@@ -1,0 +1,35 @@
+.DS_Store
+/captures
+.externalNativeBuild
+local.properties
+*.jks
+*.b64
+AGENTS.md
+/.vscode/
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+**/build/
+
+# Gradle/Android Studio
+versionname.txt
+versioncode.txt
+android/.cxx
+
+# Log Files
+*.log
+
+# IntelliJ
+*.iml
+.idea/
+
+
+# App Build
+/app/release
+/app/debug
+/gradle/gradle-daemon-jvm.properties
