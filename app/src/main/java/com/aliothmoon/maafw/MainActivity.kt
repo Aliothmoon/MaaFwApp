@@ -1,41 +1,41 @@
 package com.aliothmoon.maafw
 
+import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
-import android.view.ViewTreeObserver
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import com.aliothmoon.maafw.navigation.AppNavigation
-import com.aliothmoon.maafw.theme.MaaFwTheme
 
-class MainActivity : AppCompatActivity() {
-
-    @Volatile
-    private var isUiReady: Boolean = false
+class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splash = installSplashScreen()
-        splash.setKeepOnScreenCondition { !isUiReady }
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
-        window.decorView.viewTreeObserver.addOnPreDrawListener(object :
-            ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                isUiReady = true
-                window.decorView.viewTreeObserver.removeOnPreDrawListener(this)
-                return true
-            }
-        })
 
         setContent {
-            MaaFwTheme {
-                AppNavigation()
+            AppNavigation(
+                onDarkThemeChanged = { darkMode ->
+                    EnableEdgeToEdge(darkMode)
+                },
+            )
+        }
+    }
+
+    @Composable
+    fun EnableEdgeToEdge(darkMode: Boolean) {
+        DisposableEffect(darkMode) {
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkMode },
+                navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { darkMode },
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isNavigationBarContrastEnforced = false
             }
+            onDispose {}
         }
     }
 }
