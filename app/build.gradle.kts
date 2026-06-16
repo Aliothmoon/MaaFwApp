@@ -29,7 +29,7 @@ val gitVersionName: String by lazy {
     if (match != null) {
         val (major, minor, patch, distance) = match.destructured
         if (distance.isEmpty()) "$major.$minor.$patch"
-        else "$major.$minor.${patch.toInt() + 1}-beta.$distance"
+        else "$major.$minor.${patch.toInt() + 1}-alpha.$distance"
     } else {
         desc.removePrefix("v").ifEmpty { "0.0.0-dev" }
     }
