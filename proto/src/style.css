@@ -99,6 +99,30 @@ h3,
   gap: 8px;
 }
 
+.task-delete-button {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--muted);
+}
+
+.task-delete-button:active { background: var(--parchment); }
+.task-delete-button:focus-visible {
+  outline: 2px solid var(--primary-focus);
+  outline-offset: 2px;
+}
+.task-delete-button.pending {
+  width: 64px;
+  background: var(--parchment);
+  color: var(--ink);
+  font-size: 12px;
+}
+.task-delete-button:disabled { opacity: 0.3; pointer-events: none; }
+
 .sub-nav-frosted {
   min-height: 52px;
   padding: 0 18px;

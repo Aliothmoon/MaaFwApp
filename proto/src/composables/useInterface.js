@@ -284,6 +284,35 @@ function applyPreset(preset) {
   addLog('info', `Preset applied: ${labelOf(preset)}`)
 }
 
+function removeTask(taskName) {
+  if (state.isRunning) return false
+
+  const tasks = state.interface.task || []
+  const index = tasks.findIndex((task) => task.name === taskName)
+  if (index < 0) return false
+
+  const [removedTask] = tasks.splice(index, 1)
+  delete state.taskChecks[taskName]
+
+  const presets = state.interface.preset || []
+  for (let presetIndex = presets.length - 1; presetIndex >= 0; presetIndex--) {
+    const preset = presets[presetIndex]
+    const remainingTasks = asList(preset.task).filter((task) => task.name !== taskName)
+    if (remainingTasks.length === 0) presets.splice(presetIndex, 1)
+    else if (Array.isArray(preset.task)) preset.task = remainingTasks
+    else if (remainingTasks.length > 0) preset.task = remainingTasks[0]
+  }
+
+  if (state.expandedTaskName === taskName) state.expandedTaskName = null
+  if (state.selectedTaskName === taskName) {
+    state.selectedTaskName = tasks[index]?.name || tasks[index - 1]?.name || null
+  }
+
+  state.activePresetName = null
+  addLog('info', `Task deleted: ${labelOf(removedTask)}`)
+  return true
+}
+
 function toggleStart() {
   if (state.isRunning) {
     state.isRunning = false
@@ -348,7 +377,7 @@ export function useInterface() {
     globalOptionNames, resourceOptionNames, controllerOptionNames, selectedTaskOptionNames,
     checkedTaskCount,
     pipelinePreview, pipelineJson,
-    applyPreset, toggleStart, toggleLang, addLog, highlightJson,
+    applyPreset, removeTask, toggleStart, toggleLang, addLog, highlightJson,
     optCount: (task) => asList(task.option).filter((n) => isOptionApplicable(n)).length,
   }
 }
