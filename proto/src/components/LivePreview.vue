@@ -68,7 +68,7 @@ const elapsedStr = computed(() => {
   position: relative;
   width: 100%;
   height: 148px;
-  border-radius: 0;
+  border-radius: var(--radius-none);
   overflow: hidden;
   background: var(--black);
   border: 0;
@@ -134,7 +134,7 @@ const elapsedStr = computed(() => {
 .dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 .steady-green {
   background: var(--primary-on-dark);
@@ -174,7 +174,7 @@ const elapsedStr = computed(() => {
   font-size: 9px;
   color: var(--white-40);
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   background: var(--white-04);
 }
 

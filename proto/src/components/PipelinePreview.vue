@@ -4,7 +4,7 @@ const { state, pipelineJson, pipelinePreview, highlightJson, selectedTask } = us
 </script>
 
 <template>
-  <details class="mt-2 rounded-[11px] border border-[var(--hairline)] bg-[var(--pearl)] overflow-hidden">
+  <details class="mt-2 rounded-md border border-[var(--hairline)] bg-[var(--pearl)] overflow-hidden">
     <summary class="flex items-center gap-2 px-3 py-2 cursor-pointer">
       <span class="w-1 h-3.5 rounded-full bg-[var(--primary)] flex-shrink-0" />
       <span class="text-[11px] font-semibold text-[var(--ink-soft)]">Pipeline Override</span>
@@ -22,7 +22,7 @@ const { state, pipelineJson, pipelinePreview, highlightJson, selectedTask } = us
         <span class="text-[var(--primary)]">task</span>
       </div>
       <pre v-if="Object.keys(pipelinePreview).length > 0"
-        class="text-[10px] font-mono leading-relaxed overflow-x-auto rounded-lg p-2.5 border border-[var(--black-10)]"
+        class="text-[10px] font-mono leading-relaxed overflow-x-auto rounded-sm p-2.5 border border-[var(--black-10)]"
         style="background:var(--tile-dark);color:white"
         v-html="highlightJson(pipelineJson)" />
       <div v-else class="py-3 text-center text-[11px] text-[var(--muted)] italic">No pipeline overrides.</div>

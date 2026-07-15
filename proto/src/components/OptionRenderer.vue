@@ -98,7 +98,7 @@ function toggleCheckbox(name) {
           <div v-for="inp in optDef.inputs" :key="inp.name">
             <div class="flex items-center justify-between mb-1">
               <label class="text-[12px] text-[var(--muted)]">{{ t(inp.label || inp.name) }}</label>
-              <span v-if="inp.pipeline_type" class="text-[9px] font-mono px-1.5 py-0.5 rounded-[5px] bg-[var(--black-05)] text-[var(--muted)]">{{ inp.pipeline_type }}</span>
+              <span v-if="inp.pipeline_type" class="text-[9px] font-mono px-1.5 py-0.5 rounded-xs bg-[var(--black-05)] text-[var(--muted)]">{{ inp.pipeline_type }}</span>
             </div>
             <input v-if="inp.pipeline_type !== 'bool'" type="text" v-model="state.optionValues[optionName][inp.name]"
               :placeholder="inp.default" class="ctrl-input" :class="{ invalid: !validateInput(inp) }" />

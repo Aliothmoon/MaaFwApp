@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useInterface } from './composables/useInterface.js'
 import HomeTab from './components/HomeTab.vue'
 import SettingsTab from './components/SettingsTab.vue'
@@ -30,51 +30,11 @@ const TABS = [
 ]
 
 const activeTabLabel = computed(() => TABS.find((tab) => tab.key === state.activeTab)?.label || '')
-const navMenuOpen = ref(false)
-
-function navigateTo(tab) {
-  state.activeTab = tab
-  navMenuOpen.value = false
-}
 </script>
 
 <template>
   <div class="h-screen flex flex-col app-bg text-[var(--ink)] font-sans select-none">
     <div class="app-shell flex-1 flex flex-col w-full mx-auto overflow-hidden relative">
-
-      <!-- Design.md global navigation: true black, 44px, minimal chrome. -->
-      <header class="global-nav flex-shrink-0">
-        <div class="global-nav__brand">
-          <span class="global-nav__mark">M</span>
-          <span class="truncate">MaaFramework</span>
-        </div>
-        <nav class="global-nav__links" aria-label="主要导航">
-          <button v-for="tab in TABS" :key="'top-' + tab.key" @click="navigateTo(tab.key)">{{ tab.label }}</button>
-        </nav>
-        <span class="global-nav__status">ProjectInterface V2</span>
-        <div class="global-nav__actions">
-          <button class="global-nav__icon-button global-nav__search" aria-label="搜索任务" @click="navigateTo('tasks')">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
-            </svg>
-          </button>
-          <button class="global-nav__icon-button global-nav__menu-button" aria-label="打开导航菜单" @click="navMenuOpen = !navMenuOpen">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-              <path d="M4 7h16M4 12h16M4 17h16"/>
-            </svg>
-          </button>
-          <button class="global-nav__icon-button global-nav__task-bag" aria-label="查看已选任务" @click="navigateTo('tasks')">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-              <path d="M6 7h12l1 13H5L6 7Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>
-            </svg>
-            <span>{{ checkedTaskCount }}</span>
-          </button>
-        </div>
-      </header>
-
-      <nav v-if="navMenuOpen" class="global-nav-menu" aria-label="移动端导航">
-        <button v-for="tab in TABS" :key="'menu-' + tab.key" @click="navigateTo(tab.key)">{{ tab.label }}</button>
-      </nav>
 
       <div class="sub-nav-frosted flex-shrink-0">
         <span class="sub-nav-frosted__title">{{ activeTabLabel }}</span>
@@ -162,7 +122,7 @@ function navigateTo(tab) {
         <button
           @click="startTasks"
           :disabled="state.isRunning"
-          class="btn-primary flex-1 min-h-11 px-5 rounded-full text-[15px] flex items-center justify-center gap-2"
+          class="btn-primary flex-1 min-h-11 px-5 rounded-sm text-[15px] flex items-center justify-center gap-2"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <span>开始任务</span>
@@ -171,7 +131,7 @@ function navigateTo(tab) {
         <button
           @click="stopTasks"
           :disabled="!state.isRunning"
-          class="btn-danger flex-1 min-h-11 px-5 rounded-lg text-[15px] flex items-center justify-center gap-2"
+          class="btn-danger flex-1 min-h-11 px-5 rounded-sm text-[15px] flex items-center justify-center gap-2"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
           <span>停止任务</span>

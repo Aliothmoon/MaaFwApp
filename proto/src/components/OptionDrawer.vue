@@ -22,7 +22,7 @@ function close() { state.expandedTaskName = null }
   <!-- Sheet -->
   <transition name="sheet">
     <div v-if="isOpen && task"
-      class="absolute bottom-0 left-0 right-0 z-40 bg-[var(--canvas)] rounded-t-[18px] border-t border-[var(--hairline)] flex flex-col"
+      class="absolute bottom-0 left-0 right-0 z-40 bg-[var(--canvas)] rounded-t-lg border-t border-[var(--hairline)] flex flex-col"
       style="max-height: 78%;"
     >
       <!-- Drag handle -->
@@ -35,7 +35,7 @@ function close() { state.expandedTaskName = null }
         <div class="flex-1 min-w-0">
           <h3 class="text-[17px] font-semibold font-display tracking-tight text-[var(--ink)]">{{ labelOf(task) }}</h3>
           <div class="flex items-center gap-2 mt-0.5">
-            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-[5px] bg-[var(--black-05)] text-[var(--muted)]">entry: {{ task.entry }}</span>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-xs bg-[var(--black-05)] text-[var(--muted)]">entry: {{ task.entry }}</span>
             <span v-if="taskOptions.length" class="text-[10px] text-[var(--muted)]">{{ taskOptions.length }} options</span>
           </div>
         </div>
