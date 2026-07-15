@@ -4,16 +4,16 @@ export default {
   theme: {
     borderRadius: {
       none: '0px',
-      xs: '5px',
-      sm: '8px',
-      md: '11px',
-      lg: '18px',
+      xs: '6px',
+      sm: '10px',
+      md: '12px',
+      lg: '16px',
       full: '9999px',
     },
     extend: {
       fontFamily: {
-        sans: ['SF Pro Text', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        display: ['SF Pro Display', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        display: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
     },

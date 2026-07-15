@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useInterface } from './composables/useInterface.js'
 import HomeTab from './components/HomeTab.vue'
 import SettingsTab from './components/SettingsTab.vue'
@@ -30,6 +30,24 @@ const TABS = [
 ]
 
 const activeTabLabel = computed(() => TABS.find((tab) => tab.key === state.activeTab)?.label || '')
+const taskPageSection = ref('tasks')
+const globalSettingsGroups = computed(() => [
+  { key: 'global', label: '通用', names: globalOptionNames.value, source: 'global' },
+  { key: 'resource', label: `资源 · ${labelOf(selectedResource.value)}`, names: resourceOptionNames.value, source: 'res' },
+  { key: 'controller', label: `控制器 · ${labelOf(selectedController.value)}`, names: controllerOptionNames.value, source: 'ctrl' },
+].filter((group) => group.names.length > 0))
+const globalSettingsCount = computed(() =>
+  globalSettingsGroups.value.reduce((total, group) => total + group.names.length, 0),
+)
+
+function selectTaskPageSection(section) {
+  taskPageSection.value = section
+  if (section === 'settings') state.expandedTaskName = null
+}
+
+watch(() => state.activeTab, (nextTab, previousTab) => {
+  if (nextTab === 'tasks' && previousTab !== 'tasks') taskPageSection.value = 'tasks'
+})
 </script>
 
 <template>
@@ -55,60 +73,71 @@ const activeTabLabel = computed(() => TABS.find((tab) => tab.key === state.activ
           <!-- 实时预览 -->
           <LivePreview />
 
-          <!-- Presets（配置选择器） -->
-          <section v-if="state.interface.preset?.length" class="responsive-content px-4 pt-2">
-            <h2 class="section-label px-1 mb-2">配置</h2>
-            <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <div class="task-page-tabs-wrap">
+            <div class="responsive-content task-page-tabs" role="tablist" aria-label="任务页内容">
               <button
-                v-for="preset in state.interface.preset"
-                :key="preset.name"
-                @click="!state.isRunning && applyPreset(preset)"
-                class="flex-shrink-0 px-4 py-2.5 chip text-[13px] whitespace-nowrap"
-                :class="[
-                  state.activePresetName === preset.name ? 'on' : '',
-                  state.isRunning ? 'opacity-50' : '',
-                ]"
-              >{{ labelOf(preset) }}</button>
+                type="button"
+                role="tab"
+                :aria-selected="taskPageSection === 'tasks'"
+                :class="{ active: taskPageSection === 'tasks' }"
+                @click="selectTaskPageSection('tasks')"
+              >任务列表</button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="taskPageSection === 'settings'"
+                :class="{ active: taskPageSection === 'settings' }"
+                @click="selectTaskPageSection('settings')"
+              >
+                全局设置
+                <span v-if="globalSettingsCount" class="task-page-tab-count">{{ globalSettingsCount }}</span>
+              </button>
             </div>
-          </section>
+          </div>
 
-          <TaskList />
-
-          <!-- Global Settings -->
-          <section v-if="globalOptionNames.length + resourceOptionNames.length + controllerOptionNames.length > 0" class="responsive-content px-4 pb-4">
-            <button
-              @click="state.showGlobalSettings = !state.showGlobalSettings"
-              class="w-full flex items-center justify-between px-4 py-3.5 surface-card text-sm text-[var(--ink-soft)]"
-            >
-              <span class="flex items-center gap-2">
-                <svg class="w-4 h-4 text-[var(--primary)]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                <span class="font-semibold text-[14px]">全局设置</span>
-                <span class="text-[11px] text-[var(--muted)]">{{ globalOptionNames.length + resourceOptionNames.length + controllerOptionNames.length }}</span>
-              </span>
-              <svg class="w-4 h-4 transition-transform duration-200 text-[var(--muted)]" :class="state.showGlobalSettings ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-              </svg>
-            </button>
-
-            <transition name="expand">
-              <div v-show="state.showGlobalSettings" class="mt-2 space-y-2">
-                <div v-if="globalOptionNames.length > 0" class="space-y-2">
-                  <p class="text-[10px] font-semibold text-[var(--primary)] uppercase tracking-wider px-1 font-display">Global</p>
-                  <OptionRenderer v-for="name in globalOptionNames" :key="'g_' + name" :option-name="name" source="global" />
-                </div>
-                <div v-if="resourceOptionNames.length > 0" class="space-y-2">
-                  <p class="text-[10px] font-semibold text-[var(--primary)] uppercase tracking-wider px-1 mt-3 font-display">Resource · {{ labelOf(selectedResource) }}</p>
-                  <OptionRenderer v-for="name in resourceOptionNames" :key="'r_' + name" :option-name="name" source="res" />
-                </div>
-                <div v-if="controllerOptionNames.length > 0" class="space-y-2">
-                  <p class="text-[10px] font-semibold text-[var(--primary)] uppercase tracking-wider px-1 mt-3 font-display">Controller · {{ labelOf(selectedController) }}</p>
-                  <OptionRenderer v-for="name in controllerOptionNames" :key="'c_' + name" :option-name="name" source="ctrl" />
-                </div>
+          <template v-if="taskPageSection === 'tasks'">
+            <!-- Presets（配置选择器） -->
+            <section v-if="state.interface.preset?.length" class="responsive-content px-4 pt-3">
+              <h2 class="section-label px-1 mb-2">配置</h2>
+              <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  v-for="preset in state.interface.preset"
+                  :key="preset.name"
+                  @click="!state.isRunning && applyPreset(preset)"
+                  class="flex-shrink-0 px-4 py-2.5 chip text-[13px] whitespace-nowrap"
+                  :class="[
+                    state.activePresetName === preset.name ? 'on' : '',
+                    state.isRunning ? 'opacity-50' : '',
+                  ]"
+                >{{ labelOf(preset) }}</button>
               </div>
-            </transition>
+            </section>
+
+            <TaskList :show-heading="false" />
+          </template>
+
+          <section
+            v-else
+            class="responsive-content global-settings-panel px-4 pt-4 pb-6"
+            role="tabpanel"
+            aria-label="全局设置"
+          >
+            <div class="global-settings-intro">
+              <h2>全局设置</h2>
+              <p>这些选项会应用到当前资源、控制器和相关任务。</p>
+            </div>
+
+            <div v-for="group in globalSettingsGroups" :key="group.key" class="global-settings-group">
+              <p class="global-settings-label">{{ group.label }}</p>
+              <OptionRenderer
+                v-for="name in group.names"
+                :key="`${group.key}_${name}`"
+                :option-name="name"
+                :source="group.source"
+              />
+            </div>
+
+            <div v-if="globalSettingsCount === 0" class="global-settings-empty">当前环境没有可配置的全局选项。</div>
           </section>
         </template>
 
@@ -122,7 +151,7 @@ const activeTabLabel = computed(() => TABS.find((tab) => tab.key === state.activ
         <button
           @click="startTasks"
           :disabled="state.isRunning"
-          class="btn-primary flex-1 min-h-11 px-5 rounded-sm text-[15px] flex items-center justify-center gap-2"
+          class="task-action-button btn-primary flex-1 min-h-11 px-5 text-[15px] flex items-center justify-center gap-2"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
           <span>开始任务</span>
@@ -131,7 +160,7 @@ const activeTabLabel = computed(() => TABS.find((tab) => tab.key === state.activ
         <button
           @click="stopTasks"
           :disabled="!state.isRunning"
-          class="btn-danger flex-1 min-h-11 px-5 rounded-sm text-[15px] flex items-center justify-center gap-2"
+          class="task-action-button btn-danger flex-1 min-h-11 px-5 text-[15px] flex items-center justify-center gap-2"
         >
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
           <span>停止任务</span>

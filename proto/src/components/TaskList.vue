@@ -2,6 +2,10 @@
 import { nextTick, ref } from 'vue'
 import { useInterface, asList } from '../composables/useInterface.js'
 
+defineProps({
+  showHeading: { type: Boolean, default: true },
+})
+
 const { state, labelOf, visibleTasks, optCount, removeTask } = useInterface()
 const pendingDeleteTaskName = ref(null)
 const taskListRef = ref(null)
@@ -45,7 +49,12 @@ function handleDelete(taskName) {
 
 <template>
   <div class="px-4 pt-3 pb-4 space-y-2">
-    <h2 ref="taskListHeadingRef" class="section-label px-1 mb-2" tabindex="-1">任务列表</h2>
+    <h2
+      ref="taskListHeadingRef"
+      class="section-label px-1 mb-2"
+      :class="{ 'sr-only': !showHeading }"
+      tabindex="-1"
+    >任务列表</h2>
 
     <div ref="taskListRef" class="task-list-grid">
       <div

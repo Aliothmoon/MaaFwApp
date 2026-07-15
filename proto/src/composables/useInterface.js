@@ -57,7 +57,6 @@ const state = reactive({
   lastResult: null, // { level: success|warn|error, message }
   activePresetName: null,
   expandedTaskName: null,
-  showGlobalSettings: false,
   isConnected: true,
   previewFPS: 30,
   logEntries: [],

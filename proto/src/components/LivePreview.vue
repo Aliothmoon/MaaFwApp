@@ -41,7 +41,7 @@ const elapsedStr = computed(() => {
       <!-- Top status overlay -->
       <div class="overlay-top">
         <div class="badge-live">
-          <span class="dot" :class="state.isRunning ? 'pulse-red' : 'steady-green'" />
+          <span class="dot" :class="state.isRunning ? 'pulse-status' : 'steady-status'" />
           {{ state.isRunning ? 'RUNNING' : 'LIVE' }}
         </div>
         <div class="badge-info">
@@ -136,11 +136,11 @@ const elapsedStr = computed(() => {
   height: 7px;
   border-radius: var(--radius-full);
 }
-.steady-green {
-  background: var(--primary-on-dark);
+.steady-status {
+  background: var(--status-green);
 }
-.pulse-red {
-  background: var(--primary-on-dark);
+.pulse-status {
+  background: var(--status-green);
   animation: pulse 1.2s ease-in-out infinite;
 }
 @keyframes pulse {
