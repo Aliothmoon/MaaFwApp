@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
+import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TemplateTask
 import kotlinx.serialization.json.Json
@@ -26,6 +27,14 @@ data class PiFileContent(
     val diagnostics: List<Diagnostic> = emptyList(),
 )
 
+/** PI 根 interface.json 中当前领域模型需要的项目元数据。 */
+data class PiInterfaceContent(
+    val name: String?,
+    val version: String?,
+    val resources: List<ResourceDefinition>,
+    val diagnostics: List<Diagnostic>,
+)
+
 /**
  * PI V2 分片文件解析器。宽容解析：字段级错误降级为诊断并跳过该条目，
  * 不让单个坏条目阻断整个项目加载。
@@ -33,6 +42,37 @@ data class PiFileContent(
 object PiParser {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    fun parseInterface(source: String, content: String): PiInterfaceContent {
+        val diagnostics = mutableListOf<Diagnostic>()
+        val root = try {
+            json.parseToJsonElement(content).jsonObject
+        } catch (e: Exception) {
+            diagnostics += error(source, "JSON 解析失败: ${e.message}")
+            return PiInterfaceContent(null, null, emptyList(), diagnostics)
+        }
+
+        val resources = (root["resource"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val obj = element as? JsonObject
+                ?: return@mapNotNull null.also { diagnostics += error(source, "resource 条目不是对象") }
+            val name = obj.string("name")
+                ?: return@mapNotNull null.also { diagnostics += error(source, "resource 缺少 name") }
+            val paths = obj.stringList("path").map(::normalizeProjectPath)
+            if (paths.isEmpty()) {
+                diagnostics += error(source, "resource \"$name\" 缺少 path")
+                null
+            } else {
+                ResourceDefinition(name, paths)
+            }
+        }
+
+        return PiInterfaceContent(
+            name = root.string("name"),
+            version = root.string("version"),
+            resources = resources,
+            diagnostics = diagnostics,
+        )
+    }
 
     fun parseFile(source: String, content: String): PiFileContent {
         val diagnostics = mutableListOf<Diagnostic>()
@@ -269,4 +309,6 @@ object PiParser {
 
     private fun JsonObject.objectOrEmpty(key: String): JsonObject =
         (this[key] as? JsonObject) ?: JsonObject(emptyMap())
+
+    private fun normalizeProjectPath(path: String): String = path.removePrefix("./")
 }

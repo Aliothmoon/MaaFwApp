@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** 基于文件系统的 ProjectSource，供 JVM 测试直接读取仓库内示例 PI。 */
+/** 基于文件系统的 ProjectSource，供 JVM 测试直接读取仓库内置 PI。 */
 class FileProjectSource(private val root: File) : ProjectSource {
     override val projectName: String = root.name
 
@@ -20,27 +20,33 @@ class FileProjectSource(private val root: File) : ProjectSource {
 
 class ProjectLoaderTest {
 
-    private val sampleRoot = File("src/main/assets/sample")
+    private val projectRoot = File("src/main/assets", M9A_ASSET_ROOT)
 
     private fun load(): ProjectLoadResult.Ready {
-        val result = ProjectLoader(FileProjectSource(sampleRoot)).load()
+        val result = ProjectLoader(FileProjectSource(projectRoot)).load()
         assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
         return result as ProjectLoadResult.Ready
     }
 
     @Test
-    fun `加载示例项目并合并全部分片`() {
+    fun `加载内置 M9A 项目并合并全部分片`() {
         val ready = load()
         val definition = ready.definition
 
+        assertEquals("m9a", definition.name)
+        assertEquals("v0.1.0", definition.version)
         assertEquals(25, definition.tasks.size)
         assertEquals(4, definition.templates.size)
         assertTrue(definition.options.isNotEmpty())
-        assertTrue(definition.resources.any { it.name == "官服" })
-        // base 必须是所有非 base 资源的首个叠加层
-        definition.resources.filter { it.name != "官服" }.forEach {
-            assertEquals("resource/base", it.paths.first())
-        }
+        assertEquals(9, definition.resources.size)
+        assertEquals(
+            listOf("resource/base", "resource/global_jp", "resource/global_en"),
+            definition.resources.first { it.name == "国际服（EN）" }.paths,
+        )
+        assertEquals(
+            listOf("resource/base", "resource/global_jp", "resource/tw"),
+            definition.resources.first { it.name == "港澳台服" }.paths,
+        )
     }
 
     @Test

@@ -62,7 +62,7 @@ object RunPlanBuilder {
             val patches = mutableListOf<JsonObject>()
             if (task.pipelineOverride.isNotEmpty()) patches += task.pipelineOverride
             // patch 顺序：task 基础 patch -> global -> resource -> controller -> task option。
-            // 当前示例 PI 未声明 global/controller/resource 作用域 option，对应步骤暂为空。
+            // 当前 Android ProjectDefinition 尚未建模 global/controller/resource 作用域 option。
             compileOptions(
                 definition = definition,
                 optionNames = task.optionNames,

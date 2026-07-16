@@ -17,7 +17,9 @@ interface ProjectSource {
     fun read(path: String): String
 }
 
-/** 从 APK assets 读取示例/内置 PI。 */
+const val M9A_ASSET_ROOT = "PI/M9A"
+
+/** 从 APK assets 读取内置 PI。 */
 class AssetProjectSource(
     context: Context,
     private val root: String,

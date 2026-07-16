@@ -11,6 +11,7 @@ import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.project.AssetProjectSource
 import com.aliothmoon.maafw.project.DefaultProjectRepository
+import com.aliothmoon.maafw.project.M9A_ASSET_ROOT
 import com.aliothmoon.maafw.project.ProjectLoader
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectSource
@@ -46,7 +47,7 @@ class MaaFwApp : Application() {
 val appModule = module {
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
 
-    single<ProjectSource> { AssetProjectSource(androidContext(), root = "sample") }
+    single<ProjectSource> { AssetProjectSource(androidContext(), root = M9A_ASSET_ROOT) }
     single { ProjectLoader(get()) }
     single<ProjectRepository> { DefaultProjectRepository(get(), Dispatchers.IO) }
 

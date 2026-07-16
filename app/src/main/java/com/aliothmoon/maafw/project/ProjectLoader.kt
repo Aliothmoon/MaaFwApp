@@ -23,6 +23,7 @@ class ProjectLoader(private val source: ProjectSource) {
 
     fun load(): ProjectLoadResult {
         val diagnostics = mutableListOf<Diagnostic>()
+        val projectInterface = loadInterface(diagnostics)
 
         val files = try {
             walkJsonFiles("tasks")
@@ -76,16 +77,31 @@ class ProjectLoader(private val source: ProjectSource) {
         validateTemplates(templates, tasks, diagnostics)
 
         val definition = ProjectDefinition(
-            name = source.projectName,
-            version = null,
+            name = projectInterface?.name ?: source.projectName,
+            version = projectInterface?.version,
             controller = ControllerDefinition(),
-            resources = loadResources(diagnostics),
+            resources = projectInterface?.resources
+                ?.takeIf { it.isNotEmpty() }
+                ?: deriveResources(diagnostics),
             tasks = tasks,
             groups = buildGroups(tasks),
             options = options,
             templates = templates,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
+    }
+
+    private fun loadInterface(diagnostics: MutableList<Diagnostic>): PiInterfaceContent? {
+        val path = "interface.json"
+        val content = try {
+            source.read(path)
+        } catch (e: Exception) {
+            diagnostics += warning(path, "读取失败，将从目录结构回退加载: ${e.message}")
+            return null
+        }
+        return PiParser.parseInterface(path, content).also {
+            diagnostics += it.diagnostics
+        }
     }
 
     private fun walkJsonFiles(dir: String): List<String> {
@@ -168,11 +184,8 @@ class ProjectLoader(private val source: ProjectSource) {
         }
     }
 
-    /**
-     * 本示例 PI 没有 resource 声明文件，从 resource/ 目录派生：
-     * base 为基础层，其余目录作为叠加差分（paths = base + 差分）。
-     */
-    private fun loadResources(diagnostics: MutableList<Diagnostic>): List<ResourceDefinition> {
+    /** interface.json 未提供可用声明时，从 resource/ 目录派生兜底资源。 */
+    private fun deriveResources(diagnostics: MutableList<Diagnostic>): List<ResourceDefinition> {
         val dirs = try {
             source.list("resource").filter { it != "announcement" && source.list("resource/$it").isNotEmpty() }
         } catch (e: Exception) {
@@ -187,35 +200,20 @@ class ProjectLoader(private val source: ProjectSource) {
         val variants = dirs.filter { it != "base" }.sorted()
         val result = mutableListOf<ResourceDefinition>()
         if (hasBase) {
-            result += ResourceDefinition(displayName("base"), listOf("resource/base"))
+            result += ResourceDefinition("base", listOf("resource/base"))
         }
         for (dir in variants) {
             val paths = if (hasBase) listOf("resource/base", "resource/$dir") else listOf("resource/$dir")
-            result += ResourceDefinition(displayName(dir), paths)
+            result += ResourceDefinition(dir, paths)
         }
         return result
     }
-
-    private fun displayName(dir: String): String = RESOURCE_DISPLAY_NAMES[dir] ?: dir
 
     private fun error(source: String, message: String) = Diagnostic(DiagnosticSeverity.Error, source, message)
     private fun warning(source: String, message: String) = Diagnostic(DiagnosticSeverity.Warning, source, message)
 
     companion object {
         const val UNGROUPED = "未分组"
-
-        /** 示例项目的目录名到 PI applicability 所用服名的映射，未命中回退目录名。 */
-        private val RESOURCE_DISPLAY_NAMES = mapOf(
-            "base" to "官服",
-            "bilibili" to "B服",
-            "tw" to "繁中服",
-            "global_en" to "国际服-英文",
-            "global_jp" to "日服",
-            "global_kr" to "韩服",
-            "mi" to "小米服",
-            "oppo" to "OPPO服",
-            "huawei" to "华为服",
-        )
     }
 }
 

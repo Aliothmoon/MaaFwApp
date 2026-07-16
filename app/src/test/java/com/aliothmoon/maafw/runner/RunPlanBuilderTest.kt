@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.project.FileProjectSource
+import com.aliothmoon.maafw.project.M9A_ASSET_ROOT
 import com.aliothmoon.maafw.project.ProjectLoadResult
 import com.aliothmoon.maafw.project.ProjectLoader
 import kotlinx.serialization.json.JsonObject
@@ -28,7 +29,7 @@ class RunPlanBuilderTest {
         @JvmStatic
         @BeforeClass
         fun loadProject() {
-            val result = ProjectLoader(FileProjectSource(File("src/main/assets/sample"))).load()
+            val result = ProjectLoader(FileProjectSource(File("src/main/assets", M9A_ASSET_ROOT))).load()
             definition = (result as ProjectLoadResult.Ready).definition
         }
     }
@@ -106,11 +107,11 @@ class RunPlanBuilderTest {
 
     @Test
     fun `不适用任务被过滤`() {
-        // 切换账号 仅适用于官服；切到 B服 后应被兜底过滤
+        // 切换账号仅适用于官服；切到 B 服后应被过滤
         val id = RunConfigurationId("test")
         val config = UserConfiguration(
             initialized = true,
-            activeResourceName = "B服",
+            activeResourceName = "B 服",
             configurations = listOf(
                 RunConfiguration(id, "测试", listOf(ConfiguredTask("切换账号", enabled = true))),
             ),
