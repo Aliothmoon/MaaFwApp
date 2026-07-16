@@ -9,7 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import com.aliothmoon.maafw.navigation.AppNavigation
+import com.aliothmoon.maafw.ui.AppRoot
 
 class MainActivity : ComponentActivity() {
 
@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            AppNavigation(
+            AppRoot(
                 onDarkThemeChanged = { darkMode ->
                     EnableEdgeToEdge(darkMode)
                 },
