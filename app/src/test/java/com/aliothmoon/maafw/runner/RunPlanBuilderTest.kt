@@ -1,0 +1,152 @@
+package com.aliothmoon.maafw.runner
+
+import com.aliothmoon.maafw.config.ConfigurationResolver
+import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.OptionValue
+import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.RunConfiguration
+import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.UserConfiguration
+import com.aliothmoon.maafw.project.FileProjectSource
+import com.aliothmoon.maafw.project.ProjectLoadResult
+import com.aliothmoon.maafw.project.ProjectLoader
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.BeforeClass
+import org.junit.Test
+import java.io.File
+
+class RunPlanBuilderTest {
+
+    companion object {
+        private lateinit var definition: ProjectDefinition
+
+        @JvmStatic
+        @BeforeClass
+        fun loadProject() {
+            val result = ProjectLoader(FileProjectSource(File("src/main/assets/sample"))).load()
+            definition = (result as ProjectLoadResult.Ready).definition
+        }
+    }
+
+    private fun configWith(vararg tasks: ConfiguredTask): UserConfiguration {
+        val id = RunConfigurationId("test")
+        return UserConfiguration(
+            initialized = true,
+            activeResourceName = "官服",
+            configurations = listOf(RunConfiguration(id, "测试", tasks.toList())),
+            activeConfigurationId = id,
+        )
+    }
+
+    @Test
+    fun `无活动配置映射为 NoExecutableTasks`() {
+        val result = RunPlanBuilder.build(definition, UserConfiguration(initialized = true))
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
+    fun `全部禁用映射为 NoExecutableTasks`() {
+        val result = RunPlanBuilder.build(
+            definition,
+            configWith(ConfiguredTask("启动游戏", enabled = false)),
+        )
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
+    fun `switch 活动分支的 input placeholder 替换进 pipeline override`() {
+        val result = RunPlanBuilder.build(
+            definition,
+            configWith(
+                ConfiguredTask(
+                    taskName = "常规作战",
+                    enabled = true,
+                    optionValues = mapOf(
+                        "自定义作战关卡" to OptionValue.SingleCase("Yes"),
+                        "作战关卡(自定义)" to OptionValue.Inputs(mapOf("章节号" to "3", "关卡号" to "9")),
+                        "主线关卡难度" to firstCaseOf("主线关卡难度"),
+                        "吃糖" to firstCaseOf("吃糖"),
+                        "自定义作战次数" to firstCaseOf("自定义作战次数"),
+                        "掉落统计上报" to firstCaseOf("掉落统计上报"),
+                    ),
+                ),
+            ),
+        )
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(1, plan.tasks.size)
+
+        // 嵌入文本 placeholder 保持字符串："{章节号}-{关卡号}" -> "3-9"
+        val stagePatch = plan.tasks[0].pipelineOverrides.firstOrNull { patch ->
+            patch.stageValue() == "3-9"
+        }
+        assertTrue("应包含替换后的 stage patch", stagePatch != null)
+    }
+
+    @Test
+    fun `未设置且无默认值的 select 返回 Invalid`() {
+        val result = RunPlanBuilder.build(
+            definition,
+            configWith(
+                ConfiguredTask(
+                    taskName = "常规作战",
+                    enabled = true,
+                    // 自定义作战关卡为 switch 无 default_case，保持 Unset
+                    optionValues = emptyMap(),
+                ),
+            ),
+        )
+        assertTrue("Unset 无默认值应 Invalid: $result", result is RunPlanResult.Invalid)
+    }
+
+    @Test
+    fun `不适用任务被过滤`() {
+        // 切换账号 仅适用于官服；切到 B服 后应被兜底过滤
+        val id = RunConfigurationId("test")
+        val config = UserConfiguration(
+            initialized = true,
+            activeResourceName = "B服",
+            configurations = listOf(
+                RunConfiguration(id, "测试", listOf(ConfiguredTask("切换账号", enabled = true))),
+            ),
+            activeConfigurationId = id,
+        )
+        val result = RunPlanBuilder.build(definition, config)
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
+    fun `resolver 与 builder 对同一 Unset 语义一致`() {
+        // Resolver 对 Unset 无默认值的 select 不隐式选第一项
+        val session = ConfigurationResolver.resolve(
+            definition,
+            configWith(ConfiguredTask("常规作战", enabled = true)),
+        )
+        val task = session.activeConfiguration!!.tasks.single()
+        val switch = task.options.first { it.name == "自定义作战关卡" }
+        assertTrue("Unset 无默认值不应有活动 case", switch.activeCases.isEmpty())
+    }
+
+    /** 选择无子 option 的 case，避免测试再级联出 Unset 诊断。 */
+    private fun firstCaseOf(optionName: String): OptionValue.SingleCase {
+        val option = definition.options.getValue(optionName)
+        val cases = when (option) {
+            is com.aliothmoon.maafw.domain.OptionDefinition.Select -> option.cases
+            is com.aliothmoon.maafw.domain.OptionDefinition.Switch -> option.cases
+            else -> error("非 choice option")
+        }
+        val case = cases.firstOrNull { it.childOptionNames.isEmpty() } ?: cases.first()
+        return OptionValue.SingleCase(case.name)
+    }
+
+    /** 提取 SelectCombatStage.action.param.custom_action_param.stage。 */
+    private fun JsonObject.stageValue(): String? = runCatching {
+        this["SelectCombatStage"]!!.jsonObject["action"]!!.jsonObject["param"]!!
+            .jsonObject["custom_action_param"]!!.jsonObject["stage"]!!.jsonPrimitive.content
+    }.getOrNull()
+}
