@@ -8,22 +8,29 @@ const props = defineProps({
   source: { type: String, default: '' },
 })
 
-const { state, t, labelOf, descOf, isOptionApplicable } = useInterface()
+const {
+  state, t, labelOf, descOf, isOptionApplicable,
+  optionValueOf, setOptionValue,
+} = useInterface()
 
 const optDef = computed(() => state.interface.option?.[props.optionName])
 const optType = computed(() => getOptionType(optDef.value))
 const applicable = computed(() => isOptionApplicable(props.optionName))
-const switchOn = computed(() => isSwitchYes(state.optionValues[props.optionName]))
+const optionValue = computed({
+  get: () => optionValueOf(props.optionName),
+  set: (value) => setOptionValue(props.optionName, value),
+})
+const switchOn = computed(() => isSwitchYes(optionValue.value))
 
 const activeSubOptions = computed(() => {
   const def = optDef.value
   if (!def) return []
-  const val = state.optionValues[props.optionName]
+  const val = optionValue.value
   const result = []
   if (optType.value === 'checkbox') {
     for (const c of def.cases || []) { if ((val || []).includes(c.name)) result.push(...asList(c.option)) }
   } else if (optType.value !== 'input') {
-    const sel = val || def.default_case || def.cases?.[0]?.name
+    const sel = val ?? def.default_case
     const cd = (def.cases || []).find((c) => c.name === sel)
     if (cd) result.push(...asList(cd.option))
   }
@@ -31,20 +38,20 @@ const activeSubOptions = computed(() => {
 })
 
 function validateInput(inp) {
-  const val = (state.optionValues[props.optionName] || {})[inp.name] || ''
+  const val = (optionValue.value || {})[inp.name] ?? ''
   if (inp.verify) { try { if (val && !new RegExp(inp.verify).test(val)) return false } catch {} }
   return true
 }
 function toggleSwitch() {
   const cases = optDef.value.cases || []
   const next = switchOn.value ? cases.find((c) => !isSwitchYes(c.name)) : cases.find((c) => isSwitchYes(c.name))
-  if (next) state.optionValues[props.optionName] = next.name
+  if (next) optionValue.value = next.name
 }
 function toggleCheckbox(name) {
-  const arr = state.optionValues[props.optionName] || []
+  const arr = optionValue.value || []
   const i = arr.indexOf(name)
   if (i >= 0) arr.splice(i, 1); else arr.push(name)
-  state.optionValues[props.optionName] = [...arr]
+  optionValue.value = [...arr]
 }
 </script>
 
@@ -70,7 +77,8 @@ function toggleCheckbox(name) {
           <span v-if="source" :class="'badge badge-' + source">{{ source }}</span>
           <span class="text-[14px] font-semibold text-[var(--ink)]">{{ labelOf(optDef) }}</span>
         </div>
-        <select v-model="state.optionValues[optionName]" class="ctrl-select">
+        <select v-model="optionValue" class="ctrl-select">
+          <option :value="null" disabled>请选择</option>
           <option v-for="c in optDef.cases" :key="c.name" :value="c.name">{{ labelOf(c) }}</option>
         </select>
       </div>
@@ -84,7 +92,7 @@ function toggleCheckbox(name) {
         <div class="flex flex-wrap gap-1.5">
           <button v-for="c in optDef.cases" :key="c.name" @click="toggleCheckbox(c.name)"
             class="flex-1 min-w-[72px] py-2 chip text-xs text-center"
-            :class="(state.optionValues[optionName] || []).includes(c.name) ? 'on' : ''">{{ labelOf(c) }}</button>
+            :class="(optionValue || []).includes(c.name) ? 'on' : ''">{{ labelOf(c) }}</button>
         </div>
       </div>
 
@@ -100,12 +108,14 @@ function toggleCheckbox(name) {
               <label class="text-[12px] text-[var(--muted)]">{{ t(inp.label || inp.name) }}</label>
               <span v-if="inp.pipeline_type" class="text-[9px] font-mono px-1.5 py-0.5 rounded-xs bg-[var(--black-05)] text-[var(--muted)]">{{ inp.pipeline_type }}</span>
             </div>
-            <input v-if="inp.pipeline_type !== 'bool'" type="text" v-model="state.optionValues[optionName][inp.name]"
+            <input v-if="inp.pipeline_type !== 'bool'" type="text" v-model="optionValue[inp.name]"
               :placeholder="inp.default" class="ctrl-input" :class="{ invalid: !validateInput(inp) }" />
             <label v-else class="w-11 h-11 flex items-center justify-center">
-              <input type="checkbox" class="cb" v-model="state.optionValues[optionName][inp.name]" />
+              <input type="checkbox" class="cb" v-model="optionValue[inp.name]" />
             </label>
-            <p v-if="!validateInput(inp)" class="text-[10px] text-[var(--muted)] mt-1">Invalid input</p>
+            <p v-if="!validateInput(inp)" class="text-[10px] text-[var(--muted)] mt-1">
+              {{ inp.pattern_msg || '输入格式不正确' }}
+            </p>
           </div>
         </div>
       </div>

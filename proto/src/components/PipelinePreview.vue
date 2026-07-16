@@ -1,6 +1,6 @@
 <script setup>
 import { useInterface } from '../composables/useInterface.js'
-const { state, pipelineJson, pipelinePreview, highlightJson, selectedTask } = useInterface()
+const { pipelineJson, pipelinePreview, highlightJson, selectedTask } = useInterface()
 </script>
 
 <template>
@@ -15,17 +15,14 @@ const { state, pipelineJson, pipelinePreview, highlightJson, selectedTask } = us
     </summary>
     <div class="px-3 pb-3">
       <div class="flex items-center gap-1 text-[9px] text-[var(--muted)] mb-2 flex-wrap font-mono">
-        <span>merge:</span>
-        <span class="text-[var(--primary)]">global</span><span>→</span>
-        <span class="text-[var(--primary)]">resource</span><span>→</span>
-        <span class="text-[var(--primary)]">controller</span><span>→</span>
-        <span class="text-[var(--primary)]">task</span>
+        <span>scope:</span>
+        <span class="text-[var(--primary)]">task options + active children</span>
       </div>
       <pre v-if="Object.keys(pipelinePreview).length > 0"
         class="text-[10px] font-mono leading-relaxed overflow-x-auto rounded-sm p-2.5 border border-[var(--black-10)]"
         style="background:var(--tile-dark);color:white"
         v-html="highlightJson(pipelineJson)" />
-      <div v-else class="py-3 text-center text-[11px] text-[var(--muted)] italic">No pipeline overrides.</div>
+      <div v-else class="py-3 text-center text-[11px] text-[var(--muted)] italic">当前选项没有 Pipeline Override</div>
     </div>
   </details>
 </template>

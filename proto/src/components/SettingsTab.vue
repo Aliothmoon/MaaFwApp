@@ -37,7 +37,7 @@ const { state, labelOf, availableResources, selectedController, toggleLang } = u
       <div class="mt-2 space-y-1.5 text-[14px]">
         <div class="flex justify-between">
           <span class="text-[var(--muted)]">版本</span>
-          <span class="text-[var(--ink)] font-mono">v{{ state.interface.version }}</span>
+          <span class="text-[var(--ink)] font-mono">{{ state.interface.version ? `v${state.interface.version}` : '内置示例' }}</span>
         </div>
         <div class="flex justify-between">
           <span class="text-[var(--muted)]">协议</span>

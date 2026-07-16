@@ -1,17 +1,15 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useInterface } from './composables/useInterface.js'
 import HomeTab from './components/HomeTab.vue'
 import SettingsTab from './components/SettingsTab.vue'
 import TaskList from './components/TaskList.vue'
 import LivePreview from './components/LivePreview.vue'
-import OptionRenderer from './components/OptionRenderer.vue'
 import OptionDrawer from './components/OptionDrawer.vue'
+import TaskCatalogDrawer from './components/TaskCatalogDrawer.vue'
 
 const {
-  state, labelOf,
-  globalOptionNames, resourceOptionNames, controllerOptionNames,
-  selectedController, selectedResource, checkedTaskCount,
+  state, labelOf, checkedTaskCount,
   applyPreset, toggleStart,
 } = useInterface()
 
@@ -30,24 +28,6 @@ const TABS = [
 ]
 
 const activeTabLabel = computed(() => TABS.find((tab) => tab.key === state.activeTab)?.label || '')
-const taskPageSection = ref('tasks')
-const globalSettingsGroups = computed(() => [
-  { key: 'global', label: '通用', names: globalOptionNames.value, source: 'global' },
-  { key: 'resource', label: `资源 · ${labelOf(selectedResource.value)}`, names: resourceOptionNames.value, source: 'res' },
-  { key: 'controller', label: `控制器 · ${labelOf(selectedController.value)}`, names: controllerOptionNames.value, source: 'ctrl' },
-].filter((group) => group.names.length > 0))
-const globalSettingsCount = computed(() =>
-  globalSettingsGroups.value.reduce((total, group) => total + group.names.length, 0),
-)
-
-function selectTaskPageSection(section) {
-  taskPageSection.value = section
-  if (section === 'settings') state.expandedTaskName = null
-}
-
-watch(() => state.activeTab, (nextTab, previousTab) => {
-  if (nextTab === 'tasks' && previousTab !== 'tasks') taskPageSection.value = 'tasks'
-})
 </script>
 
 <template>
@@ -73,72 +53,24 @@ watch(() => state.activeTab, (nextTab, previousTab) => {
           <!-- 实时预览 -->
           <LivePreview />
 
-          <div class="task-page-tabs-wrap">
-            <div class="responsive-content task-page-tabs" role="tablist" aria-label="任务页内容">
+          <!-- Presets（配置选择器） -->
+          <section v-if="state.interface.preset?.length" class="responsive-content px-4 pt-3">
+            <h2 class="section-label px-1 mb-2">配置</h2>
+            <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
               <button
-                type="button"
-                role="tab"
-                :aria-selected="taskPageSection === 'tasks'"
-                :class="{ active: taskPageSection === 'tasks' }"
-                @click="selectTaskPageSection('tasks')"
-              >任务列表</button>
-              <button
-                type="button"
-                role="tab"
-                :aria-selected="taskPageSection === 'settings'"
-                :class="{ active: taskPageSection === 'settings' }"
-                @click="selectTaskPageSection('settings')"
-              >
-                全局设置
-                <span v-if="globalSettingsCount" class="task-page-tab-count">{{ globalSettingsCount }}</span>
-              </button>
+                v-for="preset in state.interface.preset"
+                :key="preset.name"
+                @click="!state.isRunning && applyPreset(preset)"
+                class="flex-shrink-0 px-4 py-2.5 chip text-[13px] whitespace-nowrap"
+                :class="[
+                  state.activePresetName === preset.name ? 'on' : '',
+                  state.isRunning ? 'opacity-50' : '',
+                ]"
+              >{{ labelOf(preset) }}</button>
             </div>
-          </div>
-
-          <template v-if="taskPageSection === 'tasks'">
-            <!-- Presets（配置选择器） -->
-            <section v-if="state.interface.preset?.length" class="responsive-content px-4 pt-3">
-              <h2 class="section-label px-1 mb-2">配置</h2>
-              <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                <button
-                  v-for="preset in state.interface.preset"
-                  :key="preset.name"
-                  @click="!state.isRunning && applyPreset(preset)"
-                  class="flex-shrink-0 px-4 py-2.5 chip text-[13px] whitespace-nowrap"
-                  :class="[
-                    state.activePresetName === preset.name ? 'on' : '',
-                    state.isRunning ? 'opacity-50' : '',
-                  ]"
-                >{{ labelOf(preset) }}</button>
-              </div>
-            </section>
-
-            <TaskList :show-heading="false" />
-          </template>
-
-          <section
-            v-else
-            class="responsive-content global-settings-panel px-4 pt-4 pb-6"
-            role="tabpanel"
-            aria-label="全局设置"
-          >
-            <div class="global-settings-intro">
-              <h2>全局设置</h2>
-              <p>这些选项会应用到当前资源、控制器和相关任务。</p>
-            </div>
-
-            <div v-for="group in globalSettingsGroups" :key="group.key" class="global-settings-group">
-              <p class="global-settings-label">{{ group.label }}</p>
-              <OptionRenderer
-                v-for="name in group.names"
-                :key="`${group.key}_${name}`"
-                :option-name="name"
-                :source="group.source"
-              />
-            </div>
-
-            <div v-if="globalSettingsCount === 0" class="global-settings-empty">当前环境没有可配置的全局选项。</div>
           </section>
+
+          <TaskList />
         </template>
 
         <!-- ── Settings ── -->
@@ -195,6 +127,7 @@ watch(() => state.activeTab, (nextTab, previousTab) => {
 
       <!-- ═══ Bottom Sheet Drawer ═══ -->
       <OptionDrawer />
+      <TaskCatalogDrawer />
 
     </div>
   </div>

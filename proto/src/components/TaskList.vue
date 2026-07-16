@@ -13,12 +13,19 @@ const taskListHeadingRef = ref(null)
 
 function openDrawer(task) {
   if (state.isRunning) return
+  state.showTaskCatalog = false
   if (state.expandedTaskName === task.name) {
     state.expandedTaskName = null
   } else {
     state.expandedTaskName = task.name
     state.selectedTaskName = task.name
   }
+}
+
+function openTaskCatalog() {
+  if (state.isRunning) return
+  state.expandedTaskName = null
+  state.showTaskCatalog = true
 }
 
 // Design.md uses one interaction accent throughout the product.
@@ -49,16 +56,29 @@ function handleDelete(taskName) {
 
 <template>
   <div class="px-4 pt-3 pb-4 space-y-2">
-    <h2
-      ref="taskListHeadingRef"
-      class="section-label px-1 mb-2"
-      :class="{ 'sr-only': !showHeading }"
-      tabindex="-1"
-    >任务列表</h2>
+    <div class="flex items-center justify-between gap-3 mb-2">
+      <h2
+        ref="taskListHeadingRef"
+        class="section-label px-1"
+        :class="{ 'sr-only': !showHeading }"
+        tabindex="-1"
+      >任务列表</h2>
+      <button
+        type="button"
+        class="task-list-add-button"
+        :disabled="state.isRunning"
+        @click="openTaskCatalog"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+        </svg>
+        添加任务
+      </button>
+    </div>
 
     <div ref="taskListRef" class="task-list-grid">
       <div
-        v-for="{ task, supported } in visibleTasks"
+        v-for="{ task, configured, supported } in visibleTasks"
         :key="task.name"
         class="surface-card relative overflow-hidden flex items-center gap-3 pl-4 pr-3.5 py-3.5 transition-all duration-200"
         :class="[
@@ -75,8 +95,8 @@ function handleDelete(taskName) {
       ></span>
 
       <label class="w-11 h-11 -m-2.5 flex items-center justify-center flex-shrink-0" @click.stop>
-        <input type="checkbox" class="cb" :checked="state.taskChecks[task.name]" :disabled="!supported || state.isRunning"
-          @change="state.taskChecks[task.name] = $event.target.checked" />
+        <input type="checkbox" class="cb" :checked="configured.enabled" :disabled="!supported || state.isRunning"
+          @change="configured.enabled = $event.target.checked" />
       </label>
 
       <div class="flex-1 min-w-0" :class="!supported ? 'opacity-30' : ''">

@@ -1,5 +1,6 @@
 import { reactive, computed, watch } from 'vue'
 import { INTERFACE_DATA, I18N_DATA } from '../data.js'
+import { substituteInputPlaceholders } from '../utils/pipeline.js'
 
 /* ═══ Utilities ═══ */
 
@@ -49,8 +50,8 @@ const state = reactive({
   selectedControllerName: null,
   selectedResourceName: null,
   selectedTaskName: null,
-  taskChecks: {},
-  optionValues: {},
+  taskQueue: [],
+  showTaskCatalog: false,
   showPipeline: true,
   isRunning: false,
   runProgress: null, // { current, total, taskName }
@@ -80,16 +81,30 @@ export function labelOf(obj) {
 export function descOf(obj) {
   if (!obj || !obj.description) return ''
   return t(obj.description)
+    .replace(/!\[[^\]]*]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /* ── Option applicability ── */
+
+function matchesSelectedController(name) {
+  const controller = selectedController.value
+  if (!controller || typeof name !== 'string') return false
+  const expected = name.toLowerCase()
+  return [controller.name, controller.type].some((value) => value?.toLowerCase() === expected)
+}
 
 export function isOptionApplicable(optName) {
   const def = state.interface.option?.[optName]
   if (!def) return false
   const controllers = asList(def.controller)
   const resources = asList(def.resource)
-  if (controllers.length > 0 && !controllers.includes(state.selectedControllerName)) return false
+  if (controllers.length > 0 && !controllers.some((name) => matchesSelectedController(name))) return false
   if (resources.length > 0 && !resources.includes(state.selectedResourceName)) return false
   return true
 }
@@ -112,35 +127,19 @@ const selectedResource = computed(() =>
   (state.interface.resource || []).find((r) => r.name === state.selectedResourceName),
 )
 
-const visibleTasks = computed(() =>
-  (state.interface.task || []).map((task) => {
-    const resources = asList(task.resource)
-    const controllers = asList(task.controller)
-    const resourceOk = resources.length === 0 || resources.includes(state.selectedResourceName)
-    const controllerOk = controllers.length === 0 || controllers.includes(state.selectedControllerName)
-    return { task, supported: resourceOk && controllerOk }
-  }),
-)
+const taskCatalog = computed(() => state.interface.task || [])
+const visibleTasks = computed(() => {
+  const tasksByName = new Map(taskCatalog.value.map((task) => [task.name, task]))
+  return state.taskQueue.flatMap((configured) => {
+    const task = tasksByName.get(configured.name)
+    if (!task) return []
+    return [{ task, configured, supported: isTaskSupported(task) }]
+  })
+})
 
 const selectedTask = computed(() =>
-  (state.interface.task || []).find((t) => t.name === state.selectedTaskName),
+  taskCatalog.value.find((task) => task.name === state.selectedTaskName),
 )
-
-const globalOptionNames = computed(() =>
-  asList(state.interface.global_option).filter((n) => isOptionApplicable(n)),
-)
-
-const resourceOptionNames = computed(() => {
-  const r = selectedResource.value
-  if (!r) return []
-  return asList(r.option).filter((n) => isOptionApplicable(n))
-})
-
-const controllerOptionNames = computed(() => {
-  const c = selectedController.value
-  if (!c) return []
-  return asList(c.option).filter((n) => isOptionApplicable(n))
-})
 
 const selectedTaskOptionNames = computed(() => {
   const task = selectedTask.value
@@ -149,24 +148,47 @@ const selectedTaskOptionNames = computed(() => {
 })
 
 const checkedTaskCount = computed(() =>
-  Object.values(state.taskChecks).filter((v) => v === true).length,
+  state.taskQueue.filter((task) => task.enabled).length,
 )
+const queuedTaskCount = computed(() => state.taskQueue.length)
+const catalogTaskCount = computed(() => taskCatalog.value.length)
+
+function defaultOptionValue(def) {
+  const type = getOptionType(def)
+  if (type === 'select' || type === 'switch') return def.default_case ?? null
+  if (type === 'checkbox') return asList(def.default_case)
+  if (type === 'input') {
+    return Object.fromEntries((def.inputs || []).map((input) => {
+      const value = input.default ?? ''
+      return [
+        input.name,
+        input.pipeline_type === 'bool' ? String(value).toLowerCase() === 'true' : value,
+      ]
+    }))
+  }
+  return null
+}
+
+function createDefaultOptionValues() {
+  return Object.fromEntries(
+    Object.entries(state.interface.option || {}).map(([name, def]) => [name, defaultOptionValue(def)]),
+  )
+}
+
+export function optionValueOf(optName, taskName = state.selectedTaskName) {
+  return state.taskQueue.find((task) => task.name === taskName)?.optionValues?.[optName]
+}
+
+export function setOptionValue(optName, value, taskName = state.selectedTaskName) {
+  if (!taskName) return
+  const configured = state.taskQueue.find((task) => task.name === taskName)
+  if (!configured) return
+  configured.optionValues[optName] = value
+}
 
 /* ═══ Pipeline Override Computation ═══ */
 
-function replacePlaceholders(obj, data) {
-  const json = JSON.stringify(obj)
-  const replaced = json.replace(/\{([^}]+)\}/g, (match, key) => {
-    const val = data[key]
-    if (val === undefined) return match
-    const numVal = Number(val)
-    if (!isNaN(numVal) && val !== '') return String(numVal)
-    return JSON.stringify(val)
-  })
-  return JSON.parse(replaced)
-}
-
-function mergeOptionPipeline(target, optName, visited) {
+function mergeOptionPipeline(target, optName, visited, values) {
   if (visited.has(optName)) return
   visited.add(optName)
 
@@ -174,26 +196,26 @@ function mergeOptionPipeline(target, optName, visited) {
   if (!def || !isOptionApplicable(optName)) return
 
   const type = getOptionType(def)
-  const val = state.optionValues[optName]
+  const val = values[optName]
 
   if (type === 'input') {
     if (def.pipeline_override) {
       const data = val || {}
-      deepMerge(target, replacePlaceholders(deepClone(def.pipeline_override), data))
+      deepMerge(target, substituteInputPlaceholders(deepClone(def.pipeline_override), def.inputs || [], data))
     }
   } else if (type === 'checkbox') {
     const checked = Array.isArray(val) ? val : []
     for (const caseDef of def.cases || []) {
       if (!checked.includes(caseDef.name)) continue
       if (caseDef.pipeline_override) deepMerge(target, deepClone(caseDef.pipeline_override))
-      for (const sub of asList(caseDef.option)) mergeOptionPipeline(target, sub, visited)
+      for (const sub of asList(caseDef.option)) mergeOptionPipeline(target, sub, visited, values)
     }
   } else {
-    const selCase = val || def.default_case || def.cases?.[0]?.name
+    const selCase = val ?? def.default_case
     const caseDef = (def.cases || []).find((c) => c.name === selCase)
     if (caseDef) {
       if (caseDef.pipeline_override) deepMerge(target, deepClone(caseDef.pipeline_override))
-      for (const sub of asList(caseDef.option)) mergeOptionPipeline(target, sub, visited)
+      for (const sub of asList(caseDef.option)) mergeOptionPipeline(target, sub, visited, values)
     }
   }
 }
@@ -204,10 +226,8 @@ const pipelinePreview = computed(() => {
   const result = {}
   if (task.pipeline_override) deepMerge(result, deepClone(task.pipeline_override))
   const visited = new Set()
-  for (const n of asList(state.interface.global_option)) mergeOptionPipeline(result, n, visited)
-  for (const n of asList(selectedResource.value?.option)) mergeOptionPipeline(result, n, visited)
-  for (const n of asList(selectedController.value?.option)) mergeOptionPipeline(result, n, visited)
-  for (const n of asList(task.option)) mergeOptionPipeline(result, n, visited)
+  const values = state.taskQueue.find((configured) => configured.name === task.name)?.optionValues || {}
+  for (const n of asList(task.option)) mergeOptionPipeline(result, n, visited, values)
   return result
 })
 
@@ -217,26 +237,16 @@ const pipelineJson = computed(() => JSON.stringify(pipelinePreview.value, null, 
 
 function initDefaults() {
   state.selectedControllerName = state.interface.controller[0]?.name || null
-  for (const task of state.interface.task || []) {
-    state.taskChecks[task.name] = task.default_check === true
+  const firstPreset = state.interface.preset?.[0]
+  if (firstPreset) applyPreset(firstPreset, { writeLog: false })
+  else {
+    state.taskQueue = taskCatalog.value.map((task) => ({
+      name: task.name,
+      enabled: task.default_check === true,
+      optionValues: createDefaultOptionValues(),
+    }))
   }
-  for (const [name, def] of Object.entries(state.interface.option || {})) {
-    const type = getOptionType(def)
-    if (type === 'select' || type === 'switch') {
-      state.optionValues[name] = def.default_case || def.cases?.[0]?.name || ''
-    } else if (type === 'checkbox') {
-      state.optionValues[name] = asList(def.default_case)
-    } else if (type === 'input') {
-      const data = {}
-      for (const inp of def.inputs || []) data[inp.name] = inp.default ?? ''
-      state.optionValues[name] = data
-    }
-  }
-  const firstOk = state.interface.task?.find((t) => {
-    const r = asList(t.resource)
-    return r.length === 0
-  })
-  state.selectedTaskName = firstOk?.name || state.interface.task?.[0]?.name || null
+  state.selectedTaskName = state.taskQueue[0]?.name || null
 }
 
 initDefaults()
@@ -258,57 +268,77 @@ function addLog(level, message) {
   if (state.logEntries.length > 50) state.logEntries.pop()
 }
 
-function applyPreset(preset) {
+function applyPreset(preset, { writeLog = true } = {}) {
   state.activePresetName = preset.name
   const presetTasks = asList(preset.task)
-  for (const task of state.interface.task || []) {
-    const pt = presetTasks.find((pt) => pt.name === task.name)
-    state.taskChecks[task.name] = pt ? pt.enabled !== false : false
-  }
-  for (const pt of presetTasks) {
-    if (!pt.option) continue
-    for (const [optName, optVal] of Object.entries(pt.option)) {
+  const knownTasks = new Set(taskCatalog.value.map((task) => task.name))
+  state.taskQueue = presetTasks.flatMap((presetTask, index) => {
+    if (!knownTasks.has(presetTask.name)) return []
+    if (presetTasks.findIndex((task) => task.name === presetTask.name) !== index) return []
+
+    const optionValues = createDefaultOptionValues()
+    for (const [optName, optVal] of Object.entries(presetTask.option || {})) {
       const def = state.interface.option?.[optName]
       if (!def) continue
       const type = getOptionType(def)
       if (type === 'checkbox') {
-        state.optionValues[optName] = Array.isArray(optVal) ? [...optVal] : [optVal]
+        optionValues[optName] = Array.isArray(optVal) ? [...optVal] : [optVal]
       } else if (type === 'input') {
-        if (typeof optVal === 'object' && !Array.isArray(optVal)) state.optionValues[optName] = { ...optVal }
+        if (typeof optVal === 'object' && !Array.isArray(optVal)) optionValues[optName] = { ...optVal }
       } else {
-        state.optionValues[optName] = optVal
+        optionValues[optName] = optVal
       }
     }
+
+    return [{
+      name: presetTask.name,
+      enabled: presetTask.enabled !== false,
+      optionValues,
+    }]
+  })
+
+  state.expandedTaskName = null
+  state.selectedTaskName = state.taskQueue[0]?.name || null
+  if (writeLog) addLog('info', `已切换配置：${labelOf(preset)}`)
+}
+
+function addTasks(taskNames) {
+  if (state.isRunning) return 0
+  const tasksByName = new Map(taskCatalog.value.map((task) => [task.name, task]))
+  const queuedNames = new Set(state.taskQueue.map((task) => task.name))
+  let added = 0
+
+  for (const taskName of taskNames) {
+    if (queuedNames.has(taskName) || !tasksByName.has(taskName)) continue
+    state.taskQueue.push({
+      name: taskName,
+      enabled: true,
+      optionValues: createDefaultOptionValues(),
+    })
+    queuedNames.add(taskName)
+    added++
   }
-  addLog('info', `Preset applied: ${labelOf(preset)}`)
+
+  state.showTaskCatalog = false
+  if (added > 0) addLog('info', `已添加 ${added} 个任务`)
+  return added
 }
 
 function removeTask(taskName) {
   if (state.isRunning) return false
 
-  const tasks = state.interface.task || []
-  const index = tasks.findIndex((task) => task.name === taskName)
+  const index = state.taskQueue.findIndex((task) => task.name === taskName)
   if (index < 0) return false
 
-  const [removedTask] = tasks.splice(index, 1)
-  delete state.taskChecks[taskName]
-
-  const presets = state.interface.preset || []
-  for (let presetIndex = presets.length - 1; presetIndex >= 0; presetIndex--) {
-    const preset = presets[presetIndex]
-    const remainingTasks = asList(preset.task).filter((task) => task.name !== taskName)
-    if (remainingTasks.length === 0) presets.splice(presetIndex, 1)
-    else if (Array.isArray(preset.task)) preset.task = remainingTasks
-    else if (remainingTasks.length > 0) preset.task = remainingTasks[0]
-  }
+  const removedTask = taskCatalog.value.find((task) => task.name === taskName)
+  state.taskQueue.splice(index, 1)
 
   if (state.expandedTaskName === taskName) state.expandedTaskName = null
   if (state.selectedTaskName === taskName) {
-    state.selectedTaskName = tasks[index]?.name || tasks[index - 1]?.name || null
+    state.selectedTaskName = state.taskQueue[index]?.name || state.taskQueue[index - 1]?.name || null
   }
 
-  state.activePresetName = null
-  addLog('info', `Task deleted: ${labelOf(removedTask)}`)
+  addLog('info', `已从当前配置移除：${labelOf(removedTask)}`)
   return true
 }
 
@@ -320,7 +350,11 @@ function toggleStart() {
     addLog('warn', 'Task execution stopped.')
     return
   }
-  const checked = (state.interface.task || []).filter((t) => state.taskChecks[t.name])
+  const tasksByName = new Map(taskCatalog.value.map((task) => [task.name, task]))
+  const checked = state.taskQueue
+    .filter((task) => task.enabled)
+    .map((task) => tasksByName.get(task.name))
+    .filter(Boolean)
   if (checked.length === 0) {
     addLog('error', 'No tasks selected.')
     return
@@ -351,6 +385,14 @@ function toggleLang() {
   state.lang = state.lang === 'zh_cn' ? 'en_us' : 'zh_cn'
 }
 
+function isTaskSupported(task) {
+  const resources = asList(task.resource)
+  const controllers = asList(task.controller)
+  const resourceOk = resources.length === 0 || resources.includes(state.selectedResourceName)
+  const controllerOk = controllers.length === 0 || controllers.some((name) => matchesSelectedController(name))
+  return resourceOk && controllerOk
+}
+
 function highlightJson(json) {
   return json
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -372,11 +414,13 @@ export function useInterface() {
     state,
     t, labelOf, descOf, asList, isOptionApplicable, isSwitchYes, getOptionType,
     availableResources, selectedController, selectedResource,
-    visibleTasks, selectedTask,
-    globalOptionNames, resourceOptionNames, controllerOptionNames, selectedTaskOptionNames,
-    checkedTaskCount,
+    taskCatalog, visibleTasks, selectedTask,
+    selectedTaskOptionNames,
+    checkedTaskCount, queuedTaskCount, catalogTaskCount,
     pipelinePreview, pipelineJson,
-    applyPreset, removeTask, toggleStart, toggleLang, addLog, highlightJson,
+    optionValueOf, setOptionValue,
+    applyPreset, addTasks, removeTask, toggleStart, toggleLang, addLog, highlightJson,
+    isTaskSupported,
     optCount: (task) => asList(task.option).filter((n) => isOptionApplicable(n)).length,
   }
 }

@@ -81,7 +81,6 @@ font-family: ui-sans-serif, system-ui, -apple-system,
 - 页面水平边距：移动端 16px；标题栏可使用 20px 左边距。
 - 列表间距：8px；卡片内边距：12–16px。
 - 顶部导航高度：56px。
-- 顶部内容 Tab 高度：48px，并支持滚动时吸顶。
 - 底部主操作区保持固定，使用安全区 `env(safe-area-inset-bottom)`。
 - 宽屏只增加列数与内容宽度，不改变功能层级。
 
@@ -90,16 +89,10 @@ font-family: ui-sans-serif, system-ui, -apple-system,
 ### 任务列表
 
 - 保持队列顺序和单列结构；平板可增加列数。
+- 列表标题区提供“添加任务”入口，任务目录以底部抽屉呈现并按选择顺序追加。
 - 每行依次包含：选择框、任务信息、可选项箭头、删除按钮。
 - 删除按钮始终占有 44×44px 点击区域，运行中禁用。
 - 删除采用二次点击确认；确认后焦点移动到相邻任务或列表标题。
-
-### 顶部内容 Tab
-
-- 任务页使用「任务列表 / 全局设置」两个文字 Tab。
-- 默认进入任务页时显示任务列表；离开后再次进入也重置为任务列表。
-- 激活态使用 2px 深色下划线，不使用大面积彩色填充。
-- 全局设置数量使用小型中性计数徽标。
 
 ### Switch
 
@@ -130,5 +123,5 @@ font-family: ui-sans-serif, system-ui, -apple-system,
 - 按压缩放最大为 `0.95`，时长 100ms。
 - 状态切换时长 150–180ms；底部抽屉可使用 250–350ms。
 - 支持 `prefers-reduced-motion: reduce`。
-- 所有图标按钮提供 `aria-label`；Tab 使用 `role="tablist"` / `role="tab"` 和 `aria-selected`。
+- 所有图标按钮提供 `aria-label`。
 - 键盘焦点必须可见，禁用控件不得响应指针事件。

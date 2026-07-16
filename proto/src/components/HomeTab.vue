@@ -2,7 +2,10 @@
 import { computed } from 'vue'
 import { useInterface } from '../composables/useInterface.js'
 
-const { state, t, labelOf, checkedTaskCount, availableResources } = useInterface()
+const {
+  state, t, labelOf, checkedTaskCount,
+  queuedTaskCount, catalogTaskCount, availableResources,
+} = useInterface()
 
 const phase = computed(() => {
   if (state.isRunning) return { key: 'running', text: '正在运行', cls: 'text-[var(--primary-on-dark)]', dot: 'dot-running' }
@@ -25,7 +28,6 @@ const resultBadge = computed(() => {
   }[r.level]
 })
 
-const totalTasks = computed(() => (state.interface.task || []).length)
 </script>
 
 <template>
@@ -68,7 +70,7 @@ const totalTasks = computed(() => (state.interface.task || []).length)
             </p>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
-            <span class="badge-tone badge-tone-info">{{ checkedTaskCount }} / {{ totalTasks }}</span>
+            <span class="badge-tone badge-tone-info">{{ checkedTaskCount }} / {{ queuedTaskCount }}</span>
             <svg class="w-4 h-4 text-[var(--primary)]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
             </svg>
@@ -87,7 +89,7 @@ const totalTasks = computed(() => (state.interface.task || []).length)
           </div>
           <div class="flex justify-between">
             <span class="text-[var(--muted)]">任务</span>
-            <span class="text-[var(--ink)]">{{ totalTasks }} 个</span>
+            <span class="text-[var(--ink)]">{{ catalogTaskCount }} 个</span>
           </div>
           <div class="flex justify-between items-center gap-4 pt-3 border-t border-[var(--divider)]">
             <span class="text-[var(--muted)]">资源</span>
