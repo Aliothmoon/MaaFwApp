@@ -29,6 +29,7 @@ data class ResolvedRunConfiguration(
 }
 
 data class ResolvedConfiguredTask(
+    val instanceId: String,
     val taskName: String,
     val label: String,
     val description: String?,
@@ -45,6 +46,7 @@ data class ResolvedConfiguredTask(
 
 data class TaskCatalogGroup(
     val groupName: String,
+    val label: String,
     val tasks: List<TaskCatalogItem>,
 )
 
@@ -54,7 +56,6 @@ data class TaskCatalogItem(
     val description: String?,
     val applicable: Boolean,
     val unavailableReason: String?,
-    val alreadyAdded: Boolean,
     val defaultChecked: Boolean,
 )
 

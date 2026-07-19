@@ -72,7 +72,7 @@ object ConfigurationResolver {
         return ResolvedProjectSession(
             configurationList = configurationList,
             activeConfiguration = activeConfiguration,
-            taskCatalog = buildTaskCatalog(definition, resourceName, activeConfiguration),
+            taskCatalog = buildTaskCatalog(definition, resourceName),
             environment = environment,
             diagnostics = diagnostics,
         )
@@ -98,14 +98,25 @@ object ConfigurationResolver {
         )
     }
 
-    /** 从模板创建新配置：仅创建瞬间复制内容，不保存模板引用。 */
-    fun createFromTemplate(definition: ProjectDefinition, templateName: String): RunConfiguration? {
+    /**
+     * 从模板创建新配置：仅创建瞬间复制内容，不保存模板引用。
+     * configurationName 为空白/null 时沿用模板名；taskNames 为 null 表示全部任务，
+     * 非 null 时按模板声明顺序保留其中出现的任务。
+     */
+    fun createFromTemplate(
+        definition: ProjectDefinition,
+        templateName: String,
+        configurationName: String? = null,
+        taskNames: List<String>? = null,
+    ): RunConfiguration? {
         val template = definition.templates.firstOrNull { it.name == templateName } ?: return null
+        val included = taskNames?.toSet()
         return RunConfiguration(
             id = newConfigurationId(),
-            name = template.name,
+            name = configurationName?.takeIf { it.isNotBlank() } ?: template.name,
             tasks = template.tasks
                 .distinctBy { it.taskName }
+                .filter { included == null || it.taskName in included }
                 .map { ConfiguredTask(it.taskName, it.enabled, it.optionValues) },
         )
     }
@@ -128,6 +139,7 @@ object ConfigurationResolver {
                     "任务 \"${configured.taskName}\" 已不在项目中",
                 )
                 ResolvedConfiguredTask(
+                    instanceId = configured.instanceId,
                     taskName = configured.taskName,
                     label = configured.taskName,
                     description = null,
@@ -140,6 +152,7 @@ object ConfigurationResolver {
             } else {
                 val applicability = checkApplicability(definition, taskDefinition, resourceName)
                 ResolvedConfiguredTask(
+                    instanceId = configured.instanceId,
                     taskName = configured.taskName,
                     label = taskDefinition.name,
                     description = taskDefinition.description,
@@ -186,9 +199,7 @@ object ConfigurationResolver {
     private fun buildTaskCatalog(
         definition: ProjectDefinition,
         resourceName: String?,
-        activeConfiguration: ResolvedRunConfiguration?,
     ): List<TaskCatalogGroup> {
-        val addedNames = activeConfiguration?.tasks?.mapTo(mutableSetOf()) { it.taskName } ?: emptySet()
         return definition.groups.map { group ->
             val tasks = definition.tasks.filter { task ->
                 if (group.name == ProjectLoader.UNGROUPED) task.groups.isEmpty()
@@ -201,11 +212,10 @@ object ConfigurationResolver {
                     description = task.description,
                     applicable = reason == null,
                     unavailableReason = reason,
-                    alreadyAdded = task.name in addedNames,
                     defaultChecked = task.defaultCheck,
                 )
             }
-            TaskCatalogGroup(group.name, tasks)
+            TaskCatalogGroup(group.name, group.label, tasks)
         }.filter { it.tasks.isNotEmpty() }
     }
 

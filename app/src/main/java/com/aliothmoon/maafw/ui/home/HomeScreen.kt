@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.ui.home
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
@@ -24,6 +26,7 @@ import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 
@@ -120,8 +123,13 @@ private fun RunnerCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit)
         MaaInfoRow("状态", phaseText(runner.phase))
         if (execution != null) {
             if (execution.totalTaskCount > 0) {
+                val animatedProgress by animateFloatAsState(
+                    targetValue = execution.completedTaskCount.toFloat() / execution.totalTaskCount,
+                    animationSpec = MaaMotion.enter(),
+                    label = "runnerProgress",
+                )
                 LinearProgressIndicator(
-                    progress = { execution.completedTaskCount.toFloat() / execution.totalTaskCount },
+                    progress = { animatedProgress },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

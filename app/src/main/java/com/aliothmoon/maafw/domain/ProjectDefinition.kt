@@ -45,8 +45,13 @@ data class TaskDefinition(
     val defaultCheck: Boolean,
 )
 
+/** PI v2.4.0 顶层 group[] 声明；label 缺省回落 name。 */
 data class TaskGroupDefinition(
     val name: String,
+    val label: String = name,
+    val description: String? = null,
+    val icon: String? = null,
+    val defaultExpand: Boolean = true,
 )
 
 sealed interface OptionDefinition {

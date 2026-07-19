@@ -125,6 +125,13 @@ dependencies {
     implementation(libs.reorderable)
     implementation(libs.kotlinx.serialization.json)
 
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.html)
+    implementation(libs.markwon.image)
+    implementation(libs.markwon.linkify)
+    implementation(libs.markwon.strikethrough)
+    implementation(libs.okhttp)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     androidTestImplementation(libs.androidx.junit)

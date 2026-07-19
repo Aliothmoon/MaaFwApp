@@ -36,33 +36,47 @@ data class SessionUiState(
 /** 封闭的语义 Intent，Screen 不直接构造 copy。 */
 sealed interface SessionIntent {
     data class CreateConfiguration(val name: String) : SessionIntent
-    data class CreateFromTemplate(val templateName: String) : SessionIntent
+
+    /**
+     * configurationName 为空白/null 时沿用模板名；taskNames 为 null 表示带入模板全部任务，
+     * 非 null 时按模板声明顺序保留其中出现的任务。
+     */
+    data class CreateFromTemplate(
+        val templateName: String,
+        val configurationName: String? = null,
+        val taskNames: List<String>? = null,
+    ) : SessionIntent
     data class SelectConfiguration(val id: RunConfigurationId) : SessionIntent
     data class RenameConfiguration(val id: RunConfigurationId, val name: String) : SessionIntent
     data class DeleteConfiguration(val id: RunConfigurationId) : SessionIntent
 
+    /** 允许重复 taskName：每个名称都新建一个独立 ConfiguredTask 实例。 */
     data class ConfirmAddTasks(
         val configurationId: RunConfigurationId,
         val orderedTaskNames: List<String>,
     ) : SessionIntent
 
-    data class RemoveTask(val configurationId: RunConfigurationId, val taskName: String) : SessionIntent
+    data class RemoveTask(
+        val configurationId: RunConfigurationId,
+        val taskInstanceId: String,
+    ) : SessionIntent
+
     data class ToggleTask(
         val configurationId: RunConfigurationId,
-        val taskName: String,
+        val taskInstanceId: String,
         val enabled: Boolean,
     ) : SessionIntent
 
     /** targetIndex 为移除原位置后目标插入位置。 */
     data class MoveTask(
         val configurationId: RunConfigurationId,
-        val taskName: String,
+        val taskInstanceId: String,
         val targetIndex: Int,
     ) : SessionIntent
 
     data class SetTaskOption(
         val configurationId: RunConfigurationId,
-        val taskName: String,
+        val taskInstanceId: String,
         val optionName: String,
         val value: OptionValue,
     ) : SessionIntent

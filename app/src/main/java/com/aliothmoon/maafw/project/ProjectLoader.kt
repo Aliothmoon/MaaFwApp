@@ -18,12 +18,22 @@ sealed interface ProjectLoadResult {
 /**
  * 合并 tasks/ 下全部 PI 分片文件为一个 ProjectDefinition，并做跨文件校验：
  * 重名 task/option、悬空 option 引用、option cycle、preset 引用缺失。
+ *
+ * 文本物化（对齐 MXU contentResolver）：$i18n 按 languages 声明查表（查无回落 key），
+ * description 级字段的文件路径形态在加载期读入；URL 形态原样保留给 UI 懒加载。
+ *
+ * @param locale 期望语言 tag（如 zh-CN）；null 时取系统默认。
  */
-class ProjectLoader(private val source: ProjectSource) {
+class ProjectLoader(
+    private val source: ProjectSource,
+    private val locale: String? = null,
+) {
 
     fun load(): ProjectLoadResult {
         val diagnostics = mutableListOf<Diagnostic>()
         val projectInterface = loadInterface(diagnostics)
+        val translations = loadTranslations(projectInterface, diagnostics)
+        val text = buildTextResolver(translations, diagnostics)
 
         val files = try {
             walkJsonFiles("tasks")
@@ -39,6 +49,16 @@ class ProjectLoader(private val source: ProjectSource) {
         val tasks = mutableListOf<TaskDefinition>()
         val options = linkedMapOf<String, OptionDefinition>()
         val templates = mutableListOf<ConfigurationTemplate>()
+        // 声明顺序合并：根 interface.json 优先，import 分片按文件顺序追加，重名先定义优先
+        // 根文件解析早于翻译表加载，label/description 在此处后置物化
+        val declaredGroups = mutableListOf<TaskGroupDefinition>()
+        projectInterface?.groups?.forEach { group ->
+            val resolved = group.copy(
+                label = text.label(group.label) ?: group.name,
+                description = text.description(group.description),
+            )
+            mergeGroup(declaredGroups, resolved, "interface.json", diagnostics)
+        }
 
         for (file in files.sorted()) {
             val content = try {
@@ -47,7 +67,7 @@ class ProjectLoader(private val source: ProjectSource) {
                 diagnostics += error(file, "读取失败: ${e.message}")
                 continue
             }
-            val parsed = PiParser.parseFile(file, content)
+            val parsed = PiParser.parseFile(file, content, text)
             diagnostics += parsed.diagnostics
             for (task in parsed.tasks) {
                 if (tasks.any { it.name == task.name }) {
@@ -70,11 +90,16 @@ class ProjectLoader(private val source: ProjectSource) {
                     templates += template
                 }
             }
+            for (group in parsed.groups) {
+                mergeGroup(declaredGroups, group, file, diagnostics)
+            }
         }
 
         validateOptionReferences(tasks, options, diagnostics)
         detectOptionCycles(options, diagnostics)
         validateTemplates(templates, tasks, diagnostics)
+
+        val (normalizedTasks, groups) = resolveGroups(declaredGroups, tasks, diagnostics)
 
         val definition = ProjectDefinition(
             name = projectInterface?.name ?: source.projectName,
@@ -83,12 +108,64 @@ class ProjectLoader(private val source: ProjectSource) {
             resources = projectInterface?.resources
                 ?.takeIf { it.isNotEmpty() }
                 ?: deriveResources(diagnostics),
-            tasks = tasks,
-            groups = buildGroups(tasks),
+            tasks = normalizedTasks,
+            groups = groups,
             options = options,
             templates = templates,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
+    }
+
+    /** 按 languages 声明加载当前语言的翻译表：精确 tag -> 语言前缀 -> 首个声明。 */
+    private fun loadTranslations(
+        projectInterface: PiInterfaceContent?,
+        diagnostics: MutableList<Diagnostic>,
+    ): Map<String, String> {
+        val languages = projectInterface?.languages.orEmpty()
+        if (languages.isEmpty()) return emptyMap()
+
+        val desired = locale ?: java.util.Locale.getDefault().toLanguageTag()
+        val lang = languages.keys.firstOrNull { it.equals(desired, ignoreCase = true) }
+            ?: languages.keys.firstOrNull {
+                it.substringBefore('-').equals(desired.substringBefore('-'), ignoreCase = true)
+            }
+            ?: languages.keys.first()
+
+        val path = normalizeProjectPath(languages.getValue(lang))
+        val content = try {
+            source.read(path)
+        } catch (e: Exception) {
+            diagnostics += warning(path, "翻译文件读取失败: ${e.message}")
+            return emptyMap()
+        }
+        return PiParser.parseTranslations(path, content) { diagnostics += it }
+    }
+
+    /** $i18n 查表（查无回落 key，同 MXU）；description 追加文件形态物化。 */
+    private fun buildTextResolver(
+        translations: Map<String, String>,
+        diagnostics: MutableList<Diagnostic>,
+    ): PiTextResolver = object : PiTextResolver {
+
+        private fun i18n(raw: String): String {
+            if (!raw.startsWith("$")) return raw
+            val key = raw.substring(1)
+            return translations[key] ?: key
+        }
+
+        override fun label(raw: String?): String? = raw?.let(::i18n)
+
+        override fun description(raw: String?): String? {
+            val resolved = raw?.let(::i18n) ?: return null
+            if (!isFilePath(resolved)) return resolved
+            val path = normalizeProjectPath(resolved)
+            return try {
+                source.read(path)
+            } catch (e: Exception) {
+                diagnostics += warning(path, "description 文件读取失败，保留原始文本: ${e.message}")
+                resolved
+            }
+        }
     }
 
     private fun loadInterface(diagnostics: MutableList<Diagnostic>): PiInterfaceContent? {
@@ -117,13 +194,47 @@ class ProjectLoader(private val source: ProjectSource) {
         return result
     }
 
-    /** 未声明 group 的任务归入客户端提供的“未分组”集合。 */
-    private fun buildGroups(tasks: List<TaskDefinition>): List<TaskGroupDefinition> {
-        val names = linkedSetOf<String>()
-        for (task in tasks) {
-            if (task.groups.isEmpty()) names += UNGROUPED else names += task.groups
+    private fun mergeGroup(
+        declared: MutableList<TaskGroupDefinition>,
+        group: TaskGroupDefinition,
+        source: String,
+        diagnostics: MutableList<Diagnostic>,
+    ) {
+        if (declared.any { it.name == group.name }) {
+            diagnostics += warning(source, "group \"${group.name}\" 重复声明，保留先出现的定义")
+        } else {
+            declared += group
         }
-        return names.map { TaskGroupDefinition(it) }
+    }
+
+    /**
+     * 以顶层 group[] 声明为准归一化任务分组（对齐 MXU v2.4.0）：
+     * - 无任何声明即无分组：任务级引用被忽略，全部归入「未分组」；
+     * - 有声明时任务只保留命中声明的引用，未命中引用丢弃并记 warning；
+     * - 有效引用为空的任务落「未分组」，该组仅在需要时追加为最后一组。
+     */
+    private fun resolveGroups(
+        declared: List<TaskGroupDefinition>,
+        tasks: List<TaskDefinition>,
+        diagnostics: MutableList<Diagnostic>,
+    ): Pair<List<TaskDefinition>, List<TaskGroupDefinition>> {
+        if (declared.isEmpty()) {
+            val flattened = tasks.map { if (it.groups.isEmpty()) it else it.copy(groups = emptyList()) }
+            val groups = if (flattened.isEmpty()) emptyList() else listOf(TaskGroupDefinition(UNGROUPED))
+            return flattened to groups
+        }
+        val declaredNames = declared.mapTo(mutableSetOf()) { it.name }
+        var hasUngrouped = false
+        val normalized = tasks.map { task ->
+            val kept = task.groups.filter { it in declaredNames }
+            task.groups.filterNot { it in declaredNames }.forEach { ref ->
+                diagnostics += warning("task:${task.name}", "引用了未声明的 group \"$ref\"")
+            }
+            if (kept.isEmpty()) hasUngrouped = true
+            if (kept.size == task.groups.size) task else task.copy(groups = kept)
+        }
+        val groups = if (hasUngrouped) declared + TaskGroupDefinition(UNGROUPED) else declared
+        return normalized to groups
     }
 
     private fun validateOptionReferences(

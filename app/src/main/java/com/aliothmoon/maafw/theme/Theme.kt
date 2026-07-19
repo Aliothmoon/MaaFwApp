@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -57,6 +58,13 @@ private fun createLightColorScheme(
     onSurface = LightOnSurface,
     surfaceVariant = LightSurfaceVariant,
     onSurfaceVariant = LightOnSurfaceVariant,
+    // M3 baseline 的 surfaceContainer* 带紫调，会与暖石色盘冲突（sheet/menu 底色）；
+    // sheet 底（surfaceContainerLow）取 background 同源暖灰，衬白卡片建立层级
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = LightBackground,
+    surfaceContainer = Color(0xFFFAF9F6),
+    surfaceContainerHigh = Color(0xFFF5F5F4),
+    surfaceContainerHighest = Color(0xFFE7E5E4),
     outline = LightOutline,
     outlineVariant = LightSurfaceVariant,
     error = Color(0xfff53f3f),
@@ -88,6 +96,11 @@ private fun createDarkColorScheme(
     onSurface = DarkOnSurface,
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = DarkOnSurfaceVariant,
+    surfaceContainerLowest = Color(0xFF0F0F0F),
+    surfaceContainerLow = DarkBackground,
+    surfaceContainer = Color(0xFF232325),
+    surfaceContainerHigh = Color(0xFF2C2C2E),
+    surfaceContainerHighest = Color(0xFF3A3A3C),
     outline = DarkOutline,
     outlineVariant = DarkSurfaceVariant,
     error = Color(0xFFFF453A),
@@ -177,7 +190,10 @@ fun MaaFwTheme(
     val colorScheme = if (darkTheme) BlueDark else BlueLight
 
     CompositionLocalProvider(
+        // foundation 层 clickable 的指示效果
         LocalIndication provides NoIndication,
+        // M3 组件内部 ripple（NavigationBarItem/Button 等不走 LocalIndication）
+        LocalRippleConfiguration provides null,
         LocalMaaPalette provides if (darkTheme) DarkMaaPalette else LightMaaPalette,
     ) {
         MaterialTheme(

@@ -1,20 +1,14 @@
 package com.aliothmoon.maafw.ui.options
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -26,16 +20,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.aliothmoon.maafw.domain.OptionCaseState
 import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.validateInputCandidate
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaChoiceChip
+import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
+import com.aliothmoon.maafw.ui.components.MaaMarkdown
 
 /**
  * 动态 option 编辑器：按 OptionEditorState 树递归渲染，
  * 活动分支的子 option 以缩进线性平铺（docs/ui-implementation-notes.md B4）。
  * 状态变更一律通过 onSetOption(optionName, value) 发出，子 option 与父共用同一 task 作用域 value map。
+ * carded = true 时顶层 option 各自包白卡片（option 名为卡片标题），子 option 仍在父卡内平铺。
  */
 @Composable
 fun OptionEditorList(
@@ -43,14 +43,48 @@ fun OptionEditorList(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
     modifier: Modifier = Modifier,
+    carded: Boolean = false,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(
+            if (carded) MaaDesignTokens.Spacing.sm else MaaDesignTokens.Spacing.md,
+        ),
     ) {
         options.forEach { option ->
-            OptionEditorItem(option, locked, onSetOption)
+            if (carded) {
+                CardedOptionItem(option, locked, onSetOption)
+            } else {
+                OptionEditorItem(option, locked, onSetOption)
+            }
         }
+    }
+}
+
+/** 卡片形态：option 名升为卡片标题（容器实体名角色），标准两态 Switch 直接放标题行尾。 */
+@Composable
+private fun CardedOptionItem(
+    option: OptionEditorState,
+    locked: Boolean,
+    onSetOption: (String, OptionValue) -> Unit,
+) {
+    val switchCases = standardSwitchCases(option)
+    MaaCard(
+        title = option.label,
+        trailing = if (switchCases != null) {
+            { OptionSwitch(option, switchCases, locked, onSetOption) }
+        } else {
+            null
+        },
+    ) {
+        when (option.kind) {
+            OptionKind.Select, OptionKind.Switch ->
+                if (switchCases == null) ChoiceChipFlow(option, locked, onSetOption)
+
+            OptionKind.Checkbox -> CheckboxCases(option, locked, onSetOption)
+            OptionKind.Input -> InputFields(option, locked, onSetOption)
+        }
+        OptionDescriptionAndChildren(option, locked, onSetOption)
     }
 }
 
@@ -72,18 +106,28 @@ private fun OptionEditorItem(
             OptionKind.Checkbox -> CheckboxEditor(option, locked, onSetOption)
             OptionKind.Input -> InputEditor(option, locked, onSetOption)
         }
-        option.description?.let {
-            Text(
+        OptionDescriptionAndChildren(option, locked, onSetOption)
+    }
+}
+
+@Composable
+private fun OptionDescriptionAndChildren(
+    option: OptionEditorState,
+    locked: Boolean,
+    onSetOption: (String, OptionValue) -> Unit,
+) {
+    option.description?.let {
+        MaaDescriptionPanel {
+            MaaMarkdown(
                 text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
-        // 活动分支子 option 递归渲染
-        val children = option.activeCases.flatMap { it.children }
-        if (children.isNotEmpty()) {
-            OptionEditorList(children, locked, onSetOption)
-        }
+    }
+    // 活动分支子 option 递归渲染（卡片内不再嵌套卡片）
+    val children = option.activeCases.flatMap { it.children }
+    if (children.isNotEmpty()) {
+        OptionEditorList(children, locked, onSetOption)
     }
 }
 
@@ -93,48 +137,64 @@ private fun SelectEditor(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val selected = option.activeCases.firstOrNull()
-    Row(
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
+        Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+        ChoiceChipFlow(option, locked, onSetOption)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChoiceChipFlow(
+    option: OptionEditorState,
+    locked: Boolean,
+    onSetOption: (String, OptionValue) -> Unit,
+) {
+    FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
-        Text(
-            text = option.label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Box {
-            OutlinedButton(
-                onClick = { expanded = true },
+        option.cases.forEach { case ->
+            MaaChoiceChip(
+                label = case.label,
+                selected = case.active,
                 enabled = !locked,
-            ) {
-                Text(
-                    text = selected?.label ?: "未设置",
-                    maxLines = 1,
-                )
-                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                option.cases.forEach { case ->
-                    DropdownMenuItem(
-                        text = { Text(case.label) },
-                        onClick = {
-                            expanded = false
-                            onSetOption(option.name, OptionValue.SingleCase(case.name))
-                        },
-                    )
-                }
-            }
+                onClick = { onSetOption(option.name, OptionValue.SingleCase(case.name)) },
+            )
         }
     }
 }
 
 private val SWITCH_ON_NAMES = setOf("yes", "on", "true", "enable", "开", "开启", "启用")
+
+/** 标准两态 Switch 的 (on, off) case；非标准两态返回 null（回落 chip 平铺）。 */
+private fun standardSwitchCases(option: OptionEditorState): Pair<OptionCaseState, OptionCaseState>? {
+    if (option.kind != OptionKind.Switch || option.cases.size != 2) return null
+    val onCase = option.cases.firstOrNull { it.name.lowercase() in SWITCH_ON_NAMES } ?: return null
+    val offCase = option.cases.firstOrNull { it != onCase } ?: return null
+    return onCase to offCase
+}
+
+@Composable
+private fun OptionSwitch(
+    option: OptionEditorState,
+    cases: Pair<OptionCaseState, OptionCaseState>,
+    locked: Boolean,
+    onSetOption: (String, OptionValue) -> Unit,
+) {
+    val (onCase, offCase) = cases
+    Switch(
+        checked = option.activeCases.firstOrNull()?.name == onCase.name,
+        onCheckedChange = { checked ->
+            onSetOption(
+                option.name,
+                OptionValue.SingleCase(if (checked) onCase.name else offCase.name),
+            )
+        },
+        enabled = !locked,
+    )
+}
 
 @Composable
 private fun SwitchEditor(
@@ -142,10 +202,9 @@ private fun SwitchEditor(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
 ) {
-    val onCase = option.cases.firstOrNull { it.name.lowercase() in SWITCH_ON_NAMES }
-    val offCase = option.cases.firstOrNull { it != onCase }
-    if (option.cases.size != 2 || onCase == null || offCase == null) {
-        // 非标准两态 switch 回退为下拉选择
+    val cases = standardSwitchCases(option)
+    if (cases == null) {
+        // 非标准两态 switch 回退为 chip 平铺
         SelectEditor(option, locked, onSetOption)
         return
     }
@@ -159,16 +218,7 @@ private fun SwitchEditor(
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f, fill = false),
         )
-        Switch(
-            checked = option.activeCases.firstOrNull()?.name == onCase.name,
-            onCheckedChange = { checked ->
-                onSetOption(
-                    option.name,
-                    OptionValue.SingleCase(if (checked) onCase.name else offCase.name),
-                )
-            },
-            enabled = !locked,
-        )
+        OptionSwitch(option, cases, locked, onSetOption)
     }
 }
 
@@ -180,6 +230,17 @@ private fun CheckboxEditor(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
         Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+        CheckboxCases(option, locked, onSetOption)
+    }
+}
+
+@Composable
+private fun CheckboxCases(
+    option: OptionEditorState,
+    locked: Boolean,
+    onSetOption: (String, OptionValue) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
         val activeNames = option.activeCases.map { it.name }
         option.cases.forEach { case ->
             Row(
@@ -209,6 +270,17 @@ private fun InputEditor(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
         Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+        InputFields(option, locked, onSetOption)
+    }
+}
+
+@Composable
+private fun InputFields(
+    option: OptionEditorState,
+    locked: Boolean,
+    onSetOption: (String, OptionValue) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
         option.inputs.forEach { field ->
             // 本地保留正在输入的候选值；仅合法候选立即提交（UI 立即拒绝，Builder 再校验）
             var text by remember(option.name, field.name, field.value) { mutableStateOf(field.value) }
@@ -238,12 +310,4 @@ private fun InputEditor(
             )
         }
     }
-}
-
-@Composable
-fun OptionEditorDivider() {
-    HorizontalDivider(
-        thickness = MaaDesignTokens.Separator.thickness,
-        color = MaterialTheme.colorScheme.outlineVariant,
-    )
 }

@@ -39,13 +39,20 @@ data class RunConfiguration(
     val tasks: List<ConfiguredTask> = emptyList(),
 )
 
-/** 同一 RunConfiguration 内 taskName 唯一。 */
+/**
+ * 同一 RunConfiguration 内允许重复 taskName（每次添加生成独立实例，
+ * 各自持有 enabled / optionValues）；实例定位一律使用 instanceId。
+ * 旧持久化数据缺失 instanceId 时由默认值在解码时补齐，首次写回后固定。
+ */
 @Serializable
 data class ConfiguredTask(
     val taskName: String,
     val enabled: Boolean = true,
     val optionValues: Map<String, OptionValue> = emptyMap(),
+    val instanceId: String = newTaskInstanceId(),
 )
+
+fun newTaskInstanceId(): String = java.util.UUID.randomUUID().toString()
 
 /**
  * 用户对某个 option 的当前选择。Unset（从未配置）表示为 value map 中不存在该键，

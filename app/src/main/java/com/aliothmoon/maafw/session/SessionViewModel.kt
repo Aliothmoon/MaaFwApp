@@ -110,7 +110,12 @@ class SessionViewModel(
             is SessionIntent.CreateFromTemplate -> guarded {
                 val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition
                 val created = definition?.let {
-                    ConfigurationResolver.createFromTemplate(it, intent.templateName)
+                    ConfigurationResolver.createFromTemplate(
+                        definition = it,
+                        templateName = intent.templateName,
+                        configurationName = intent.configurationName,
+                        taskNames = intent.taskNames,
+                    )
                 }
                 if (created == null) {
                     effectChannel.send(SessionEffect.ShowMessage("模板 \"${intent.templateName}\" 不存在"))
@@ -154,29 +159,28 @@ class SessionViewModel(
 
             is SessionIntent.ConfirmAddTasks -> guarded {
                 mutateConfiguration(intent.configurationId) { configuration ->
-                    val existing = configuration.tasks.mapTo(mutableSetOf()) { it.taskName }
-                    val added = intent.orderedTaskNames
-                        .filter { it !in existing }
-                        .distinct()
-                        .map { ConfiguredTask(taskName = it) }
+                    // 允许重复 taskName：每个名称都追加为独立实例
+                    val added = intent.orderedTaskNames.map { ConfiguredTask(taskName = it) }
                     configuration.copy(tasks = configuration.tasks + added)
                 }
             }
 
             is SessionIntent.RemoveTask -> guarded {
                 mutateConfiguration(intent.configurationId) { configuration ->
-                    configuration.copy(tasks = configuration.tasks.filterNot { it.taskName == intent.taskName })
+                    configuration.copy(
+                        tasks = configuration.tasks.filterNot { it.instanceId == intent.taskInstanceId },
+                    )
                 }
             }
 
             is SessionIntent.ToggleTask -> guarded {
-                mutateTask(intent.configurationId, intent.taskName) { it.copy(enabled = intent.enabled) }
+                mutateTask(intent.configurationId, intent.taskInstanceId) { it.copy(enabled = intent.enabled) }
             }
 
             is SessionIntent.MoveTask -> guarded {
                 mutateConfiguration(intent.configurationId) { configuration ->
                     val tasks = configuration.tasks.toMutableList()
-                    val index = tasks.indexOfFirst { it.taskName == intent.taskName }
+                    val index = tasks.indexOfFirst { it.instanceId == intent.taskInstanceId }
                     if (index < 0) return@mutateConfiguration configuration
                     val task = tasks.removeAt(index)
                     tasks.add(intent.targetIndex.coerceIn(0, tasks.size), task)
@@ -185,7 +189,7 @@ class SessionViewModel(
             }
 
             is SessionIntent.SetTaskOption -> guarded {
-                mutateTask(intent.configurationId, intent.taskName) { task ->
+                mutateTask(intent.configurationId, intent.taskInstanceId) { task ->
                     task.copy(optionValues = task.optionValues + (intent.optionName to intent.value))
                 }
             }
@@ -242,13 +246,13 @@ class SessionViewModel(
 
     private suspend fun mutateTask(
         configurationId: RunConfigurationId,
-        taskName: String,
+        taskInstanceId: String,
         transform: (ConfiguredTask) -> ConfiguredTask,
     ) {
         mutateConfiguration(configurationId) { configuration ->
             configuration.copy(
                 tasks = configuration.tasks.map {
-                    if (it.taskName == taskName) transform(it) else it
+                    if (it.instanceId == taskInstanceId) transform(it) else it
                 },
             )
         }
