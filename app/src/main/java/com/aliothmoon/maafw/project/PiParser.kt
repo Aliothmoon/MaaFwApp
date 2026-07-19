@@ -34,10 +34,13 @@ data class PiFileContent(
 data class PiInterfaceContent(
     val name: String?,
     val version: String?,
+    /** 顶层 interface_version；PI V2 要求恒为 2，缺失或非法由 loader 硬失败。 */
+    val interfaceVersion: Long?,
     val resources: List<ResourceDefinition>,
-    val groups: List<TaskGroupDefinition>,
     /** v2 languages 声明：语言 tag -> 翻译文件相对路径。 */
     val languages: Map<String, String>,
+    /** v2.2.0 import 分片声明，按数组顺序加载；路径相对 interface.json 目录。 */
+    val imports: List<String>,
     val diagnostics: List<Diagnostic>,
 )
 
@@ -70,13 +73,18 @@ object PiParser {
         allowTrailingComma = true
     }
 
+    /**
+     * 解析根 interface.json 的项目元数据（版本 / 资源 / 语言 / import 声明）。
+     * 根文件自身声明的 task/option/preset/group 在翻译表就绪后由 [parseFile] 再次解析，
+     * 避免元数据阶段无法物化 $i18n 的鸡生蛋问题。
+     */
     fun parseInterface(source: String, content: String): PiInterfaceContent {
         val diagnostics = mutableListOf<Diagnostic>()
         val root = try {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
             diagnostics += error(source, "JSON 解析失败: ${e.message}")
-            return PiInterfaceContent(null, null, emptyList(), emptyList(), emptyMap(), diagnostics)
+            return PiInterfaceContent(null, null, null, emptyList(), emptyMap(), emptyList(), diagnostics)
         }
 
         val resources = (root["resource"] as? JsonArray).orEmpty().mapNotNull { element ->
@@ -103,10 +111,10 @@ object PiParser {
         return PiInterfaceContent(
             name = root.string("name"),
             version = root.string("version"),
+            interfaceVersion = (root["interface_version"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull(),
             resources = resources,
-            // 根文件的 group 解析时翻译表尚未加载，$i18n 由 ProjectLoader 后置物化
-            groups = parseGroups(source, root, diagnostics),
             languages = languages,
+            imports = root.stringList("import").map(::normalizeProjectPath),
             diagnostics = diagnostics,
         )
     }
@@ -171,13 +179,15 @@ object PiParser {
         return TaskDefinition(
             name = name,
             entry = entry,
+            label = text.label(obj.string("label")) ?: name,
             description = text.description(obj.string("description") ?: obj.string("desc")),
             groups = obj.stringList("group"),
             optionNames = obj.stringList("option"),
             pipelineOverride = obj.objectOrEmpty("pipeline_override"),
             controllers = obj.stringList("controller"),
             resources = obj.stringList("resource"),
-            defaultCheck = obj.boolean("check") ?: false,
+            // 规范键 default_check（官方/MXU）优先，静默兼容早期数据的 check
+            defaultCheck = obj.boolean("default_check") ?: obj.boolean("check") ?: false,
         )
     }
 

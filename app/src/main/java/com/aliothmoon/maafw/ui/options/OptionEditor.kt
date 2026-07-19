@@ -166,7 +166,8 @@ private fun ChoiceChipFlow(
     }
 }
 
-private val SWITCH_ON_NAMES = setOf("yes", "on", "true", "enable", "开", "开启", "启用")
+// 官方推荐 Yes/No（允许 Y/y）；on/true/开 等为本项目宽容超集
+private val SWITCH_ON_NAMES = setOf("yes", "y", "on", "true", "enable", "开", "开启", "启用")
 
 /** 标准两态 Switch 的 (on, off) case；非标准两态返回 null（回落 chip 平铺）。 */
 private fun standardSwitchCases(option: OptionEditorState): Pair<OptionCaseState, OptionCaseState>? {

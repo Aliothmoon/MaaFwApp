@@ -29,14 +29,15 @@ class ProjectLoaderTest {
     }
 
     @Test
-    fun `加载内置 M9A 项目并合并全部分片`() {
+    fun `加载内置 M9A 项目并按 import 声明合并分片`() {
         val ready = load()
         val definition = ready.definition
 
         assertEquals("m9a", definition.name)
         assertEquals("v0.1.0", definition.version)
-        assertEquals(66, definition.tasks.size)
-        assertEquals(7, definition.templates.size)
+        // 严格 import 语义：只加载 interface.json + import[] 声明的 29 个分片
+        assertEquals(25, definition.tasks.size)
+        assertEquals(4, definition.templates.size)
         assertTrue(definition.options.isNotEmpty())
         assertEquals(9, definition.resources.size)
         assertEquals(
@@ -119,6 +120,13 @@ private class MapProjectSource(private val files: Map<String, String>) : Project
         files[path] ?: throw IllegalArgumentException("no file: $path")
 }
 
+/** 生成合法的 V2 根文件：interface_version + import 声明，body 追加其余顶层字段。 */
+private fun piRoot(vararg imports: String, body: String = ""): String {
+    val importJson = imports.joinToString(",") { "\"$it\"" }
+    val extra = if (body.isBlank()) "" else ",$body"
+    return """{"interface_version":2,"name":"t"$extra,"import":[$importJson]}"""
+}
+
 class ProjectLoaderGroupTest {
 
     private fun load(files: Map<String, String>): ProjectLoadResult.Ready {
@@ -131,9 +139,10 @@ class ProjectLoaderGroupTest {
     fun `根与分片声明按顺序合并且重名先定义优先`() {
         val ready = load(
             mapOf(
-                "interface.json" to """
-                    {"name":"t","group":[{"name":"g1","label":"组一"},{"name":"g2"}]}
-                """.trimIndent(),
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"group":[{"name":"g1","label":"组一"},{"name":"g2"}]""",
+                ),
                 "tasks/a.json" to """
                     {
                         "group": [{"name":"g1","label":"重复的组一"},{"name":"g3"}],
@@ -156,7 +165,7 @@ class ProjectLoaderGroupTest {
     fun `未命中声明的引用被丢弃并落未分组`() {
         val ready = load(
             mapOf(
-                "interface.json" to """{"name":"t","group":[{"name":"g1"}]}""",
+                "interface.json" to piRoot("tasks/a.json", body = """"group":[{"name":"g1"}]"""),
                 "tasks/a.json" to """
                     {"task":[
                         {"name":"T1","entry":"E1","group":["g1","nope"]},
@@ -178,6 +187,7 @@ class ProjectLoaderGroupTest {
     fun `无顶层声明时忽略任务级引用全部扁平`() {
         val ready = load(
             mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","group":["x"]}]}""",
             ),
         )
@@ -190,6 +200,7 @@ class ProjectLoaderGroupTest {
     fun `JSONC 注释与尾逗号可解析`() {
         val ready = load(
             mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
                 "tasks/a.json" to """
                     {
                         // 行注释
@@ -211,16 +222,18 @@ class ProjectLoaderGroupTest {
                 mapOf(
                     "interface.json" to """
                         {
+                            "interface_version": 2,
                             "name": "t",
                             "languages": {"zh-CN": "./i18n/zh-CN.json", "en-US": "./i18n/en-US.json"},
-                            "group": [{"name": "g1", "label": "${'$'}group.g1"}]
+                            "group": [{"name": "g1", "label": "${'$'}group.g1"}],
+                            "import": ["tasks/a.json"]
                         }
                     """.trimIndent(),
-                    "i18n/zh-CN.json" to """{"group.g1": "分组一", "task.t1.desc": "任务一说明", "opt.label": "选项一"}""",
+                    "i18n/zh-CN.json" to """{"group.g1": "分组一", "task.t1.label": "任务一", "task.t1.desc": "任务一说明", "opt.label": "选项一"}""",
                     "i18n/en-US.json" to """{"group.g1": "Group One"}""",
                     "tasks/a.json" to """
                         {
-                            "task": [{"name": "T1", "entry": "E1", "description": "${'$'}task.t1.desc", "group": ["g1"]}],
+                            "task": [{"name": "T1", "entry": "E1", "label": "${'$'}task.t1.label", "description": "${'$'}task.t1.desc", "group": ["g1"]}],
                             "option": {"O1": {"type": "select", "label": "${'$'}opt.label", "cases": [{"name": "c1"}]}}
                         }
                     """.trimIndent(),
@@ -231,15 +244,42 @@ class ProjectLoaderGroupTest {
         ).load() as ProjectLoadResult.Ready
 
         val definition = ready.definition
+        assertEquals("任务一", definition.tasks.single().label)
         assertEquals("任务一说明", definition.tasks.single().description)
         assertEquals("选项一", definition.options.getValue("O1").label)
         assertEquals("分组一", definition.groups.first { it.name == "g1" }.label)
     }
 
     @Test
+    fun `languages 下划线风格 tag 可与 BCP-47 locale 匹配`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "name": "t",
+                            "languages": {"en_us": "./i18n/en.json", "zh_cn": "./i18n/zh.json"},
+                            "import": ["tasks/a.json"]
+                        }
+                    """.trimIndent(),
+                    "i18n/en.json" to """{"t1": "Task One"}""",
+                    "i18n/zh.json" to """{"t1": "任务一"}""",
+                    "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","label":"${'$'}t1"}]}""",
+                ),
+            ),
+            // zh_cn 与 zh-CN 归一化后应精确命中，而不是回落首个声明的 en_us
+            locale = "zh-CN",
+        ).load() as ProjectLoadResult.Ready
+
+        assertEquals("任务一", ready.definition.tasks.single().label)
+    }
+
+    @Test
     fun `i18n 查无翻译回落 key`() {
         val ready = load(
             mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","description":"${'$'}missing.key"}]}""",
             ),
         )
@@ -250,6 +290,7 @@ class ProjectLoaderGroupTest {
     fun `文件形态 description 加载期物化`() {
         val ready = load(
             mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","description":"./docs/help.md"}]}""",
                 "docs/help.md" to "# 帮助\n完整说明内容",
             ),
@@ -262,6 +303,7 @@ class ProjectLoaderGroupTest {
         val url = "https://example.com/help.md"
         val ready = load(
             mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","description":"$url"}]}""",
             ),
         )
@@ -272,6 +314,7 @@ class ProjectLoaderGroupTest {
     fun `hotkey option 跳过并降级为 warning`() {
         val ready = load(
             mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
                 "tasks/a.json" to """
                     {
                         "task": [{"name":"T1","entry":"E1"}],
@@ -283,5 +326,130 @@ class ProjectLoaderGroupTest {
         assertTrue(ready.definition.options.isEmpty())
         assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
         assertTrue(ready.diagnostics.any { "hotkey" in it.message && it.severity == DiagnosticSeverity.Warning })
+    }
+}
+
+class ProjectLoaderProtocolTest {
+
+    @Test
+    fun `缺少 interface_version 拒绝加载`() {
+        val result = ProjectLoader(
+            MapProjectSource(mapOf("interface.json" to """{"name":"t","task":[]}""")),
+        ).load()
+        assertTrue("应为 Failure: $result", result is ProjectLoadResult.Failure)
+        val diagnostics = (result as ProjectLoadResult.Failure).diagnostics
+        assertTrue(diagnostics.any { "interface_version" in it.message && it.severity == DiagnosticSeverity.Error })
+    }
+
+    @Test
+    fun `interface_version 非 2 拒绝加载`() {
+        val result = ProjectLoader(
+            MapProjectSource(mapOf("interface.json" to """{"interface_version":1,"name":"t"}""")),
+        ).load()
+        assertTrue("应为 Failure: $result", result is ProjectLoadResult.Failure)
+    }
+
+    @Test
+    fun `interface json 缺失拒绝加载`() {
+        val result = ProjectLoader(MapProjectSource(emptyMap())).load()
+        assertTrue("应为 Failure: $result", result is ProjectLoadResult.Failure)
+    }
+
+    @Test
+    fun `根文件自身可声明 task 与 preset`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "name": "t",
+                            "task": [{"name":"T1","entry":"E1"}],
+                            "preset": [{"name":"P1","task":[{"name":"T1"}]}]
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        ).load() as ProjectLoadResult.Ready
+        assertEquals("T1", ready.definition.tasks.single().name)
+        assertEquals("P1", ready.definition.templates.single().name)
+    }
+
+    @Test
+    fun `import 分片按声明顺序加载且缺失分片降级 warning`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to piRoot("tasks/b.json", "tasks/missing.json", "tasks/a.json"),
+                    "tasks/a.json" to """{"task":[{"name":"TA","entry":"E"}]}""",
+                    "tasks/b.json" to """{"task":[{"name":"TB","entry":"E"}]}""",
+                ),
+            ),
+        ).load() as ProjectLoadResult.Ready
+        // 顺序 = import 声明序（b 在 a 前），不是字典序
+        assertEquals(listOf("TB", "TA"), ready.definition.tasks.map { it.name })
+        assertTrue(ready.diagnostics.any { "tasks/missing.json" == it.source && it.severity == DiagnosticSeverity.Warning })
+        assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
+    }
+
+    @Test
+    fun `无任何任务时仍 Ready 并记 warning`() {
+        val ready = ProjectLoader(
+            MapProjectSource(mapOf("interface.json" to """{"interface_version":2,"name":"t"}""")),
+        ).load()
+        assertTrue("应为 Ready: $ready", ready is ProjectLoadResult.Ready)
+        val diagnostics = (ready as ProjectLoadResult.Ready).diagnostics
+        assertTrue(diagnostics.any { "未声明任何任务" in it.message && it.severity == DiagnosticSeverity.Warning })
+    }
+
+    @Test
+    fun `default_check 与 check 双读且规范键优先`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "name": "t",
+                            "task": [
+                                {"name":"T1","entry":"E","default_check":true},
+                                {"name":"T2","entry":"E","check":true},
+                                {"name":"T3","entry":"E","default_check":false,"check":true},
+                                {"name":"T4","entry":"E"}
+                            ]
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        ).load() as ProjectLoadResult.Ready
+        val byName = ready.definition.tasks.associateBy { it.name }
+        assertEquals(true, byName.getValue("T1").defaultCheck)
+        assertEquals(true, byName.getValue("T2").defaultCheck)
+        // 规范键 default_check 优先于 legacy check
+        assertEquals(false, byName.getValue("T3").defaultCheck)
+        assertEquals(false, byName.getValue("T4").defaultCheck)
+    }
+
+    @Test
+    fun `task label 缺省回落 name`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "name": "t",
+                            "task": [
+                                {"name":"T1","entry":"E","label":"显示名"},
+                                {"name":"T2","entry":"E"}
+                            ]
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        ).load() as ProjectLoadResult.Ready
+        val byName = ready.definition.tasks.associateBy { it.name }
+        assertEquals("显示名", byName.getValue("T1").label)
+        assertEquals("T2", byName.getValue("T2").label)
     }
 }

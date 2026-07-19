@@ -35,6 +35,8 @@ data class ResourceDefinition(
 data class TaskDefinition(
     val name: String,
     val entry: String,
+    /** 显示名（$i18n 已物化）；缺省回落 name。 */
+    val label: String = name,
     val description: String?,
     val groups: List<String>,
     val optionNames: List<String>,

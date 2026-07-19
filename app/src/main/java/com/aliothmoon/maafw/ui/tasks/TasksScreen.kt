@@ -92,6 +92,7 @@ import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TemplateTask
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -318,6 +319,13 @@ private fun TasksContent(
                     }
                 }
             }
+            RunnerToggleButton(
+                state = state,
+                onIntent = onIntent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = MaaDesignTokens.Spacing.xs),
+            )
         }
     }
 
@@ -384,6 +392,37 @@ private fun TasksContent(
  * 实时截图（Live Preview）占位区域：固定 16:9。
  * 不进入 RunnerState/RunnerEvent，后续单独实现（docs/android-ui-contract.md §10）。
  */
+/**
+ * 底部运行开关（替代首页的启停按钮）：Idle 显示「开始」，
+ * 运行/准备中切换为「停止」，停止中降级为不可点的「停止中…」。
+ */
+@Composable
+private fun RunnerToggleButton(
+    state: SessionUiState,
+    onIntent: (SessionIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val phase = state.runner.phase
+    val running = phase == RunnerPhase.Preparing || phase == RunnerPhase.Running
+    if (running || phase == RunnerPhase.Stopping) {
+        OutlinedButton(
+            onClick = { onIntent(SessionIntent.Stop) },
+            enabled = running,
+            modifier = modifier,
+        ) {
+            Text(if (phase == RunnerPhase.Stopping) "停止中…" else "停止")
+        }
+    } else {
+        Button(
+            onClick = { onIntent(SessionIntent.Start) },
+            enabled = phase == RunnerPhase.Idle && state.activeConfiguration != null,
+            modifier = modifier,
+        ) {
+            Text("开始")
+        }
+    }
+}
+
 @Composable
 private fun LivePreviewPlaceholder() {
     Surface(

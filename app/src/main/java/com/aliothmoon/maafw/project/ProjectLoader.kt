@@ -16,8 +16,8 @@ sealed interface ProjectLoadResult {
 }
 
 /**
- * 合并 tasks/ 下全部 PI 分片文件为一个 ProjectDefinition，并做跨文件校验：
- * 重名 task/option、悬空 option 引用、option cycle、preset 引用缺失。
+ * 按 PI V2 语义加载项目：根 interface.json 声明 + import[] 分片按序合并（对齐 MXU），
+ * 并做跨文件校验：重名 task/option、悬空 option 引用、option cycle、preset 引用缺失。
  *
  * 文本物化（对齐 MXU contentResolver）：$i18n 按 languages 声明查表（查无回落 key），
  * description 级字段的文件路径形态在加载期读入；URL 形态原样保留给 UI 懒加载。
@@ -29,71 +29,62 @@ class ProjectLoader(
     private val locale: String? = null,
 ) {
 
-    fun load(): ProjectLoadResult {
-        val diagnostics = mutableListOf<Diagnostic>()
-        val projectInterface = loadInterface(diagnostics)
-        val translations = loadTranslations(projectInterface, diagnostics)
-        val text = buildTextResolver(translations, diagnostics)
-
-        val files = try {
-            walkJsonFiles("tasks")
-        } catch (e: Exception) {
-            diagnostics += error("tasks", "无法枚举 PI 文件: ${e.message}")
-            return ProjectLoadResult.Failure(diagnostics)
-        }
-        if (files.isEmpty()) {
-            diagnostics += error("tasks", "项目内没有任何 PI 声明文件")
-            return ProjectLoadResult.Failure(diagnostics)
-        }
-
+    private class MergeState {
         val tasks = mutableListOf<TaskDefinition>()
         val options = linkedMapOf<String, OptionDefinition>()
         val templates = mutableListOf<ConfigurationTemplate>()
-        // 声明顺序合并：根 interface.json 优先，import 分片按文件顺序追加，重名先定义优先
-        // 根文件解析早于翻译表加载，label/description 在此处后置物化
         val declaredGroups = mutableListOf<TaskGroupDefinition>()
-        projectInterface?.groups?.forEach { group ->
-            val resolved = group.copy(
-                label = text.label(group.label) ?: group.name,
-                description = text.description(group.description),
+    }
+
+    fun load(): ProjectLoadResult {
+        val diagnostics = mutableListOf<Diagnostic>()
+
+        val interfacePath = "interface.json"
+        val interfaceContent = try {
+            source.read(interfacePath)
+        } catch (e: Exception) {
+            diagnostics += error(interfacePath, "interface.json 读取失败: ${e.message}")
+            return ProjectLoadResult.Failure(diagnostics)
+        }
+        val projectInterface = PiParser.parseInterface(interfacePath, interfaceContent)
+        diagnostics += projectInterface.diagnostics
+
+        // 对齐官方/MXU：interface_version 必须为 2，否则拒绝加载
+        if (projectInterface.interfaceVersion != 2L) {
+            diagnostics += error(
+                interfacePath,
+                when (val v = projectInterface.interfaceVersion) {
+                    null -> "缺少 interface_version（PI V2 协议要求为 2）"
+                    else -> "interface_version $v 不受支持（仅支持 2）"
+                },
             )
-            mergeGroup(declaredGroups, resolved, "interface.json", diagnostics)
+            return ProjectLoadResult.Failure(diagnostics)
         }
 
-        for (file in files.sorted()) {
+        val translations = loadTranslations(projectInterface, diagnostics)
+        val text = buildTextResolver(translations, diagnostics)
+
+        // 根文件自身作为首个分片（task/option/preset/group），import 分片按声明顺序追加；
+        // 重名一律先定义优先。缺失分片降级为 warning 跳过（MXU 同款容错）。
+        val state = MergeState()
+        mergeContent(state, PiParser.parseFile(interfacePath, interfaceContent, text), interfacePath, diagnostics)
+        for (path in projectInterface.imports) {
             val content = try {
-                source.read(file)
+                source.read(path)
             } catch (e: Exception) {
-                diagnostics += error(file, "读取失败: ${e.message}")
+                diagnostics += warning(path, "import 分片读取失败，已跳过: ${e.message}")
                 continue
             }
-            val parsed = PiParser.parseFile(file, content, text)
-            diagnostics += parsed.diagnostics
-            for (task in parsed.tasks) {
-                if (tasks.any { it.name == task.name }) {
-                    diagnostics += error(file, "task \"${task.name}\" 重复声明，保留先出现的定义")
-                } else {
-                    tasks += task
-                }
-            }
-            for ((name, option) in parsed.options) {
-                if (options.containsKey(name)) {
-                    diagnostics += error(file, "option \"$name\" 重复声明，保留先出现的定义")
-                } else {
-                    options[name] = option
-                }
-            }
-            for (template in parsed.templates) {
-                if (templates.any { it.name == template.name }) {
-                    diagnostics += warning(file, "preset \"${template.name}\" 重复声明，保留先出现的定义")
-                } else {
-                    templates += template
-                }
-            }
-            for (group in parsed.groups) {
-                mergeGroup(declaredGroups, group, file, diagnostics)
-            }
+            mergeContent(state, PiParser.parseFile(path, content, text), path, diagnostics)
         }
+        if (state.tasks.isEmpty()) {
+            diagnostics += warning(interfacePath, "项目未声明任何任务")
+        }
+
+        val tasks = state.tasks
+        val options = state.options
+        val templates = state.templates
+        val declaredGroups = state.declaredGroups
 
         validateOptionReferences(tasks, options, diagnostics)
         detectOptionCycles(options, diagnostics)
@@ -102,11 +93,11 @@ class ProjectLoader(
         val (normalizedTasks, groups) = resolveGroups(declaredGroups, tasks, diagnostics)
 
         val definition = ProjectDefinition(
-            name = projectInterface?.name ?: source.projectName,
-            version = projectInterface?.version,
+            name = projectInterface.name ?: source.projectName,
+            version = projectInterface.version,
             controller = ControllerDefinition(),
-            resources = projectInterface?.resources
-                ?.takeIf { it.isNotEmpty() }
+            resources = projectInterface.resources
+                .takeIf { it.isNotEmpty() }
                 ?: deriveResources(diagnostics),
             tasks = normalizedTasks,
             groups = groups,
@@ -116,18 +107,56 @@ class ProjectLoader(
         return ProjectLoadResult.Ready(definition, diagnostics)
     }
 
-    /** 按 languages 声明加载当前语言的翻译表：精确 tag -> 语言前缀 -> 首个声明。 */
+    /** 分片内容合并进累计状态：task/option 重名 → error，preset/group 重名 → warning，一律先定义优先。 */
+    private fun mergeContent(
+        state: MergeState,
+        parsed: PiFileContent,
+        file: String,
+        diagnostics: MutableList<Diagnostic>,
+    ) {
+        diagnostics += parsed.diagnostics
+        for (task in parsed.tasks) {
+            if (state.tasks.any { it.name == task.name }) {
+                diagnostics += error(file, "task \"${task.name}\" 重复声明，保留先出现的定义")
+            } else {
+                state.tasks += task
+            }
+        }
+        for ((name, option) in parsed.options) {
+            if (state.options.containsKey(name)) {
+                diagnostics += error(file, "option \"$name\" 重复声明，保留先出现的定义")
+            } else {
+                state.options[name] = option
+            }
+        }
+        for (template in parsed.templates) {
+            if (state.templates.any { it.name == template.name }) {
+                diagnostics += warning(file, "preset \"${template.name}\" 重复声明，保留先出现的定义")
+            } else {
+                state.templates += template
+            }
+        }
+        for (group in parsed.groups) {
+            mergeGroup(state.declaredGroups, group, file, diagnostics)
+        }
+    }
+
+    /**
+     * 按 languages 声明加载当前语言的翻译表：精确 tag -> 语言前缀 -> 首个声明。
+     * tag 比较前统一小写并把 '_' 归一为 '-'，兼容 MXU 生态的 zh_cn 风格键。
+     */
     private fun loadTranslations(
-        projectInterface: PiInterfaceContent?,
+        projectInterface: PiInterfaceContent,
         diagnostics: MutableList<Diagnostic>,
     ): Map<String, String> {
-        val languages = projectInterface?.languages.orEmpty()
+        val languages = projectInterface.languages
         if (languages.isEmpty()) return emptyMap()
 
-        val desired = locale ?: java.util.Locale.getDefault().toLanguageTag()
-        val lang = languages.keys.firstOrNull { it.equals(desired, ignoreCase = true) }
+        fun norm(tag: String) = tag.lowercase().replace('_', '-')
+        val desired = norm(locale ?: java.util.Locale.getDefault().toLanguageTag())
+        val lang = languages.keys.firstOrNull { norm(it) == desired }
             ?: languages.keys.firstOrNull {
-                it.substringBefore('-').equals(desired.substringBefore('-'), ignoreCase = true)
+                norm(it).substringBefore('-') == desired.substringBefore('-')
             }
             ?: languages.keys.first()
 
@@ -166,32 +195,6 @@ class ProjectLoader(
                 resolved
             }
         }
-    }
-
-    private fun loadInterface(diagnostics: MutableList<Diagnostic>): PiInterfaceContent? {
-        val path = "interface.json"
-        val content = try {
-            source.read(path)
-        } catch (e: Exception) {
-            diagnostics += warning(path, "读取失败，将从目录结构回退加载: ${e.message}")
-            return null
-        }
-        return PiParser.parseInterface(path, content).also {
-            diagnostics += it.diagnostics
-        }
-    }
-
-    private fun walkJsonFiles(dir: String): List<String> {
-        val result = mutableListOf<String>()
-        for (entry in source.list(dir)) {
-            val path = "$dir/$entry"
-            if (entry.endsWith(".json")) {
-                result += path
-            } else if (source.list(path).isNotEmpty()) {
-                result += walkJsonFiles(path)
-            }
-        }
-        return result
     }
 
     private fun mergeGroup(

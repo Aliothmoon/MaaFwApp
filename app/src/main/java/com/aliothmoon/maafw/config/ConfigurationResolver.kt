@@ -154,7 +154,7 @@ object ConfigurationResolver {
                 ResolvedConfiguredTask(
                     instanceId = configured.instanceId,
                     taskName = configured.taskName,
-                    label = taskDefinition.name,
+                    label = taskDefinition.label,
                     description = taskDefinition.description,
                     enabled = configured.enabled,
                     applicable = applicability == null,
@@ -208,7 +208,7 @@ object ConfigurationResolver {
                 val reason = checkApplicability(definition, task, resourceName)
                 TaskCatalogItem(
                     taskName = task.name,
-                    label = task.name,
+                    label = task.label,
                     description = task.description,
                     applicable = reason == null,
                     unavailableReason = reason,

@@ -9,11 +9,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,7 +44,7 @@ fun HomeScreen(
     ) {
         ProjectCard(state)
         ConfigurationCard(state)
-        RunnerCard(state, onIntent)
+        RunnerCard(state)
     }
 }
 
@@ -116,7 +114,7 @@ private fun ConfigurationCard(state: SessionUiState) {
 }
 
 @Composable
-private fun RunnerCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+private fun RunnerCard(state: SessionUiState) {
     MaaCard(title = "运行状态") {
         val runner = state.runner
         val execution = runner.activeExecution
@@ -144,25 +142,6 @@ private fun RunnerCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit)
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
-        ) {
-            Button(
-                onClick = { onIntent(SessionIntent.Start) },
-                enabled = runner.phase == RunnerPhase.Idle && state.projectState is ProjectState.Ready,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("开始")
-            }
-            OutlinedButton(
-                onClick = { onIntent(SessionIntent.Stop) },
-                enabled = runner.phase == RunnerPhase.Preparing || runner.phase == RunnerPhase.Running,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("停止")
             }
         }
     }
