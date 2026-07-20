@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.OptionDefinition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.BeforeClass
 import org.junit.Test
 import java.io.File
 
@@ -20,13 +21,20 @@ class FileProjectSource(private val root: File) : ProjectSource {
 
 class ProjectLoaderTest {
 
-    private val projectRoot = File("src/main/assets", M9A_ASSET_ROOT)
+    companion object {
+        // M9A 全量加载（29 个分片 + 翻译）较重，整个测试类共享一次结果
+        private lateinit var ready: ProjectLoadResult.Ready
 
-    private fun load(): ProjectLoadResult.Ready {
-        val result = ProjectLoader(FileProjectSource(projectRoot)).load()
-        assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
-        return result as ProjectLoadResult.Ready
+        @JvmStatic
+        @BeforeClass
+        fun loadProject() {
+            val result = ProjectLoader(FileProjectSource(File("src/main/assets", M9A_ASSET_ROOT))).load()
+            assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
+            ready = result as ProjectLoadResult.Ready
+        }
     }
+
+    private fun load(): ProjectLoadResult.Ready = ready
 
     @Test
     fun `加载内置 M9A 项目并按 import 声明合并分片`() {
