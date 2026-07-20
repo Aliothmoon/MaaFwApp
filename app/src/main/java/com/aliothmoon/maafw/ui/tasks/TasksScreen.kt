@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddTask
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -45,13 +47,16 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.OndemandVideo
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -59,6 +64,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -83,6 +89,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -107,6 +115,7 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.i18n.localized
@@ -171,6 +180,11 @@ private fun TasksContent(
     // 配置选择 sheet；新建/模板预览/重命名全部内嵌在 sheet 内部
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
 
+    // 服务器（资源）切换 sheet：入口在配置卡右侧 chip，项目无候选时不展示
+    var showServerSheet by rememberSaveable { mutableStateOf(false) }
+    val environment = state.environment
+    val serverCandidates = environment?.resourceCandidates.orEmpty()
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -185,6 +199,13 @@ private fun TasksContent(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             LivePreviewPlaceholder()
+            if (serverCandidates.isNotEmpty()) {
+                ServerSelectorRow(
+                    label = environment?.resource?.label ?: stringResource(R.string.settings_not_selected),
+                    locked = locked,
+                    onClick = { showServerSheet = true },
+                )
+            }
             ConfigurationSelectorCard(
                 active = active,
                 locked = locked,
@@ -341,6 +362,15 @@ private fun TasksContent(
         }
     }
 
+    if (showServerSheet && serverCandidates.isNotEmpty()) {
+        ServerSwitchSheet(
+            candidates = serverCandidates,
+            currentName = environment?.resource?.name,
+            onSelect = { onIntent(SessionIntent.SelectResource(it)) },
+            onDismiss = { showServerSheet = false },
+        )
+    }
+
     if (showAddTasks && active != null) {
         AddTasksSheet(
             catalog = state.taskCatalog,
@@ -389,8 +419,9 @@ private fun TasksContent(
 }
 
 /**
- * 底部运行开关（替代首页的启停按钮）：Idle 显示「开始」，
- * 运行/准备中切换为「停止」，停止中降级为不可点的「停止中…」。
+ * 底部运行区 split button：左段为原启停开关——Idle 显示「开始」，
+ * 运行/准备中切换为「停止」，停止中降级为不可点的「停止中…」；
+ * 右段为运行选项弹出（仅 UI 展示），与运行不冲突，不随运行锁定。
  */
 @Composable
 private fun RunnerToggleButton(
@@ -399,25 +430,156 @@ private fun RunnerToggleButton(
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
-    if (phase.isBusy) {
-        OutlinedButton(
-            onClick = { onIntent(SessionIntent.Stop) },
-            enabled = phase != RunnerPhase.Stopping,
-            modifier = modifier,
+    var extraOptionsExpanded by remember { mutableStateOf(false) }
+    var muteGame by rememberSaveable { mutableStateOf(false) }
+    var screensaverAutoplay by rememberSaveable { mutableStateOf(false) }
+    // 外缘使用紧凑 8dp 圆角，分割处保留更小圆角，2dp 分缝形成 split 视觉；
+    // 外层 Surface 只负责统一底色和轮廓，不加投影，避免底部栏向导航区落阴影。
+    val outer = MaaDesignTokens.CornerRadius.inner
+    val inner = 4.dp
+    BoxWithConstraints(modifier = modifier) {
+        val menuWidth = maxWidth
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(outer),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            // M3 按钮自带隐形 48dp 最小触控留白，白底 Surface 会把它显形成白边；
+            // 容器内取消该强制值，让 Surface 紧贴按钮实际高度
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val toggleShape = RoundedCornerShape(
+                        topStart = outer,
+                        bottomStart = outer,
+                        topEnd = inner,
+                        bottomEnd = inner,
+                    )
+                    val toggleModifier = Modifier.weight(1f)
+                    if (phase.isBusy) {
+                        OutlinedButton(
+                            onClick = { onIntent(SessionIntent.Stop) },
+                            enabled = phase != RunnerPhase.Stopping,
+                            shape = toggleShape,
+                            modifier = toggleModifier,
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (phase == RunnerPhase.Stopping) {
+                                        R.string.runner_stopping
+                                    } else {
+                                        R.string.runner_stop
+                                    },
+                                ),
+                            )
+                        }
+                    } else {
+                        Button(
+                            onClick = { onIntent(SessionIntent.Start) },
+                            enabled = state.canStart,
+                            shape = toggleShape,
+                            modifier = toggleModifier,
+                        ) {
+                            Text(stringResource(R.string.runner_start))
+                        }
+                    }
+                    ExtraOptionsSegment(
+                        shape = RoundedCornerShape(
+                            topStart = inner,
+                            bottomStart = inner,
+                            topEnd = outer,
+                            bottomEnd = outer,
+                        ),
+                        onClick = { extraOptionsExpanded = true },
+                    )
+                }
+            }
+        }
+        DropdownMenu(
+            expanded = extraOptionsExpanded,
+            onDismissRequest = { extraOptionsExpanded = false },
+            offset = DpOffset(x = 0.dp, y = -MaaDesignTokens.Spacing.sm),
+            modifier = Modifier.width(menuWidth),
         ) {
             Text(
-                stringResource(
-                    if (phase == RunnerPhase.Stopping) R.string.runner_stopping else R.string.runner_stop,
+                text = stringResource(R.string.runner_extra_options),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(
+                    horizontal = MaaDesignTokens.Spacing.lg,
+                    vertical = MaaDesignTokens.Spacing.sm,
                 ),
             )
+            Column(
+                modifier = Modifier.padding(
+                    start = MaaDesignTokens.Spacing.sm,
+                    end = MaaDesignTokens.Spacing.sm,
+                    bottom = MaaDesignTokens.Spacing.sm,
+                ),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                ExtraOptionSwitchRow(
+                    label = stringResource(R.string.extra_mute_game),
+                    checked = muteGame,
+                    onCheckedChange = { muteGame = it },
+                )
+                ExtraOptionSwitchRow(
+                    label = stringResource(R.string.extra_screensaver_autoplay),
+                    checked = screensaverAutoplay,
+                    onCheckedChange = { screensaverAutoplay = it },
+                )
+            }
         }
-    } else {
-        Button(
-            onClick = { onIntent(SessionIntent.Start) },
-            enabled = state.canStart,
-            modifier = modifier,
+    }
+}
+
+/**
+ * 启动键右段：打开由整条运行栏锚定的运行选项菜单。
+ */
+@Composable
+private fun ExtraOptionsSegment(
+    shape: RoundedCornerShape,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilledTonalButton(
+        onClick = onClick,
+        shape = shape,
+        contentPadding = PaddingValues(0.dp),
+        modifier = modifier.width(64.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Tune,
+            contentDescription = stringResource(R.string.runner_extra_options),
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+@Composable
+private fun ExtraOptionSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                horizontal = MaaDesignTokens.Spacing.lg,
+                vertical = MaaDesignTokens.Spacing.sm,
+            ),
         ) {
-            Text(stringResource(R.string.runner_start))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }
@@ -451,6 +613,51 @@ private fun LivePreviewPlaceholder() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                 )
             }
+        }
+    }
+}
+
+/** 服务器（资源）选择行：独立于配置卡，整行点击弹服务器 sheet；无候选时调用方不渲染。 */
+@Composable
+private fun ServerSelectorRow(
+    /** 当前服务器（资源）label；未选择时由调用方传入占位文案。 */
+    label: String,
+    locked: Boolean,
+    onClick: () -> Unit,
+) {
+    val valueTint = if (locked) {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    MaaCardSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .maaClickable(enabled = !locked, onClick = onClick),
+    ) {
+        Row(
+            // 去掉图标/标题后行内只剩文字，垂直 padding 加大保证触控高度
+            modifier = Modifier.padding(
+                horizontal = MaaDesignTokens.Spacing.md,
+                vertical = MaaDesignTokens.Spacing.md,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = valueTint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Outlined.ArrowDropDown,
+                contentDescription = null,
+                tint = valueTint,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
@@ -810,7 +1017,7 @@ private fun TemplateTaskRow(
     ) {
         Checkbox(checked = checked, onCheckedChange = onToggle)
         Text(
-            text = task.taskName,
+            text = task.label,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
             maxLines = 1,

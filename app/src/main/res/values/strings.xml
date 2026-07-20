@@ -147,6 +147,12 @@
     <string name="msg_cannot_start">无法开始：%1$s</string>
     <string name="msg_cannot_stop">无法停止：%1$s</string>
 
+    <!-- 服务器切换与运行选项 -->
+    <string name="server_switch_title">服务器</string>
+    <string name="runner_extra_options">运行选项</string>
+    <string name="extra_mute_game">关闭游戏声音</string>
+    <string name="extra_screensaver_autoplay">屏保自动播放</string>
+
     <!-- 结构化诊断（domain DiagnosticMessage -> ui/i18n/DiagnosticStrings） -->
     <string name="diagnostic_severity_warning">警告</string>
     <string name="diagnostic_severity_error">错误</string>

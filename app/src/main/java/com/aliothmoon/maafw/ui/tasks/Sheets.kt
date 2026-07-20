@@ -1,6 +1,8 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
@@ -36,11 +39,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
+import com.aliothmoon.maafw.domain.ResolvedResource
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TaskCatalogItem
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -50,6 +56,7 @@ import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.ExpandableTipContent
 import com.aliothmoon.maafw.ui.components.ExpandableTipIcon
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
@@ -359,6 +366,116 @@ fun TaskOptionSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 服务器（资源）切换 sheet：点选即切换并收起。
+ * 与设置页资源卡走同一条 SelectResource 链路，两处状态天然同步。
+ */
+@Composable
+fun ServerSwitchSheet(
+    candidates: List<ResolvedResource>,
+    currentName: String?,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
+        Column(
+            modifier = sheetModifier,
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+        ) {
+            MaaSheetHeader(title = stringResource(R.string.server_switch_title), onClose = onDismiss)
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                items(candidates, key = { it.name }) { resource ->
+                    val selected = resource.name == currentName
+                    ServerRowCard(
+                        resource = resource,
+                        selected = selected,
+                        onClick = {
+                            onDismiss()
+                            if (!selected) onSelect(resource.name)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 服务器候选行：单选圈 + 高亮样式与配置列表同款。 */
+@Composable
+private fun ServerRowCard(
+    resource: ResolvedResource,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    MaaCardSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .maaClickable(onClick = onClick),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        border = BorderStroke(
+            width = if (selected) 1.dp else MaaDesignTokens.Separator.thickness,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = MaaDesignTokens.Spacing.md,
+                vertical = MaaDesignTokens.Spacing.md,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .border(
+                        width = 2.dp,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        shape = CircleShape,
+                    )
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    ),
+            ) {
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
+            Text(
+                text = resource.label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }

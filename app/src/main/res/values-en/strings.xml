@@ -156,6 +156,12 @@
     <string name="msg_cannot_start">Cannot start: %1$s</string>
     <string name="msg_cannot_stop">Cannot stop: %1$s</string>
 
+    <!-- Server switching & run options -->
+    <string name="server_switch_title">Server</string>
+    <string name="runner_extra_options">Run options</string>
+    <string name="extra_mute_game">Mute game audio</string>
+    <string name="extra_screensaver_autoplay">Screensaver auto-play</string>
+
     <!-- Structured diagnostics (domain DiagnosticMessage -> ui/i18n/DiagnosticStrings) -->
     <string name="diagnostic_severity_warning">Warning</string>
     <string name="diagnostic_severity_error">Error</string>
