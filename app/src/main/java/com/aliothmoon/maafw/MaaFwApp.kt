@@ -49,7 +49,7 @@ val appModule = module {
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
 
     single<ProjectSource> { AssetProjectSource(androidContext(), root = M9A_ASSET_ROOT) }
-    single { ProjectLoader(get(), localeProvider = AppLocales::currentTag) }
+    single { ProjectLoader(get(), localeProvider = AppLocales::currentProjectTag) }
     single<ProjectRepository> { DefaultProjectRepository(get(), Dispatchers.IO) }
 
     single<DataStore<UserConfiguration>> {

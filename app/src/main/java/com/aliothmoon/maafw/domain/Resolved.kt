@@ -14,8 +14,14 @@ data class ResolvedProjectSession(
 
 data class ResolvedEnvironment(
     val controllerName: String,
-    val resourceName: String?,
-    val resourceCandidates: List<String>,
+    val resource: ResolvedResource?,
+    val resourceCandidates: List<ResolvedResource>,
+)
+
+/** 运行匹配使用稳定内部名，UI 只展示已本地化 label。 */
+data class ResolvedResource(
+    val name: String,
+    val label: String,
 )
 
 data class ResolvedRunConfiguration(
@@ -118,6 +124,7 @@ fun OptionEditorState.standardSwitchCases(): Pair<OptionCaseState, OptionCaseSta
 
 data class InputFieldState(
     val name: String,
+    val label: String,
     val pipelineType: PipelineType,
     val value: String,
     val default: String,

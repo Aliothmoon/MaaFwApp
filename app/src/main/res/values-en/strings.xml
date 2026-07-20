@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">MaaFwApp</string>
 
     <!-- Common -->
@@ -18,7 +18,8 @@
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
     <string name="tasks_run_order">Run order</string>
-    <string name="tasks_effective_count">· %1$d/%2$d active</string>
+    <!-- "active" is an adjective and does not inflect with quantity. -->
+    <string name="tasks_effective_count" tools:ignore="PluralsCandidate">· %1$d/%2$d active</string>
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_remove">Remove</string>
     <string name="tasks_drag_reorder">Drag to reorder</string>
@@ -32,14 +33,20 @@
     <!-- Configuration sheet -->
     <string name="config_select">Select configuration</string>
     <string name="config_select_hint">Tap to select or create a configuration</string>
-    <string name="config_current_summary">Current · %1$d tasks · %2$d active</string>
+    <plurals name="config_current_summary">
+        <item quantity="one">Current · %1$d task · %2$d active</item>
+        <item quantity="other">Current · %1$d tasks · %2$d active</item>
+    </plurals>
     <string name="config_create_from_template">New from template</string>
     <string name="config_template_list_hint">Preview a template and pick the tasks you need before creating</string>
     <string name="config_name_label">Configuration name</string>
     <string name="config_included_tasks">Included tasks</string>
     <string name="config_included_count">%1$d/%2$d</string>
     <string name="config_create_use">Create and use</string>
-    <string name="config_create_use_count">Create and use (%1$d tasks)</string>
+    <plurals name="config_create_use_count">
+        <item quantity="one">Create and use (%1$d task)</item>
+        <item quantity="other">Create and use (%1$d tasks)</item>
+    </plurals>
     <string name="config_task_disabled_by_default">Off by default</string>
     <string name="config_create_empty">New empty configuration</string>
     <string name="config_create_empty_hint">After creating, use “Add tasks” to pick tasks from the catalog</string>
@@ -72,11 +79,15 @@
     <string name="home_resource">Resource</string>
     <string name="home_none">None</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
-    <string name="home_diagnostics_summary_with_errors">Diagnostics: %1$d (%2$d errors)</string>
+    <plurals name="home_diagnostics_summary_with_errors">
+        <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
+        <item quantity="other">Diagnostics: %1$d (%2$d errors)</item>
+    </plurals>
     <string name="home_current_config">Current configuration</string>
     <string name="home_no_config_hint">No configuration selected. Create or pick one on the Tasks tab.</string>
     <string name="home_enabled">Enabled</string>
-    <string name="home_enabled_count">%1$d (%2$d active)</string>
+    <!-- "active" is an adjective and does not inflect with quantity. -->
+    <string name="home_enabled_count" tools:ignore="PluralsCandidate">%1$d (%2$d active)</string>
     <string name="home_runner_status">Runner status</string>
     <string name="home_state">State</string>
     <string name="home_progress">Progress</string>
@@ -91,8 +102,14 @@
     <string name="phase_preparing">Preparing</string>
     <string name="phase_running">Running</string>
     <string name="phase_stopping">Stopping</string>
-    <string name="result_completed">All completed (%1$d tasks)</string>
-    <string name="result_completed_with_failures">Completed with %1$d failed tasks</string>
+    <plurals name="result_completed">
+        <item quantity="one">All completed (%1$d task)</item>
+        <item quantity="other">All completed (%1$d tasks)</item>
+    </plurals>
+    <plurals name="result_completed_with_failures">
+        <item quantity="one">Completed with %1$d failed task</item>
+        <item quantity="other">Completed with %1$d failed tasks</item>
+    </plurals>
     <string name="result_cancelled">Cancelled</string>
     <string name="result_failed">Failed: %1$s</string>
 
@@ -137,4 +154,45 @@
     <string name="msg_template_not_found">Template \"%1$s\" does not exist</string>
     <string name="msg_cannot_start">Cannot start: %1$s</string>
     <string name="msg_cannot_stop">Cannot stop: %1$s</string>
+
+    <!-- Structured diagnostics (domain DiagnosticMessage -> ui/i18n/DiagnosticStrings) -->
+    <string name="diagnostic_severity_warning">Warning</string>
+    <string name="diagnostic_severity_error">Error</string>
+    <string name="diagnostic_interface_read_failed">Failed to read interface.json: %1$s</string>
+    <string name="diagnostic_missing_interface_version">Missing interface_version (PI V2 requires 2)</string>
+    <string name="diagnostic_unsupported_interface_version">Unsupported interface_version %1$d (only 2 is supported)</string>
+    <string name="diagnostic_json_parse_failed">Failed to parse JSON: %1$s</string>
+    <string name="diagnostic_translation_json_parse_failed">Failed to parse translation JSON: %1$s</string>
+    <string name="diagnostic_entry_not_object">%1$s entry is not an object</string>
+    <string name="diagnostic_required_field_missing">%1$s is missing %2$s</string>
+    <string name="diagnostic_resource_path_missing">Resource "%1$s" is missing path</string>
+    <string name="diagnostic_language_path_invalid">Language "%1$s" path is not a string</string>
+    <string name="diagnostic_import_read_failed">Failed to read import; skipped: %1$s</string>
+    <string name="diagnostic_project_has_no_tasks">Project declares no tasks</string>
+    <string name="diagnostic_duplicate_declaration">Duplicate %1$s "%2$s"; keeping the first declaration</string>
+    <string name="diagnostic_translation_read_failed">Failed to read translation file: %1$s</string>
+    <string name="diagnostic_description_read_failed">Failed to read description file; keeping original text: %1$s</string>
+    <string name="diagnostic_default_case_missing">Option "%1$s" default_case "%2$s" is not in cases</string>
+    <string name="diagnostic_input_has_no_fields">Input option "%1$s" has no usable inputs</string>
+    <string name="diagnostic_unsupported_option_type">Option "%1$s" type "%2$s" is unsupported on Android; skipped</string>
+    <string name="diagnostic_invalid_option_type">Option "%1$s" has invalid type: %2$s</string>
+    <string name="diagnostic_option_case_not_object">Option "%1$s" contains a case that is not an object</string>
+    <string name="diagnostic_option_case_name_missing">Option "%1$s" contains a case without name</string>
+    <string name="diagnostic_invalid_pipeline_type">Input "%1$s.%2$s" has invalid pipeline_type %3$s; using string</string>
+    <string name="diagnostic_regex_compile_failed">Input "%1$s.%2$s" verify regex failed to compile: %3$s</string>
+    <string name="diagnostic_missing_reference">References missing %1$s "%2$s"</string>
+    <string name="diagnostic_option_cycle">Option references form a cycle: %1$s</string>
+    <string name="diagnostic_directory_enumeration_failed">Failed to enumerate %1$s directory: %2$s</string>
+    <string name="diagnostic_no_available_resource">No resource is available</string>
+    <string name="diagnostic_resource_selection_missing">Resource "%1$s" no longer exists; falling back to %2$s</string>
+    <string name="diagnostic_none">none</string>
+    <string name="diagnostic_active_configuration_missing">activeConfigurationId points to a missing configuration</string>
+    <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>
+    <string name="diagnostic_runtime_no_resource">No resource is available to build the runtime environment</string>
+    <string name="diagnostic_enabled_task_missing_definition">Enabled task "%1$s" has no definition</string>
+    <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
+    <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
+    <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
+    <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
+    <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
 </resources>

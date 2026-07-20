@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
@@ -84,14 +85,19 @@ private fun ProjectCard(state: SessionUiState) {
                 )
                 MaaInfoRow(
                     stringResource(R.string.home_resource),
-                    state.environment?.resourceName ?: stringResource(R.string.home_none),
+                    state.environment?.resource?.label ?: stringResource(R.string.home_none),
                 )
                 val diagnostics = state.visibleDiagnostics
                 if (diagnostics.isNotEmpty()) {
                     val errors = diagnostics.count { it.severity == DiagnosticSeverity.Error }
                     Text(
                         text = if (errors > 0) {
-                            stringResource(R.string.home_diagnostics_summary_with_errors, diagnostics.size, errors)
+                            pluralStringResource(
+                                R.plurals.home_diagnostics_summary_with_errors,
+                                errors,
+                                diagnostics.size,
+                                errors,
+                            )
                         } else {
                             stringResource(R.string.home_diagnostics_summary, diagnostics.size)
                         },
@@ -178,9 +184,15 @@ private fun phaseText(phase: RunnerPhase): String = when (phase) {
 
 @Composable
 private fun resultText(result: ExecutionResult): String = when (result) {
-    is ExecutionResult.Completed -> stringResource(R.string.result_completed, result.taskResults.size)
+    is ExecutionResult.Completed -> pluralStringResource(
+        R.plurals.result_completed,
+        result.taskResults.size,
+        result.taskResults.size,
+    )
     is ExecutionResult.CompletedWithFailures ->
-        stringResource(R.string.result_completed_with_failures, result.taskResults.count { !it.success })
+        result.taskResults.count { !it.success }.let { failures ->
+            pluralStringResource(R.plurals.result_completed_with_failures, failures, failures)
+        }
 
     is ExecutionResult.Cancelled -> stringResource(R.string.result_cancelled)
     is ExecutionResult.Failed -> stringResource(R.string.result_failed, result.reason)

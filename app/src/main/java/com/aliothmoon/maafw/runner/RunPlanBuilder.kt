@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
@@ -39,7 +40,7 @@ object RunPlanBuilder {
         val resource = definition.resources.firstOrNull { it.name == config.activeResourceName }
             ?: definition.resources.firstOrNull()
         if (resource == null) {
-            diagnostics += runtimeError("environment", "没有可用的 resource，无法构造运行环境")
+            diagnostics += runtimeError("environment", DiagnosticMessage.RuntimeNoResource)
             return RunPlanResult.Invalid(diagnostics)
         }
 
@@ -52,7 +53,10 @@ object RunPlanBuilder {
             val task = definition.task(configured.taskName)
             if (task == null) {
                 if (configured.enabled) {
-                    diagnostics += runtimeError("task:${configured.taskName}", "enabled 任务缺少 definition")
+                    diagnostics += runtimeError(
+                        "task:${configured.taskName}",
+                        DiagnosticMessage.EnabledTaskMissingDefinition(configured.taskName),
+                    )
                 }
                 continue
             }
@@ -107,7 +111,7 @@ object RunPlanBuilder {
             if (!processed.add(name)) return
             val option = definition.options[name]
             if (option == null) {
-                diagnostics += runtimeError(scopeLabel, "引用了不存在的 option \"$name\"")
+                diagnostics += runtimeError(scopeLabel, DiagnosticMessage.MissingReference("option", name))
                 return
             }
             when (option) {
@@ -115,12 +119,18 @@ object RunPlanBuilder {
                     val value = values[name] as? OptionValue.SingleCase
                     val selectedName = value?.case ?: option.defaultCase
                     if (selectedName == null) {
-                        diagnostics += runtimeError(scopeLabel, "option \"$name\" 未设置且没有默认值")
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessage.OptionUnsetWithoutDefault(name),
+                        )
                         return
                     }
                     val case = option.cases.firstOrNull { it.name == selectedName }
                     if (case == null) {
-                        diagnostics += runtimeError(scopeLabel, "option \"$name\" 选择的 case \"$selectedName\" 不存在")
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessage.SelectedCaseMissing(name, selectedName),
+                        )
                         return
                     }
                     if (case.pipelineOverride.isNotEmpty()) patches += case.pipelineOverride
@@ -131,7 +141,10 @@ object RunPlanBuilder {
                     val value = values[name] as? OptionValue.MultipleCases
                     val selected = value?.cases?.toSet() ?: option.defaultCases.toSet()
                     (selected - option.cases.mapTo(mutableSetOf()) { it.name }).forEach {
-                        diagnostics += runtimeError(scopeLabel, "option \"$name\" 选择的 case \"$it\" 不存在")
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessage.SelectedCaseMissing(name, it),
+                        )
                     }
                     // 用户选择顺序不改变 patch 顺序：按 case definition 声明顺序编译
                     for (case in option.cases) {
@@ -150,7 +163,11 @@ object RunPlanBuilder {
                         if (!validateInputCandidate(field.pipelineType, field.verify, raw)) {
                             diagnostics += runtimeError(
                                 scopeLabel,
-                                "option \"$name\" 的输入 \"${field.name}\" 不合法: ${field.patternMessage ?: raw}",
+                                DiagnosticMessage.InvalidInput(
+                                    option = name,
+                                    input = field.name,
+                                    detail = field.patternMessage ?: raw,
+                                ),
                             )
                             valid = false
                         }
@@ -232,15 +249,21 @@ object RunPlanBuilder {
     ): JsonPrimitive? = when (type) {
         PipelineType.StringType -> JsonPrimitive(raw)
         PipelineType.IntType -> raw.toLongOrNull()?.let { JsonPrimitive(it) } ?: run {
-            diagnostics += runtimeError(scopeLabel, "option \"$optionName\" 的输入 \"$raw\" 无法转换为整数")
+            diagnostics += runtimeError(
+                scopeLabel,
+                DiagnosticMessage.IntegerConversionFailed(optionName, raw),
+            )
             null
         }
 
         PipelineType.BoolType -> raw.toBooleanStrictOrNull()?.let { JsonPrimitive(it) } ?: run {
-            diagnostics += runtimeError(scopeLabel, "option \"$optionName\" 的输入 \"$raw\" 无法转换为布尔值")
+            diagnostics += runtimeError(
+                scopeLabel,
+                DiagnosticMessage.BooleanConversionFailed(optionName, raw),
+            )
             null
         }
     }
 
-    private fun runtimeError(source: String, message: String) = Diagnostic.error(source, message)
+    private fun runtimeError(source: String, message: DiagnosticMessage) = Diagnostic.error(source, message)
 }

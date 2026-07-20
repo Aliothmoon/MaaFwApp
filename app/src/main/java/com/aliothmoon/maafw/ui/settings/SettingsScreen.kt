@@ -153,16 +153,16 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                         onClick = { expanded = true },
                         enabled = !state.configurationLocked,
                     ) {
-                        Text(environment.resourceName ?: stringResource(R.string.settings_not_selected))
+                        Text(environment.resource?.label ?: stringResource(R.string.settings_not_selected))
                         Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
                     }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        environment.resourceCandidates.forEach { name ->
+                        environment.resourceCandidates.forEach { resource ->
                             DropdownMenuItem(
-                                text = { Text(name) },
+                                text = { Text(resource.label) },
                                 onClick = {
                                     expanded = false
-                                    onIntent(SessionIntent.SelectResource(name))
+                                    onIntent(SessionIntent.SelectResource(resource.name))
                                 },
                             )
                         }

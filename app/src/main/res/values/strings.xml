@@ -32,14 +32,18 @@
     <!-- 配置 sheet -->
     <string name="config_select">选择配置</string>
     <string name="config_select_hint">点击选择或新建配置</string>
-    <string name="config_current_summary">当前配置 · %1$d 个任务 · %2$d 个有效</string>
+    <plurals name="config_current_summary">
+        <item quantity="other">当前配置 · %1$d 个任务 · %2$d 个有效</item>
+    </plurals>
     <string name="config_create_from_template">从模板新建</string>
     <string name="config_template_list_hint">预览模板内容，按需挑选任务后创建</string>
     <string name="config_name_label">配置名称</string>
     <string name="config_included_tasks">带入任务</string>
     <string name="config_included_count">%1$d/%2$d 个</string>
     <string name="config_create_use">创建并使用</string>
-    <string name="config_create_use_count">创建并使用（%1$d 个任务）</string>
+    <plurals name="config_create_use_count">
+        <item quantity="other">创建并使用（%1$d 个任务）</item>
+    </plurals>
     <string name="config_task_disabled_by_default">默认停用</string>
     <string name="config_create_empty">新建空配置</string>
     <string name="config_create_empty_hint">创建后可通过「添加任务」从任务目录挑选任务</string>
@@ -70,7 +74,9 @@
     <string name="home_resource">资源</string>
     <string name="home_none">无</string>
     <string name="home_diagnostics_summary">诊断：%1$d 条</string>
-    <string name="home_diagnostics_summary_with_errors">诊断：%1$d 条（%2$d 条错误）</string>
+    <plurals name="home_diagnostics_summary_with_errors">
+        <item quantity="other">诊断：%1$d 条（%2$d 条错误）</item>
+    </plurals>
     <string name="home_current_config">当前配置</string>
     <string name="home_no_config_hint">尚未选择配置，请前往任务页创建或选择</string>
     <string name="home_enabled">已启用</string>
@@ -89,8 +95,12 @@
     <string name="phase_preparing">准备中</string>
     <string name="phase_running">运行中</string>
     <string name="phase_stopping">停止中</string>
-    <string name="result_completed">全部完成（%1$d 个任务）</string>
-    <string name="result_completed_with_failures">完成，%1$d 个任务失败</string>
+    <plurals name="result_completed">
+        <item quantity="other">全部完成（%1$d 个任务）</item>
+    </plurals>
+    <plurals name="result_completed_with_failures">
+        <item quantity="other">完成，%1$d 个任务失败</item>
+    </plurals>
     <string name="result_cancelled">已取消</string>
     <string name="result_failed">失败：%1$s</string>
 
@@ -135,4 +145,45 @@
     <string name="msg_template_not_found">模板“%1$s”不存在</string>
     <string name="msg_cannot_start">无法开始：%1$s</string>
     <string name="msg_cannot_stop">无法停止：%1$s</string>
+
+    <!-- 结构化诊断（domain DiagnosticMessage -> ui/i18n/DiagnosticStrings） -->
+    <string name="diagnostic_severity_warning">警告</string>
+    <string name="diagnostic_severity_error">错误</string>
+    <string name="diagnostic_interface_read_failed">读取 interface.json 失败：%1$s</string>
+    <string name="diagnostic_missing_interface_version">缺少 interface_version（PI V2 协议要求为 2）</string>
+    <string name="diagnostic_unsupported_interface_version">不支持 interface_version %1$d（仅支持 2）</string>
+    <string name="diagnostic_json_parse_failed">JSON 解析失败：%1$s</string>
+    <string name="diagnostic_translation_json_parse_failed">翻译文件 JSON 解析失败：%1$s</string>
+    <string name="diagnostic_entry_not_object">%1$s 条目不是对象</string>
+    <string name="diagnostic_required_field_missing">%1$s 缺少 %2$s</string>
+    <string name="diagnostic_resource_path_missing">resource "%1$s" 缺少 path</string>
+    <string name="diagnostic_language_path_invalid">languages "%1$s" 的路径不是字符串</string>
+    <string name="diagnostic_import_read_failed">import 分片读取失败，已跳过：%1$s</string>
+    <string name="diagnostic_project_has_no_tasks">项目未声明任何任务</string>
+    <string name="diagnostic_duplicate_declaration">%1$s "%2$s" 重复声明，保留先出现的定义</string>
+    <string name="diagnostic_translation_read_failed">翻译文件读取失败：%1$s</string>
+    <string name="diagnostic_description_read_failed">description 文件读取失败，保留原始文本：%1$s</string>
+    <string name="diagnostic_default_case_missing">option "%1$s" 的 default_case "%2$s" 不在 cases 中</string>
+    <string name="diagnostic_input_has_no_fields">input option "%1$s" 没有可用的 inputs</string>
+    <string name="diagnostic_unsupported_option_type">option "%1$s" 的 type "%2$s" 在 Android 端不支持，已跳过</string>
+    <string name="diagnostic_invalid_option_type">option "%1$s" 的 type 非法：%2$s</string>
+    <string name="diagnostic_option_case_not_object">option "%1$s" 存在非对象 case</string>
+    <string name="diagnostic_option_case_name_missing">option "%1$s" 存在缺少 name 的 case</string>
+    <string name="diagnostic_invalid_pipeline_type">input "%1$s.%2$s" 的 pipeline_type 非法：%3$s，按 string 处理</string>
+    <string name="diagnostic_regex_compile_failed">input "%1$s.%2$s" 的 verify regex 编译失败：%3$s</string>
+    <string name="diagnostic_missing_reference">引用了不存在的 %1$s "%2$s"</string>
+    <string name="diagnostic_option_cycle">option 引用形成 cycle：%1$s</string>
+    <string name="diagnostic_directory_enumeration_failed">无法枚举 %1$s 目录：%2$s</string>
+    <string name="diagnostic_no_available_resource">没有可用的 resource</string>
+    <string name="diagnostic_resource_selection_missing">resource "%1$s" 已不存在，回退到 %2$s</string>
+    <string name="diagnostic_none">无</string>
+    <string name="diagnostic_active_configuration_missing">activeConfigurationId 指向不存在的配置</string>
+    <string name="diagnostic_configured_task_missing">任务 "%1$s" 已不在项目中</string>
+    <string name="diagnostic_runtime_no_resource">没有可用的 resource，无法构造运行环境</string>
+    <string name="diagnostic_enabled_task_missing_definition">已启用任务 "%1$s" 缺少 definition</string>
+    <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
+    <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
+    <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>
+    <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
+    <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
 </resources>

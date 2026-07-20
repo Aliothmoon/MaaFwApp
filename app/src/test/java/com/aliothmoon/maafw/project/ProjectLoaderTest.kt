@@ -1,7 +1,13 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.config.ConfigurationResolver
+import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.OptionDefinition
+import com.aliothmoon.maafw.domain.RunConfiguration
+import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.UserConfiguration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
@@ -171,7 +177,12 @@ class ProjectLoaderGroupTest {
         assertEquals(listOf("g1", "g2", "g3"), groups.map { it.name })
         // label 缺省回落 name；重名声明保留先出现的定义
         assertEquals(listOf("组一", "g2", "g3"), groups.map { it.label })
-        assertTrue(ready.diagnostics.any { it.severity == DiagnosticSeverity.Warning && "g1" in it.message })
+        assertTrue(
+            ready.diagnostics.any {
+                it.severity == DiagnosticSeverity.Warning &&
+                    it.message == DiagnosticMessage.DuplicateDeclaration("group", "g1")
+            },
+        )
     }
 
     @Test
@@ -193,7 +204,10 @@ class ProjectLoaderGroupTest {
         // 全部未命中：归一化为空，落未分组
         assertEquals(emptyList<String>(), definition.tasks.first { it.name == "T2" }.groups)
         assertEquals(listOf("g1", ProjectLoader.UNGROUPED), definition.groups.map { it.name })
-        assertEquals(2, ready.diagnostics.count { "未声明的 group" in it.message })
+        assertEquals(
+            2,
+            ready.diagnostics.count { it.message is DiagnosticMessage.MissingReference },
+        )
     }
 
     @Test
@@ -238,16 +252,20 @@ class ProjectLoaderGroupTest {
                             "interface_version": 2,
                             "name": "t",
                             "languages": {"zh-CN": "./i18n/zh-CN.json", "en-US": "./i18n/en-US.json"},
+                            "resource": [{"name": "cn", "label": "${'$'}resource.cn.label", "path": ["./resource"]}],
                             "group": [{"name": "g1", "label": "${'$'}group.g1"}],
                             "import": ["tasks/a.json"]
                         }
                     """.trimIndent(),
-                    "i18n/zh-CN.json" to """{"group.g1": "分组一", "task.t1.label": "任务一", "task.t1.desc": "任务一说明", "opt.label": "选项一"}""",
+                    "i18n/zh-CN.json" to """{"resource.cn.label": "国服资源", "group.g1": "分组一", "task.t1.label": "任务一", "task.t1.desc": "任务一说明", "opt.label": "选项一", "input.label": "次数"}""",
                     "i18n/en-US.json" to """{"group.g1": "Group One"}""",
                     "tasks/a.json" to """
                         {
-                            "task": [{"name": "T1", "entry": "E1", "label": "${'$'}task.t1.label", "description": "${'$'}task.t1.desc", "group": ["g1"]}],
-                            "option": {"O1": {"type": "select", "label": "${'$'}opt.label", "cases": [{"name": "c1"}]}}
+                            "task": [{"name": "T1", "entry": "E1", "label": "${'$'}task.t1.label", "description": "${'$'}task.t1.desc", "group": ["g1"], "option": ["I1"]}],
+                            "option": {
+                                "O1": {"type": "select", "label": "${'$'}opt.label", "cases": [{"name": "c1"}]},
+                                "I1": {"type": "input", "inputs": [{"name": "Times", "label": "${'$'}input.label"}]}
+                            }
                         }
                     """.trimIndent(),
                 ),
@@ -261,6 +279,27 @@ class ProjectLoaderGroupTest {
         assertEquals("任务一说明", definition.tasks.single().description)
         assertEquals("选项一", definition.options.getValue("O1").label)
         assertEquals("分组一", definition.groups.first { it.name == "g1" }.label)
+        assertEquals("国服资源", definition.resources.single().label)
+        val input = definition.options.getValue("I1") as OptionDefinition.Input
+        assertEquals("次数", input.fields.single().label)
+
+        val configurationId = RunConfigurationId("localized-labels")
+        val session = ConfigurationResolver.resolve(
+            definition,
+            UserConfiguration(
+                initialized = true,
+                activeResourceName = "cn",
+                configurations = listOf(
+                    RunConfiguration(configurationId, "test", listOf(ConfiguredTask("T1"))),
+                ),
+                activeConfigurationId = configurationId,
+            ),
+        )
+        assertEquals("国服资源", session.environment.resource?.label)
+        assertEquals(
+            "次数",
+            session.activeConfiguration!!.tasks.single().options.single().inputs.single().label,
+        )
     }
 
     @Test
@@ -337,6 +376,30 @@ class ProjectLoaderGroupTest {
     }
 
     @Test
+    fun `以文档扩展名结尾的本地化说明仍作为正文`() {
+        val description = "筛选结束后保存到工作目录下的 EssencePlan.html"
+        val ready = ProjectLoader(
+            source = MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "languages": {"zh_cn": "./i18n/zh.json"},
+                            "import": ["tasks/a.json"]
+                        }
+                    """.trimIndent(),
+                    "i18n/zh.json" to """{"task.description": "$description"}""",
+                    "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","description":"${'$'}task.description"}]}""",
+                ),
+            ),
+            localeProvider = { "zh-CN" },
+        ).load() as ProjectLoadResult.Ready
+
+        assertEquals(description, ready.definition.tasks.single().description)
+        assertTrue(ready.diagnostics.none { it.message is DiagnosticMessage.DescriptionReadFailed })
+    }
+
+    @Test
     fun `URL 形态 description 原样保留`() {
         val url = "https://example.com/help.md"
         val ready = load(
@@ -363,7 +426,12 @@ class ProjectLoaderGroupTest {
         )
         assertTrue(ready.definition.options.isEmpty())
         assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
-        assertTrue(ready.diagnostics.any { "hotkey" in it.message && it.severity == DiagnosticSeverity.Warning })
+        assertTrue(
+            ready.diagnostics.any {
+                it.message == DiagnosticMessage.UnsupportedOptionType("Keymap", "hotkey") &&
+                    it.severity == DiagnosticSeverity.Warning
+            },
+        )
     }
 }
 
@@ -376,7 +444,12 @@ class ProjectLoaderProtocolTest {
         ).load()
         assertTrue("应为 Failure: $result", result is ProjectLoadResult.Failure)
         val diagnostics = (result as ProjectLoadResult.Failure).diagnostics
-        assertTrue(diagnostics.any { "interface_version" in it.message && it.severity == DiagnosticSeverity.Error })
+        assertTrue(
+            diagnostics.any {
+                it.message == DiagnosticMessage.MissingInterfaceVersion &&
+                    it.severity == DiagnosticSeverity.Error
+            },
+        )
     }
 
     @Test
@@ -426,7 +499,13 @@ class ProjectLoaderProtocolTest {
         ).load() as ProjectLoadResult.Ready
         // 顺序 = import 声明序（b 在 a 前），不是字典序
         assertEquals(listOf("TB", "TA"), ready.definition.tasks.map { it.name })
-        assertTrue(ready.diagnostics.any { "tasks/missing.json" == it.source && it.severity == DiagnosticSeverity.Warning })
+        assertTrue(
+            ready.diagnostics.any {
+                "tasks/missing.json" == it.source &&
+                    it.severity == DiagnosticSeverity.Warning &&
+                    it.message is DiagnosticMessage.ImportReadFailed
+            },
+        )
         assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
     }
 
@@ -437,7 +516,12 @@ class ProjectLoaderProtocolTest {
         ).load()
         assertTrue("应为 Ready: $ready", ready is ProjectLoadResult.Ready)
         val diagnostics = (ready as ProjectLoadResult.Ready).diagnostics
-        assertTrue(diagnostics.any { "未声明任何任务" in it.message && it.severity == DiagnosticSeverity.Warning })
+        assertTrue(
+            diagnostics.any {
+                it.message == DiagnosticMessage.ProjectHasNoTasks &&
+                    it.severity == DiagnosticSeverity.Warning
+            },
+        )
     }
 
     @Test

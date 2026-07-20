@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
@@ -104,6 +105,12 @@ class RunPlanBuilderTest {
             ),
         )
         assertTrue("Unset 无默认值应 Invalid: $result", result is RunPlanResult.Invalid)
+        val diagnostics = (result as RunPlanResult.Invalid).diagnostics
+        assertTrue(
+            diagnostics.any {
+                it.message == DiagnosticMessage.OptionUnsetWithoutDefault("自定义作战关卡")
+            },
+        )
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
+import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
@@ -46,7 +47,10 @@ class ProjectLoader(
         val interfaceContent = try {
             source.read(interfacePath)
         } catch (e: Exception) {
-            diagnostics += error(interfacePath, "interface.json 读取失败: ${e.message}")
+            diagnostics += error(
+                interfacePath,
+                DiagnosticMessage.InterfaceReadFailed(e.message.orEmpty()),
+            )
             return ProjectLoadResult.Failure(diagnostics)
         }
         val projectInterface = PiParser.parseInterface(interfacePath, interfaceContent)
@@ -57,8 +61,8 @@ class ProjectLoader(
             diagnostics += error(
                 interfacePath,
                 when (val v = projectInterface.interfaceVersion) {
-                    null -> "缺少 interface_version（PI V2 协议要求为 2）"
-                    else -> "interface_version $v 不受支持（仅支持 2）"
+                    null -> DiagnosticMessage.MissingInterfaceVersion
+                    else -> DiagnosticMessage.UnsupportedInterfaceVersion(v)
                 },
             )
             return ProjectLoadResult.Failure(diagnostics)
@@ -78,13 +82,13 @@ class ProjectLoader(
             val content = try {
                 source.read(path)
             } catch (e: Exception) {
-                diagnostics += warning(path, "import 分片读取失败，已跳过: ${e.message}")
+                diagnostics += warning(path, DiagnosticMessage.ImportReadFailed(e.message.orEmpty()))
                 continue
             }
             mergeContent(state, PiParser.parseFile(path, content, text), path, diagnostics)
         }
         if (state.tasks.isEmpty()) {
-            diagnostics += warning(interfacePath, "项目未声明任何任务")
+            diagnostics += warning(interfacePath, DiagnosticMessage.ProjectHasNoTasks)
         }
 
         validateOptionReferences(state.tasks, state.options, diagnostics)
@@ -98,6 +102,7 @@ class ProjectLoader(
             version = projectInterface.version,
             controller = ControllerDefinition(),
             resources = projectInterface.resources
+                .map { ResourceDefinition(it.name, it.paths, text.label(it.label) ?: it.name) }
                 .takeIf { it.isNotEmpty() }
                 ?: deriveResources(diagnostics),
             tasks = normalizedTasks,
@@ -118,28 +123,34 @@ class ProjectLoader(
         diagnostics += parsed.diagnostics
         for (task in parsed.tasks) {
             if (state.tasks.any { it.name == task.name }) {
-                diagnostics += error(file, "task \"${task.name}\" 重复声明，保留先出现的定义")
+                diagnostics += error(file, DiagnosticMessage.DuplicateDeclaration("task", task.name))
             } else {
                 state.tasks += task
             }
         }
         for ((name, option) in parsed.options) {
             if (state.options.containsKey(name)) {
-                diagnostics += error(file, "option \"$name\" 重复声明，保留先出现的定义")
+                diagnostics += error(file, DiagnosticMessage.DuplicateDeclaration("option", name))
             } else {
                 state.options[name] = option
             }
         }
         for (template in parsed.templates) {
             if (state.templates.any { it.name == template.name }) {
-                diagnostics += warning(file, "preset \"${template.name}\" 重复声明，保留先出现的定义")
+                diagnostics += warning(
+                    file,
+                    DiagnosticMessage.DuplicateDeclaration("preset", template.name),
+                )
             } else {
                 state.templates += template
             }
         }
         for (group in parsed.groups) {
             if (state.declaredGroups.any { it.name == group.name }) {
-                diagnostics += warning(file, "group \"${group.name}\" 重复声明，保留先出现的定义")
+                diagnostics += warning(
+                    file,
+                    DiagnosticMessage.DuplicateDeclaration("group", group.name),
+                )
             } else {
                 state.declaredGroups += group
             }
@@ -169,7 +180,7 @@ class ProjectLoader(
         val content = try {
             source.read(path)
         } catch (e: Exception) {
-            diagnostics += warning(path, "翻译文件读取失败: ${e.message}")
+            diagnostics += warning(path, DiagnosticMessage.TranslationReadFailed(e.message.orEmpty()))
             return emptyMap()
         }
         return PiParser.parseTranslations(path, content) { diagnostics += it }
@@ -196,7 +207,7 @@ class ProjectLoader(
             return try {
                 source.read(path)
             } catch (e: Exception) {
-                diagnostics += warning(path, "description 文件读取失败，保留原始文本: ${e.message}")
+                diagnostics += warning(path, DiagnosticMessage.DescriptionReadFailed(e.message.orEmpty()))
                 resolved
             }
         }
@@ -223,7 +234,10 @@ class ProjectLoader(
         val normalized = tasks.map { task ->
             val kept = task.groups.filter { it in declaredNames }
             task.groups.filterNot { it in declaredNames }.forEach { ref ->
-                diagnostics += warning("task:${task.name}", "引用了未声明的 group \"$ref\"")
+                diagnostics += warning(
+                    "task:${task.name}",
+                    DiagnosticMessage.MissingReference("group", ref),
+                )
             }
             if (kept.isEmpty()) hasUngrouped = true
             if (kept.size == task.groups.size) task else task.copy(groups = kept)
@@ -243,7 +257,10 @@ class ProjectLoader(
         for (task in tasks) {
             for (ref in task.optionNames) {
                 if (ref !in options) {
-                    diagnostics += error("task:${task.name}", "引用了不存在的 option \"$ref\"")
+                    diagnostics += error(
+                        "task:${task.name}",
+                        DiagnosticMessage.MissingReference("option", ref),
+                    )
                 }
             }
         }
@@ -251,7 +268,10 @@ class ProjectLoader(
             for (case in option.casesOrEmpty()) {
                 for (child in case.childOptionNames) {
                     if (child !in options) {
-                        diagnostics += error("option:${option.name}", "case \"${case.name}\" 引用了不存在的 option \"$child\"")
+                        diagnostics += error(
+                            "option:${option.name}/case:${case.name}",
+                            DiagnosticMessage.MissingReference("option", child),
+                        )
                     }
                 }
             }
@@ -268,7 +288,10 @@ class ProjectLoader(
         fun visit(name: String) {
             if (name in done || name !in options) return
             if (!visiting.add(name)) {
-                diagnostics += error("option:$name", "option 引用形成 cycle: ${visiting.joinToString(" -> ")} -> $name")
+                diagnostics += error(
+                    "option:$name",
+                    DiagnosticMessage.OptionCycle("${visiting.joinToString(" -> ")} -> $name"),
+                )
                 return
             }
             options[name]?.casesOrEmpty()?.forEach { case ->
@@ -288,7 +311,10 @@ class ProjectLoader(
         val taskNames = tasks.mapTo(mutableSetOf()) { it.name }
         for (template in templates) {
             template.tasks.filter { it.taskName !in taskNames }.forEach {
-                diagnostics += warning("preset:${template.name}", "引用了不存在的任务 \"${it.taskName}\"")
+                diagnostics += warning(
+                    "preset:${template.name}",
+                    DiagnosticMessage.MissingReference("task", it.taskName),
+                )
             }
         }
     }
@@ -298,11 +324,14 @@ class ProjectLoader(
         val dirs = try {
             source.list("resource").filter { it !in NON_RESOURCE_DIRS && source.list("resource/$it").isNotEmpty() }
         } catch (e: Exception) {
-            diagnostics += warning("resource", "无法枚举 resource 目录: ${e.message}")
+            diagnostics += warning(
+                "resource",
+                DiagnosticMessage.DirectoryEnumerationFailed("resource", e.message.orEmpty()),
+            )
             emptyList()
         }
         if (dirs.isEmpty()) {
-            diagnostics += warning("resource", "没有可用的 resource")
+            diagnostics += warning("resource", DiagnosticMessage.NoAvailableResource)
             return emptyList()
         }
         val hasBase = "base" in dirs

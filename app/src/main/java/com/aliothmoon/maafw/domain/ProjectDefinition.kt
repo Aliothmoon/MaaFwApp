@@ -30,6 +30,8 @@ data class ControllerDefinition(
 data class ResourceDefinition(
     val name: String,
     val paths: List<String>,
+    /** 展示名（$i18n 已物化）；内部匹配与持久化仍使用 [name]。 */
+    val label: String = name,
 )
 
 data class TaskDefinition(
@@ -127,6 +129,8 @@ data class InputFieldDefinition(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
+    /** 展示名（$i18n 已物化）；pipeline placeholder 仍使用 [name]。 */
+    val label: String = name,
 )
 
 /** PI preset 的领域名称：只读的一次性创建模板。name 为标识符，label 为展示名。 */

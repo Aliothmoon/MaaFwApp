@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.config
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
+import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.InputFieldState
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionCaseState
@@ -14,6 +15,7 @@ import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
+import com.aliothmoon.maafw.domain.ResolvedResource
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -43,7 +45,10 @@ object ConfigurationResolver {
             config.activeResourceName != null -> {
                 diagnostics += warning(
                     "resource",
-                    "resource \"${config.activeResourceName}\" 已不存在，回退到 ${resourceNames.firstOrNull() ?: "无"}",
+                    DiagnosticMessage.ResourceSelectionMissing(
+                        selected = config.activeResourceName,
+                        fallback = resourceNames.firstOrNull(),
+                    ),
                 )
                 resourceNames.firstOrNull()
             }
@@ -53,8 +58,9 @@ object ConfigurationResolver {
 
         val environment = ResolvedEnvironment(
             controllerName = definition.controller.name,
-            resourceName = resourceName,
-            resourceCandidates = resourceNames,
+            resource = definition.resources.firstOrNull { it.name == resourceName }
+                ?.let { ResolvedResource(it.name, it.label) },
+            resourceCandidates = definition.resources.map { ResolvedResource(it.name, it.label) },
         )
 
         val configurationList = config.configurations.map { runConfiguration ->
@@ -62,7 +68,7 @@ object ConfigurationResolver {
         }
         val activeConfiguration = configurationList.firstOrNull { it.isActive }
         if (config.activeConfigurationId != null && activeConfiguration == null) {
-            diagnostics += warning("configuration", "activeConfigurationId 指向不存在的配置")
+            diagnostics += warning("configuration", DiagnosticMessage.ActiveConfigurationMissing)
         }
 
         return ResolvedProjectSession(
@@ -123,7 +129,7 @@ object ConfigurationResolver {
             if (taskDefinition == null) {
                 diagnostics += warning(
                     "configuration:${runConfiguration.name}",
-                    "任务 \"${configured.taskName}\" 已不在项目中",
+                    DiagnosticMessage.ConfiguredTaskMissing(configured.taskName),
                 )
                 ResolvedConfiguredTask(
                     instanceId = configured.instanceId,
@@ -277,6 +283,7 @@ object ConfigurationResolver {
                     inputs = option.fields.map { field ->
                         InputFieldState(
                             name = field.name,
+                            label = field.label,
                             pipelineType = field.pipelineType,
                             value = inputValues[field.name] ?: field.default,
                             default = field.default,

@@ -41,6 +41,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTone
+import com.aliothmoon.maafw.ui.i18n.localized
 
 /** M3 Card 之上的统一卡片封装（自建设计系统的 Maa* wrapper 层）。 */
 @Composable
@@ -132,9 +133,9 @@ fun MaaDiagnosticList(
 ) {
     Column {
         diagnostics.forEach {
-            val prefix = if (showSeverity) "[${it.severity}] " else ""
+            val prefix = if (showSeverity) "[${it.severity.localized()}] " else ""
             Text(
-                text = "$prefix${it.source}: ${it.message}",
+                text = "$prefix${it.source}: ${it.message.localized()}",
                 style = MaterialTheme.typography.bodySmall,
                 color = if (it.severity == DiagnosticSeverity.Error) {
                     MaterialTheme.colorScheme.error

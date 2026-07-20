@@ -299,7 +299,7 @@ private fun InputFields(
                         onSetOption(option.name, OptionValue.Inputs(values))
                     }
                 },
-                label = { Text(field.name) },
+                label = { Text(field.label) },
                 supportingText = {
                     when {
                         !valid -> Text(field.patternMessage ?: stringResource(R.string.option_input_invalid))

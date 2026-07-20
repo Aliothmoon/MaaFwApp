@@ -4,12 +4,12 @@ import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
+import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
-import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.TemplateTask
@@ -31,13 +31,20 @@ data class PiFileContent(
     val diagnostics: List<Diagnostic> = emptyList(),
 )
 
+/** translations 加载前的 resource 声明；label 仍保留 PI 原始值。 */
+data class PiResourceContent(
+    val name: String,
+    val paths: List<String>,
+    val label: String?,
+)
+
 /** PI 根 interface.json 中当前领域模型需要的项目元数据。 */
 data class PiInterfaceContent(
     val name: String?,
     val version: String?,
     /** 顶层 interface_version；PI V2 要求恒为 2，缺失或非法由 loader 硬失败。 */
     val interfaceVersion: Long?,
-    val resources: List<ResourceDefinition>,
+    val resources: List<PiResourceContent>,
     /** v2 languages 声明：语言 tag -> 翻译文件相对路径。 */
     val languages: Map<String, String>,
     /** v2.2.0 import 分片声明，按数组顺序加载；路径相对 interface.json 目录。 */
@@ -82,28 +89,39 @@ object PiParser {
         val root = try {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
-            diagnostics += error(source, "JSON 解析失败: ${e.message}")
+            diagnostics += error(source, DiagnosticMessage.JsonParseFailed(e.message.orEmpty()))
             return PiInterfaceContent(null, null, null, emptyList(), emptyMap(), emptyList(), diagnostics)
         }
 
         val resources = (root["resource"] as? JsonArray).orEmpty().mapNotNull { element ->
             val obj = element as? JsonObject
-                ?: return@mapNotNull null.also { diagnostics += error(source, "resource 条目不是对象") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("resource"))
+                }
             val name = obj.string("name")
-                ?: return@mapNotNull null.also { diagnostics += error(source, "resource 缺少 name") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessage.RequiredFieldMissing("resource", "name"),
+                    )
+                }
             val paths = obj.stringList("path").map(::normalizeProjectPath)
             if (paths.isEmpty()) {
-                diagnostics += error(source, "resource \"$name\" 缺少 path")
+                diagnostics += error(source, DiagnosticMessage.ResourcePathMissing(name))
                 null
             } else {
-                ResourceDefinition(name, paths)
+                PiResourceContent(name, paths, obj.string("label"))
             }
         }
 
         val languages = buildMap {
             (root["languages"] as? JsonObject)?.forEach { (lang, element) ->
-                (element as? JsonPrimitive)?.contentOrNull?.let { put(lang, it) }
-                    ?: run { diagnostics += warning(source, "languages \"$lang\" 的路径不是字符串") }
+                val path = (element as? JsonPrimitive)?.contentOrNull
+                if (path != null) {
+                    put(lang, path)
+                } else {
+                    diagnostics += warning(source, DiagnosticMessage.LanguagePathInvalid(lang))
+                }
             }
         }
 
@@ -123,7 +141,9 @@ object PiParser {
         val root = try {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
-            return PiFileContent(diagnostics = listOf(error(source, "JSON 解析失败: ${e.message}")))
+            return PiFileContent(
+                diagnostics = listOf(error(source, DiagnosticMessage.JsonParseFailed(e.message.orEmpty()))),
+            )
         }
         return parseFile(source, root, text)
     }
@@ -155,9 +175,16 @@ object PiParser {
     ): List<TaskGroupDefinition> =
         (root["group"] as? JsonArray).orEmpty().mapNotNull { element ->
             val obj = element as? JsonObject
-                ?: return@mapNotNull null.also { diagnostics += error(source, "group 条目不是对象") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("group"))
+                }
             val name = obj.string("name")
-                ?: return@mapNotNull null.also { diagnostics += error(source, "group 缺少 name") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessage.RequiredFieldMissing("group", "name"),
+                    )
+                }
             TaskGroupDefinition(
                 name = name,
                 label = text.label(obj.string("label")) ?: name,
@@ -174,11 +201,20 @@ object PiParser {
         text: PiTextResolver,
     ): TaskDefinition? {
         val obj = element as? JsonObject
-            ?: return null.also { diagnostics += error(source, "task 条目不是对象") }
+            ?: return null.also {
+                diagnostics += error(source, DiagnosticMessage.EntryNotObject("task"))
+            }
         val name = obj.string("name")
-            ?: return null.also { diagnostics += error(source, "task 缺少 name") }
+            ?: return null.also {
+                diagnostics += error(source, DiagnosticMessage.RequiredFieldMissing("task", "name"))
+            }
         val entry = obj.string("entry")
-            ?: return null.also { diagnostics += error(source, "task \"$name\" 缺少 entry") }
+            ?: return null.also {
+                diagnostics += error(
+                    source,
+                    DiagnosticMessage.RequiredFieldMissing("task", "entry", owner = name),
+                )
+            }
         return TaskDefinition(
             name = name,
             entry = entry,
@@ -202,7 +238,9 @@ object PiParser {
         text: PiTextResolver,
     ): OptionDefinition? {
         val obj = element as? JsonObject
-            ?: return null.also { diagnostics += error(source, "option \"$name\" 不是对象") }
+            ?: return null.also {
+                diagnostics += error(source, DiagnosticMessage.EntryNotObject("option \"$name\""))
+            }
         val label = text.label(obj.string("label")) ?: name
         val description = text.description(obj.string("description"))
         return when (val type = obj.string("type")) {
@@ -210,7 +248,7 @@ object PiParser {
                 val cases = parseCases(source, name, obj, diagnostics, text)
                 val defaultCase = obj.string("default_case")?.also {
                     if (cases.none { c -> c.name == it }) {
-                        diagnostics += warning(source, "option \"$name\" 的 default_case \"$it\" 不在 cases 中")
+                        diagnostics += warning(source, DiagnosticMessage.DefaultCaseMissing(name, it))
                     }
                 }?.takeIf { d -> cases.any { it.name == d } }
                 if (type == "select") {
@@ -229,7 +267,9 @@ object PiParser {
                     else -> emptyList()
                 }.filter { d ->
                     cases.any { it.name == d }.also { found ->
-                        if (!found) diagnostics += warning(source, "option \"$name\" 的 default_case \"$d\" 不在 cases 中")
+                        if (!found) {
+                            diagnostics += warning(source, DiagnosticMessage.DefaultCaseMissing(name, d))
+                        }
                     }
                 }
                 OptionDefinition.Checkbox(name, label, description, cases, defaults)
@@ -240,19 +280,22 @@ object PiParser {
                     parseInputField(source, name, field, diagnostics, text)
                 }
                 if (fields.isEmpty()) {
-                    diagnostics += warning(source, "input option \"$name\" 没有可用的 inputs")
+                    diagnostics += warning(source, DiagnosticMessage.InputHasNoFields(name))
                 }
                 OptionDefinition.Input(name, label, description, fields, obj.objectOrEmpty("pipeline_override"))
             }
 
             // MXU 合法类型，但热键是桌面端语义，Android 端跳过不投影
             "hotkey" -> {
-                diagnostics += warning(source, "option \"$name\" 的 type \"hotkey\" 在 Android 端不支持，已跳过")
+                diagnostics += warning(
+                    source,
+                    DiagnosticMessage.UnsupportedOptionType(name, "hotkey"),
+                )
                 null
             }
 
             else -> {
-                diagnostics += error(source, "option \"$name\" 的 type 非法: $type")
+                diagnostics += error(source, DiagnosticMessage.InvalidOptionType(name, type))
                 null
             }
         }
@@ -267,9 +310,13 @@ object PiParser {
     ): List<OptionCaseDefinition> =
         (obj["cases"] as? JsonArray).orEmpty().mapNotNull { element ->
             val case = element as? JsonObject
-                ?: return@mapNotNull null.also { diagnostics += error(source, "option \"$optionName\" 存在非对象 case") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessage.OptionCaseNotObject(optionName))
+                }
             val caseName = case.string("name")
-                ?: return@mapNotNull null.also { diagnostics += error(source, "option \"$optionName\" 存在缺少 name 的 case") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessage.OptionCaseNameMissing(optionName))
+                }
             OptionCaseDefinition(
                 name = caseName,
                 label = text.label(case.string("label")) ?: caseName,
@@ -287,15 +334,25 @@ object PiParser {
         text: PiTextResolver,
     ): InputFieldDefinition? {
         val obj = element as? JsonObject
-            ?: return null.also { diagnostics += error(source, "input option \"$optionName\" 存在非对象 field") }
+            ?: return null.also {
+                diagnostics += error(source, DiagnosticMessage.EntryNotObject("input field"))
+            }
         val name = obj.string("name")
-            ?: return null.also { diagnostics += error(source, "input option \"$optionName\" 存在缺少 name 的 field") }
+            ?: return null.also {
+                diagnostics += error(
+                    source,
+                    DiagnosticMessage.RequiredFieldMissing("input field", "name", owner = optionName),
+                )
+            }
         val pipelineType = when (val t = obj.string("pipeline_type")?.lowercase()) {
             null, "string" -> PipelineType.StringType
             "int" -> PipelineType.IntType
             "bool" -> PipelineType.BoolType
             else -> {
-                diagnostics += warning(source, "input \"$optionName.$name\" 的 pipeline_type 非法: $t，按 string 处理")
+                diagnostics += warning(
+                    source,
+                    DiagnosticMessage.InvalidPipelineType(optionName, name, t),
+                )
                 PipelineType.StringType
             }
         }
@@ -304,7 +361,14 @@ object PiParser {
             try {
                 Regex(it)
             } catch (e: Exception) {
-                diagnostics += error(source, "input \"$optionName.$name\" 的 verify regex 编译失败: ${e.message}")
+                diagnostics += error(
+                    source,
+                    DiagnosticMessage.RegexCompileFailed(
+                        option = optionName,
+                        input = name,
+                        detail = e.message.orEmpty(),
+                    ),
+                )
                 null
             }
         }
@@ -320,6 +384,7 @@ object PiParser {
             verify = verify,
             patternMessage = text.label(obj.string("pattern_msg")),
             description = text.description(obj.string("description")),
+            label = text.label(obj.string("label")) ?: name,
         )
     }
 
@@ -330,14 +395,25 @@ object PiParser {
         text: PiTextResolver,
     ): ConfigurationTemplate? {
         val obj = element as? JsonObject
-            ?: return null.also { diagnostics += error(source, "preset 条目不是对象") }
+            ?: return null.also {
+                diagnostics += error(source, DiagnosticMessage.EntryNotObject("preset"))
+            }
         val name = obj.string("name")
-            ?: return null.also { diagnostics += error(source, "preset 缺少 name") }
+            ?: return null.also {
+                diagnostics += error(source, DiagnosticMessage.RequiredFieldMissing("preset", "name"))
+            }
         val tasks = (obj["task"] as? JsonArray).orEmpty().mapNotNull { taskElement ->
             val task = taskElement as? JsonObject
-                ?: return@mapNotNull null.also { diagnostics += error(source, "preset \"$name\" 存在非对象 task") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("preset task"))
+                }
             val taskName = task.string("name")
-                ?: return@mapNotNull null.also { diagnostics += error(source, "preset \"$name\" 存在缺少 name 的 task") }
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessage.RequiredFieldMissing("preset task", "name", owner = name),
+                    )
+                }
             TemplateTask(
                 taskName = taskName,
                 enabled = task.boolean("enabled") ?: true,
@@ -401,7 +477,9 @@ object PiParser {
         val root = try {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
-            onDiagnostic(error(source, "翻译文件 JSON 解析失败: ${e.message}"))
+            onDiagnostic(
+                error(source, DiagnosticMessage.TranslationJsonParseFailed(e.message.orEmpty())),
+            )
             return emptyMap()
         }
         return buildMap {

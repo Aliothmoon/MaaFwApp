@@ -500,7 +500,12 @@ private fun ConfigurationSelectorCard(
                 )
                 Text(
                     text = if (active != null) {
-                        stringResource(R.string.config_current_summary, active.tasks.size, active.effectiveTaskCount)
+                        pluralStringResource(
+                            R.plurals.config_current_summary,
+                            active.tasks.size,
+                            active.tasks.size,
+                            active.effectiveTaskCount,
+                        )
                     } else {
                         stringResource(R.string.config_select_hint)
                     },
@@ -812,7 +817,13 @@ private fun TemplatePreviewPage(
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
         ) {
-            Text(stringResource(R.string.config_create_use_count, included.size))
+            Text(
+                pluralStringResource(
+                    R.plurals.config_create_use_count,
+                    included.size,
+                    included.size,
+                ),
+            )
         }
     }
 }
