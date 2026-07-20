@@ -5,6 +5,7 @@
     <string name="common_close">关闭</string>
     <string name="common_back">返回</string>
     <string name="common_save">保存</string>
+    <string name="common_copy">复制</string>
     <string name="common_rename">重命名</string>
     <string name="common_delete">删除</string>
     <string name="common_loading">加载中…</string>
@@ -17,21 +18,21 @@
     <string name="tasks_empty_task_title">还没有任务</string>
     <string name="tasks_empty_task_hint">从任务目录选择要执行的任务</string>
     <string name="tasks_add_task">添加任务</string>
-    <string name="tasks_run_order">执行顺序</string>
-    <string name="tasks_effective_count">· %1$d/%2$d 有效</string>
+    <string name="tasks_run_order">任务列表</string>
     <string name="tasks_live_preview">实时预览</string>
     <string name="tasks_remove">移除</string>
     <string name="tasks_drag_reorder">拖动排序</string>
     <string name="tasks_description_title">任务说明</string>
 
     <!-- 运行开关 -->
-    <string name="runner_start">开始</string>
+    <string name="runner_start">开始任务</string>
     <string name="runner_stop">停止</string>
     <string name="runner_stopping">停止中…</string>
 
     <!-- 配置 sheet -->
     <string name="config_title">配置</string>
     <string name="config_select">选择配置</string>
+    <string name="config_copy_name">%1$s 副本</string>
     <string name="config_select_hint">点击选择或新建配置</string>
     <plurals name="config_current_summary">
         <item quantity="other">当前配置 · %1$d 个任务 · %2$d 个有效</item>

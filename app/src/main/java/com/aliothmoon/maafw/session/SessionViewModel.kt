@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
+import com.aliothmoon.maafw.domain.duplicate
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -145,6 +146,20 @@ class SessionViewModel(
                     } else {
                         config
                     }
+                }
+            }
+
+            is SessionIntent.DuplicateConfiguration -> guarded {
+                configurationStore.update { config ->
+                    val source = config.configuration(intent.id) ?: return@update config
+                    val duplicated = source.duplicate(
+                        id = ConfigurationResolver.newConfigurationId(),
+                        name = intent.name,
+                    )
+                    config.copy(
+                        configurations = config.configurations + duplicated,
+                        activeConfigurationId = duplicated.id,
+                    )
                 }
             }
 

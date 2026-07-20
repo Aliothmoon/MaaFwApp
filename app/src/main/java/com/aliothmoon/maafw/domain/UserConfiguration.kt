@@ -38,6 +38,16 @@ data class RunConfiguration(
     val tasks: List<ConfiguredTask> = emptyList(),
 )
 
+/** 复制为独立配置：保留任务设置，但为配置和任务实例换用新的身份。 */
+fun RunConfiguration.duplicate(
+    id: RunConfigurationId,
+    name: String,
+): RunConfiguration = RunConfiguration(
+    id = id,
+    name = name,
+    tasks = tasks.map { it.copy(instanceId = newTaskInstanceId()) },
+)
+
 /**
  * 同一 RunConfiguration 内允许重复 taskName（每次添加生成独立实例，
  * 各自持有 enabled / optionValues）；实例定位一律使用 instanceId。

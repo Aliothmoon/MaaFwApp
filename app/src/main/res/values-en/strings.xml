@@ -5,6 +5,7 @@
     <string name="common_close">Close</string>
     <string name="common_back">Back</string>
     <string name="common_save">Save</string>
+    <string name="common_copy">Copy</string>
     <string name="common_rename">Rename</string>
     <string name="common_delete">Delete</string>
     <string name="common_loading">Loading…</string>
@@ -17,22 +18,22 @@
     <string name="tasks_empty_task_title">No tasks yet</string>
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
-    <string name="tasks_run_order">Run order</string>
+    <string name="tasks_run_order">Task list</string>
     <!-- "active" is an adjective and does not inflect with quantity. -->
-    <string name="tasks_effective_count" tools:ignore="PluralsCandidate">· %1$d/%2$d active</string>
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_remove">Remove</string>
     <string name="tasks_drag_reorder">Drag to reorder</string>
     <string name="tasks_description_title">Task description</string>
 
     <!-- Runner toggle -->
-    <string name="runner_start">Start</string>
+    <string name="runner_start">Start tasks</string>
     <string name="runner_stop">Stop</string>
     <string name="runner_stopping">Stopping…</string>
 
     <!-- Configuration sheet -->
     <string name="config_title">Configurations</string>
     <string name="config_select">Select configuration</string>
+    <string name="config_copy_name">%1$s copy</string>
     <string name="config_select_hint">Tap to select or create a configuration</string>
     <plurals name="config_current_summary">
         <item quantity="one">Current · %1$d task · %2$d active</item>

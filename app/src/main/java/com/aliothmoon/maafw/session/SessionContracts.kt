@@ -54,6 +54,7 @@ sealed interface SessionIntent {
         val taskNames: List<String>? = null,
     ) : SessionIntent
     data class SelectConfiguration(val id: RunConfigurationId) : SessionIntent
+    data class DuplicateConfiguration(val id: RunConfigurationId, val name: String) : SessionIntent
     data class RenameConfiguration(val id: RunConfigurationId, val name: String) : SessionIntent
     data class DeleteConfiguration(val id: RunConfigurationId) : SessionIntent
 

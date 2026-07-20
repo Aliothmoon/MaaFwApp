@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.AddTask
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.Edit
@@ -269,17 +270,6 @@ private fun TasksContent(
                         Text(
                             text = stringResource(R.string.tasks_run_order),
                             style = MaterialTheme.typography.titleSmall,
-                        )
-                        Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
-                        // 计数弱化为标题后缀，整行只保留标题块与添加钮两个视觉元素
-                        Text(
-                            text = stringResource(
-                                R.string.tasks_effective_count,
-                                active.effectiveTaskCount,
-                                active.tasks.size,
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
                         )
                         // 轻量文字添加钮：主色文字无底色，不与白底任务卡抢层级
@@ -402,6 +392,7 @@ private fun TasksContent(
                 showConfigSheet = false
                 onIntent(SessionIntent.SelectConfiguration(id))
             },
+            onDuplicate = { id, name -> onIntent(SessionIntent.DuplicateConfiguration(id, name)) },
             onRename = { id, name -> onIntent(SessionIntent.RenameConfiguration(id, name)) },
             onDelete = { onIntent(SessionIntent.DeleteConfiguration(it)) },
             onCreateEmpty = { name ->
@@ -766,6 +757,7 @@ private fun ConfigurationSheet(
     state: SessionUiState,
     templates: List<ConfigurationTemplate>,
     onSelect: (RunConfigurationId) -> Unit,
+    onDuplicate: (RunConfigurationId, String) -> Unit,
     onRename: (RunConfigurationId, String) -> Unit,
     onDelete: (RunConfigurationId) -> Unit,
     onCreateEmpty: (name: String) -> Unit,
@@ -800,6 +792,7 @@ private fun ConfigurationSheet(
                     tab = homeTab,
                     onTabChange = { homeTab = it },
                     onSelect = onSelect,
+                    onDuplicate = onDuplicate,
                     onOpenRename = { page = ConfigSheetPage.Rename(it) },
                     onDelete = onDelete,
                     onOpenCreateEmpty = { page = ConfigSheetPage.CreateEmpty },
@@ -861,6 +854,7 @@ private fun ConfigSheetHomePage(
     tab: Int,
     onTabChange: (Int) -> Unit,
     onSelect: (RunConfigurationId) -> Unit,
+    onDuplicate: (RunConfigurationId, String) -> Unit,
     onOpenRename: (RunConfigurationId) -> Unit,
     onDelete: (RunConfigurationId) -> Unit,
     onOpenCreateEmpty: () -> Unit,
@@ -893,9 +887,14 @@ private fun ConfigSheetHomePage(
                     verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                 ) {
                     items(state.configurationList, key = { it.id.value }) { configuration ->
+                        val duplicatedName = uniqueConfigurationName(
+                            base = stringResource(R.string.config_copy_name, configuration.name),
+                            existing = state.configurationList.map { it.name },
+                        )
                         ConfigRowCard(
                             configuration = configuration,
                             onSelect = { onSelect(configuration.id) },
+                            onDuplicate = { onDuplicate(configuration.id, duplicatedName) },
                             onRename = { onOpenRename(configuration.id) },
                             onDelete = { onDelete(configuration.id) },
                         )
@@ -1149,11 +1148,12 @@ private fun CreateEmptyCard(onClick: () -> Unit) {
     }
 }
 
-/** 配置卡片：active 主色描边 + 容器底色 + 单选圈；行尾重命名（滑入子页）/删除。 */
+/** 配置卡片：active 主色描边 + 容器底色 + 单选圈；行尾复制/重命名（滑入子页）/删除。 */
 @Composable
 private fun ConfigRowCard(
     configuration: ResolvedRunConfiguration,
     onSelect: () -> Unit,
+    onDuplicate: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -1233,6 +1233,14 @@ private fun ConfigRowCard(
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = contentColor.copy(alpha = 0.7f),
+                )
+            }
+            IconButton(onClick = onDuplicate) {
+                Icon(
+                    imageVector = Icons.Outlined.ContentCopy,
+                    contentDescription = stringResource(R.string.common_copy),
+                    tint = contentColor.copy(alpha = 0.7f),
+                    modifier = Modifier.size(20.dp),
                 )
             }
             IconButton(onClick = onRename) {
