@@ -6,6 +6,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -29,6 +31,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Add
@@ -43,7 +47,6 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.OndemandVideo
 import androidx.compose.material.icons.outlined.UnfoldMore
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,7 +59,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,9 +73,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -156,9 +163,8 @@ private fun TasksContent(
     var showAddTasks by rememberSaveable { mutableStateOf(false) }
     var editingTaskInstanceId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // 配置选择 sheet 与重命名对话框状态；新建/模板预览内嵌在 sheet 内部
+    // 配置选择 sheet；新建/模板预览/重命名全部内嵌在 sheet 内部
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
-    var renameTarget by remember { mutableStateOf<RunConfigurationId?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -357,7 +363,7 @@ private fun TasksContent(
                 showConfigSheet = false
                 onIntent(SessionIntent.SelectConfiguration(id))
             },
-            onRename = { renameTarget = it },
+            onRename = { id, name -> onIntent(SessionIntent.RenameConfiguration(id, name)) },
             onDelete = { onIntent(SessionIntent.DeleteConfiguration(it)) },
             onCreateEmpty = { name ->
                 showConfigSheet = false
@@ -371,18 +377,6 @@ private fun TasksContent(
         )
     }
 
-    renameTarget?.let { targetId ->
-        val current = state.configurationList.firstOrNull { it.id == targetId }
-        NameInputDialog(
-            title = "重命名配置",
-            initial = current?.name.orEmpty(),
-            onConfirm = { name ->
-                renameTarget = null
-                onIntent(SessionIntent.RenameConfiguration(targetId, name))
-            },
-            onDismiss = { renameTarget = null },
-        )
-    }
 }
 
 /**
@@ -521,9 +515,24 @@ private fun ConfigurationSelectorCard(
 
 /** 配置 sheet 内部页面：主页 / 模板预览 / 新建空配置，全程不离开 sheet。 */
 private sealed interface ConfigSheetPage {
-    data object Home : ConfigSheetPage
-    data class TemplatePreview(val templateName: String) : ConfigSheetPage
-    data object CreateEmpty : ConfigSheetPage
+    /** 导航层级：决定页面切换的滑动方向（前进右进、返回左进）。 */
+    val depth: Int
+
+    data object Home : ConfigSheetPage {
+        override val depth = 0
+    }
+
+    data class TemplatePreview(val templateName: String) : ConfigSheetPage {
+        override val depth = 1
+    }
+
+    data object CreateEmpty : ConfigSheetPage {
+        override val depth = 1
+    }
+
+    data class Rename(val id: RunConfigurationId) : ConfigSheetPage {
+        override val depth = 1
+    }
 }
 
 /** 底部上弹抽屉：配置卡片 + 模板区；模板预览与新建空配置内嵌为子页，免去二次弹窗。 */
@@ -532,7 +541,7 @@ private fun ConfigurationSheet(
     state: SessionUiState,
     templates: List<ConfigurationTemplate>,
     onSelect: (RunConfigurationId) -> Unit,
-    onRename: (RunConfigurationId) -> Unit,
+    onRename: (RunConfigurationId, String) -> Unit,
     onDelete: (RunConfigurationId) -> Unit,
     onCreateEmpty: (name: String) -> Unit,
     onCreateFromTemplate: (templateName: String, configurationName: String, taskNames: List<String>) -> Unit,
@@ -547,7 +556,14 @@ private fun ConfigurationSheet(
         AnimatedContent(
             targetState = page,
             transitionSpec = {
-                fadeIn(MaaMotion.enter()).togetherWith(fadeOut(MaaMotion.exit()))
+                val forward = targetState.depth > initialState.depth
+                val enter = fadeIn(MaaMotion.enter<Float>()) + slideInHorizontally(MaaMotion.enter()) {
+                    if (forward) it / 3 else -it / 3
+                }
+                val exit = fadeOut(MaaMotion.exit<Float>()) + slideOutHorizontally(MaaMotion.exit()) {
+                    if (forward) -it / 3 else it / 3
+                }
+                enter.togetherWith(exit)
             },
             label = "configSheetPage",
             modifier = sheetModifier.imePadding(),
@@ -559,12 +575,30 @@ private fun ConfigurationSheet(
                     tab = homeTab,
                     onTabChange = { homeTab = it },
                     onSelect = onSelect,
-                    onRename = onRename,
+                    onOpenRename = { page = ConfigSheetPage.Rename(it) },
                     onDelete = onDelete,
                     onOpenCreateEmpty = { page = ConfigSheetPage.CreateEmpty },
                     onOpenTemplate = { page = ConfigSheetPage.TemplatePreview(it) },
                     onClose = onDismiss,
                 )
+
+                is ConfigSheetPage.Rename -> {
+                    val configuration = state.configurationList.firstOrNull { it.id == current.id }
+                    if (configuration == null) {
+                        // 目标配置已消失（并发删除/重载）时退回主页
+                        LaunchedEffect(current) { page = ConfigSheetPage.Home }
+                    } else {
+                        RenameConfigurationPage(
+                            configuration = configuration,
+                            onBack = { page = ConfigSheetPage.Home },
+                            onClose = onDismiss,
+                            onRename = { name ->
+                                page = ConfigSheetPage.Home
+                                onRename(configuration.id, name)
+                            },
+                        )
+                    }
+                }
 
                 is ConfigSheetPage.CreateEmpty -> CreateEmptyPage(
                     onBack = { page = ConfigSheetPage.Home },
@@ -602,7 +636,7 @@ private fun ConfigSheetHomePage(
     tab: Int,
     onTabChange: (Int) -> Unit,
     onSelect: (RunConfigurationId) -> Unit,
-    onRename: (RunConfigurationId) -> Unit,
+    onOpenRename: (RunConfigurationId) -> Unit,
     onDelete: (RunConfigurationId) -> Unit,
     onOpenCreateEmpty: () -> Unit,
     onOpenTemplate: (String) -> Unit,
@@ -647,7 +681,7 @@ private fun ConfigSheetHomePage(
                         ConfigRowCard(
                             configuration = configuration,
                             onSelect = { onSelect(configuration.id) },
-                            onRename = { onRename(configuration.id) },
+                            onRename = { onOpenRename(configuration.id) },
                             onDelete = { onDelete(configuration.id) },
                         )
                     }
@@ -831,6 +865,49 @@ private fun CreateEmptyPage(
     }
 }
 
+/** 重命名配置页：预填当前名并全选，直接输入即整体替换；与新建/模板预览同为 sheet 子页。 */
+@Composable
+private fun RenameConfigurationPage(
+    configuration: ResolvedRunConfiguration,
+    onBack: () -> Unit,
+    onClose: () -> Unit,
+    onRename: (String) -> Unit,
+) {
+    var name by remember(configuration.id) {
+        mutableStateOf(
+            TextFieldValue(configuration.name, selection = TextRange(0, configuration.name.length)),
+        )
+    }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    val commit = { if (name.text.isNotBlank()) onRename(name.text.trim()) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
+        MaaSheetHeader(title = "重命名配置", onClose = onClose, onBack = onBack)
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("配置名称") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { commit() }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+        )
+        Spacer(Modifier.weight(1f))
+        Button(
+            onClick = commit,
+            enabled = name.text.isNotBlank(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = MaaDesignTokens.Spacing.lg),
+        ) {
+            Text("保存")
+        }
+    }
+}
+
 /** 生成不与现有配置重名的预填名称：base、base 2、base 3…（仅预填，不强制唯一）。 */
 private fun uniqueConfigurationName(base: String, existing: Collection<String>): String {
     if (base !in existing) return base
@@ -873,7 +950,7 @@ private fun CreateEmptyCard(onClick: () -> Unit) {
     }
 }
 
-/** 配置卡片：active 主色描边 + 容器底色 + 单选圈；行尾直接重命名/删除。 */
+/** 配置卡片：active 主色描边 + 容器底色 + 单选圈；行尾重命名（滑入子页）/删除。 */
 @Composable
 private fun ConfigRowCard(
     configuration: ResolvedRunConfiguration,
@@ -1004,37 +1081,6 @@ private fun TemplateCard(template: ConfigurationTemplate, onClick: () -> Unit) {
             MaaMarkdown(text = it, maxLines = 3, linksClickable = false)
         }
     }
-}
-
-@Composable
-private fun NameInputDialog(
-    title: String,
-    initial: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var name by rememberSaveable { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("配置名称") },
-                singleLine = true,
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(name.trim()) },
-                enabled = name.isNotBlank(),
-            ) { Text("确认") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        },
-    )
 }
 
 @Composable
