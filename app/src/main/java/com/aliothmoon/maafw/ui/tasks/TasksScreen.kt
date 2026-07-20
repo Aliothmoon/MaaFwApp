@@ -39,7 +39,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddTask
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.Edit
@@ -80,7 +79,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
@@ -108,6 +106,7 @@ import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
+import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.i18n.localized
@@ -662,28 +661,18 @@ private fun ConfigSheetHomePage(
     onClose: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
-        ) {
-            SheetTab(
-                text = stringResource(R.string.config_select),
-                selected = tab == 0 || templates.isEmpty(),
-                onClick = { onTabChange(0) },
-            )
+        MaaSheetHeader(title = stringResource(R.string.config_title), onClose = onClose)
+        val tabs = buildList {
+            add(0 to stringResource(R.string.config_select))
             if (templates.isNotEmpty()) {
-                SheetTab(
-                    text = stringResource(R.string.config_create_from_template),
-                    selected = tab == 1,
-                    onClick = { onTabChange(1) },
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.common_close))
+                add(1 to stringResource(R.string.config_create_from_template))
             }
         }
+        MaaSingleChoiceFlow(
+            options = tabs,
+            selected = if (templates.isEmpty()) 0 else tab,
+            onSelect = onTabChange,
+        )
         val showTemplates = tab == 1 && templates.isNotEmpty()
         Crossfade(
             targetState = showTemplates,
@@ -728,28 +717,6 @@ private fun ConfigSheetHomePage(
         }
         Spacer(Modifier.size(MaaDesignTokens.Spacing.sm))
     }
-}
-
-/** sheet 标题页签：选中态加粗主色调文本，未选中弱化。 */
-@Composable
-private fun SheetTab(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-        color = if (selected) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-        },
-        modifier = Modifier
-            .maaClickable(onClick = onClick)
-            .padding(vertical = MaaDesignTokens.Spacing.xxs),
-    )
 }
 
 /** 模板预览页：命名 + 挑选任务 + 创建并使用，一步完成。 */

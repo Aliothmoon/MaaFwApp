@@ -31,6 +31,7 @@
     <string name="runner_stopping">Stopping…</string>
 
     <!-- Configuration sheet -->
+    <string name="config_title">Configurations</string>
     <string name="config_select">Select configuration</string>
     <string name="config_select_hint">Tap to select or create a configuration</string>
     <plurals name="config_current_summary">

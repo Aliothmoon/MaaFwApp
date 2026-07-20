@@ -2,8 +2,13 @@ package com.aliothmoon.maafw.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -13,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.sp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
@@ -29,7 +35,18 @@ fun MaaChoiceChip(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     leading: (@Composable () -> Unit)? = null,
+    role: Role? = null,
 ) {
+    val interactionModifier = if (role == null) {
+        Modifier.maaClickable(enabled = enabled, onClick = onClick)
+    } else {
+        Modifier.selectable(
+            selected = selected,
+            enabled = enabled,
+            role = role,
+            onClick = onClick,
+        )
+    }
     Surface(
         shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.button),
         color = if (selected) {
@@ -47,7 +64,7 @@ fun MaaChoiceChip(
         ),
         modifier = modifier
             .alpha(if (enabled) 1f else 0.5f)
-            .maaClickable(enabled = enabled, onClick = onClick),
+            .then(interactionModifier),
     ) {
         Row(
             modifier = Modifier.padding(
@@ -70,6 +87,35 @@ fun MaaChoiceChip(
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 },
+            )
+        }
+    }
+}
+
+/** 内容宽度单选组；空间不足时整颗 chip 换行，不在等分单元内挤压标签。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun <T> MaaSingleChoiceFlow(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    FlowRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+    ) {
+        options.forEach { (value, label) ->
+            MaaChoiceChip(
+                label = label,
+                selected = selected == value,
+                enabled = enabled,
+                role = Role.RadioButton,
+                onClick = { onSelect(value) },
             )
         }
     }

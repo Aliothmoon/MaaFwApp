@@ -2,6 +2,7 @@
 agp = "9.2.1"
 kotlin = "2.3.21"
 ksp = "2.3.9"
+composeScreenshot = "0.0.1-alpha15"
 
 coreKtx = "1.19.0"
 coreSplashscreen = "1.2.0"
@@ -73,8 +74,10 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+compose-screenshot-validation = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "composeScreenshot" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+compose-screenshot = { id = "com.android.compose.screenshot", version.ref = "composeScreenshot" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

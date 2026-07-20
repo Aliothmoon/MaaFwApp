@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -36,6 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
@@ -62,20 +66,51 @@ fun MaaCard(
             modifier = Modifier.padding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            if (title != null || trailing != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        text = title.orEmpty(),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    trailing?.invoke()
-                }
+            when {
+                trailing != null -> MaaLabeledControlRow(
+                    label = title.orEmpty(),
+                    labelStyle = MaterialTheme.typography.titleMedium,
+                    trailing = trailing,
+                )
+
+                title != null -> Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
             content()
+        }
+    }
+}
+
+/**
+ * 动态标签与固定尾控件的安全横排：尾控件保留固有宽度，标签只使用剩余空间并自然换行。
+ * 避免本地化文案或 PI label 先占满整行后把 Switch/Icon 挤出容器。
+ */
+@Composable
+fun MaaLabeledControlRow(
+    label: String,
+    modifier: Modifier = Modifier,
+    labelStyle: TextStyle = MaterialTheme.typography.bodyLarge,
+    labelColor: Color = Color.Unspecified,
+    trailing: @Composable () -> Unit,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+    ) {
+        Text(
+            text = label,
+            style = labelStyle,
+            color = labelColor,
+            modifier = Modifier.weight(1f),
+        )
+        Box(
+            modifier = Modifier.wrapContentWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            trailing()
         }
     }
 }
@@ -183,18 +218,20 @@ fun Modifier.maaClickable(
 fun MaaInfoRow(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+        verticalAlignment = Alignment.Top,
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(0.4f),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(start = MaaDesignTokens.Spacing.lg),
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(0.6f),
         )
     }
 }

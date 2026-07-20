@@ -3,7 +3,6 @@ package com.aliothmoon.maafw.ui.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,18 +15,15 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ThemeMode
@@ -38,6 +34,8 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
+import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
+import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 
 @Composable
@@ -69,17 +67,11 @@ private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> U
             ThemeMode.Light to stringResource(R.string.settings_theme_light),
             ThemeMode.Dark to stringResource(R.string.settings_theme_dark),
         )
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            modes.forEachIndexed { index, (mode, label) ->
-                SegmentedButton(
-                    selected = state.themeMode == mode,
-                    onClick = { onIntent(SessionIntent.SetThemeMode(mode)) },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
-                ) {
-                    Text(label)
-                }
-            }
-        }
+        MaaSingleChoiceFlow(
+            options = modes,
+            selected = state.themeMode,
+            onSelect = { onIntent(SessionIntent.SetThemeMode(it)) },
+        )
     }
 }
 
@@ -104,24 +96,18 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                 },
             )
         }
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (tag, label) ->
-                SegmentedButton(
-                    selected = selectedTag == tag,
-                    // 重复点选当前档位不发 Intent：避免无意义的 Activity 重建闪屏
-                    onClick = {
-                        if (tag != selectedTag) {
-                            selectedTag = tag
-                            onIntent(SessionIntent.SetLanguage(tag))
-                        }
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                    enabled = !state.configurationLocked,
-                ) {
-                    Text(label)
+        MaaSingleChoiceFlow(
+            options = options,
+            selected = selectedTag,
+            enabled = !state.configurationLocked,
+            // 重复点选当前档位不发 Intent：避免无意义的 Activity 重建闪屏
+            onSelect = { tag ->
+                if (tag != selectedTag) {
+                    selectedTag = tag
+                    onIntent(SessionIntent.SetLanguage(tag))
                 }
-            }
-        }
+            },
+        )
         Text(
             text = stringResource(R.string.settings_language_hint),
             style = MaterialTheme.typography.bodySmall,
@@ -142,30 +128,29 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
             )
         } else {
             var expanded by remember { mutableStateOf(false) }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(stringResource(R.string.settings_current_resource), style = MaterialTheme.typography.bodyLarge)
-                Box {
-                    OutlinedButton(
-                        onClick = { expanded = true },
-                        enabled = !state.configurationLocked,
-                    ) {
-                        Text(environment.resource?.label ?: stringResource(R.string.settings_not_selected))
-                        Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-                    }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        environment.resourceCandidates.forEach { resource ->
-                            DropdownMenuItem(
-                                text = { Text(resource.label) },
-                                onClick = {
-                                    expanded = false
-                                    onIntent(SessionIntent.SelectResource(resource.name))
-                                },
-                            )
-                        }
+            Text(stringResource(R.string.settings_current_resource), style = MaterialTheme.typography.bodyLarge)
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    enabled = !state.configurationLocked,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = environment.resource?.label ?: stringResource(R.string.settings_not_selected),
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    environment.resourceCandidates.forEach { resource ->
+                        DropdownMenuItem(
+                            text = { Text(resource.label) },
+                            onClick = {
+                                expanded = false
+                                onIntent(SessionIntent.SelectResource(resource.name))
+                            },
+                        )
                     }
                 }
             }
@@ -181,17 +166,15 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
 @Composable
 private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     MaaCard(title = stringResource(R.string.settings_developer)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(stringResource(R.string.settings_developer_mode), style = MaterialTheme.typography.bodyLarge)
-            MaaSwitch(
-                checked = state.developerMode,
-                onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
-            )
-        }
+        MaaLabeledControlRow(
+            label = stringResource(R.string.settings_developer_mode),
+            trailing = {
+                MaaSwitch(
+                    checked = state.developerMode,
+                    onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
+                )
+            },
+        )
         OutlinedButton(
             onClick = { onIntent(SessionIntent.ReloadProject) },
             enabled = !state.configurationLocked,

@@ -30,6 +30,7 @@
     <string name="runner_stopping">停止中…</string>
 
     <!-- 配置 sheet -->
+    <string name="config_title">配置</string>
     <string name="config_select">选择配置</string>
     <string name="config_select_hint">点击选择或新建配置</string>
     <plurals name="config_current_summary">

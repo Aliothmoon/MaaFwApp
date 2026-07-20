@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -15,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
@@ -29,6 +27,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
+import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 
@@ -210,18 +209,11 @@ private fun SwitchEditor(
         SelectEditor(option, locked, onSetOption)
         return
     }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = option.label,
-            style = optionLabelStyle(option.depth),
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        OptionSwitch(option, cases, locked, onSetOption)
-    }
+    MaaLabeledControlRow(
+        label = option.label,
+        labelStyle = optionLabelStyle(option.depth),
+        trailing = { OptionSwitch(option, cases, locked, onSetOption) },
+    )
 }
 
 @Composable
