@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
@@ -136,12 +137,8 @@ class RunPlanBuilderTest {
     /** 选择无子 option 的 case，避免测试再级联出 Unset 诊断。 */
     private fun firstCaseOf(optionName: String): OptionValue.SingleCase {
         val option = definition.options.getValue(optionName)
-        val cases = when (option) {
-            is com.aliothmoon.maafw.domain.OptionDefinition.Select -> option.cases
-            is com.aliothmoon.maafw.domain.OptionDefinition.Switch -> option.cases
-            else -> error("非 choice option")
-        }
-        val case = cases.firstOrNull { it.childOptionNames.isEmpty() } ?: cases.first()
+        check(option is OptionDefinition.Choice) { "非 choice option: $optionName" }
+        val case = option.cases.firstOrNull { it.childOptionNames.isEmpty() } ?: option.cases.first()
         return OptionValue.SingleCase(case.name)
     }
 

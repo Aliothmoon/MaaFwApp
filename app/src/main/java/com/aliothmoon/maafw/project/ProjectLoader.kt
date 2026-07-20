@@ -3,12 +3,14 @@ package com.aliothmoon.maafw.project
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.Diagnostic
-import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
+import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
+import com.aliothmoon.maafw.domain.casesOrEmpty
 
 sealed interface ProjectLoadResult {
     data class Ready(val definition: ProjectDefinition, val diagnostics: List<Diagnostic>) : ProjectLoadResult
@@ -66,8 +68,11 @@ class ProjectLoader(
 
         // 根文件自身作为首个分片（task/option/preset/group），import 分片按声明顺序追加；
         // 重名一律先定义优先。缺失分片降级为 warning 跳过（MXU 同款容错）。
+        // 根 JSON 复用 parseInterface 的解析结果（version 校验通过则 root 必非 null）。
         val state = MergeState()
-        mergeContent(state, PiParser.parseFile(interfacePath, interfaceContent, text), interfacePath, diagnostics)
+        projectInterface.root?.let {
+            mergeContent(state, PiParser.parseFile(interfacePath, it, text), interfacePath, diagnostics)
+        }
         for (path in projectInterface.imports) {
             val content = try {
                 source.read(path)
@@ -81,16 +86,11 @@ class ProjectLoader(
             diagnostics += warning(interfacePath, "项目未声明任何任务")
         }
 
-        val tasks = state.tasks
-        val options = state.options
-        val templates = state.templates
-        val declaredGroups = state.declaredGroups
+        validateOptionReferences(state.tasks, state.options, diagnostics)
+        detectOptionCycles(state.options, diagnostics)
+        validateTemplates(state.templates, state.tasks, diagnostics)
 
-        validateOptionReferences(tasks, options, diagnostics)
-        detectOptionCycles(options, diagnostics)
-        validateTemplates(templates, tasks, diagnostics)
-
-        val (normalizedTasks, groups) = resolveGroups(declaredGroups, tasks, diagnostics)
+        val (normalizedTasks, groups) = resolveGroups(state.declaredGroups, state.tasks, diagnostics)
 
         val definition = ProjectDefinition(
             name = projectInterface.name ?: source.projectName,
@@ -101,8 +101,8 @@ class ProjectLoader(
                 ?: deriveResources(diagnostics),
             tasks = normalizedTasks,
             groups = groups,
-            options = options,
-            templates = templates,
+            options = state.options,
+            templates = state.templates,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
     }
@@ -137,7 +137,11 @@ class ProjectLoader(
             }
         }
         for (group in parsed.groups) {
-            mergeGroup(state.declaredGroups, group, file, diagnostics)
+            if (state.declaredGroups.any { it.name == group.name }) {
+                diagnostics += warning(file, "group \"${group.name}\" 重复声明，保留先出现的定义")
+            } else {
+                state.declaredGroups += group
+            }
         }
     }
 
@@ -197,19 +201,6 @@ class ProjectLoader(
         }
     }
 
-    private fun mergeGroup(
-        declared: MutableList<TaskGroupDefinition>,
-        group: TaskGroupDefinition,
-        source: String,
-        diagnostics: MutableList<Diagnostic>,
-    ) {
-        if (declared.any { it.name == group.name }) {
-            diagnostics += warning(source, "group \"${group.name}\" 重复声明，保留先出现的定义")
-        } else {
-            declared += group
-        }
-    }
-
     /**
      * 以顶层 group[] 声明为准归一化任务分组（对齐 MXU v2.4.0）：
      * - 无任何声明即无分组：任务级引用被忽略，全部归入「未分组」；
@@ -223,7 +214,7 @@ class ProjectLoader(
     ): Pair<List<TaskDefinition>, List<TaskGroupDefinition>> {
         if (declared.isEmpty()) {
             val flattened = tasks.map { if (it.groups.isEmpty()) it else it.copy(groups = emptyList()) }
-            val groups = if (flattened.isEmpty()) emptyList() else listOf(TaskGroupDefinition(UNGROUPED))
+            val groups = if (flattened.isEmpty()) emptyList() else listOf(ungroupedGroup())
             return flattened to groups
         }
         val declaredNames = declared.mapTo(mutableSetOf()) { it.name }
@@ -236,9 +227,12 @@ class ProjectLoader(
             if (kept.isEmpty()) hasUngrouped = true
             if (kept.size == task.groups.size) task else task.copy(groups = kept)
         }
-        val groups = if (hasUngrouped) declared + TaskGroupDefinition(UNGROUPED) else declared
+        val groups = if (hasUngrouped) declared + ungroupedGroup() else declared
         return normalized to groups
     }
+
+    /** 合成「未分组」兜底组：消费方按 isUngrouped 标记判定，不依赖显示名。 */
+    private fun ungroupedGroup() = TaskGroupDefinition(UNGROUPED, isUngrouped = true)
 
     private fun validateOptionReferences(
         tasks: List<TaskDefinition>,
@@ -301,7 +295,7 @@ class ProjectLoader(
     /** interface.json 未提供可用声明时，从 resource/ 目录派生兜底资源。 */
     private fun deriveResources(diagnostics: MutableList<Diagnostic>): List<ResourceDefinition> {
         val dirs = try {
-            source.list("resource").filter { it != "announcement" && source.list("resource/$it").isNotEmpty() }
+            source.list("resource").filter { it !in NON_RESOURCE_DIRS && source.list("resource/$it").isNotEmpty() }
         } catch (e: Exception) {
             diagnostics += warning("resource", "无法枚举 resource 目录: ${e.message}")
             emptyList()
@@ -323,17 +317,11 @@ class ProjectLoader(
         return result
     }
 
-    private fun error(source: String, message: String) = Diagnostic(DiagnosticSeverity.Error, source, message)
-    private fun warning(source: String, message: String) = Diagnostic(DiagnosticSeverity.Warning, source, message)
-
     companion object {
+        /** 合成「未分组」的显示名；身份判定走 TaskGroupDefinition.isUngrouped。 */
         const val UNGROUPED = "未分组"
-    }
-}
 
-internal fun OptionDefinition.casesOrEmpty() = when (this) {
-    is OptionDefinition.Select -> cases
-    is OptionDefinition.Switch -> cases
-    is OptionDefinition.Checkbox -> cases
-    is OptionDefinition.Input -> emptyList()
+        /** M9A 生态惯例的非资源目录（公告等），fallback 枚举资源变体时排除。 */
+        private val NON_RESOURCE_DIRS = setOf("announcement")
+    }
 }

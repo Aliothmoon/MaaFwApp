@@ -12,13 +12,6 @@ object MaaDesignTokens {
         val md: Dp = 12.dp
         val lg: Dp = 16.dp
         val xl: Dp = 20.dp
-        val xxl: Dp = 24.dp
-
-        val listHorizontal: Dp = 16.dp
-
-        val listItemVertical: Dp = 11.dp
-
-        val sectionGap: Dp = 20.dp
     }
 
     object CornerRadius {
@@ -30,12 +23,16 @@ object MaaDesignTokens {
 
     object Separator {
         val thickness: Dp = 0.5.dp
-        val inset: Dp = 16.dp
     }
 
     object Card {
         /** 卡片类容器统一轻投影；chip/面板/按钮保持平面（docs/design-system.md §4） */
         val elevation: Dp = 2.dp
         val innerPadding: Dp = 16.dp
+    }
+
+    object Sheet {
+        /** 全部 modal sheet 统一固定高度：屏幕的 3/5。 */
+        const val heightFraction = 0.6f
     }
 }

@@ -26,6 +26,7 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 
 /** 首页：项目 / 当前配置 / 运行状态摘要 + Start/Stop。 */
@@ -66,13 +67,7 @@ private fun ProjectCard(state: SessionUiState) {
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error,
                 )
-                project.diagnostics.take(5).forEach {
-                    Text(
-                        text = "${it.source}: ${it.message}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                MaaDiagnosticList(project.diagnostics.take(5))
             }
 
             is ProjectState.Ready -> {
@@ -80,12 +75,11 @@ private fun ProjectCard(state: SessionUiState) {
                 MaaInfoRow("任务", "${project.definition.tasks.size} 个")
                 MaaInfoRow("预设模板", "${project.definition.templates.size} 个")
                 MaaInfoRow("资源", state.environment?.resourceName ?: "无")
-                val warnings = project.diagnostics.size + state.sessionDiagnostics.size
-                if (warnings > 0) {
-                    val errors = (project.diagnostics + state.sessionDiagnostics)
-                        .count { it.severity == DiagnosticSeverity.Error }
+                val diagnostics = state.visibleDiagnostics
+                if (diagnostics.isNotEmpty()) {
+                    val errors = diagnostics.count { it.severity == DiagnosticSeverity.Error }
                     Text(
-                        text = "诊断：$warnings 条${if (errors > 0) "（$errors 条错误）" else ""}",
+                        text = "诊断：${diagnostics.size} 条${if (errors > 0) "（$errors 条错误）" else ""}",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (errors > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )

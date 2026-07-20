@@ -31,6 +31,13 @@ sealed interface RunnerPhase {
     data object Stopping : RunnerPhase
 }
 
+/**
+ * 忙碌 = Preparing/Running/Stopping。配置锁定（UI 禁用 + 写入口二次校验）
+ * 与启停按钮态共用这一处判定，新增 phase 时只改这里。
+ */
+val RunnerPhase.isBusy: Boolean
+    get() = this == RunnerPhase.Preparing || this == RunnerPhase.Running || this == RunnerPhase.Stopping
+
 data class ActiveExecution(
     val executionId: String,
     val runConfigurationId: RunConfigurationId,

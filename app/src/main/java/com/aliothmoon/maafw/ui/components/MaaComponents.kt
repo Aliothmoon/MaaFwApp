@@ -22,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,9 +31,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.aliothmoon.maafw.domain.Diagnostic
+import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTone
 
@@ -69,6 +73,49 @@ fun MaaCard(
                 }
             }
             content()
+        }
+    }
+}
+
+/**
+ * 卡片视觉的低层 Surface：设计系统卡片配方（medium 圆角 + 轻投影 + 发丝描边）。
+ * 供需要 Surface 语义（可点行卡、自定义底色/描边）的容器复用，普通内容卡用 [MaaCard]。
+ */
+@Composable
+fun MaaCardSurface(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.surface,
+    border: BorderStroke = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = color,
+        shadowElevation = MaaDesignTokens.Card.elevation,
+        border = border,
+        content = content,
+    )
+}
+
+/** 诊断行统一渲染：Error 红色、其余弱化；showSeverity 追加 [severity] 前缀。 */
+@Composable
+fun MaaDiagnosticList(
+    diagnostics: List<Diagnostic>,
+    showSeverity: Boolean = false,
+) {
+    Column {
+        diagnostics.forEach {
+            val prefix = if (showSeverity) "[${it.severity}] " else ""
+            Text(
+                text = "$prefix${it.source}: ${it.message}",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (it.severity == DiagnosticSeverity.Error) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
         }
     }
 }

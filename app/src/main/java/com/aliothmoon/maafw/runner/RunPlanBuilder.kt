@@ -110,24 +110,14 @@ object RunPlanBuilder {
                 return
             }
             when (option) {
-                is OptionDefinition.Select, is OptionDefinition.Switch -> {
-                    val cases = when (option) {
-                        is OptionDefinition.Select -> option.cases
-                        is OptionDefinition.Switch -> option.cases
-                        else -> emptyList()
-                    }
-                    val defaultCase = when (option) {
-                        is OptionDefinition.Select -> option.defaultCase
-                        is OptionDefinition.Switch -> option.defaultCase
-                        else -> null
-                    }
+                is OptionDefinition.Choice -> {
                     val value = values[name] as? OptionValue.SingleCase
-                    val selectedName = value?.case ?: defaultCase
+                    val selectedName = value?.case ?: option.defaultCase
                     if (selectedName == null) {
                         diagnostics += runtimeError(scopeLabel, "option \"$name\" 未设置且没有默认值")
                         return
                     }
-                    val case = cases.firstOrNull { it.name == selectedName }
+                    val case = option.cases.firstOrNull { it.name == selectedName }
                     if (case == null) {
                         diagnostics += runtimeError(scopeLabel, "option \"$name\" 选择的 case \"$selectedName\" 不存在")
                         return
@@ -266,6 +256,5 @@ object RunPlanBuilder {
         }
     }
 
-    private fun runtimeError(source: String, message: String) =
-        Diagnostic(DiagnosticSeverity.Error, source, message)
+    private fun runtimeError(source: String, message: String) = Diagnostic.error(source, message)
 }

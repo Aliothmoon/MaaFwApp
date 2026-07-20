@@ -10,4 +10,9 @@ data class Diagnostic(
     val severity: DiagnosticSeverity,
     val source: String,
     val message: String,
-)
+) {
+    companion object {
+        fun error(source: String, message: String) = Diagnostic(DiagnosticSeverity.Error, source, message)
+        fun warning(source: String, message: String) = Diagnostic(DiagnosticSeverity.Warning, source, message)
+    }
+}

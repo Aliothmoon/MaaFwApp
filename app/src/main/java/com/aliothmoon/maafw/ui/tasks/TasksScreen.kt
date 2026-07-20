@@ -18,11 +18,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,14 +30,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddTask
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.Edit
@@ -51,19 +47,16 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,6 +86,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TemplateTask
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunnerPhase
+import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -100,7 +94,10 @@ import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
+import com.aliothmoon.maafw.ui.components.MaaModalSheet
+import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 
@@ -192,7 +189,7 @@ private fun TasksContent(
                 )
             } else {
                 // 拖拽期间用本地顺序渲染，松手后发 MoveTask，等 DataStore 回流后回到权威顺序
-                val canonicalIds = active.tasks.map { it.instanceId }
+                val canonicalIds = remember(active.tasks) { active.tasks.map { it.instanceId } }
                 val canonicalState = rememberUpdatedState(canonicalIds)
                 var pendingOrder by remember(active.id) { mutableStateOf<List<String>?>(null) }
 
@@ -209,7 +206,7 @@ private fun TasksContent(
                         add(to.index, removeAt(from.index))
                     }
                 }
-                val tasksById = active.tasks.associateBy { it.instanceId }
+                val tasksById = remember(active.tasks) { active.tasks.associateBy { it.instanceId } }
 
                 if (active.tasks.isEmpty()) {
                     EmptyState(
@@ -389,10 +386,6 @@ private fun TasksContent(
 }
 
 /**
- * 实时截图（Live Preview）占位区域：固定 16:9。
- * 不进入 RunnerState/RunnerEvent，后续单独实现（docs/android-ui-contract.md §10）。
- */
-/**
  * 底部运行开关（替代首页的启停按钮）：Idle 显示「开始」，
  * 运行/准备中切换为「停止」，停止中降级为不可点的「停止中…」。
  */
@@ -403,11 +396,10 @@ private fun RunnerToggleButton(
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
-    val running = phase == RunnerPhase.Preparing || phase == RunnerPhase.Running
-    if (running || phase == RunnerPhase.Stopping) {
+    if (phase.isBusy) {
         OutlinedButton(
             onClick = { onIntent(SessionIntent.Stop) },
-            enabled = running,
+            enabled = phase != RunnerPhase.Stopping,
             modifier = modifier,
         ) {
             Text(if (phase == RunnerPhase.Stopping) "停止中…" else "停止")
@@ -415,7 +407,7 @@ private fun RunnerToggleButton(
     } else {
         Button(
             onClick = { onIntent(SessionIntent.Start) },
-            enabled = phase == RunnerPhase.Idle && state.activeConfiguration != null,
+            enabled = state.canStart,
             modifier = modifier,
         ) {
             Text("开始")
@@ -423,17 +415,17 @@ private fun RunnerToggleButton(
     }
 }
 
+/**
+ * 实时截图（Live Preview）占位区域：固定 16:9。
+ * 不进入 RunnerState/RunnerEvent，后续单独实现（docs/android-ui-contract.md §10）。
+ */
 @Composable
 private fun LivePreviewPlaceholder() {
-    Surface(
+    MaaCardSurface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = MaaDesignTokens.Spacing.md)
             .aspectRatio(16f / 9f),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = MaaDesignTokens.Card.elevation,
-        border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Column(
@@ -463,14 +455,10 @@ private fun ConfigurationSelectorCard(
     locked: Boolean,
     onClick: () -> Unit,
 ) {
-    Surface(
+    MaaCardSurface(
         modifier = Modifier
             .fillMaxWidth()
             .maaClickable(enabled = !locked, onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = MaaDesignTokens.Card.elevation,
-        border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
     ) {
         Row(
             modifier = Modifier.padding(
@@ -539,7 +527,6 @@ private sealed interface ConfigSheetPage {
 }
 
 /** 底部上弹抽屉：配置卡片 + 模板区；模板预览与新建空配置内嵌为子页，免去二次弹窗。 */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConfigurationSheet(
     state: SessionUiState,
@@ -556,26 +543,14 @@ private fun ConfigurationSheet(
     var homeTab by rememberSaveable { mutableStateOf(0) }
     val existingNames = state.configurationList.map { it.name }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        // 跳过半展开态，避免两段上拉
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        // 内容区滚动不牵动 sheet，防止下滑误关；关闭走标题栏按钮/遮罩/返回键
-        sheetGesturesEnabled = false,
-        dragHandle = null,
-    ) {
+    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
         AnimatedContent(
             targetState = page,
             transitionSpec = {
                 fadeIn(MaaMotion.enter()).togetherWith(fadeOut(MaaMotion.exit()))
             },
             label = "configSheetPage",
-            modifier = Modifier
-                .fillMaxHeight(CONFIG_SHEET_HEIGHT_FRACTION)
-                .padding(horizontal = MaaDesignTokens.Spacing.lg)
-                .padding(top = MaaDesignTokens.Spacing.sm)
-                .navigationBarsPadding()
-                .imePadding(),
+            modifier = sheetModifier.imePadding(),
         ) { current ->
             when (current) {
                 is ConfigSheetPage.Home -> ConfigSheetHomePage(
@@ -615,34 +590,6 @@ private fun ConfigurationSheet(
                     }
                 }
             }
-        }
-    }
-}
-
-/** sheet 子页统一标题栏：可选返回键 + 标题 + 关闭。 */
-@Composable
-private fun SheetPageHeader(
-    title: String,
-    onClose: () -> Unit,
-    onBack: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
-            }
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f),
-        )
-        // 40dp 紧凑触控区，与 Sheets.SheetHeader 一致
-        IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Close, contentDescription = "关闭")
         }
     }
 }
@@ -761,7 +708,7 @@ private fun TemplatePreviewPage(
     onClose: () -> Unit,
     onCreate: (name: String, taskNames: List<String>) -> Unit,
 ) {
-    val templateTasks = remember(template) { template.tasks.distinctBy { it.taskName } }
+    val templateTasks = remember(template) { template.distinctTasks }
     var name by rememberSaveable(template.name) {
         mutableStateOf(uniqueConfigurationName(template.name, existingNames))
     }
@@ -771,7 +718,7 @@ private fun TemplatePreviewPage(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
-        SheetPageHeader(title = "从模板新建", onClose = onClose, onBack = onBack)
+        MaaSheetHeader(title = "从模板新建", onClose = onClose, onBack = onBack)
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
@@ -806,13 +753,7 @@ private fun TemplatePreviewPage(
                 TemplateTaskRow(
                     task = task,
                     checked = task.taskName in included,
-                    onToggle = { checked ->
-                        if (checked) {
-                            if (task.taskName !in included) included.add(task.taskName)
-                        } else {
-                            included.remove(task.taskName)
-                        }
-                    },
+                    onToggle = { checked -> included.setPresent(task.taskName, checked) },
                 )
             }
         }
@@ -864,7 +805,7 @@ private fun CreateEmptyPage(
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
-        SheetPageHeader(title = "新建空配置", onClose = onClose, onBack = onBack)
+        MaaSheetHeader(title = "新建空配置", onClose = onClose, onBack = onBack)
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
@@ -932,9 +873,6 @@ private fun CreateEmptyCard(onClick: () -> Unit) {
     }
 }
 
-/** sheet 固定高度：屏幕的 3/5，与其他 sheet 一致。 */
-private const val CONFIG_SHEET_HEIGHT_FRACTION = 0.6f
-
 /** 配置卡片：active 主色描边 + 容器底色 + 单选圈；行尾直接重命名/删除。 */
 @Composable
 private fun ConfigRowCard(
@@ -949,17 +887,15 @@ private fun ConfigRowCard(
     } else {
         MaterialTheme.colorScheme.onSurface
     }
-    Surface(
+    MaaCardSurface(
         modifier = Modifier
             .fillMaxWidth()
             .maaClickable(onClick = onSelect),
-        shape = MaterialTheme.shapes.medium,
         color = if (active) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surface
         },
-        shadowElevation = MaaDesignTokens.Card.elevation,
         border = BorderStroke(
             width = if (active) 1.dp else MaaDesignTokens.Separator.thickness,
             color = if (active) {

@@ -89,6 +89,20 @@ data class OptionCaseState(
     val children: List<OptionEditorState>,
 )
 
+// 官方推荐 Yes/No（允许 Y/y）；on/true/开 等为本项目宽容超集
+private val SWITCH_ON_NAMES = setOf("yes", "y", "on", "true", "enable", "开", "开启", "启用")
+
+/**
+ * 标准两态 Switch 的 (on, off) case；非标准两态返回 null（UI 回落 chip 平铺）。
+ * PI switch 语义解释属于领域层，UI 与其他消费者共用同一份判定。
+ */
+fun OptionEditorState.standardSwitchCases(): Pair<OptionCaseState, OptionCaseState>? {
+    if (kind != OptionKind.Switch || cases.size != 2) return null
+    val onCase = cases.firstOrNull { it.name.lowercase() in SWITCH_ON_NAMES } ?: return null
+    val offCase = cases.firstOrNull { it != onCase } ?: return null
+    return onCase to offCase
+}
+
 data class InputFieldState(
     val name: String,
     val pipelineType: PipelineType,

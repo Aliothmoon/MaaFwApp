@@ -1,15 +1,12 @@
 package com.aliothmoon.maafw.ui.tasks
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,22 +15,17 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -44,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
@@ -56,10 +47,13 @@ import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.ExpandableTipContent
 import com.aliothmoon.maafw.ui.components.ExpandableTipIcon
+import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
+import com.aliothmoon.maafw.ui.components.MaaModalSheet
+import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.maaClickable
-import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 
 /**
@@ -68,7 +62,6 @@ import com.aliothmoon.maafw.ui.options.OptionEditorList
  * 不标记也不限制已在配置中的任务，确认后一律追加为独立实例。
  * 支持搜索过滤。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTasksSheet(
     catalog: List<TaskCatalogGroup>,
@@ -103,24 +96,12 @@ fun AddTasksSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        // 跳过半展开态，避免两段上拉
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        // 内容区滚动不牵动 sheet，防止下滑误关；关闭走标题栏按钮/遮罩/返回键
-        sheetGesturesEnabled = false,
-        dragHandle = null,
-    ) {
+    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
         Column(
-            // 固定 3/5 高度，内容不足时由列表区留白 + 底部提示填充
-            modifier = Modifier
-                .fillMaxHeight(SHEET_HEIGHT_FRACTION)
-                .padding(horizontal = MaaDesignTokens.Spacing.lg)
-                .padding(top = MaaDesignTokens.Spacing.sm)
-                .navigationBarsPadding(),
+            modifier = sheetModifier,
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            SheetHeader(title = "添加任务", onClose = onDismiss)
+            MaaSheetHeader(title = "添加任务", onClose = onDismiss)
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -142,11 +123,7 @@ fun AddTasksSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             val toggleTask: (String, Boolean) -> Unit = { taskName, checked ->
-                if (checked) {
-                    if (taskName !in selected) selected.add(taskName)
-                } else {
-                    selected.remove(taskName)
-                }
+                selected.setPresent(taskName, checked)
             }
             when {
                 filteredCatalog.isEmpty() -> Box(
@@ -226,7 +203,7 @@ fun AddTasksSheet(
 
 }
 
-/** 分组页签：色点 + 组名，选中态主色容器底 + 主色描边。 */
+/** 分组页签：MaaChoiceChip + 前置分组色点。 */
 @Composable
 private fun GroupTabChip(
     label: String,
@@ -234,47 +211,27 @@ private fun GroupTabChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Surface(
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.button),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            Color.Transparent
-        },
-        border = BorderStroke(
-            width = MaaDesignTokens.Separator.thickness,
-            color = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outline
-            },
-        ),
-        modifier = Modifier.maaClickable(onClick = onClick),
-    ) {
-        Row(
-            modifier = Modifier.padding(
-                horizontal = MaaDesignTokens.Spacing.sm,
-                vertical = MaaDesignTokens.Spacing.xs,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-        ) {
+    MaaChoiceChip(
+        label = label,
+        selected = selected,
+        onClick = onClick,
+        leading = {
             Box(
                 modifier = Modifier
                     .size(6.dp)
                     .clip(CircleShape)
                     .background(tone.content),
             )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
+        },
+    )
+}
+
+/** 有序 draft 的勾选切换：加入保持点选顺序，重复勾选不追加。 */
+internal fun MutableList<String>.setPresent(name: String, present: Boolean) {
+    if (present) {
+        if (name !in this) add(name)
+    } else {
+        remove(name)
     }
 }
 
@@ -355,7 +312,6 @@ private fun CatalogRow(
 }
 
 /** 单个任务的 option 编辑 sheet：承载该任务全部 option 及活动子树。 */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskOptionSheet(
     task: ResolvedConfiguredTask,
@@ -363,24 +319,12 @@ fun TaskOptionSheet(
     onSetOption: (String, OptionValue) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        // 跳过半展开态，避免两段上拉
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        // 内容区滚动不牵动 sheet，防止下滑误关；关闭走标题栏按钮/遮罩/返回键
-        sheetGesturesEnabled = false,
-        dragHandle = null,
-    ) {
+    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
         Column(
-            // 固定 3/5 高度；option 不足一屏时用任务说明填充剩余空间
-            modifier = Modifier
-                .fillMaxHeight(SHEET_HEIGHT_FRACTION)
-                .padding(horizontal = MaaDesignTokens.Spacing.lg)
-                .padding(top = MaaDesignTokens.Spacing.sm, bottom = MaaDesignTokens.Spacing.xl)
-                .navigationBarsPadding(),
+            modifier = sheetModifier.padding(bottom = MaaDesignTokens.Spacing.xl),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            SheetHeader(title = task.label, onClose = onDismiss)
+            MaaSheetHeader(title = task.label, onClose = onDismiss)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -405,29 +349,6 @@ fun TaskOptionSheet(
                     }
                 }
             }
-        }
-    }
-}
-
-/** sheet 固定高度：屏幕的 3/5。 */
-private const val SHEET_HEIGHT_FRACTION = 0.6f
-
-/** 无拖拽把手后的统一标题栏：标题 + 显式关闭按钮。 */
-@Composable
-private fun SheetHeader(title: String, onClose: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f),
-        )
-        // 40dp 紧凑触控区：默认 48dp IconButton 会把标题行撑出多余空腔
-        IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Close, contentDescription = "关闭")
         }
     }
 }

@@ -2,7 +2,8 @@ package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.Diagnostic
-import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
+import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
@@ -42,6 +43,8 @@ data class PiInterfaceContent(
     /** v2.2.0 import 分片声明，按数组顺序加载；路径相对 interface.json 目录。 */
     val imports: List<String>,
     val diagnostics: List<Diagnostic>,
+    /** 已解析的根 JSON（解析失败为 null），供 loader 二次提取内容时免去重复解析。 */
+    val root: JsonObject? = null,
 )
 
 /**
@@ -52,11 +55,6 @@ data class PiInterfaceContent(
 interface PiTextResolver {
     fun label(raw: String?): String?
     fun description(raw: String?): String?
-
-    object None : PiTextResolver {
-        override fun label(raw: String?): String? = raw
-        override fun description(raw: String?): String? = raw
-    }
 }
 
 /**
@@ -75,7 +73,8 @@ object PiParser {
 
     /**
      * 解析根 interface.json 的项目元数据（版本 / 资源 / 语言 / import 声明）。
-     * 根文件自身声明的 task/option/preset/group 在翻译表就绪后由 [parseFile] 再次解析，
+     * 根文件自身声明的 task/option/preset/group 在翻译表就绪后由 [parseFile] 基于
+     * 返回的 [PiInterfaceContent.root] 再次提取（只解析一次 JSON），
      * 避免元数据阶段无法物化 $i18n 的鸡生蛋问题。
      */
     fun parseInterface(source: String, content: String): PiInterfaceContent {
@@ -116,18 +115,22 @@ object PiParser {
             languages = languages,
             imports = root.stringList("import").map(::normalizeProjectPath),
             diagnostics = diagnostics,
+            root = root,
         )
     }
 
-    fun parseFile(source: String, content: String, text: PiTextResolver = PiTextResolver.None): PiFileContent {
-        val diagnostics = mutableListOf<Diagnostic>()
+    fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {
         val root = try {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
-            diagnostics += error(source, "JSON 解析失败: ${e.message}")
-            return PiFileContent(diagnostics = diagnostics)
+            return PiFileContent(diagnostics = listOf(error(source, "JSON 解析失败: ${e.message}")))
         }
+        return parseFile(source, root, text)
+    }
 
+    /** 已解析根对象的内容提取：根 interface.json 复用 [parseInterface] 的解析结果走这里。 */
+    fun parseFile(source: String, root: JsonObject, text: PiTextResolver): PiFileContent {
+        val diagnostics = mutableListOf<Diagnostic>()
         val tasks = (root["task"] as? JsonArray).orEmpty().mapNotNull { element ->
             parseTask(source, element, diagnostics, text)
         }
@@ -148,7 +151,7 @@ object PiParser {
         source: String,
         root: JsonObject,
         diagnostics: MutableList<Diagnostic>,
-        text: PiTextResolver = PiTextResolver.None,
+        text: PiTextResolver,
     ): List<TaskGroupDefinition> =
         (root["group"] as? JsonArray).orEmpty().mapNotNull { element ->
             val obj = element as? JsonObject
@@ -368,12 +371,6 @@ object PiParser {
             }
         }
     }
-
-    private fun error(source: String, message: String) =
-        Diagnostic(DiagnosticSeverity.Error, source, message)
-
-    private fun warning(source: String, message: String) =
-        Diagnostic(DiagnosticSeverity.Warning, source, message)
 
     private fun JsonObject.string(key: String): String? =
         (this[key] as? JsonPrimitive)?.contentOrNull

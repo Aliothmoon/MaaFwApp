@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.isBusy
 
 /**
  * Session* 指跨页面共享的整个工作会话（Activity 作用域），
@@ -26,11 +27,17 @@ data class SessionUiState(
     val themeMode: ThemeMode = ThemeMode.System,
     val developerMode: Boolean = false,
 ) {
-    /** 锁定唯一规则：runner.phase in { Preparing, Running, Stopping }。 */
+    /** 锁定唯一规则：runner 忙碌（见 RunnerPhase.isBusy）。 */
     val configurationLocked: Boolean
-        get() = runner.phase == RunnerPhase.Preparing ||
-            runner.phase == RunnerPhase.Running ||
-            runner.phase == RunnerPhase.Stopping
+        get() = runner.phase.isBusy
+
+    /** 面向用户的诊断合流：项目加载诊断 + 会话解析诊断（各页统一读这里）。 */
+    val visibleDiagnostics: List<Diagnostic>
+        get() = (projectState as? ProjectState.Ready)?.diagnostics.orEmpty() + sessionDiagnostics
+
+    /** 启动按钮可用性的单一出处；Builder 侧仍会对可执行任务做最终校验。 */
+    val canStart: Boolean
+        get() = runner.phase == RunnerPhase.Idle && activeConfiguration != null
 }
 
 /** 封闭的语义 Intent，Screen 不直接构造 copy。 */

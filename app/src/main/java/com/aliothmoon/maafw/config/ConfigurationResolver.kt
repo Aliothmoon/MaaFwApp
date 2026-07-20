@@ -2,8 +2,9 @@ package com.aliothmoon.maafw.config
 
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.Diagnostic
-import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.InputFieldState
+import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionCaseState
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionEditorState
@@ -20,7 +21,6 @@ import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TaskCatalogItem
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.UserConfiguration
-import com.aliothmoon.maafw.project.ProjectLoader
 import java.util.UUID
 
 /**
@@ -40,8 +40,7 @@ object ConfigurationResolver {
                 config.activeResourceName
 
             config.activeResourceName != null -> {
-                diagnostics += Diagnostic(
-                    DiagnosticSeverity.Warning,
+                diagnostics += warning(
                     "resource",
                     "resource \"${config.activeResourceName}\" 已不存在，回退到 ${resourceNames.firstOrNull() ?: "无"}",
                 )
@@ -62,11 +61,7 @@ object ConfigurationResolver {
         }
         val activeConfiguration = configurationList.firstOrNull { it.isActive }
         if (config.activeConfigurationId != null && activeConfiguration == null) {
-            diagnostics += Diagnostic(
-                DiagnosticSeverity.Warning,
-                "configuration",
-                "activeConfigurationId 指向不存在的配置",
-            )
+            diagnostics += warning("configuration", "activeConfigurationId 指向不存在的配置")
         }
 
         return ResolvedProjectSession(
@@ -80,15 +75,8 @@ object ConfigurationResolver {
 
     /** 首次初始化：每个 PI preset 创建一个独立 RunConfiguration；没有 preset 保持空列表。 */
     fun initialize(definition: ProjectDefinition, config: UserConfiguration): UserConfiguration {
-        val configurations = definition.templates.map { template ->
-            RunConfiguration(
-                id = newConfigurationId(),
-                name = template.name,
-                tasks = template.tasks
-                    .distinctBy { it.taskName }
-                    .map { ConfiguredTask(it.taskName, it.enabled, it.optionValues) },
-            )
-        }
+        // 与用户手动「从模板创建」走同一条投影，保证两条路径不漂移
+        val configurations = definition.templates.mapNotNull { createFromTemplate(definition, it.name) }
         return config.copy(
             initialized = true,
             configurations = configurations,
@@ -114,8 +102,7 @@ object ConfigurationResolver {
         return RunConfiguration(
             id = newConfigurationId(),
             name = configurationName?.takeIf { it.isNotBlank() } ?: template.name,
-            tasks = template.tasks
-                .distinctBy { it.taskName }
+            tasks = template.distinctTasks
                 .filter { included == null || it.taskName in included }
                 .map { ConfiguredTask(it.taskName, it.enabled, it.optionValues) },
         )
@@ -133,8 +120,7 @@ object ConfigurationResolver {
         val tasks = runConfiguration.tasks.map { configured ->
             val taskDefinition = definition.task(configured.taskName)
             if (taskDefinition == null) {
-                diagnostics += Diagnostic(
-                    DiagnosticSeverity.Warning,
+                diagnostics += warning(
                     "configuration:${runConfiguration.name}",
                     "任务 \"${configured.taskName}\" 已不在项目中",
                 )
@@ -164,8 +150,6 @@ object ConfigurationResolver {
                         definition = definition,
                         optionNames = taskDefinition.optionNames,
                         values = configured.optionValues,
-                        depth = 0,
-                        visited = emptySet(),
                     ),
                 )
             }
@@ -202,7 +186,7 @@ object ConfigurationResolver {
     ): List<TaskCatalogGroup> {
         return definition.groups.map { group ->
             val tasks = definition.tasks.filter { task ->
-                if (group.name == ProjectLoader.UNGROUPED) task.groups.isEmpty()
+                if (group.isUngrouped) task.groups.isEmpty()
                 else group.name in task.groups
             }.map { task ->
                 val reason = checkApplicability(definition, task, resourceName)
@@ -223,12 +207,12 @@ object ConfigurationResolver {
      * 构建 option 编辑树：只物化活动分支（active branch），
      * dormant 值保留在持久层；防御 cycle 与超深嵌套。
      */
-    fun buildOptionEditors(
+    private fun buildOptionEditors(
         definition: ProjectDefinition,
         optionNames: List<String>,
         values: Map<String, OptionValue>,
-        depth: Int,
-        visited: Set<String>,
+        depth: Int = 0,
+        visited: Set<String> = emptySet(),
     ): List<OptionEditorState> {
         if (depth > MAX_OPTION_DEPTH) return emptyList()
         return optionNames.mapNotNull { name ->
@@ -247,13 +231,11 @@ object ConfigurationResolver {
     ): OptionEditorState {
         val value = values[option.name]
         return when (option) {
-            is OptionDefinition.Select, is OptionDefinition.Switch -> {
-                val cases = option.choiceCases()
-                val defaultCase = option.choiceDefaultCase()
+            is OptionDefinition.Choice -> {
                 // Unset 且没有 defaultCase 时保持无活动 case，不隐式选第一项
                 val selected = (value as? OptionValue.SingleCase)?.case
-                    ?.takeIf { s -> cases.any { it.name == s } }
-                    ?: defaultCase
+                    ?.takeIf { s -> option.cases.any { it.name == s } }
+                    ?: option.defaultCase
                 OptionEditorState(
                     name = option.name,
                     label = option.label,
@@ -261,20 +243,7 @@ object ConfigurationResolver {
                     kind = if (option is OptionDefinition.Select) OptionKind.Select else OptionKind.Switch,
                     depth = depth,
                     value = value,
-                    cases = cases.map { case ->
-                        val active = case.name == selected
-                        OptionCaseState(
-                            name = case.name,
-                            label = case.label,
-                            description = case.description,
-                            active = active,
-                            children = if (active) {
-                                buildOptionEditors(definition, case.childOptionNames, values, depth + 1, visited)
-                            } else {
-                                emptyList()
-                            },
-                        )
-                    },
+                    cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, depth, visited),
                     inputs = emptyList(),
                 )
             }
@@ -289,20 +258,7 @@ object ConfigurationResolver {
                     kind = OptionKind.Checkbox,
                     depth = depth,
                     value = value,
-                    cases = option.cases.map { case ->
-                        val active = case.name in selected
-                        OptionCaseState(
-                            name = case.name,
-                            label = case.label,
-                            description = case.description,
-                            active = active,
-                            children = if (active) {
-                                buildOptionEditors(definition, case.childOptionNames, values, depth + 1, visited)
-                            } else {
-                                emptyList()
-                            },
-                        )
-                    },
+                    cases = buildCaseStates(definition, option.cases, selected.toSet(), values, depth, visited),
                     inputs = emptyList(),
                 )
             }
@@ -333,15 +289,26 @@ object ConfigurationResolver {
         }
     }
 
-    private fun OptionDefinition.choiceCases() = when (this) {
-        is OptionDefinition.Select -> cases
-        is OptionDefinition.Switch -> cases
-        else -> emptyList()
-    }
-
-    private fun OptionDefinition.choiceDefaultCase() = when (this) {
-        is OptionDefinition.Select -> defaultCase
-        is OptionDefinition.Switch -> defaultCase
-        else -> null
+    /** Choice/Checkbox 共用的 case 投影：仅活动 case 物化子树。 */
+    private fun buildCaseStates(
+        definition: ProjectDefinition,
+        cases: List<OptionCaseDefinition>,
+        selected: Set<String>,
+        values: Map<String, OptionValue>,
+        depth: Int,
+        visited: Set<String>,
+    ): List<OptionCaseState> = cases.map { case ->
+        val active = case.name in selected
+        OptionCaseState(
+            name = case.name,
+            label = case.label,
+            description = case.description,
+            active = active,
+            children = if (active) {
+                buildOptionEditors(definition, case.childOptionNames, values, depth + 1, visited)
+            } else {
+                emptyList()
+            },
+        )
     }
 }

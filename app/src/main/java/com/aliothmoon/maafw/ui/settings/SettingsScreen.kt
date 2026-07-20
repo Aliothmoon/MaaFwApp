@@ -29,13 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.aliothmoon.maafw.BuildConfig
-import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.ThemeMode
-import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 
 @Composable
@@ -150,10 +149,7 @@ private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Un
             Text("重新加载项目")
         }
         if (state.developerMode) {
-            val diagnostics = buildList {
-                (state.projectState as? ProjectState.Ready)?.let { addAll(it.diagnostics) }
-                addAll(state.sessionDiagnostics)
-            }
+            val diagnostics = state.visibleDiagnostics
             if (diagnostics.isEmpty()) {
                 Text(
                     text = "没有诊断信息",
@@ -161,17 +157,7 @@ private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Un
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                diagnostics.forEach {
-                    Text(
-                        text = "[${it.severity}] ${it.source}: ${it.message}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (it.severity == DiagnosticSeverity.Error) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
+                MaaDiagnosticList(diagnostics, showSeverity = true)
             }
         }
     }

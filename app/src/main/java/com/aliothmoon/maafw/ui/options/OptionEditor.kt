@@ -24,6 +24,7 @@ import com.aliothmoon.maafw.domain.OptionCaseState
 import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
+import com.aliothmoon.maafw.domain.standardSwitchCases
 import com.aliothmoon.maafw.domain.validateInputCandidate
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
@@ -68,7 +69,7 @@ private fun CardedOptionItem(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
 ) {
-    val switchCases = standardSwitchCases(option)
+    val switchCases = option.standardSwitchCases()
     MaaCard(
         title = option.label,
         trailing = if (switchCases != null) {
@@ -166,17 +167,6 @@ private fun ChoiceChipFlow(
     }
 }
 
-// 官方推荐 Yes/No（允许 Y/y）；on/true/开 等为本项目宽容超集
-private val SWITCH_ON_NAMES = setOf("yes", "y", "on", "true", "enable", "开", "开启", "启用")
-
-/** 标准两态 Switch 的 (on, off) case；非标准两态返回 null（回落 chip 平铺）。 */
-private fun standardSwitchCases(option: OptionEditorState): Pair<OptionCaseState, OptionCaseState>? {
-    if (option.kind != OptionKind.Switch || option.cases.size != 2) return null
-    val onCase = option.cases.firstOrNull { it.name.lowercase() in SWITCH_ON_NAMES } ?: return null
-    val offCase = option.cases.firstOrNull { it != onCase } ?: return null
-    return onCase to offCase
-}
-
 @Composable
 private fun OptionSwitch(
     option: OptionEditorState,
@@ -203,7 +193,7 @@ private fun SwitchEditor(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
 ) {
-    val cases = standardSwitchCases(option)
+    val cases = option.standardSwitchCases()
     if (cases == null) {
         // 非标准两态 switch 回退为 chip 平铺
         SelectEditor(option, locked, onSetOption)

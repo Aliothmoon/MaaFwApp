@@ -12,7 +12,6 @@ import androidx.compose.animation.core.tween
 object MaaMotion {
     const val DURATION_SHORT = 150
     const val DURATION_MEDIUM = 300
-    const val DURATION_LONG = 450
 
     val EmphasizedDecelerate: Easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
     val EmphasizedAccelerate: Easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)

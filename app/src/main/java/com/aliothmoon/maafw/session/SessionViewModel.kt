@@ -10,18 +10,21 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.RunPlanBuilder
 import com.aliothmoon.maafw.runner.RunPlanResult
 import com.aliothmoon.maafw.runner.RunnerCommandResult
-import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.isBusy
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -38,11 +41,12 @@ class SessionViewModel(
         runnerPort.state,
     ) { project, config, runner ->
         buildUiState(project, config, runner)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SessionUiState(),
-    )
+    }.flowOn(Dispatchers.Default) // resolve 属重计算，不占用主线程
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = SessionUiState(),
+        )
 
     private val effectChannel = Channel<SessionEffect>(Channel.BUFFERED)
     val effects: Flow<SessionEffect> = effectChannel.receiveAsFlow()
@@ -73,6 +77,21 @@ class SessionViewModel(
         intents.trySend(intent)
     }
 
+    // resolve 只依赖 (project, config)；runner tick 触发的 combine 直接复用上次结果。
+    // combine transform 串行执行，无并发访问。
+    private var resolveCacheKey: Pair<ProjectState, UserConfiguration>? = null
+    private var resolveCacheValue: ResolvedProjectSession? = null
+
+    private fun resolveCached(project: ProjectState.Ready, config: UserConfiguration): ResolvedProjectSession {
+        val cached = resolveCacheValue
+        val key = resolveCacheKey
+        if (cached != null && key != null && key.first === project && key.second === config) return cached
+        return ConfigurationResolver.resolve(project.definition, config).also {
+            resolveCacheKey = project to config
+            resolveCacheValue = it
+        }
+    }
+
     private fun buildUiState(
         project: ProjectState,
         config: UserConfiguration,
@@ -85,7 +104,7 @@ class SessionViewModel(
             developerMode = config.developerMode,
         )
         if (project !is ProjectState.Ready) return base
-        val session = ConfigurationResolver.resolve(project.definition, config)
+        val session = resolveCached(project, config)
         return base.copy(
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
@@ -98,13 +117,7 @@ class SessionViewModel(
     private suspend fun handle(intent: SessionIntent) {
         when (intent) {
             is SessionIntent.CreateConfiguration -> guarded {
-                val id = ConfigurationResolver.newConfigurationId()
-                configurationStore.update { config ->
-                    config.copy(
-                        configurations = config.configurations + RunConfiguration(id, intent.name),
-                        activeConfigurationId = id,
-                    )
-                }
+                appendAndActivate(RunConfiguration(ConfigurationResolver.newConfigurationId(), intent.name))
             }
 
             is SessionIntent.CreateFromTemplate -> guarded {
@@ -120,12 +133,7 @@ class SessionViewModel(
                 if (created == null) {
                     effectChannel.send(SessionEffect.ShowMessage("模板 \"${intent.templateName}\" 不存在"))
                 } else {
-                    configurationStore.update { config ->
-                        config.copy(
-                            configurations = config.configurations + created,
-                            activeConfigurationId = created.id,
-                        )
-                    }
+                    appendAndActivate(created)
                 }
             }
 
@@ -226,9 +234,16 @@ class SessionViewModel(
         block()
     }
 
-    private fun locked(): Boolean = when (runnerPort.state.value.phase) {
-        RunnerPhase.Preparing, RunnerPhase.Running, RunnerPhase.Stopping -> true
-        else -> false
+    private fun locked(): Boolean = runnerPort.state.value.phase.isBusy
+
+    /** 新建配置统一动作：追加到列表末尾并立即设为活动配置。 */
+    private suspend fun appendAndActivate(configuration: RunConfiguration) {
+        configurationStore.update { config ->
+            config.copy(
+                configurations = config.configurations + configuration,
+                activeConfigurationId = configuration.id,
+            )
+        }
     }
 
     private suspend fun mutateConfiguration(

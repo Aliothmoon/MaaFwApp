@@ -54,6 +54,8 @@ data class TaskGroupDefinition(
     val description: String? = null,
     val icon: String? = null,
     val defaultExpand: Boolean = true,
+    /** 加载器合成的「未分组」兜底组；按此标记（而非组名）判定，避免与真实同名 group 冲突。 */
+    val isUngrouped: Boolean = false,
 )
 
 sealed interface OptionDefinition {
@@ -61,21 +63,27 @@ sealed interface OptionDefinition {
     val label: String
     val description: String?
 
+    /** 单选语义（Select/Switch 共享 cases + defaultCase），供 resolver/builder 统一分派。 */
+    sealed interface Choice : OptionDefinition {
+        val cases: List<OptionCaseDefinition>
+        val defaultCase: String?
+    }
+
     data class Select(
         override val name: String,
         override val label: String,
         override val description: String?,
-        val cases: List<OptionCaseDefinition>,
-        val defaultCase: String?,
-    ) : OptionDefinition
+        override val cases: List<OptionCaseDefinition>,
+        override val defaultCase: String?,
+    ) : Choice
 
     data class Switch(
         override val name: String,
         override val label: String,
         override val description: String?,
-        val cases: List<OptionCaseDefinition>,
-        val defaultCase: String?,
-    ) : OptionDefinition
+        override val cases: List<OptionCaseDefinition>,
+        override val defaultCase: String?,
+    ) : Choice
 
     data class Checkbox(
         override val name: String,
@@ -92,6 +100,13 @@ sealed interface OptionDefinition {
         val fields: List<InputFieldDefinition>,
         val pipelineOverride: JsonObject,
     ) : OptionDefinition
+}
+
+/** 全 option 类型统一取 cases（Input 无 cases）。 */
+fun OptionDefinition.casesOrEmpty(): List<OptionCaseDefinition> = when (this) {
+    is OptionDefinition.Choice -> cases
+    is OptionDefinition.Checkbox -> cases
+    is OptionDefinition.Input -> emptyList()
 }
 
 data class OptionCaseDefinition(
@@ -119,7 +134,10 @@ data class ConfigurationTemplate(
     val name: String,
     val description: String?,
     val tasks: List<TemplateTask>,
-)
+) {
+    /** 创建/预览共用的去重投影：同名任务保留先声明的一条（resolver 与 UI 必须一致）。 */
+    val distinctTasks: List<TemplateTask> get() = tasks.distinctBy { it.taskName }
+}
 
 data class TemplateTask(
     val taskName: String,

@@ -9,6 +9,11 @@ package com.aliothmoon.maafw.project
 fun isRemoteUrl(content: String): Boolean =
     content.startsWith("https://") || content.startsWith("http://")
 
+private val DOC_EXTENSION = Regex("""\.(md|txt|json|html|htm)$""", RegexOption.IGNORE_CASE)
+private val SIMPLE_NAME_CHARS = Regex("""^[A-Za-z0-9_\-./\\]+$""")
+private val DIGITS_ONLY = Regex("""^\d+$""")
+private val UPPERCASE_NAME = Regex("""^[A-Z][A-Z0-9_\-]*$""")
+
 /**
  * 文件路径特征：./ 或 ../ 前缀；常见文档扩展名；
  * 或不含空白/HTML 标签的简单文件名（全大写如 LICENSE，或带路径分隔符）。
@@ -16,13 +21,13 @@ fun isRemoteUrl(content: String): Boolean =
 fun isFilePath(content: String): Boolean {
     if (isRemoteUrl(content)) return false
     if (content.startsWith("./") || content.startsWith("../")) return true
-    if (Regex("""\.(md|txt|json|html|htm)$""", RegexOption.IGNORE_CASE).containsMatchIn(content)) return true
+    if (DOC_EXTENSION.containsMatchIn(content)) return true
 
-    val isSimpleName = Regex("""^[A-Za-z0-9_\-./\\]+$""").matches(content) &&
+    val isSimpleName = SIMPLE_NAME_CHARS.matches(content) &&
         content.length in 1..100 &&
-        !Regex("""^\d+$""").matches(content)
+        !DIGITS_ONLY.matches(content)
 
-    if (isSimpleName && Regex("""^[A-Z][A-Z0-9_\-]*$""").matches(content)) return true
+    if (isSimpleName && UPPERCASE_NAME.matches(content)) return true
     if (isSimpleName && (content.contains('/') || content.contains('\\'))) return true
     return false
 }

@@ -48,12 +48,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.domain.Diagnostic
-import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
+import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.home.HomeScreen
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
@@ -76,7 +76,7 @@ private enum class TopDestination(
  */
 @Composable
 fun AppRoot(
-    onDarkThemeChanged: @Composable (Boolean) -> Unit,
+    onDarkThemeChanged: (Boolean) -> Unit,
     viewModel: SessionViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -86,7 +86,7 @@ fun AppRoot(
         ThemeMode.Light -> false
         ThemeMode.Dark -> true
     }
-    onDarkThemeChanged(darkTheme)
+    LaunchedEffect(darkTheme) { onDarkThemeChanged(darkTheme) }
 
     MaaFwTheme(darkTheme = darkTheme) {
         // pager 是选中 tab 的唯一事实来源：滑动切页、点 tab 平滑滚动
@@ -183,21 +183,7 @@ fun AppRoot(
             AlertDialog(
                 onDismissRequest = { diagnosticsDialog = null },
                 title = { Text("无法开始") },
-                text = {
-                    androidx.compose.foundation.layout.Column {
-                        diagnostics.forEach {
-                            Text(
-                                text = "${it.source}: ${it.message}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (it.severity == DiagnosticSeverity.Error) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            )
-                        }
-                    }
-                },
+                text = { MaaDiagnosticList(diagnostics) },
                 confirmButton = {
                     TextButton(onClick = { diagnosticsDialog = null }) { Text("知道了") }
                 },

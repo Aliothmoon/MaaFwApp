@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.viewinterop.AndroidView
 import com.aliothmoon.maafw.project.M9A_ASSET_ROOT
 import com.aliothmoon.maafw.project.isRemoteUrl
+import com.aliothmoon.maafw.project.normalizeProjectPath
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
 import io.noties.markwon.MarkwonVisitor
@@ -73,11 +74,14 @@ fun MaaMarkdown(
     val onSurface = MaterialTheme.colorScheme.onSurface.toArgb()
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    val markwon = remember(context, onSurface, onSurfaceVariant, linkColor) {
-        buildMarkwon(context, onSurface, onSurfaceVariant, linkColor)
+    // Markwon 管线按主题色三元组进程级复用（深浅色各一份），列表项不再各建一套插件
+    val markwon = remember(onSurface, onSurfaceVariant, linkColor) {
+        cachedMarkwon(context, onSurface, onSurfaceVariant, linkColor)
     }
 
     val resolved = body ?: "加载中…"
+    // Markdown 解析只在文本/管线变化时执行，与无关重组解耦
+    val spanned = remember(markwon, resolved) { markwon.toMarkdown(rewriteRelativeImages(resolved)) }
     val textColor = color.toArgb()
     val fontSizeSp = if (style.fontSize.isSpecified) style.fontSize.value else 12f
 
@@ -94,7 +98,7 @@ fun MaaMarkdown(
             view.textSize = fontSizeSp
             view.maxLines = maxLines
             view.ellipsize = if (maxLines == Int.MAX_VALUE) null else TextUtils.TruncateAt.END
-            markwon.setMarkdown(view, rewriteRelativeImages(resolved))
+            markwon.setParsedMarkdown(view, spanned)
             if (!linksClickable) {
                 view.movementMethod = null
                 view.isClickable = false
@@ -103,6 +107,14 @@ fun MaaMarkdown(
         },
     )
 }
+
+// 组合只发生在主线程，普通 HashMap 即可；key = 主题色三元组
+private val markwonCache = HashMap<List<Int>, Markwon>()
+
+private fun cachedMarkwon(context: Context, onSurface: Int, onSurfaceVariant: Int, linkColor: Int): Markwon =
+    markwonCache.getOrPut(listOf(onSurface, onSurfaceVariant, linkColor)) {
+        buildMarkwon(context.applicationContext, onSurface, onSurfaceVariant, linkColor)
+    }
 
 private fun buildMarkwon(
     context: Context,
@@ -126,15 +138,18 @@ private fun buildMarkwon(
     })
     .build()
 
+private val MARKDOWN_RELATIVE_IMAGE = Regex("""(!\[[^\]]*]\()(?!https?://|file:|data:)([^)\s]+)""")
+private val HTML_RELATIVE_IMAGE = Regex("""(<img[^>]*\bsrc=")(?!https?://|file:|data:)([^"]+)""", RegexOption.IGNORE_CASE)
+
 /** 相对路径图片（md 与 <img>）重写为 PI assets URI；http/file/data 原样保留。 */
 private fun rewriteRelativeImages(body: String, assetRoot: String = M9A_ASSET_ROOT): String {
     val prefix = "file:///android_asset/$assetRoot/"
     return body
-        .replace(Regex("""(!\[[^\]]*]\()(?!https?://|file:|data:)([^)\s]+)""")) {
-            "${it.groupValues[1]}$prefix${it.groupValues[2].removePrefix("./")}"
+        .replace(MARKDOWN_RELATIVE_IMAGE) {
+            "${it.groupValues[1]}$prefix${normalizeProjectPath(it.groupValues[2])}"
         }
-        .replace(Regex("""(<img[^>]*\bsrc=")(?!https?://|file:|data:)([^"]+)""", RegexOption.IGNORE_CASE)) {
-            "${it.groupValues[1]}$prefix${it.groupValues[2].removePrefix("./")}"
+        .replace(HTML_RELATIVE_IMAGE) {
+            "${it.groupValues[1]}$prefix${normalizeProjectPath(it.groupValues[2])}"
         }
 }
 
