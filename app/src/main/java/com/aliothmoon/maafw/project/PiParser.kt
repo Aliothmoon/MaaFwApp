@@ -344,7 +344,12 @@ object PiParser {
                 optionValues = parsePresetOptionValues(task["option"]),
             )
         }
-        return ConfigurationTemplate(name, text.description(obj.string("description")), tasks)
+        return ConfigurationTemplate(
+            name = name,
+            label = text.label(obj.string("label")) ?: name,
+            description = text.description(obj.string("description")),
+            tasks = tasks,
+        )
     }
 
     /** preset 的 option 值形态：string -> SingleCase，array -> MultipleCases，object -> Inputs。 */

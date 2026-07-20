@@ -129,9 +129,10 @@ data class InputFieldDefinition(
     val description: String?,
 )
 
-/** PI preset 的领域名称：只读的一次性创建模板。 */
+/** PI preset 的领域名称：只读的一次性创建模板。name 为标识符，label 为展示名。 */
 data class ConfigurationTemplate(
     val name: String,
+    val label: String,
     val description: String?,
     val tasks: List<TemplateTask>,
 ) {

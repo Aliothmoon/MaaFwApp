@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.domain.OptionCaseState
 import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionKind
@@ -34,7 +32,7 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 
 /**
  * 动态 option 编辑器：按 OptionEditorState 树递归渲染，
- * 活动分支的子 option 以缩进线性平铺（docs/ui-implementation-notes.md B4）。
+ * 活动分支的子 option 以小缩进（8dp/层）+ 逐层递减字号平铺（docs/ui-implementation-notes.md B4）。
  * 状态变更一律通过 onSetOption(optionName, value) 发出，子 option 与父共用同一 task 作用域 value map。
  * carded = true 时顶层 option 各自包白卡片（option 名为卡片标题），子 option 仍在父卡内平铺。
  */
@@ -96,9 +94,7 @@ private fun OptionEditorItem(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = (option.depth * 16).dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
         when (option.kind) {
@@ -125,11 +121,24 @@ private fun OptionDescriptionAndChildren(
             )
         }
     }
-    // 活动分支子 option 递归渲染（卡片内不再嵌套卡片）
+    // 活动分支子 option 递归渲染（卡片内不再嵌套卡片），每层 8dp 缩进
     val children = option.activeCases.flatMap { it.children }
     if (children.isNotEmpty()) {
-        OptionEditorList(children, locked, onSetOption)
+        OptionEditorList(
+            options = children,
+            locked = locked,
+            onSetOption = onSetOption,
+            modifier = Modifier.padding(start = MaaDesignTokens.Spacing.sm),
+        )
     }
+}
+
+/** option 名字号随嵌套层级递减（17/15/13sp），与缩进共同构成层级线索。 */
+@Composable
+private fun optionLabelStyle(depth: Int) = when {
+    depth <= 1 -> MaterialTheme.typography.bodyLarge
+    depth == 2 -> MaterialTheme.typography.bodyMedium
+    else -> MaterialTheme.typography.bodySmall
 }
 
 @Composable
@@ -139,7 +148,7 @@ private fun SelectEditor(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
-        Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+        Text(text = option.label, style = optionLabelStyle(option.depth))
         ChoiceChipFlow(option, locked, onSetOption)
     }
 }
@@ -206,7 +215,7 @@ private fun SwitchEditor(
     ) {
         Text(
             text = option.label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = optionLabelStyle(option.depth),
             modifier = Modifier.weight(1f, fill = false),
         )
         OptionSwitch(option, cases, locked, onSetOption)
@@ -220,35 +229,36 @@ private fun CheckboxEditor(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
-        Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+        Text(text = option.label, style = optionLabelStyle(option.depth))
         CheckboxCases(option, locked, onSetOption)
     }
 }
 
+/** 多选 case 与单选同为胶囊平铺，仅切换语义不同（增删选中集合）。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CheckboxCases(
     option: OptionEditorState,
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+    ) {
         val activeNames = option.activeCases.map { it.name }
         option.cases.forEach { case ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(
-                    checked = case.active,
-                    onCheckedChange = { checked ->
-                        val updated = if (checked) activeNames + case.name else activeNames - case.name
-                        // 明确的空选择也是合法值（MultipleCases(emptyList())），与 Unset 区分
-                        onSetOption(option.name, OptionValue.MultipleCases(updated))
-                    },
-                    enabled = !locked,
-                )
-                Text(text = case.label, style = MaterialTheme.typography.bodyMedium)
-            }
+            MaaChoiceChip(
+                label = case.label,
+                selected = case.active,
+                enabled = !locked,
+                onClick = {
+                    val updated = if (case.active) activeNames - case.name else activeNames + case.name
+                    // 明确的空选择也是合法值（MultipleCases(emptyList())），与 Unset 区分
+                    onSetOption(option.name, OptionValue.MultipleCases(updated))
+                },
+            )
         }
     }
 }
@@ -260,7 +270,7 @@ private fun InputEditor(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
-        Text(text = option.label, style = MaterialTheme.typography.bodyLarge)
+        Text(text = option.label, style = optionLabelStyle(option.depth))
         InputFields(option, locked, onSetOption)
     }
 }

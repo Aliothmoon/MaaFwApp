@@ -30,7 +30,8 @@ class RunPlanBuilderTest {
         @JvmStatic
         @BeforeClass
         fun loadProject() {
-            val result = ProjectLoader(FileProjectSource(File("src/main/assets", M9A_ASSET_ROOT))).load()
+            // 夹具固定在 test/fixtures，不随打包资源更换而变
+            val result = ProjectLoader(FileProjectSource(File("src/test/fixtures", M9A_ASSET_ROOT))).load()
             definition = (result as ProjectLoadResult.Ready).definition
         }
     }

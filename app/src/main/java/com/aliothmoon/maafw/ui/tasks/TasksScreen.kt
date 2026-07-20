@@ -744,7 +744,7 @@ private fun TemplatePreviewPage(
 ) {
     val templateTasks = remember(template) { template.distinctTasks }
     var name by rememberSaveable(template.name) {
-        mutableStateOf(uniqueConfigurationName(template.name, existingNames))
+        mutableStateOf(uniqueConfigurationName(template.label, existingNames))
     }
     // 带入任务集合：默认全选，创建时由模板声明顺序决定最终顺序
     val included = remember(template) {
@@ -1065,7 +1065,7 @@ private fun TemplateCard(template: ConfigurationTemplate, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
             Text(
-                text = template.name,
+                text = template.label,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,

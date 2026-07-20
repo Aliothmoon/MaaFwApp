@@ -23,12 +23,13 @@ class ProjectLoaderTest {
 
     companion object {
         // M9A 全量加载（29 个分片 + 翻译）较重，整个测试类共享一次结果
+        // 夹具固定在 test/fixtures，不随打包资源更换而变
         private lateinit var ready: ProjectLoadResult.Ready
 
         @JvmStatic
         @BeforeClass
         fun loadProject() {
-            val result = ProjectLoader(FileProjectSource(File("src/main/assets", M9A_ASSET_ROOT))).load()
+            val result = ProjectLoader(FileProjectSource(File("src/test/fixtures", M9A_ASSET_ROOT))).load()
             assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
             ready = result as ProjectLoadResult.Ready
         }

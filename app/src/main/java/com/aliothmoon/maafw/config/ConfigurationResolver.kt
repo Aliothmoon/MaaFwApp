@@ -88,7 +88,7 @@ object ConfigurationResolver {
 
     /**
      * 从模板创建新配置：仅创建瞬间复制内容，不保存模板引用。
-     * configurationName 为空白/null 时沿用模板名；taskNames 为 null 表示全部任务，
+     * configurationName 为空白/null 时沿用模板展示名（label）；taskNames 为 null 表示全部任务，
      * 非 null 时按模板声明顺序保留其中出现的任务。
      */
     fun createFromTemplate(
@@ -101,7 +101,7 @@ object ConfigurationResolver {
         val included = taskNames?.toSet()
         return RunConfiguration(
             id = newConfigurationId(),
-            name = configurationName?.takeIf { it.isNotBlank() } ?: template.name,
+            name = configurationName?.takeIf { it.isNotBlank() } ?: template.label,
             tasks = template.distinctTasks
                 .filter { included == null || it.taskName in included }
                 .map { ConfiguredTask(it.taskName, it.enabled, it.optionValues) },
