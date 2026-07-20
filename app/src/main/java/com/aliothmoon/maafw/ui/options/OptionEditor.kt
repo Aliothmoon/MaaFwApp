@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +29,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
+import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 
 /**
@@ -175,7 +175,7 @@ private fun OptionSwitch(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     val (onCase, offCase) = cases
-    Switch(
+    MaaSwitch(
         checked = option.activeCases.firstOrNull()?.name == onCase.name,
         onCheckedChange = { checked ->
             onSetOption(

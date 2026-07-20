@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
@@ -50,8 +51,8 @@ fun MaaChoiceChip(
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = MaaDesignTokens.Spacing.sm,
-                vertical = MaaDesignTokens.Spacing.xs,
+                horizontal = MaaDesignTokens.Spacing.md,
+                vertical = MaaDesignTokens.Spacing.sm,
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
@@ -59,7 +60,11 @@ fun MaaChoiceChip(
             leading?.invoke()
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
+                // label 档位间隔过大（15/12sp），chip 取中间值 13sp
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                ),
                 color = if (selected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {

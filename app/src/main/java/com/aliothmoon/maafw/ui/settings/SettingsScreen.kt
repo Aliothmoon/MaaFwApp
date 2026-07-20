@@ -19,7 +19,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +35,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
+import com.aliothmoon.maafw.ui.components.MaaSwitch
 
 @Composable
 fun SettingsScreen(
@@ -136,7 +136,7 @@ private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Un
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text("开发者模式", style = MaterialTheme.typography.bodyLarge)
-            Switch(
+            MaaSwitch(
                 checked = state.developerMode,
                 onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
             )

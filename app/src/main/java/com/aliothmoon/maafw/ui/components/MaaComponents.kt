@@ -23,6 +23,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -95,6 +97,30 @@ fun MaaCardSurface(
         shadowElevation = MaaDesignTokens.Card.elevation,
         border = border,
         content = content,
+    )
+}
+
+/**
+ * 主题把 outline 定义为发丝分隔线色（与 surfaceContainerHighest 同值），
+ * M3 Switch 未选中态的滑块/描边默认取 outline，会与轨道糊成一个纯色药丸；
+ * 这里统一改用 onSurfaceVariant 保证滑块可辨识。
+ */
+@Composable
+fun MaaSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        enabled = enabled,
+        colors = SwitchDefaults.colors(
+            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
     )
 }
 
