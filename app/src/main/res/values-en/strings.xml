@@ -1,0 +1,140 @@
+<resources>
+    <string name="app_name">MaaFwApp</string>
+
+    <!-- Common -->
+    <string name="common_close">Close</string>
+    <string name="common_back">Back</string>
+    <string name="common_save">Save</string>
+    <string name="common_rename">Rename</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_loading">Loading…</string>
+
+    <!-- Tasks screen -->
+    <string name="tasks_project_load_failed">Project failed to load. Check diagnostics on Home.</string>
+    <string name="tasks_reload">Reload</string>
+    <string name="tasks_empty_config_title">No configurations yet</string>
+    <string name="tasks_empty_config_hint">Tap the selector above to create an empty configuration, or start from a template</string>
+    <string name="tasks_empty_task_title">No tasks yet</string>
+    <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
+    <string name="tasks_add_task">Add tasks</string>
+    <string name="tasks_run_order">Run order</string>
+    <string name="tasks_effective_count">· %1$d/%2$d active</string>
+    <string name="tasks_live_preview">Live preview</string>
+    <string name="tasks_remove">Remove</string>
+    <string name="tasks_drag_reorder">Drag to reorder</string>
+    <string name="tasks_description_title">Task description</string>
+
+    <!-- Runner toggle -->
+    <string name="runner_start">Start</string>
+    <string name="runner_stop">Stop</string>
+    <string name="runner_stopping">Stopping…</string>
+
+    <!-- Configuration sheet -->
+    <string name="config_select">Select configuration</string>
+    <string name="config_select_hint">Tap to select or create a configuration</string>
+    <string name="config_current_summary">Current · %1$d tasks · %2$d active</string>
+    <string name="config_create_from_template">New from template</string>
+    <string name="config_template_list_hint">Preview a template and pick the tasks you need before creating</string>
+    <string name="config_name_label">Configuration name</string>
+    <string name="config_included_tasks">Included tasks</string>
+    <string name="config_included_count">%1$d/%2$d</string>
+    <string name="config_create_use">Create and use</string>
+    <string name="config_create_use_count">Create and use (%1$d tasks)</string>
+    <string name="config_task_disabled_by_default">Off by default</string>
+    <string name="config_create_empty">New empty configuration</string>
+    <string name="config_create_empty_hint">After creating, use “Add tasks” to pick tasks from the catalog</string>
+    <string name="config_rename_title">Rename configuration</string>
+    <plurals name="config_task_count">
+        <item quantity="one">%1$d task</item>
+        <item quantity="other">%1$d tasks</item>
+    </plurals>
+    <plurals name="template_task_count">
+        <item quantity="one">%1$d/%2$d task</item>
+        <item quantity="other">%1$d/%2$d tasks</item>
+    </plurals>
+
+    <!-- Add tasks sheet -->
+    <string name="tasks_search_placeholder">Search task names or descriptions</string>
+    <string name="tasks_search_clear">Clear search</string>
+    <string name="tasks_add_hint">Checked tasks are appended in the order you pick them; the same task can be added again</string>
+    <string name="tasks_search_empty">No tasks match “%1$s”</string>
+    <string name="tasks_confirm_add">Add selected</string>
+    <string name="tasks_confirm_add_count">Add selected (%1$d)</string>
+
+    <!-- Home screen -->
+    <string name="home_project">Project</string>
+    <string name="home_project_loading">Loading ProjectInterface…</string>
+    <string name="home_project_load_failed">Project failed to load</string>
+    <string name="home_name">Name</string>
+    <string name="home_tasks">Tasks</string>
+    <string name="home_count_items">%1$d</string>
+    <string name="home_templates">Preset templates</string>
+    <string name="home_resource">Resource</string>
+    <string name="home_none">None</string>
+    <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
+    <string name="home_diagnostics_summary_with_errors">Diagnostics: %1$d (%2$d errors)</string>
+    <string name="home_current_config">Current configuration</string>
+    <string name="home_no_config_hint">No configuration selected. Create or pick one on the Tasks tab.</string>
+    <string name="home_enabled">Enabled</string>
+    <string name="home_enabled_count">%1$d (%2$d active)</string>
+    <string name="home_runner_status">Runner status</string>
+    <string name="home_state">State</string>
+    <string name="home_progress">Progress</string>
+    <string name="home_current_task">Current task</string>
+    <string name="home_latest_result">Latest result</string>
+    <string name="home_task_failed">Failed: %1$s</string>
+    <string name="home_task_failed_with_message">Failed: %1$s (%2$s)</string>
+
+    <!-- Runner phase / result -->
+    <string name="phase_unavailable">Unavailable: %1$s</string>
+    <string name="phase_idle">Idle</string>
+    <string name="phase_preparing">Preparing</string>
+    <string name="phase_running">Running</string>
+    <string name="phase_stopping">Stopping</string>
+    <string name="result_completed">All completed (%1$d tasks)</string>
+    <string name="result_completed_with_failures">Completed with %1$d failed tasks</string>
+    <string name="result_cancelled">Cancelled</string>
+    <string name="result_failed">Failed: %1$s</string>
+
+    <!-- Settings screen -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_follow_system">System default</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_hint">Switching language reloads the project; unavailable while running</string>
+    <string name="settings_resource">Resource</string>
+    <string name="settings_no_resources">The project provides no selectable resources</string>
+    <string name="settings_current_resource">Current resource</string>
+    <string name="settings_not_selected">Not selected</string>
+    <string name="settings_resource_hint">Switching resources affects task applicability; unavailable while running</string>
+    <string name="settings_developer">Developer</string>
+    <string name="settings_developer_mode">Developer mode</string>
+    <string name="settings_reload_project">Reload project</string>
+    <string name="settings_no_diagnostics">No diagnostics</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_build">Build</string>
+
+    <!-- Navigation & dialogs -->
+    <string name="nav_home">Home</string>
+    <string name="nav_tasks">Tasks</string>
+    <string name="nav_settings">Settings</string>
+    <string name="dialog_cannot_start">Cannot start</string>
+    <string name="dialog_ok">OK</string>
+
+    <!-- Option editor -->
+    <string name="option_input_invalid">Invalid input</string>
+
+    <!-- Localized text for structured domain/VM semantics (ui/i18n/DomainStrings) -->
+    <string name="tasks_ungrouped">Ungrouped</string>
+    <string name="task_unavailable_missing">Task no longer exists in the project</string>
+    <string name="task_unavailable_controller">Unsupported controller (requires %1$s)</string>
+    <string name="task_unavailable_resource">Unsupported resource (requires %1$s)</string>
+    <string name="msg_locked_while_running">Cannot change configuration while running</string>
+    <string name="msg_project_not_loaded">Project is not loaded yet</string>
+    <string name="msg_no_executable_tasks">No tasks available to run</string>
+    <string name="msg_template_not_found">Template \"%1$s\" does not exist</string>
+    <string name="msg_cannot_start">Cannot start: %1$s</string>
+    <string name="msg_cannot_stop">Cannot stop: %1$s</string>
+</resources>

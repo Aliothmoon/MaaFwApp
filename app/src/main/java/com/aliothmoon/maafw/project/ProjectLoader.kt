@@ -24,11 +24,12 @@ sealed interface ProjectLoadResult {
  * 文本物化（对齐 MXU contentResolver）：$i18n 按 languages 声明查表（查无回落 key），
  * description 级字段的文件路径形态在加载期读入；URL 形态原样保留给 UI 懒加载。
  *
- * @param locale 期望语言 tag（如 zh-CN）；null 时取系统默认。
+ * @param localeProvider 每次 load 时查询期望语言 tag（如 zh-CN）；null 表示跟随系统默认。
+ *   用 provider 而非固定值：loader 是单例，语言切换后 reload 需要拿到新 locale。
  */
 class ProjectLoader(
     private val source: ProjectSource,
-    private val locale: String? = null,
+    private val localeProvider: () -> String? = { null },
 ) {
 
     private class MergeState {
@@ -157,7 +158,7 @@ class ProjectLoader(
         if (languages.isEmpty()) return emptyMap()
 
         fun norm(tag: String) = tag.lowercase().replace('_', '-')
-        val desired = norm(locale ?: java.util.Locale.getDefault().toLanguageTag())
+        val desired = norm(localeProvider() ?: java.util.Locale.getDefault().toLanguageTag())
         val lang = languages.keys.firstOrNull { norm(it) == desired }
             ?: languages.keys.firstOrNull {
                 norm(it).substringBefore('-') == desired.substringBefore('-')
@@ -318,7 +319,7 @@ class ProjectLoader(
     }
 
     companion object {
-        /** 合成「未分组」的显示名；身份判定走 TaskGroupDefinition.isUngrouped。 */
+        /** 合成「未分组」的内部组名；身份判定走 isUngrouped，显示名由 UI 层用资源本地化。 */
         const val UNGROUPED = "未分组"
 
         /** M9A 生态惯例的非资源目录（公告等），fallback 枚举资源变体时排除。 */

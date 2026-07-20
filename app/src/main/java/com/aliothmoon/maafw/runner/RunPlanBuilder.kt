@@ -29,7 +29,8 @@ sealed interface RunPlanResult {
  */
 object RunPlanBuilder {
 
-    private val PLACEHOLDER = Regex("""\{([^{}]+)}""")
+    // 闭括号必须转义：Android ICU regex 对孤立 } 抛 PatternSyntaxException（JVM 单测环境则宽容）
+    private val PLACEHOLDER = Regex("""\{([^{}]+)\}""")
 
     fun build(definition: ProjectDefinition, config: UserConfiguration): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
@@ -206,33 +207,18 @@ object RunPlanBuilder {
         optionName: String,
         diagnostics: MutableList<Diagnostic>,
     ): JsonElement {
+        // 未命中 input 的 {…} 不是错误：M9A 等项目在 override 里写
+        // "{节点名}<{输入名}" 这类运行期表达式，节点引用必须原样透传给框架
         // 整个 string token 恰好是 placeholder 时保留目标类型
         val whole = PLACEHOLDER.matchEntire(content)
         if (whole != null) {
-            val key = whole.groupValues[1]
-            val entry = fields[key]
-            if (entry == null) {
-                diagnostics += runtimeError(scopeLabel, "option \"$optionName\" 的 placeholder \"{$key}\" 没有对应输入")
-                return JsonPrimitive(content)
-            }
-            val (field, raw) = entry
+            val (field, raw) = fields[whole.groupValues[1]] ?: return JsonPrimitive(content)
             return typedPrimitive(field.pipelineType, raw, scopeLabel, optionName, diagnostics)
                 ?: JsonPrimitive(content)
         }
         // 嵌入文本时保持字符串
-        var missing = false
         val replaced = PLACEHOLDER.replace(content) { match ->
-            val key = match.groupValues[1]
-            val entry = fields[key]
-            if (entry == null) {
-                missing = true
-                match.value
-            } else {
-                entry.second
-            }
-        }
-        if (missing) {
-            diagnostics += runtimeError(scopeLabel, "option \"$optionName\" 存在无法替换的 placeholder: $content")
+            fields[match.groupValues[1]]?.second ?: match.value
         }
         return JsonPrimitive(replaced)
     }

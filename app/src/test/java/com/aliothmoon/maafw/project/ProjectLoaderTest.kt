@@ -29,7 +29,11 @@ class ProjectLoaderTest {
         @JvmStatic
         @BeforeClass
         fun loadProject() {
-            val result = ProjectLoader(FileProjectSource(File("src/test/fixtures", M9A_ASSET_ROOT))).load()
+            // locale 显式固定，不依赖运行机默认语言
+            val result = ProjectLoader(
+                FileProjectSource(File("src/test/fixtures", M9A_ASSET_ROOT)),
+                localeProvider = { "zh-CN" },
+            ).load()
             assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
             ready = result as ProjectLoadResult.Ready
         }
@@ -249,7 +253,7 @@ class ProjectLoaderGroupTest {
                 ),
             ),
             // 前缀匹配：zh-TW 未声明，应命中 zh-CN
-            locale = "zh-TW",
+            localeProvider = { "zh-TW" },
         ).load() as ProjectLoadResult.Ready
 
         val definition = ready.definition
@@ -278,7 +282,32 @@ class ProjectLoaderGroupTest {
                 ),
             ),
             // zh_cn 与 zh-CN 归一化后应精确命中，而不是回落首个声明的 en_us
-            locale = "zh-CN",
+            localeProvider = { "zh-CN" },
+        ).load() as ProjectLoadResult.Ready
+
+        assertEquals("任务一", ready.definition.tasks.single().label)
+    }
+
+    @Test
+    fun `未声明的语言回落首个声明`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "name": "t",
+                            "languages": {"zh_cn": "./i18n/zh.json", "en_us": "./i18n/en.json"},
+                            "import": ["tasks/a.json"]
+                        }
+                    """.trimIndent(),
+                    "i18n/zh.json" to """{"t1": "任务一"}""",
+                    "i18n/en.json" to """{"t1": "Task One"}""",
+                    "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","label":"${'$'}t1"}]}""",
+                ),
+            ),
+            // ja-JP 精确与前缀都不命中，回落声明序首位 zh_cn
+            localeProvider = { "ja-JP" },
         ).load() as ProjectLoadResult.Ready
 
         assertEquals("任务一", ready.definition.tasks.single().label)

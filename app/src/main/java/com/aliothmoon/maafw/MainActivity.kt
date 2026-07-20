@@ -3,13 +3,14 @@ package com.aliothmoon.maafw
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import com.aliothmoon.maafw.ui.AppRoot
 
-class MainActivity : ComponentActivity() {
+// AppCompatActivity 是 per-app locale 在 API 32- 生效的前提（appcompat 回填只包装它的 context）
+class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

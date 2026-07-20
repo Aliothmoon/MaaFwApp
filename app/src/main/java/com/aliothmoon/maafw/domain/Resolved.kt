@@ -28,6 +28,17 @@ data class ResolvedRunConfiguration(
     val effectiveTaskCount: Int get() = tasks.count { it.effectiveEnabled }
 }
 
+/**
+ * 任务不可用的结构化原因。领域层只表达语义，
+ * 展示文案由 UI 层映射 string 资源（领域层无 Context，不做本地化）。
+ */
+sealed interface UnavailableReason {
+    /** 配置引用的任务已不在项目定义中。 */
+    data object MissingDefinition : UnavailableReason
+    data class ControllerMismatch(val required: List<String>) : UnavailableReason
+    data class ResourceMismatch(val required: List<String>) : UnavailableReason
+}
+
 data class ResolvedConfiguredTask(
     val instanceId: String,
     val taskName: String,
@@ -36,7 +47,7 @@ data class ResolvedConfiguredTask(
     val enabled: Boolean,
     val applicable: Boolean,
     val missingDefinition: Boolean,
-    val unavailableReason: String?,
+    val unavailableReason: UnavailableReason?,
     val options: List<OptionEditorState>,
 ) {
     /** 派生状态，不写回持久化；环境恢复兼容后启用意图自动恢复。 */
@@ -48,6 +59,8 @@ data class TaskCatalogGroup(
     val groupName: String,
     val label: String,
     val tasks: List<TaskCatalogItem>,
+    /** 加载器合成的「未分组」兜底组；UI 据此用资源显示组名，不展示 label 原文。 */
+    val isUngrouped: Boolean = false,
 )
 
 data class TaskCatalogItem(
@@ -55,7 +68,7 @@ data class TaskCatalogItem(
     val label: String,
     val description: String?,
     val applicable: Boolean,
-    val unavailableReason: String?,
+    val unavailableReason: UnavailableReason?,
     val defaultChecked: Boolean,
 )
 

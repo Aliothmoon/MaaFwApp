@@ -20,6 +20,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TaskCatalogItem
 import com.aliothmoon.maafw.domain.TaskDefinition
+import com.aliothmoon.maafw.domain.UnavailableReason
 import com.aliothmoon.maafw.domain.UserConfiguration
 import java.util.UUID
 
@@ -132,7 +133,7 @@ object ConfigurationResolver {
                     enabled = configured.enabled,
                     applicable = false,
                     missingDefinition = true,
-                    unavailableReason = "项目中已不存在该任务",
+                    unavailableReason = UnavailableReason.MissingDefinition,
                     options = emptyList(),
                 )
             } else {
@@ -162,21 +163,21 @@ object ConfigurationResolver {
         )
     }
 
-    /** 返回 null 表示适用；否则返回不可用原因（Session diagnostic 语义）。 */
+    /** 返回 null 表示适用；否则返回结构化不可用原因（文案由 UI 层本地化）。 */
     fun checkApplicability(
         definition: ProjectDefinition,
         task: TaskDefinition,
         resourceName: String?,
-    ): String? {
+    ): UnavailableReason? {
         val controllerOk = task.controllers.isEmpty() ||
             task.controllers.any {
                 it.equals(definition.controller.type, ignoreCase = true) ||
                     it.equals(definition.controller.name, ignoreCase = true)
             }
-        if (!controllerOk) return "不支持当前控制器（需要 ${task.controllers.joinToString()}）"
+        if (!controllerOk) return UnavailableReason.ControllerMismatch(task.controllers)
         val resourceOk = task.resources.isEmpty() ||
             (resourceName != null && task.resources.any { it == resourceName })
-        if (!resourceOk) return "不支持当前资源（需要 ${task.resources.joinToString()}）"
+        if (!resourceOk) return UnavailableReason.ResourceMismatch(task.resources)
         return null
     }
 
@@ -199,7 +200,7 @@ object ConfigurationResolver {
                     defaultChecked = task.defaultCheck,
                 )
             }
-            TaskCatalogGroup(group.name, group.label, tasks)
+            TaskCatalogGroup(group.name, group.label, tasks, isUngrouped = group.isUngrouped)
         }.filter { it.tasks.isNotEmpty() }
     }
 

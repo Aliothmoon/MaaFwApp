@@ -1,3 +1,138 @@
 <resources>
     <string name="app_name">MaaFwApp</string>
+
+    <!-- 通用 -->
+    <string name="common_close">关闭</string>
+    <string name="common_back">返回</string>
+    <string name="common_save">保存</string>
+    <string name="common_rename">重命名</string>
+    <string name="common_delete">删除</string>
+    <string name="common_loading">加载中…</string>
+
+    <!-- 任务页 -->
+    <string name="tasks_project_load_failed">项目加载失败，请查看首页诊断</string>
+    <string name="tasks_reload">重新加载</string>
+    <string name="tasks_empty_config_title">还没有配置</string>
+    <string name="tasks_empty_config_hint">点击上方选择器新建空配置，或从模板快速创建</string>
+    <string name="tasks_empty_task_title">还没有任务</string>
+    <string name="tasks_empty_task_hint">从任务目录选择要执行的任务</string>
+    <string name="tasks_add_task">添加任务</string>
+    <string name="tasks_run_order">执行顺序</string>
+    <string name="tasks_effective_count">· %1$d/%2$d 有效</string>
+    <string name="tasks_live_preview">实时预览</string>
+    <string name="tasks_remove">移除</string>
+    <string name="tasks_drag_reorder">拖动排序</string>
+    <string name="tasks_description_title">任务说明</string>
+
+    <!-- 运行开关 -->
+    <string name="runner_start">开始</string>
+    <string name="runner_stop">停止</string>
+    <string name="runner_stopping">停止中…</string>
+
+    <!-- 配置 sheet -->
+    <string name="config_select">选择配置</string>
+    <string name="config_select_hint">点击选择或新建配置</string>
+    <string name="config_current_summary">当前配置 · %1$d 个任务 · %2$d 个有效</string>
+    <string name="config_create_from_template">从模板新建</string>
+    <string name="config_template_list_hint">预览模板内容，按需挑选任务后创建</string>
+    <string name="config_name_label">配置名称</string>
+    <string name="config_included_tasks">带入任务</string>
+    <string name="config_included_count">%1$d/%2$d 个</string>
+    <string name="config_create_use">创建并使用</string>
+    <string name="config_create_use_count">创建并使用（%1$d 个任务）</string>
+    <string name="config_task_disabled_by_default">默认停用</string>
+    <string name="config_create_empty">新建空配置</string>
+    <string name="config_create_empty_hint">创建后可通过「添加任务」从任务目录挑选任务</string>
+    <string name="config_rename_title">重命名配置</string>
+    <plurals name="config_task_count">
+        <item quantity="other">%1$d 个任务</item>
+    </plurals>
+    <plurals name="template_task_count">
+        <item quantity="other">%1$d/%2$d 个任务</item>
+    </plurals>
+
+    <!-- 添加任务 sheet -->
+    <string name="tasks_search_placeholder">搜索任务名称或说明</string>
+    <string name="tasks_search_clear">清除搜索</string>
+    <string name="tasks_add_hint">勾选的任务将按点选顺序追加到配置末尾，同一任务可重复添加</string>
+    <string name="tasks_search_empty">没有匹配「%1$s」的任务</string>
+    <string name="tasks_confirm_add">确认添加</string>
+    <string name="tasks_confirm_add_count">确认添加（%1$d）</string>
+
+    <!-- 首页 -->
+    <string name="home_project">项目</string>
+    <string name="home_project_loading">正在加载 ProjectInterface…</string>
+    <string name="home_project_load_failed">项目加载失败</string>
+    <string name="home_name">名称</string>
+    <string name="home_tasks">任务</string>
+    <string name="home_count_items">%1$d 个</string>
+    <string name="home_templates">预设模板</string>
+    <string name="home_resource">资源</string>
+    <string name="home_none">无</string>
+    <string name="home_diagnostics_summary">诊断：%1$d 条</string>
+    <string name="home_diagnostics_summary_with_errors">诊断：%1$d 条（%2$d 条错误）</string>
+    <string name="home_current_config">当前配置</string>
+    <string name="home_no_config_hint">尚未选择配置，请前往任务页创建或选择</string>
+    <string name="home_enabled">已启用</string>
+    <string name="home_enabled_count">%1$d 个（有效 %2$d 个）</string>
+    <string name="home_runner_status">运行状态</string>
+    <string name="home_state">状态</string>
+    <string name="home_progress">进度</string>
+    <string name="home_current_task">当前任务</string>
+    <string name="home_latest_result">最近结果</string>
+    <string name="home_task_failed">失败：%1$s</string>
+    <string name="home_task_failed_with_message">失败：%1$s（%2$s）</string>
+
+    <!-- 运行阶段 / 结果 -->
+    <string name="phase_unavailable">不可用：%1$s</string>
+    <string name="phase_idle">空闲</string>
+    <string name="phase_preparing">准备中</string>
+    <string name="phase_running">运行中</string>
+    <string name="phase_stopping">停止中</string>
+    <string name="result_completed">全部完成（%1$d 个任务）</string>
+    <string name="result_completed_with_failures">完成，%1$d 个任务失败</string>
+    <string name="result_cancelled">已取消</string>
+    <string name="result_failed">失败：%1$s</string>
+
+    <!-- 设置页 -->
+    <string name="settings_appearance">外观</string>
+    <string name="settings_follow_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_language">语言</string>
+    <string name="settings_language_hint">切换语言会重新加载项目，运行期间不可切换</string>
+    <string name="settings_resource">资源</string>
+    <string name="settings_no_resources">项目未提供可选资源</string>
+    <string name="settings_current_resource">当前资源</string>
+    <string name="settings_not_selected">未选择</string>
+    <string name="settings_resource_hint">切换资源会影响任务适用性，运行期间不可切换</string>
+    <string name="settings_developer">开发者</string>
+    <string name="settings_developer_mode">开发者模式</string>
+    <string name="settings_reload_project">重新加载项目</string>
+    <string name="settings_no_diagnostics">没有诊断信息</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_build">构建</string>
+
+    <!-- 导航与对话框 -->
+    <string name="nav_home">首页</string>
+    <string name="nav_tasks">任务</string>
+    <string name="nav_settings">设置</string>
+    <string name="dialog_cannot_start">无法开始</string>
+    <string name="dialog_ok">知道了</string>
+
+    <!-- option 编辑器 -->
+    <string name="option_input_invalid">输入不合法</string>
+
+    <!-- 跨层结构化语义的展示文案（domain/VM -> ui/i18n/DomainStrings） -->
+    <string name="tasks_ungrouped">未分组</string>
+    <string name="task_unavailable_missing">项目中已不存在该任务</string>
+    <string name="task_unavailable_controller">不支持当前控制器（需要 %1$s）</string>
+    <string name="task_unavailable_resource">不支持当前资源（需要 %1$s）</string>
+    <string name="msg_locked_while_running">运行期间不能修改配置</string>
+    <string name="msg_project_not_loaded">项目尚未加载完成</string>
+    <string name="msg_no_executable_tasks">没有可用的任务</string>
+    <string name="msg_template_not_found">模板“%1$s”不存在</string>
+    <string name="msg_cannot_start">无法开始：%1$s</string>
+    <string name="msg_cannot_stop">无法停止：%1$s</string>
 </resources>

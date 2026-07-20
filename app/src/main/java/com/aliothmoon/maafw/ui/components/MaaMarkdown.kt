@@ -18,9 +18,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.viewinterop.AndroidView
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.project.M9A_ASSET_ROOT
 import com.aliothmoon.maafw.project.isRemoteUrl
 import com.aliothmoon.maafw.project.normalizeProjectPath
@@ -79,7 +81,7 @@ fun MaaMarkdown(
         cachedMarkwon(context, onSurface, onSurfaceVariant, linkColor)
     }
 
-    val resolved = body ?: "加载中…"
+    val resolved = body ?: stringResource(R.string.common_loading)
     // Markdown 解析只在文本/管线变化时执行，与无关重组解耦
     val spanned = remember(markwon, resolved) { markwon.toMarkdown(rewriteRelativeImages(resolved)) }
     val textColor = color.toArgb()

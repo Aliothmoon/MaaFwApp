@@ -30,8 +30,11 @@ class RunPlanBuilderTest {
         @JvmStatic
         @BeforeClass
         fun loadProject() {
-            // 夹具固定在 test/fixtures，不随打包资源更换而变
-            val result = ProjectLoader(FileProjectSource(File("src/test/fixtures", M9A_ASSET_ROOT))).load()
+            // 夹具固定在 test/fixtures，不随打包资源更换而变；locale 显式固定，不依赖运行机默认语言
+            val result = ProjectLoader(
+                FileProjectSource(File("src/test/fixtures", M9A_ASSET_ROOT)),
+                localeProvider = { "zh-CN" },
+            ).load()
             definition = (result as ProjectLoadResult.Ready).definition
         }
     }
@@ -63,23 +66,7 @@ class RunPlanBuilderTest {
 
     @Test
     fun `switch 活动分支的 input placeholder 替换进 pipeline override`() {
-        val result = RunPlanBuilder.build(
-            definition,
-            configWith(
-                ConfiguredTask(
-                    taskName = "常规作战",
-                    enabled = true,
-                    optionValues = mapOf(
-                        "自定义作战关卡" to OptionValue.SingleCase("Yes"),
-                        "作战关卡(自定义)" to OptionValue.Inputs(mapOf("章节号" to "3", "关卡号" to "9")),
-                        "主线关卡难度" to firstCaseOf("主线关卡难度"),
-                        "吃糖" to firstCaseOf("吃糖"),
-                        "自定义作战次数" to firstCaseOf("自定义作战次数"),
-                        "掉落统计上报" to firstCaseOf("掉落统计上报"),
-                    ),
-                ),
-            ),
-        )
+        val result = RunPlanBuilder.build(definition, configWith(customStageTask()))
         assertTrue("应编译成功: $result", result is RunPlanResult.Success)
         val plan = (result as RunPlanResult.Success).plan
         assertEquals(1, plan.tasks.size)
@@ -89,6 +76,18 @@ class RunPlanBuilderTest {
             patch.stageValue() == "3-9"
         }
         assertTrue("应包含替换后的 stage patch", stagePatch != null)
+    }
+
+    @Test
+    fun `未命中 input 的 placeholder 原样透传且不阻断编译`() {
+        // M9A 在 override 里写 "{节点名}<{输入名}" 运行期表达式，节点引用不是 input
+        val result = RunPlanBuilder.build(definition, configWith(customStageTask()))
+        assertTrue("表达式 placeholder 不应产生 Invalid: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        val expression = plan.tasks[0].pipelineOverrides.firstNotNullOfOrNull { patch ->
+            patch.expressionValue()
+        }
+        assertEquals("{CombatStageOCRInternal}<3", expression)
     }
 
     @Test
@@ -135,6 +134,20 @@ class RunPlanBuilderTest {
         assertTrue("Unset 无默认值不应有活动 case", switch.activeCases.isEmpty())
     }
 
+    /** 自定义关卡 3-9 的常规作战任务；其余 option 选定避免级联出 Unset 诊断。 */
+    private fun customStageTask() = ConfiguredTask(
+        taskName = "常规作战",
+        enabled = true,
+        optionValues = mapOf(
+            "自定义作战关卡" to OptionValue.SingleCase("Yes"),
+            "作战关卡(自定义)" to OptionValue.Inputs(mapOf("章节号" to "3", "关卡号" to "9")),
+            "主线关卡难度" to firstCaseOf("主线关卡难度"),
+            "吃糖" to firstCaseOf("吃糖"),
+            "自定义作战次数" to firstCaseOf("自定义作战次数"),
+            "掉落统计上报" to firstCaseOf("掉落统计上报"),
+        ),
+    )
+
     /** 选择无子 option 的 case，避免测试再级联出 Unset 诊断。 */
     private fun firstCaseOf(optionName: String): OptionValue.SingleCase {
         val option = definition.options.getValue(optionName)
@@ -147,5 +160,11 @@ class RunPlanBuilderTest {
     private fun JsonObject.stageValue(): String? = runCatching {
         this["SelectCombatStage"]!!.jsonObject["action"]!!.jsonObject["param"]!!
             .jsonObject["custom_action_param"]!!.jsonObject["stage"]!!.jsonPrimitive.content
+    }.getOrNull()
+
+    /** 提取 CombatStageGate.recognition.param.custom_recognition_param.expression。 */
+    private fun JsonObject.expressionValue(): String? = runCatching {
+        this["CombatStageGate"]!!.jsonObject["recognition"]!!.jsonObject["param"]!!
+            .jsonObject["custom_recognition_param"]!!.jsonObject["expression"]!!.jsonPrimitive.content
     }.getOrNull()
 }

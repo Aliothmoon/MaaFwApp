@@ -40,34 +40,42 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.session.SessionEffect
+import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.home.HomeScreen
+import com.aliothmoon.maafw.ui.i18n.localized
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 private enum class TopDestination(
-    val label: String,
+    @param:StringRes val labelRes: Int,
     val outlinedIcon: ImageVector,
     val filledIcon: ImageVector,
 ) {
-    Home("首页", Icons.Outlined.Home, Icons.Filled.Home),
-    Tasks("任务", Icons.Outlined.Checklist, Icons.Filled.Checklist),
-    Settings("设置", Icons.Outlined.Settings, Icons.Filled.Settings),
+    Home(R.string.nav_home, Icons.Outlined.Home, Icons.Filled.Home),
+    Tasks(R.string.nav_tasks, Icons.Outlined.Checklist, Icons.Filled.Checklist),
+    Settings(R.string.nav_settings, Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
 /**
@@ -80,6 +88,17 @@ fun AppRoot(
     viewModel: SessionViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // 语言变化的唯一重载触发点：App 内切换与系统设置入口都以 Activity 重建落地，
+    // 重建后这里发现 locale tag 与上次不同，以新语言重载 PI 定义（翻译在加载期物化）。
+    val localeTag = LocalConfiguration.current.locales[0]?.toLanguageTag().orEmpty()
+    var lastLocaleTag by rememberSaveable { mutableStateOf(localeTag) }
+    LaunchedEffect(localeTag) {
+        if (lastLocaleTag != localeTag) {
+            lastLocaleTag = localeTag
+            viewModel.onIntent(SessionIntent.ReloadProject)
+        }
+    }
 
     val darkTheme = when (state.themeMode) {
         ThemeMode.System -> isSystemInDarkTheme()
@@ -95,10 +114,13 @@ fun AppRoot(
         val snackbarHostState = remember { SnackbarHostState() }
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
 
+        val context = LocalContext.current
         LaunchedEffect(Unit) {
             viewModel.effects.collect { effect ->
                 when (effect) {
-                    is SessionEffect.ShowMessage -> snackbarHostState.showSnackbar(effect.message)
+                    is SessionEffect.ShowMessage ->
+                        snackbarHostState.showSnackbar(effect.message.localized(context))
+
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
                 }
             }
@@ -149,12 +171,12 @@ fun AppRoot(
                                 ) {
                                     Icon(
                                         imageVector = if (selected) destination.filledIcon else destination.outlinedIcon,
-                                        contentDescription = destination.label,
+                                        contentDescription = stringResource(destination.labelRes),
                                         tint = tint,
                                     )
                                     Spacer(Modifier.height(2.dp))
                                     Text(
-                                        text = destination.label,
+                                        text = stringResource(destination.labelRes),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = tint,
                                     )
@@ -182,10 +204,10 @@ fun AppRoot(
         diagnosticsDialog?.let { diagnostics ->
             AlertDialog(
                 onDismissRequest = { diagnosticsDialog = null },
-                title = { Text("无法开始") },
+                title = { Text(stringResource(R.string.dialog_cannot_start)) },
                 text = { MaaDiagnosticList(diagnostics) },
                 confirmButton = {
-                    TextButton(onClick = { diagnosticsDialog = null }) { Text("知道了") }
+                    TextButton(onClick = { diagnosticsDialog = null }) { Text(stringResource(R.string.dialog_ok)) }
                 },
             )
         }

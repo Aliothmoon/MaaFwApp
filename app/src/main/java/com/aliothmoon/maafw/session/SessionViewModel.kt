@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
@@ -131,7 +132,7 @@ class SessionViewModel(
                     )
                 }
                 if (created == null) {
-                    effectChannel.send(SessionEffect.ShowMessage("模板 \"${intent.templateName}\" 不存在"))
+                    effectChannel.send(SessionEffect.ShowMessage(SessionMessage.TemplateNotFound(intent.templateName)))
                 } else {
                     appendAndActivate(created)
                 }
@@ -213,6 +214,11 @@ class SessionViewModel(
             is SessionIntent.SetDeveloperMode ->
                 configurationStore.update { it.copy(developerMode = intent.enabled) }
 
+            // 语言切换连带项目重载（翻译在加载期物化），运行期间与其他配置修改同样拦截
+            is SessionIntent.SetLanguage -> guarded {
+                AppLocales.apply(intent.localeTag)
+            }
+
             SessionIntent.ReloadProject -> guarded {
                 projectRepository.reload()
             }
@@ -228,7 +234,7 @@ class SessionViewModel(
      */
     private suspend fun guarded(block: suspend () -> Unit) {
         if (locked()) {
-            effectChannel.send(SessionEffect.ShowMessage("运行期间不能修改配置"))
+            effectChannel.send(SessionEffect.ShowMessage(SessionMessage.ConfigurationLocked))
             return
         }
         block()
@@ -276,13 +282,13 @@ class SessionViewModel(
     private suspend fun start() {
         val project = projectRepository.state.value
         if (project !is ProjectState.Ready) {
-            effectChannel.send(SessionEffect.ShowMessage("项目尚未加载完成"))
+            effectChannel.send(SessionEffect.ShowMessage(SessionMessage.ProjectNotLoaded))
             return
         }
         val config = configurationStore.data.first()
         when (val result = RunPlanBuilder.build(project.definition, config)) {
             is RunPlanResult.NoExecutableTasks ->
-                effectChannel.send(SessionEffect.ShowMessage("没有可用的任务"))
+                effectChannel.send(SessionEffect.ShowMessage(SessionMessage.NoExecutableTasks))
 
             is RunPlanResult.Invalid ->
                 effectChannel.send(SessionEffect.ShowDiagnostics(result.diagnostics))
@@ -291,7 +297,7 @@ class SessionViewModel(
                 when (val command = runnerPort.start(result.plan)) {
                     is RunnerCommandResult.Accepted -> Unit
                     is RunnerCommandResult.Rejected ->
-                        effectChannel.send(SessionEffect.ShowMessage("无法开始：${command.reason}"))
+                        effectChannel.send(SessionEffect.ShowMessage(SessionMessage.CannotStart(command.reason)))
                 }
             }
         }
@@ -301,7 +307,7 @@ class SessionViewModel(
         when (val command = runnerPort.stop()) {
             is RunnerCommandResult.Accepted -> Unit
             is RunnerCommandResult.Rejected ->
-                effectChannel.send(SessionEffect.ShowMessage("无法停止：${command.reason}"))
+                effectChannel.send(SessionEffect.ShowMessage(SessionMessage.CannotStop(command.reason)))
         }
     }
 }

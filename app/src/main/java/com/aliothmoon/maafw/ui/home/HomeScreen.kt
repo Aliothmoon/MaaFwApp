@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.ExecutionResult
@@ -51,19 +53,19 @@ fun HomeScreen(
 
 @Composable
 private fun ProjectCard(state: SessionUiState) {
-    MaaCard(title = "项目") {
+    MaaCard(title = stringResource(R.string.home_project)) {
         when (val project = state.projectState) {
             is ProjectState.Loading -> Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
             ) {
                 CircularProgressIndicator(modifier = Modifier.padding(MaaDesignTokens.Spacing.xs))
-                Text("正在加载 ProjectInterface…", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.home_project_loading), style = MaterialTheme.typography.bodyMedium)
             }
 
             is ProjectState.Error -> {
                 Text(
-                    text = "项目加载失败",
+                    text = stringResource(R.string.home_project_load_failed),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -71,15 +73,28 @@ private fun ProjectCard(state: SessionUiState) {
             }
 
             is ProjectState.Ready -> {
-                MaaInfoRow("名称", project.definition.name)
-                MaaInfoRow("任务", "${project.definition.tasks.size} 个")
-                MaaInfoRow("预设模板", "${project.definition.templates.size} 个")
-                MaaInfoRow("资源", state.environment?.resourceName ?: "无")
+                MaaInfoRow(stringResource(R.string.home_name), project.definition.name)
+                MaaInfoRow(
+                    stringResource(R.string.home_tasks),
+                    stringResource(R.string.home_count_items, project.definition.tasks.size),
+                )
+                MaaInfoRow(
+                    stringResource(R.string.home_templates),
+                    stringResource(R.string.home_count_items, project.definition.templates.size),
+                )
+                MaaInfoRow(
+                    stringResource(R.string.home_resource),
+                    state.environment?.resourceName ?: stringResource(R.string.home_none),
+                )
                 val diagnostics = state.visibleDiagnostics
                 if (diagnostics.isNotEmpty()) {
                     val errors = diagnostics.count { it.severity == DiagnosticSeverity.Error }
                     Text(
-                        text = "诊断：${diagnostics.size} 条${if (errors > 0) "（$errors 条错误）" else ""}",
+                        text = if (errors > 0) {
+                            stringResource(R.string.home_diagnostics_summary_with_errors, diagnostics.size, errors)
+                        } else {
+                            stringResource(R.string.home_diagnostics_summary, diagnostics.size)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = if (errors > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -91,28 +106,34 @@ private fun ProjectCard(state: SessionUiState) {
 
 @Composable
 private fun ConfigurationCard(state: SessionUiState) {
-    MaaCard(title = "当前配置") {
+    MaaCard(title = stringResource(R.string.home_current_config)) {
         val active = state.activeConfiguration
         if (active == null) {
             Text(
-                text = "尚未选择配置，请前往任务页创建或选择",
+                text = stringResource(R.string.home_no_config_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            MaaInfoRow("名称", active.name)
-            MaaInfoRow("任务", "${active.tasks.size} 个")
-            MaaInfoRow("已启用", "${active.enabledTaskCount} 个（有效 ${active.effectiveTaskCount} 个）")
+            MaaInfoRow(stringResource(R.string.home_name), active.name)
+            MaaInfoRow(
+                stringResource(R.string.home_tasks),
+                stringResource(R.string.home_count_items, active.tasks.size),
+            )
+            MaaInfoRow(
+                stringResource(R.string.home_enabled),
+                stringResource(R.string.home_enabled_count, active.enabledTaskCount, active.effectiveTaskCount),
+            )
         }
     }
 }
 
 @Composable
 private fun RunnerCard(state: SessionUiState) {
-    MaaCard(title = "运行状态") {
+    MaaCard(title = stringResource(R.string.home_runner_status)) {
         val runner = state.runner
         val execution = runner.activeExecution
-        MaaInfoRow("状态", phaseText(runner.phase))
+        MaaInfoRow(stringResource(R.string.home_state), phaseText(runner.phase))
         if (execution != null) {
             if (execution.totalTaskCount > 0) {
                 val animatedProgress by animateFloatAsState(
@@ -125,14 +146,19 @@ private fun RunnerCard(state: SessionUiState) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            MaaInfoRow("进度", "${execution.completedTaskCount} / ${execution.totalTaskCount}")
-            execution.currentTaskName?.let { MaaInfoRow("当前任务", it) }
+            MaaInfoRow(
+                stringResource(R.string.home_progress),
+                "${execution.completedTaskCount} / ${execution.totalTaskCount}",
+            )
+            execution.currentTaskName?.let { MaaInfoRow(stringResource(R.string.home_current_task), it) }
         }
         runner.latestResult?.let { result ->
-            MaaInfoRow("最近结果", resultText(result))
-            result.taskResults.filterNot { it.success }.forEach {
+            MaaInfoRow(stringResource(R.string.home_latest_result), resultText(result))
+            result.taskResults.filterNot { it.success }.forEach { failure ->
                 Text(
-                    text = "失败：${it.taskName}${it.message?.let { m -> "（$m）" } ?: ""}",
+                    text = failure.message
+                        ?.let { stringResource(R.string.home_task_failed_with_message, failure.taskName, it) }
+                        ?: stringResource(R.string.home_task_failed, failure.taskName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -141,19 +167,21 @@ private fun RunnerCard(state: SessionUiState) {
     }
 }
 
+@Composable
 private fun phaseText(phase: RunnerPhase): String = when (phase) {
-    is RunnerPhase.Unavailable -> "不可用：${phase.reason}"
-    RunnerPhase.Idle -> "空闲"
-    RunnerPhase.Preparing -> "准备中"
-    RunnerPhase.Running -> "运行中"
-    RunnerPhase.Stopping -> "停止中"
+    is RunnerPhase.Unavailable -> stringResource(R.string.phase_unavailable, phase.reason)
+    RunnerPhase.Idle -> stringResource(R.string.phase_idle)
+    RunnerPhase.Preparing -> stringResource(R.string.phase_preparing)
+    RunnerPhase.Running -> stringResource(R.string.phase_running)
+    RunnerPhase.Stopping -> stringResource(R.string.phase_stopping)
 }
 
+@Composable
 private fun resultText(result: ExecutionResult): String = when (result) {
-    is ExecutionResult.Completed -> "全部完成（${result.taskResults.size} 个任务）"
+    is ExecutionResult.Completed -> stringResource(R.string.result_completed, result.taskResults.size)
     is ExecutionResult.CompletedWithFailures ->
-        "完成，${result.taskResults.count { !it.success }} 个任务失败"
+        stringResource(R.string.result_completed_with_failures, result.taskResults.count { !it.success })
 
-    is ExecutionResult.Cancelled -> "已取消"
-    is ExecutionResult.Failed -> "失败：${result.reason}"
+    is ExecutionResult.Cancelled -> stringResource(R.string.result_cancelled)
+    is ExecutionResult.Failed -> stringResource(R.string.result_failed, result.reason)
 }

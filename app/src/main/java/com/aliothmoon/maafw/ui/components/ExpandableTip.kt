@@ -14,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.aliothmoon.maafw.R
 
 /**
  * 就地展开的提示图标 + 内容区（移植自 MaaMeow 的 ExpandableTip 模式）：
@@ -36,7 +38,7 @@ fun ExpandableTipIcon(
     ) {
         Icon(
             imageVector = Icons.Filled.Info,
-            contentDescription = "任务说明",
+            contentDescription = stringResource(R.string.tasks_description_title),
             tint = if (expanded) {
                 MaterialTheme.colorScheme.primary
             } else {

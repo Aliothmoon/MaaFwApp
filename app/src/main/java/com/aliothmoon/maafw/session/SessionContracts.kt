@@ -90,6 +90,12 @@ sealed interface SessionIntent {
 
     data class SelectResource(val resourceName: String) : SessionIntent
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent
+
+    /**
+     * 切换 App 语言（null = 跟随系统）。事实来源在平台侧 per-app locale（AppLocales），
+     * 落地路径：Activity 重建 -> AppRoot 检测 locale 变化 -> ReloadProject 以新语言重载 PI。
+     */
+    data class SetLanguage(val localeTag: String?) : SessionIntent
     data class SetDeveloperMode(val enabled: Boolean) : SessionIntent
     data object ReloadProject : SessionIntent
 
@@ -99,6 +105,19 @@ sealed interface SessionIntent {
 
 /** 一次性消息，不长期存进 UiState，不在重组时重复触发。 */
 sealed interface SessionEffect {
-    data class ShowMessage(val message: String) : SessionEffect
+    data class ShowMessage(val message: SessionMessage) : SessionEffect
     data class ShowDiagnostics(val diagnostics: List<Diagnostic>) : SessionEffect
+}
+
+/**
+ * VM 一次性提示的结构化语义：VM 无 Context，文案由 UI 层映射 string 资源。
+ * reason 载荷来自 Runner 契约，是面向排查的技术性文本，原样拼进提示尾部。
+ */
+sealed interface SessionMessage {
+    data object ConfigurationLocked : SessionMessage
+    data object ProjectNotLoaded : SessionMessage
+    data object NoExecutableTasks : SessionMessage
+    data class TemplateNotFound(val templateName: String) : SessionMessage
+    data class CannotStart(val reason: String) : SessionMessage
+    data class CannotStop(val reason: String) : SessionMessage
 }

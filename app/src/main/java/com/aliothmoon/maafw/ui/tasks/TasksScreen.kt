@@ -77,6 +77,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -86,6 +88,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
@@ -107,6 +110,7 @@ import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.i18n.localized
 
 /**
  * 任务页：配置选择 + 任务列表 + 添加任务/option 编辑（bottom sheet）。
@@ -141,8 +145,10 @@ fun TasksScreen(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(40.dp),
                     )
-                    Text("项目加载失败，请查看首页诊断", color = MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = { onIntent(SessionIntent.ReloadProject) }) { Text("重新加载") }
+                    Text(stringResource(R.string.tasks_project_load_failed), color = MaterialTheme.colorScheme.error)
+                    OutlinedButton(onClick = { onIntent(SessionIntent.ReloadProject) }) {
+                        Text(stringResource(R.string.tasks_reload))
+                    }
                 }
             }
 
@@ -189,8 +195,8 @@ private fun TasksContent(
             if (active == null) {
                 EmptyState(
                     icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
-                    title = "还没有配置",
-                    hint = "点击上方选择器新建空配置，或从模板快速创建",
+                    title = stringResource(R.string.tasks_empty_config_title),
+                    hint = stringResource(R.string.tasks_empty_config_hint),
                     modifier = Modifier.weight(1f),
                 )
             } else {
@@ -217,8 +223,8 @@ private fun TasksContent(
                 if (active.tasks.isEmpty()) {
                     EmptyState(
                         icon = Icons.Outlined.AddTask,
-                        title = "还没有任务",
-                        hint = "从任务目录选择要执行的任务",
+                        title = stringResource(R.string.tasks_empty_task_title),
+                        hint = stringResource(R.string.tasks_empty_task_hint),
                         modifier = Modifier.weight(1f),
                         action = {
                             FilledTonalButton(
@@ -231,7 +237,7 @@ private fun TasksContent(
                                     modifier = Modifier.size(18.dp),
                                 )
                                 Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
-                                Text("添加任务")
+                                Text(stringResource(R.string.tasks_add_task))
                             }
                         },
                     )
@@ -241,13 +247,17 @@ private fun TasksContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "执行顺序",
+                            text = stringResource(R.string.tasks_run_order),
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
                         // 计数弱化为标题后缀，整行只保留标题块与添加钮两个视觉元素
                         Text(
-                            text = "· ${active.effectiveTaskCount}/${active.tasks.size} 有效",
+                            text = stringResource(
+                                R.string.tasks_effective_count,
+                                active.effectiveTaskCount,
+                                active.tasks.size,
+                            ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
@@ -276,7 +286,7 @@ private fun TasksContent(
                             )
                             Spacer(Modifier.width(MaaDesignTokens.Spacing.xxs))
                             Text(
-                                text = "添加任务",
+                                text = stringResource(R.string.tasks_add_task),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = addTint,
                             )
@@ -396,7 +406,11 @@ private fun RunnerToggleButton(
             enabled = phase != RunnerPhase.Stopping,
             modifier = modifier,
         ) {
-            Text(if (phase == RunnerPhase.Stopping) "停止中…" else "停止")
+            Text(
+                stringResource(
+                    if (phase == RunnerPhase.Stopping) R.string.runner_stopping else R.string.runner_stop,
+                ),
+            )
         }
     } else {
         Button(
@@ -404,7 +418,7 @@ private fun RunnerToggleButton(
             enabled = state.canStart,
             modifier = modifier,
         ) {
-            Text("开始")
+            Text(stringResource(R.string.runner_start))
         }
     }
 }
@@ -433,7 +447,7 @@ private fun LivePreviewPlaceholder() {
                     modifier = Modifier.size(32.dp),
                 )
                 Text(
-                    text = "实时预览",
+                    text = stringResource(R.string.tasks_live_preview),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                 )
@@ -479,16 +493,16 @@ private fun ConfigurationSelectorCard(
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = active?.name ?: "选择配置",
+                    text = active?.name ?: stringResource(R.string.config_select),
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = if (active != null) {
-                        "当前配置 · ${active.tasks.size} 个任务 · ${active.effectiveTaskCount} 个有效"
+                        stringResource(R.string.config_current_summary, active.tasks.size, active.effectiveTaskCount)
                     } else {
-                        "点击选择或新建配置"
+                        stringResource(R.string.config_select_hint)
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -649,20 +663,20 @@ private fun ConfigSheetHomePage(
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
         ) {
             SheetTab(
-                text = "选择配置",
+                text = stringResource(R.string.config_select),
                 selected = tab == 0 || templates.isEmpty(),
                 onClick = { onTabChange(0) },
             )
             if (templates.isNotEmpty()) {
                 SheetTab(
-                    text = "从模板新建",
+                    text = stringResource(R.string.config_create_from_template),
                     selected = tab == 1,
                     onClick = { onTabChange(1) },
                 )
             }
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Outlined.Close, contentDescription = "关闭")
+                Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.common_close))
             }
         }
         val showTemplates = tab == 1 && templates.isNotEmpty()
@@ -692,7 +706,7 @@ private fun ConfigSheetHomePage(
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
                     Text(
-                        text = "预览模板内容，按需挑选任务后创建",
+                        text = stringResource(R.string.config_template_list_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -752,11 +766,11 @@ private fun TemplatePreviewPage(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
-        MaaSheetHeader(title = "从模板新建", onClose = onClose, onBack = onBack)
+        MaaSheetHeader(title = stringResource(R.string.config_create_from_template), onClose = onClose, onBack = onBack)
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("配置名称") },
+            label = { Text(stringResource(R.string.config_name_label)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -772,9 +786,9 @@ private fun TemplatePreviewPage(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("带入任务", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.config_included_tasks), style = MaterialTheme.typography.titleSmall)
             Text(
-                text = "${included.size}/${templateTasks.size} 个",
+                text = stringResource(R.string.config_included_count, included.size, templateTasks.size),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -798,7 +812,7 @@ private fun TemplatePreviewPage(
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
         ) {
-            Text("创建并使用（${included.size} 个任务）")
+            Text(stringResource(R.string.config_create_use_count, included.size))
         }
     }
 }
@@ -825,7 +839,7 @@ private fun TemplateTaskRow(
             overflow = TextOverflow.Ellipsis,
         )
         if (!task.enabled) {
-            MaaToneBadge(text = "默认停用", tone = MaaTheme.palette.neutral)
+            MaaToneBadge(text = stringResource(R.string.config_task_disabled_by_default), tone = MaaTheme.palette.neutral)
         }
     }
 }
@@ -839,16 +853,16 @@ private fun CreateEmptyPage(
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
-        MaaSheetHeader(title = "新建空配置", onClose = onClose, onBack = onBack)
+        MaaSheetHeader(title = stringResource(R.string.config_create_empty), onClose = onClose, onBack = onBack)
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("配置名称") },
+            label = { Text(stringResource(R.string.config_name_label)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            text = "创建后可通过「添加任务」从任务目录挑选任务",
+            text = stringResource(R.string.config_create_empty_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -860,7 +874,7 @@ private fun CreateEmptyPage(
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
         ) {
-            Text("创建并使用")
+            Text(stringResource(R.string.config_create_use))
         }
     }
 }
@@ -883,11 +897,11 @@ private fun RenameConfigurationPage(
     val commit = { if (name.text.isNotBlank()) onRename(name.text.trim()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
-        MaaSheetHeader(title = "重命名配置", onClose = onClose, onBack = onBack)
+        MaaSheetHeader(title = stringResource(R.string.config_rename_title), onClose = onClose, onBack = onBack)
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("配置名称") },
+            label = { Text(stringResource(R.string.config_name_label)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { commit() }),
@@ -903,7 +917,7 @@ private fun RenameConfigurationPage(
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
         ) {
-            Text("保存")
+            Text(stringResource(R.string.common_save))
         }
     }
 }
@@ -942,7 +956,7 @@ private fun CreateEmptyCard(onClick: () -> Unit) {
             )
             Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
             Text(
-                text = "新建空配置",
+                text = stringResource(R.string.config_create_empty),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -1027,7 +1041,11 @@ private fun ConfigRowCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${configuration.tasks.size} 个任务",
+                    text = pluralStringResource(
+                        R.plurals.config_task_count,
+                        configuration.tasks.size,
+                        configuration.tasks.size,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = contentColor.copy(alpha = 0.7f),
                 )
@@ -1035,7 +1053,7 @@ private fun ConfigRowCard(
             IconButton(onClick = onRename) {
                 Icon(
                     imageVector = Icons.Outlined.Edit,
-                    contentDescription = "重命名",
+                    contentDescription = stringResource(R.string.common_rename),
                     tint = contentColor.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp),
                 )
@@ -1043,7 +1061,7 @@ private fun ConfigRowCard(
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = "删除",
+                    contentDescription = stringResource(R.string.common_delete),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp),
                 )
@@ -1072,7 +1090,13 @@ private fun TemplateCard(template: ConfigurationTemplate, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${template.tasks.count { it.enabled }}/${template.tasks.size} 个任务",
+                // 复数档位由总数决定
+                text = pluralStringResource(
+                    R.plurals.template_task_count,
+                    template.tasks.size,
+                    template.tasks.count { it.enabled },
+                    template.tasks.size,
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1141,7 +1165,7 @@ private fun TaskRow(
                 )
                 task.unavailableReason?.let {
                     MaaToneBadge(
-                        text = it,
+                        text = it.localized(),
                         tone = MaaTone(
                             MaterialTheme.colorScheme.error,
                             MaterialTheme.colorScheme.errorContainer,
@@ -1164,7 +1188,7 @@ private fun TaskRow(
             IconButton(onClick = onRemove, enabled = !locked) {
                 Icon(
                     imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = "移除",
+                    contentDescription = stringResource(R.string.tasks_remove),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
                 )
@@ -1172,7 +1196,7 @@ private fun TaskRow(
             IconButton(onClick = {}, modifier = dragHandleModifier, enabled = !locked) {
                 Icon(
                     imageVector = Icons.Outlined.DragIndicator,
-                    contentDescription = "拖动排序",
+                    contentDescription = stringResource(R.string.tasks_drag_reorder),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
                 )

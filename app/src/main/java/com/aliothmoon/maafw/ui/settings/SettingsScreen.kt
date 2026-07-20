@@ -27,8 +27,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ThemeMode
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -51,6 +54,7 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
     ) {
         AppearanceCard(state, onIntent)
+        LanguageCard(state, onIntent)
         ResourceCard(state, onIntent)
         DeveloperCard(state, onIntent)
         AboutCard()
@@ -59,11 +63,11 @@ fun SettingsScreen(
 
 @Composable
 private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = "外观") {
+    MaaCard(title = stringResource(R.string.settings_appearance)) {
         val modes = listOf(
-            ThemeMode.System to "跟随系统",
-            ThemeMode.Light to "浅色",
-            ThemeMode.Dark to "深色",
+            ThemeMode.System to stringResource(R.string.settings_follow_system),
+            ThemeMode.Light to stringResource(R.string.settings_theme_light),
+            ThemeMode.Dark to stringResource(R.string.settings_theme_dark),
         )
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             modes.forEachIndexed { index, (mode, label) ->
@@ -80,12 +84,59 @@ private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> U
 }
 
 @Composable
+private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_language)) {
+        // 事实来源在平台侧 per-app locale（AppLocales），不进 UserConfiguration；
+        // 切换后 Activity 重建，本处在新组合中重新读取，无需观察流。
+        // 语言名按惯例保持本族语原文，不随界面语言翻译
+        val options = listOf<Pair<String?, String>>(
+            null to stringResource(R.string.settings_follow_system),
+            "zh-CN" to "简体中文",
+            "en" to "English",
+        )
+        // 选中态用本地 state 立即回显：切到效果相同的档位（如 跟随系统(中文) ↔ 简体中文）
+        // 不触发 Activity 重建，重新读 AppLocales 的时机不会到来
+        var selectedTag by remember {
+            mutableStateOf(
+                when (val tag = AppLocales.currentTag()) {
+                    null -> null
+                    else -> if (tag.startsWith("zh")) "zh-CN" else "en"
+                },
+            )
+        }
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { index, (tag, label) ->
+                SegmentedButton(
+                    selected = selectedTag == tag,
+                    // 重复点选当前档位不发 Intent：避免无意义的 Activity 重建闪屏
+                    onClick = {
+                        if (tag != selectedTag) {
+                            selectedTag = tag
+                            onIntent(SessionIntent.SetLanguage(tag))
+                        }
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                    enabled = !state.configurationLocked,
+                ) {
+                    Text(label)
+                }
+            }
+        }
+        Text(
+            text = stringResource(R.string.settings_language_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = "资源") {
+    MaaCard(title = stringResource(R.string.settings_resource)) {
         val environment = state.environment
         if (environment == null || environment.resourceCandidates.isEmpty()) {
             Text(
-                text = "项目未提供可选资源",
+                text = stringResource(R.string.settings_no_resources),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -96,13 +147,13 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("当前资源", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_current_resource), style = MaterialTheme.typography.bodyLarge)
                 Box {
                     OutlinedButton(
                         onClick = { expanded = true },
                         enabled = !state.configurationLocked,
                     ) {
-                        Text(environment.resourceName ?: "未选择")
+                        Text(environment.resourceName ?: stringResource(R.string.settings_not_selected))
                         Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
                     }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -119,7 +170,7 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                 }
             }
             Text(
-                text = "切换资源会影响任务适用性，运行期间不可切换",
+                text = stringResource(R.string.settings_resource_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -129,13 +180,13 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
 
 @Composable
 private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = "开发者") {
+    MaaCard(title = stringResource(R.string.settings_developer)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("开发者模式", style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.settings_developer_mode), style = MaterialTheme.typography.bodyLarge)
             MaaSwitch(
                 checked = state.developerMode,
                 onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
@@ -146,13 +197,13 @@ private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Un
             enabled = !state.configurationLocked,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("重新加载项目")
+            Text(stringResource(R.string.settings_reload_project))
         }
         if (state.developerMode) {
             val diagnostics = state.visibleDiagnostics
             if (diagnostics.isEmpty()) {
                 Text(
-                    text = "没有诊断信息",
+                    text = stringResource(R.string.settings_no_diagnostics),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -165,8 +216,8 @@ private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Un
 
 @Composable
 private fun AboutCard() {
-    MaaCard(title = "关于") {
-        MaaInfoRow("版本", BuildConfig.VERSION_NAME)
-        MaaInfoRow("构建", BuildConfig.VERSION_CODE.toString())
+    MaaCard(title = stringResource(R.string.settings_about)) {
+        MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
+        MaaInfoRow(stringResource(R.string.settings_build), BuildConfig.VERSION_CODE.toString())
     }
 }

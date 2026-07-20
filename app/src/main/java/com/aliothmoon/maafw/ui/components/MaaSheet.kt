@@ -19,7 +19,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
@@ -63,7 +65,7 @@ fun MaaSheetHeader(
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回")
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.common_back))
             }
         }
         Text(
@@ -73,7 +75,7 @@ fun MaaSheetHeader(
         )
         // 40dp 紧凑触控区：默认 48dp IconButton 会把标题行撑出多余空腔
         IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Close, contentDescription = "关闭")
+            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.common_close))
         }
     }
 }

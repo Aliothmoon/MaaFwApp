@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.config.DataStoreUserConfigurationStore
 import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.UserConfiguration
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.project.AssetProjectSource
 import com.aliothmoon.maafw.project.DefaultProjectRepository
 import com.aliothmoon.maafw.project.M9A_ASSET_ROOT
@@ -48,7 +49,7 @@ val appModule = module {
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
 
     single<ProjectSource> { AssetProjectSource(androidContext(), root = M9A_ASSET_ROOT) }
-    single { ProjectLoader(get()) }
+    single { ProjectLoader(get(), localeProvider = AppLocales::currentTag) }
     single<ProjectRepository> { DefaultProjectRepository(get(), Dispatchers.IO) }
 
     single<DataStore<UserConfiguration>> {

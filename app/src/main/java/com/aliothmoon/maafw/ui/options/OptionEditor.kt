@@ -17,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.OptionCaseState
 import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionKind
@@ -300,7 +302,7 @@ private fun InputFields(
                 label = { Text(field.name) },
                 supportingText = {
                     when {
-                        !valid -> Text(field.patternMessage ?: "输入不合法")
+                        !valid -> Text(field.patternMessage ?: stringResource(R.string.option_input_invalid))
                         field.description != null -> Text(field.description)
                     }
                 },

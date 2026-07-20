@@ -36,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
@@ -54,6 +56,8 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.i18n.displayLabel
+import com.aliothmoon.maafw.ui.i18n.localized
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 
 /**
@@ -101,16 +105,16 @@ fun AddTasksSheet(
             modifier = sheetModifier,
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            MaaSheetHeader(title = "添加任务", onClose = onDismiss)
+            MaaSheetHeader(title = stringResource(R.string.tasks_add_task), onClose = onDismiss)
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("搜索任务名称或说明") },
+                placeholder = { Text(stringResource(R.string.tasks_search_placeholder)) },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Outlined.Close, contentDescription = "清除搜索")
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.tasks_search_clear))
                         }
                     }
                 },
@@ -118,7 +122,7 @@ fun AddTasksSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = "勾选的任务将按点选顺序追加到配置末尾，同一任务可重复添加",
+                text = stringResource(R.string.tasks_add_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -133,7 +137,7 @@ fun AddTasksSheet(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "没有匹配「${query.trim()}」的任务",
+                        text = stringResource(R.string.tasks_search_empty, query.trim()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -166,7 +170,7 @@ fun AddTasksSheet(
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
                         items(catalog, key = { it.groupName }) { group ->
                             GroupTabChip(
-                                label = group.label,
+                                label = group.displayLabel(),
                                 tone = toneByGroup[group.groupName] ?: MaaTheme.palette.neutral,
                                 selected = group.groupName == selectedGroupName,
                                 onClick = { selectedGroupName = group.groupName },
@@ -196,7 +200,13 @@ fun AddTasksSheet(
                     .fillMaxWidth()
                     .padding(bottom = MaaDesignTokens.Spacing.lg),
             ) {
-                Text(if (selected.isEmpty()) "确认添加" else "确认添加（${selected.size}）")
+                Text(
+                    if (selected.isEmpty()) {
+                        stringResource(R.string.tasks_confirm_add)
+                    } else {
+                        stringResource(R.string.tasks_confirm_add_count, selected.size)
+                    },
+                )
             }
         }
     }
@@ -252,7 +262,7 @@ private fun GroupHeader(group: TaskCatalogGroup, tone: MaaTone) {
                 .background(tone.content),
         )
         Text(
-            text = group.label,
+            text = group.displayLabel(),
             style = MaterialTheme.typography.titleSmall,
             color = tone.content,
             modifier = Modifier.weight(1f),
@@ -294,7 +304,7 @@ private fun CatalogRow(
             }
             when {
                 item.unavailableReason != null -> Text(
-                    text = item.unavailableReason,
+                    text = item.unavailableReason.localized(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -339,7 +349,7 @@ fun TaskOptionSheet(
                     carded = true,
                 )
                 task.description?.takeIf { it.isNotBlank() }?.let { description ->
-                    MaaCard(title = "任务说明") {
+                    MaaCard(title = stringResource(R.string.tasks_description_title)) {
                         MaaDescriptionPanel {
                             MaaMarkdown(
                                 text = description,

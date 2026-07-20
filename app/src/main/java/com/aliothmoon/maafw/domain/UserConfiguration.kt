@@ -16,7 +16,6 @@ enum class ThemeMode { System, Light, Dark }
 @Serializable
 data class UserConfiguration(
     val initialized: Boolean = false,
-    val languageOverride: String? = null,
     val themeMode: ThemeMode = ThemeMode.System,
     val developerMode: Boolean = false,
     val activeResourceName: String? = null,
