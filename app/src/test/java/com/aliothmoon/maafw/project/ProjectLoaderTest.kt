@@ -487,6 +487,26 @@ class ProjectLoaderProtocolTest {
     }
 
     @Test
+    fun `模板任务 label 加载期由任务定义物化且缺失定义回落 taskName`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "name": "t",
+                            "task": [{"name":"T1","entry":"E1","label":"任务一"}],
+                            "preset": [{"name":"P1","task":[{"name":"T1"},{"name":"Nope"}]}]
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        ).load() as ProjectLoadResult.Ready
+        val template = ready.definition.templates.single()
+        assertEquals(listOf("任务一", "Nope"), template.tasks.map { it.label })
+    }
+
+    @Test
     fun `import 分片按声明顺序加载且缺失分片降级 warning`() {
         val ready = ProjectLoader(
             MapProjectSource(

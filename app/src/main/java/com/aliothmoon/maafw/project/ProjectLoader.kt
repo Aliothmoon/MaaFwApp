@@ -97,6 +97,14 @@ class ProjectLoader(
 
         val (normalizedTasks, groups) = resolveGroups(state.declaredGroups, state.tasks, diagnostics)
 
+        // 模板任务展示名在此物化：preset 只声明 taskName，label 在任务定义上
+        val taskLabels = normalizedTasks.associate { it.name to it.label }
+        val templates = state.templates.map { template ->
+            template.copy(
+                tasks = template.tasks.map { it.copy(label = taskLabels[it.taskName] ?: it.taskName) },
+            )
+        }
+
         val definition = ProjectDefinition(
             name = projectInterface.name ?: source.projectName,
             version = projectInterface.version,
@@ -108,7 +116,7 @@ class ProjectLoader(
             tasks = normalizedTasks,
             groups = groups,
             options = state.options,
-            templates = state.templates,
+            templates = templates,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
     }

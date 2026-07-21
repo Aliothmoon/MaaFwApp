@@ -148,4 +148,6 @@ data class TemplateTask(
     val taskName: String,
     val enabled: Boolean,
     val optionValues: Map<String, OptionValue>,
+    /** 展示名（加载期由任务定义回填物化）；任务定义缺失时回落 taskName。 */
+    val label: String = taskName,
 )
