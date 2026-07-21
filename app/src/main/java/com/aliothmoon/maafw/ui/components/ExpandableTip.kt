@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -28,11 +29,11 @@ fun ExpandableTipIcon(
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 视觉 16dp，但触控区放大到 36dp：过小的命中区会让点按时灵时不灵
+    // 视觉 16dp，触控区 ≥48dp（a11y 最小目标）
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .size(36.dp)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clip(CircleShape)
             .maaClickable(onClick = { onExpandedChange(!expanded) }),
     ) {

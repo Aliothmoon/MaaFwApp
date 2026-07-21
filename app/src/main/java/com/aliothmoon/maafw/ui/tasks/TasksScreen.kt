@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,7 +58,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -65,7 +65,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -197,157 +196,161 @@ private fun TasksContent(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            LivePreviewPlaceholder()
-            if (serverCandidates.isNotEmpty()) {
-                ServerSelectorRow(
-                    label = environment?.resource?.label ?: stringResource(R.string.settings_not_selected),
+            // 上半区自带 md 间距；与底部启动栏分离，避免 list 底 padding + spacedBy 叠成过大空隙
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+            ) {
+                LivePreviewPlaceholder()
+                if (serverCandidates.isNotEmpty()) {
+                    ServerSelectorRow(
+                        label = environment?.resource?.label ?: stringResource(R.string.settings_not_selected),
+                        locked = locked,
+                        onClick = { showServerSheet = true },
+                    )
+                }
+                ConfigurationSelectorCard(
+                    active = active,
                     locked = locked,
-                    onClick = { showServerSheet = true },
+                    onClick = { showConfigSheet = true },
                 )
-            }
-            ConfigurationSelectorCard(
-                active = active,
-                locked = locked,
-                onClick = { showConfigSheet = true },
-            )
 
-            if (active == null) {
-                EmptyState(
-                    icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
-                    title = stringResource(R.string.tasks_empty_config_title),
-                    hint = stringResource(R.string.tasks_empty_config_hint),
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                // 拖拽期间用本地顺序渲染，松手后发 MoveTask，等 DataStore 回流后回到权威顺序
-                val canonicalIds = remember(active.tasks) { active.tasks.map { it.instanceId } }
-                val canonicalState = rememberUpdatedState(canonicalIds)
-                var pendingOrder by remember(active.id) { mutableStateOf<List<String>?>(null) }
-
-                fun currentOrder(): List<String> {
-                    val canonical = canonicalState.value
-                    val pending = pendingOrder
-                    // 集合已变化（增删任务）时废弃本地顺序
-                    return if (pending != null && pending.toSet() == canonical.toSet()) pending else canonical
-                }
-
-                val listState = rememberLazyListState()
-                val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
-                    pendingOrder = currentOrder().toMutableList().apply {
-                        add(to.index, removeAt(from.index))
-                    }
-                }
-                val tasksById = remember(active.tasks) { active.tasks.associateBy { it.instanceId } }
-
-                if (active.tasks.isEmpty()) {
+                if (active == null) {
                     EmptyState(
-                        icon = Icons.Outlined.AddTask,
-                        title = stringResource(R.string.tasks_empty_task_title),
-                        hint = stringResource(R.string.tasks_empty_task_hint),
+                        icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
+                        title = stringResource(R.string.tasks_empty_config_title),
+                        hint = stringResource(R.string.tasks_empty_config_hint),
                         modifier = Modifier.weight(1f),
-                        action = {
-                            FilledTonalButton(
-                                onClick = { showAddTasks = true },
-                                enabled = !locked,
+                    )
+                } else {
+                    // 拖拽期间用本地顺序渲染，松手后发 MoveTask，等 DataStore 回流后回到权威顺序
+                    val canonicalIds = remember(active.tasks) { active.tasks.map { it.instanceId } }
+                    val canonicalState = rememberUpdatedState(canonicalIds)
+                    var pendingOrder by remember(active.id) { mutableStateOf<List<String>?>(null) }
+
+                    fun currentOrder(): List<String> {
+                        val canonical = canonicalState.value
+                        val pending = pendingOrder
+                        // 集合已变化（增删任务）时废弃本地顺序
+                        return if (pending != null && pending.toSet() == canonical.toSet()) pending else canonical
+                    }
+
+                    val listState = rememberLazyListState()
+                    val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
+                        pendingOrder = currentOrder().toMutableList().apply {
+                            add(to.index, removeAt(from.index))
+                        }
+                    }
+                    val tasksById = remember(active.tasks) { active.tasks.associateBy { it.instanceId } }
+
+                    if (active.tasks.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Outlined.AddTask,
+                            title = stringResource(R.string.tasks_empty_task_title),
+                            hint = stringResource(R.string.tasks_empty_task_hint),
+                            modifier = Modifier.weight(1f),
+                            action = {
+                                FilledTonalButton(
+                                    onClick = { showAddTasks = true },
+                                    enabled = !locked,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
+                                    Text(stringResource(R.string.tasks_add_task))
+                                }
+                            },
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.tasks_run_order),
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                            // 轻量文字添加钮：主色文字无底色，不与白底任务卡抢层级
+                            val addTint = if (locked) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(MaaDesignTokens.CornerRadius.button))
+                                    .maaClickable(enabled = !locked, onClick = { showAddTasks = true })
+                                    .padding(
+                                        horizontal = MaaDesignTokens.Spacing.xs,
+                                        vertical = MaaDesignTokens.Spacing.xxs,
+                                    ),
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.Add,
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
+                                    tint = addTint,
+                                    modifier = Modifier.size(16.dp),
                                 )
-                                Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
-                                Text(stringResource(R.string.tasks_add_task))
+                                Spacer(Modifier.width(MaaDesignTokens.Spacing.xxs))
+                                Text(
+                                    text = stringResource(R.string.tasks_add_task),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = addTint,
+                                )
                             }
-                        },
-                    )
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.tasks_run_order),
-                            style = MaterialTheme.typography.titleSmall,
+                        }
+                        LazyColumn(
+                            state = listState,
                             modifier = Modifier.weight(1f),
-                        )
-                        // 轻量文字添加钮：主色文字无底色，不与白底任务卡抢层级
-                        val addTint = if (locked) {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(MaaDesignTokens.CornerRadius.button))
-                                .maaClickable(enabled = !locked, onClick = { showAddTasks = true })
-                                .padding(
-                                    horizontal = MaaDesignTokens.Spacing.xs,
-                                    vertical = MaaDesignTokens.Spacing.xxs,
-                                ),
+                            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Add,
-                                contentDescription = null,
-                                tint = addTint,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(Modifier.width(MaaDesignTokens.Spacing.xxs))
-                            Text(
-                                text = stringResource(R.string.tasks_add_task),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = addTint,
-                            )
-                        }
-                    }
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-                        contentPadding = PaddingValues(bottom = MaaDesignTokens.Spacing.lg),
-                    ) {
-                        items(currentOrder(), key = { it }) { instanceId ->
-                            val task = tasksById[instanceId] ?: return@items
-                            ReorderableItem(reorderableState, key = instanceId) { isDragging ->
-                                TaskRow(
-                                    task = task,
-                                    locked = locked,
-                                    isDragging = isDragging,
-                                    dragHandleModifier = Modifier.draggableHandle(
-                                        enabled = !locked,
-                                        onDragStopped = {
-                                            val target = currentOrder().indexOf(instanceId)
-                                            val origin = canonicalState.value.indexOf(instanceId)
-                                            if (target >= 0 && origin >= 0 && target != origin) {
-                                                onIntent(SessionIntent.MoveTask(active.id, instanceId, target))
-                                            }
+                            items(currentOrder(), key = { it }) { instanceId ->
+                                val task = tasksById[instanceId] ?: return@items
+                                ReorderableItem(reorderableState, key = instanceId) { isDragging ->
+                                    TaskRow(
+                                        task = task,
+                                        locked = locked,
+                                        isDragging = isDragging,
+                                        dragHandleModifier = Modifier.draggableHandle(
+                                            enabled = !locked,
+                                            onDragStopped = {
+                                                val target = currentOrder().indexOf(instanceId)
+                                                val origin = canonicalState.value.indexOf(instanceId)
+                                                if (target >= 0 && origin >= 0 && target != origin) {
+                                                    onIntent(SessionIntent.MoveTask(active.id, instanceId, target))
+                                                }
+                                            },
+                                        ),
+                                        onToggle = { enabled ->
+                                            onIntent(SessionIntent.ToggleTask(active.id, task.instanceId, enabled))
                                         },
-                                    ),
-                                    onToggle = { enabled ->
-                                        onIntent(SessionIntent.ToggleTask(active.id, task.instanceId, enabled))
-                                    },
-                                    onRemove = {
-                                        onIntent(SessionIntent.RemoveTask(active.id, task.instanceId))
-                                    },
-                                    onClick = {
-                                        if (task.hasOptions) editingTaskInstanceId = task.instanceId
-                                    },
-                                    // 增删/换位时的位置与淡入动画（reorderable 兼容）
-                                    modifier = Modifier.animateItem(),
-                                )
+                                        onRemove = {
+                                            onIntent(SessionIntent.RemoveTask(active.id, task.instanceId))
+                                        },
+                                        onClick = {
+                                            if (task.hasOptions) editingTaskInstanceId = task.instanceId
+                                        },
+                                        // 增删/换位时的位置与淡入动画（reorderable 兼容）
+                                        modifier = Modifier.animateItem(),
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
+            // 列表与启动栏、启动栏与底栏之间只留 xs，避免原先 md+lg 叠出大空隙
+            Spacer(Modifier.height(MaaDesignTokens.Spacing.xs))
             RunnerToggleButton(
                 state = state,
                 onIntent = onIntent,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = MaaDesignTokens.Spacing.xs),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -364,6 +367,7 @@ private fun TasksContent(
     if (showAddTasks && active != null) {
         AddTasksSheet(
             catalog = state.taskCatalog,
+            locked = locked,
             onConfirm = { orderedNames ->
                 onIntent(SessionIntent.ConfirmAddTasks(active.id, orderedNames))
                 showAddTasks = false
@@ -388,6 +392,7 @@ private fun TasksContent(
         ConfigurationSheet(
             state = state,
             templates = (state.projectState as? ProjectState.Ready)?.definition?.templates.orEmpty(),
+            locked = locked,
             onSelect = { id ->
                 showConfigSheet = false
                 onIntent(SessionIntent.SelectConfiguration(id))
@@ -435,54 +440,51 @@ private fun RunnerToggleButton(
             shape = RoundedCornerShape(outer),
             color = MaterialTheme.colorScheme.surface,
         ) {
-            // M3 按钮自带隐形 48dp 最小触控留白，白底 Surface 会把它显形成白边；
-            // 容器内取消该强制值，让 Surface 紧贴按钮实际高度
-            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    val toggleShape = RoundedCornerShape(
-                        topStart = outer,
-                        bottomStart = outer,
-                        topEnd = inner,
-                        bottomEnd = inner,
-                    )
-                    val toggleModifier = Modifier.weight(1f)
-                    if (phase.isBusy) {
-                        OutlinedButton(
-                            onClick = { onIntent(SessionIntent.Stop) },
-                            enabled = phase != RunnerPhase.Stopping,
-                            shape = toggleShape,
-                            modifier = toggleModifier,
-                        ) {
-                            Text(
-                                stringResource(
-                                    if (phase == RunnerPhase.Stopping) {
-                                        R.string.runner_stopping
-                                    } else {
-                                        R.string.runner_stop
-                                    },
-                                ),
-                            )
-                        }
-                    } else {
-                        Button(
-                            onClick = { onIntent(SessionIntent.Start) },
-                            enabled = state.canStart,
-                            shape = toggleShape,
-                            modifier = toggleModifier,
-                        ) {
-                            Text(stringResource(R.string.runner_start))
-                        }
+            // 保留 M3 默认 ≥48dp 最小触控；栏高可能略增于视觉贴边
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                val toggleShape = RoundedCornerShape(
+                    topStart = outer,
+                    bottomStart = outer,
+                    topEnd = inner,
+                    bottomEnd = inner,
+                )
+                val toggleModifier = Modifier.weight(1f)
+                if (phase.isBusy) {
+                    OutlinedButton(
+                        onClick = { onIntent(SessionIntent.Stop) },
+                        enabled = phase != RunnerPhase.Stopping,
+                        shape = toggleShape,
+                        modifier = toggleModifier,
+                    ) {
+                        Text(
+                            stringResource(
+                                if (phase == RunnerPhase.Stopping) {
+                                    R.string.runner_stopping
+                                } else {
+                                    R.string.runner_stop
+                                },
+                            ),
+                        )
                     }
-                    ExtraOptionsSegment(
-                        shape = RoundedCornerShape(
-                            topStart = inner,
-                            bottomStart = inner,
-                            topEnd = outer,
-                            bottomEnd = outer,
-                        ),
-                        onClick = { extraOptionsExpanded = true },
-                    )
+                } else {
+                    Button(
+                        onClick = { onIntent(SessionIntent.Start) },
+                        enabled = state.canStart,
+                        shape = toggleShape,
+                        modifier = toggleModifier,
+                    ) {
+                        Text(stringResource(R.string.runner_start))
+                    }
                 }
+                ExtraOptionsSegment(
+                    shape = RoundedCornerShape(
+                        topStart = inner,
+                        bottomStart = inner,
+                        topEnd = outer,
+                        bottomEnd = outer,
+                    ),
+                    onClick = { extraOptionsExpanded = true },
+                )
             }
         }
         DropdownMenu(
@@ -756,6 +758,7 @@ private sealed interface ConfigSheetPage {
 private fun ConfigurationSheet(
     state: SessionUiState,
     templates: List<ConfigurationTemplate>,
+    locked: Boolean,
     onSelect: (RunConfigurationId) -> Unit,
     onDuplicate: (RunConfigurationId, String) -> Unit,
     onRename: (RunConfigurationId, String) -> Unit,
@@ -789,6 +792,7 @@ private fun ConfigurationSheet(
                 is ConfigSheetPage.Home -> ConfigSheetHomePage(
                     state = state,
                     templates = templates,
+                    locked = locked,
                     tab = homeTab,
                     onTabChange = { homeTab = it },
                     onSelect = onSelect,
@@ -808,6 +812,7 @@ private fun ConfigurationSheet(
                     } else {
                         RenameConfigurationPage(
                             configuration = configuration,
+                            writeEnabled = !locked,
                             onBack = { page = ConfigSheetPage.Home },
                             onClose = onDismiss,
                             onRename = { name ->
@@ -819,6 +824,7 @@ private fun ConfigurationSheet(
                 }
 
                 is ConfigSheetPage.CreateEmpty -> CreateEmptyPage(
+                    writeEnabled = !locked,
                     onBack = { page = ConfigSheetPage.Home },
                     onClose = onDismiss,
                     onCreate = onCreateEmpty,
@@ -833,6 +839,7 @@ private fun ConfigurationSheet(
                         TemplatePreviewPage(
                             template = template,
                             existingNames = existingNames,
+                            writeEnabled = !locked,
                             onBack = { page = ConfigSheetPage.Home },
                             onClose = onDismiss,
                             onCreate = { name, taskNames ->
@@ -851,6 +858,7 @@ private fun ConfigurationSheet(
 private fun ConfigSheetHomePage(
     state: SessionUiState,
     templates: List<ConfigurationTemplate>,
+    locked: Boolean,
     tab: Int,
     onTabChange: (Int) -> Unit,
     onSelect: (RunConfigurationId) -> Unit,
@@ -893,6 +901,7 @@ private fun ConfigSheetHomePage(
                         )
                         ConfigRowCard(
                             configuration = configuration,
+                            writeEnabled = !locked,
                             onSelect = { onSelect(configuration.id) },
                             onDuplicate = { onDuplicate(configuration.id, duplicatedName) },
                             onRename = { onOpenRename(configuration.id) },
@@ -900,7 +909,10 @@ private fun ConfigSheetHomePage(
                         )
                     }
                     item(key = "create-empty") {
-                        CreateEmptyCard(onClick = onOpenCreateEmpty)
+                        CreateEmptyCard(
+                            writeEnabled = !locked,
+                            onClick = onOpenCreateEmpty,
+                        )
                     }
                 }
             } else {
@@ -915,7 +927,11 @@ private fun ConfigSheetHomePage(
                         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                     ) {
                         items(templates, key = { "template-${it.name}" }) { template ->
-                            TemplateCard(template = template, onClick = { onOpenTemplate(template.name) })
+                            TemplateCard(
+                                template = template,
+                                writeEnabled = !locked,
+                                onClick = { onOpenTemplate(template.name) },
+                            )
                         }
                     }
                 }
@@ -930,6 +946,7 @@ private fun ConfigSheetHomePage(
 private fun TemplatePreviewPage(
     template: ConfigurationTemplate,
     existingNames: List<String>,
+    writeEnabled: Boolean,
     onBack: () -> Unit,
     onClose: () -> Unit,
     onCreate: (name: String, taskNames: List<String>) -> Unit,
@@ -950,6 +967,7 @@ private fun TemplatePreviewPage(
             onValueChange = { name = it },
             label = { Text(stringResource(R.string.config_name_label)) },
             singleLine = true,
+            enabled = writeEnabled,
             modifier = Modifier.fillMaxWidth(),
         )
         template.description?.takeIf { it.isNotBlank() }?.let {
@@ -979,13 +997,14 @@ private fun TemplatePreviewPage(
                 TemplateTaskRow(
                     task = task,
                     checked = task.taskName in included,
+                    writeEnabled = writeEnabled,
                     onToggle = { checked -> included.setPresent(task.taskName, checked) },
                 )
             }
         }
         Button(
             onClick = { onCreate(name.trim(), included.toList()) },
-            enabled = name.isNotBlank() && included.isNotEmpty(),
+            enabled = writeEnabled && name.isNotBlank() && included.isNotEmpty(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -1006,15 +1025,16 @@ private fun TemplatePreviewPage(
 private fun TemplateTaskRow(
     task: TemplateTask,
     checked: Boolean,
+    writeEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(onClick = { onToggle(!checked) }),
+            .maaClickable(enabled = writeEnabled, onClick = { onToggle(!checked) }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, onCheckedChange = onToggle)
+        Checkbox(checked = checked, onCheckedChange = onToggle, enabled = writeEnabled)
         Text(
             text = task.label,
             style = MaterialTheme.typography.bodyLarge,
@@ -1031,6 +1051,7 @@ private fun TemplateTaskRow(
 /** 新建空配置页：命名后直接创建并使用。 */
 @Composable
 private fun CreateEmptyPage(
+    writeEnabled: Boolean,
     onBack: () -> Unit,
     onClose: () -> Unit,
     onCreate: (String) -> Unit,
@@ -1043,6 +1064,7 @@ private fun CreateEmptyPage(
             onValueChange = { name = it },
             label = { Text(stringResource(R.string.config_name_label)) },
             singleLine = true,
+            enabled = writeEnabled,
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
@@ -1053,7 +1075,7 @@ private fun CreateEmptyPage(
         Spacer(Modifier.weight(1f))
         Button(
             onClick = { onCreate(name.trim()) },
-            enabled = name.isNotBlank(),
+            enabled = writeEnabled && name.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -1067,6 +1089,7 @@ private fun CreateEmptyPage(
 @Composable
 private fun RenameConfigurationPage(
     configuration: ResolvedRunConfiguration,
+    writeEnabled: Boolean,
     onBack: () -> Unit,
     onClose: () -> Unit,
     onRename: (String) -> Unit,
@@ -1077,8 +1100,8 @@ private fun RenameConfigurationPage(
         )
     }
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    val commit = { if (name.text.isNotBlank()) onRename(name.text.trim()) }
+    LaunchedEffect(Unit) { if (writeEnabled) focusRequester.requestFocus() }
+    val commit = { if (writeEnabled && name.text.isNotBlank()) onRename(name.text.trim()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
         MaaSheetHeader(title = stringResource(R.string.config_rename_title), onClose = onClose, onBack = onBack)
@@ -1087,6 +1110,7 @@ private fun RenameConfigurationPage(
             onValueChange = { name = it },
             label = { Text(stringResource(R.string.config_name_label)) },
             singleLine = true,
+            enabled = writeEnabled,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { commit() }),
             modifier = Modifier
@@ -1096,7 +1120,7 @@ private fun RenameConfigurationPage(
         Spacer(Modifier.weight(1f))
         Button(
             onClick = commit,
-            enabled = name.text.isNotBlank(),
+            enabled = writeEnabled && name.text.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -1116,11 +1140,15 @@ private fun uniqueConfigurationName(base: String, existing: Collection<String>):
 
 /** 新建空配置入口卡：描边占位样式，与配置卡片同尺寸。 */
 @Composable
-private fun CreateEmptyCard(onClick: () -> Unit) {
+private fun CreateEmptyCard(
+    writeEnabled: Boolean,
+    onClick: () -> Unit,
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(onClick = onClick),
+            .maaClickable(enabled = writeEnabled, onClick = onClick)
+            .alpha(if (writeEnabled) 1f else 0.5f),
         shape = MaterialTheme.shapes.medium,
         color = Color.Transparent,
         border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
@@ -1152,6 +1180,7 @@ private fun CreateEmptyCard(onClick: () -> Unit) {
 @Composable
 private fun ConfigRowCard(
     configuration: ResolvedRunConfiguration,
+    writeEnabled: Boolean,
     onSelect: () -> Unit,
     onDuplicate: () -> Unit,
     onRename: () -> Unit,
@@ -1166,7 +1195,8 @@ private fun ConfigRowCard(
     MaaCardSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(onClick = onSelect),
+            .maaClickable(enabled = writeEnabled, onClick = onSelect)
+            .alpha(if (writeEnabled) 1f else 0.6f),
         color = if (active) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
@@ -1235,7 +1265,7 @@ private fun ConfigRowCard(
                     color = contentColor.copy(alpha = 0.7f),
                 )
             }
-            IconButton(onClick = onDuplicate) {
+            IconButton(onClick = onDuplicate, enabled = writeEnabled) {
                 Icon(
                     imageVector = Icons.Outlined.ContentCopy,
                     contentDescription = stringResource(R.string.common_copy),
@@ -1243,7 +1273,7 @@ private fun ConfigRowCard(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = onRename) {
+            IconButton(onClick = onRename, enabled = writeEnabled) {
                 Icon(
                     imageVector = Icons.Outlined.Edit,
                     contentDescription = stringResource(R.string.common_rename),
@@ -1251,7 +1281,7 @@ private fun ConfigRowCard(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = onDelete, enabled = writeEnabled) {
                 Icon(
                     imageVector = Icons.Outlined.DeleteOutline,
                     contentDescription = stringResource(R.string.common_delete),
@@ -1264,9 +1294,15 @@ private fun ConfigRowCard(
 }
 
 @Composable
-private fun TemplateCard(template: ConfigurationTemplate, onClick: () -> Unit) {
+private fun TemplateCard(
+    template: ConfigurationTemplate,
+    writeEnabled: Boolean,
+    onClick: () -> Unit,
+) {
     MaaCard(
-        modifier = Modifier.maaClickable(onClick = onClick),
+        modifier = Modifier
+            .maaClickable(enabled = writeEnabled, onClick = onClick)
+            .alpha(if (writeEnabled) 1f else 0.5f),
         // 行卡密度：与同 sheet 的配置行卡同档（单行 ~48dp）
         contentPadding = PaddingValues(MaaDesignTokens.Spacing.md),
     ) {

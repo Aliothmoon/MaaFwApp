@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
@@ -20,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
@@ -52,7 +50,7 @@ fun MaaModalSheet(
     }
 }
 
-/** 无拖拽把手 sheet 的统一标题栏：可选返回键 + 标题 + 40dp 紧凑关闭钮。 */
+/** 无拖拽把手 sheet 的统一标题栏：可选返回键 + 标题 + 关闭钮（M3 默认 ≥48dp 触控）。 */
 @Composable
 fun MaaSheetHeader(
     title: String,
@@ -64,7 +62,7 @@ fun MaaSheetHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+            IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.common_back))
             }
         }
@@ -73,8 +71,7 @@ fun MaaSheetHeader(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.weight(1f),
         )
-        // 40dp 紧凑触控区：默认 48dp IconButton 会把标题行撑出多余空腔
-        IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onClose) {
             Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.common_close))
         }
     }

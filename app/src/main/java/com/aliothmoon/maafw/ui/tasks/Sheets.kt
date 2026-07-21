@@ -76,6 +76,7 @@ import com.aliothmoon.maafw.ui.options.OptionEditorList
 @Composable
 fun AddTasksSheet(
     catalog: List<TaskCatalogGroup>,
+    locked: Boolean = false,
     onConfirm: (List<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -166,6 +167,7 @@ fun AddTasksSheet(
                             CatalogRow(
                                 item = item,
                                 checked = item.taskName in selected,
+                                enabled = !locked,
                                 onCheckedChange = { toggleTask(item.taskName, it) },
                             )
                         }
@@ -194,6 +196,7 @@ fun AddTasksSheet(
                             CatalogRow(
                                 item = item,
                                 checked = item.taskName in selected,
+                                enabled = !locked,
                                 onCheckedChange = { toggleTask(item.taskName, it) },
                             )
                         }
@@ -202,7 +205,7 @@ fun AddTasksSheet(
             }
             Button(
                 onClick = { onConfirm(selected.toList()) },
-                enabled = selected.isNotEmpty(),
+                enabled = !locked && selected.isNotEmpty(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -282,6 +285,7 @@ private fun GroupHeader(group: TaskCatalogGroup, tone: MaaTone) {
 private fun CatalogRow(
     item: TaskCatalogItem,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     // 就地展开态：列表回收后收起即可，无需跨会话保存
@@ -289,10 +293,10 @@ private fun CatalogRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(onClick = { onCheckedChange(!checked) }),
+            .maaClickable(enabled = enabled, onClick = { onCheckedChange(!checked) }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

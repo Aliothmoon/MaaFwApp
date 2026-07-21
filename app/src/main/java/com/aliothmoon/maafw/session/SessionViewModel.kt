@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
 import com.aliothmoon.maafw.i18n.AppLocales
+import com.aliothmoon.maafw.i18n.LocaleController
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
@@ -35,6 +36,7 @@ class SessionViewModel(
     private val projectRepository: ProjectRepository,
     private val configurationStore: UserConfigurationStore,
     private val runnerPort: RunnerPort,
+    private val localeController: LocaleController = AppLocales,
 ) : ViewModel() {
 
     val uiState: StateFlow<SessionUiState> = combine(
@@ -231,7 +233,7 @@ class SessionViewModel(
 
             // 语言切换连带项目重载（翻译在加载期物化），运行期间与其他配置修改同样拦截
             is SessionIntent.SetLanguage -> guarded {
-                AppLocales.apply(intent.localeTag)
+                localeController.apply(intent.localeTag)
             }
 
             SessionIntent.ReloadProject -> guarded {

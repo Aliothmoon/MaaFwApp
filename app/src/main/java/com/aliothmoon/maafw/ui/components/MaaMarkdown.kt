@@ -64,6 +64,8 @@ fun MaaMarkdown(
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     maxLines: Int = Int.MAX_VALUE,
     linksClickable: Boolean = true,
+    /** PI 资源根（assets 相对路径），由上层注入，避免 UI 写死产品 id。 */
+    assetRoot: String = M9A_ASSET_ROOT,
 ) {
     val context = LocalContext.current
     var body by remember(text) { mutableStateOf(if (isRemoteUrl(text)) null else text) }
@@ -83,7 +85,9 @@ fun MaaMarkdown(
 
     val resolved = body ?: stringResource(R.string.common_loading)
     // Markdown 解析只在文本/管线变化时执行，与无关重组解耦
-    val spanned = remember(markwon, resolved) { markwon.toMarkdown(rewriteRelativeImages(resolved)) }
+    val spanned = remember(markwon, resolved, assetRoot) {
+        markwon.toMarkdown(rewriteRelativeImages(resolved, assetRoot))
+    }
     val textColor = color.toArgb()
     val fontSizeSp = if (style.fontSize.isSpecified) style.fontSize.value else 12f
 

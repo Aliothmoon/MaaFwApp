@@ -19,6 +19,7 @@ import com.aliothmoon.maafw.project.ProjectSource
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerPort
 import com.aliothmoon.maafw.session.SessionViewModel
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,8 +28,12 @@ import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import timber.log.Timber
+
+/** 进程级后台 scope 标记，避免与其它 CoroutineScope 绑定冲突。 */
+object AppCoroutineScope
 
 class MaaFwApp : Application() {
 
@@ -46,7 +51,12 @@ class MaaFwApp : Application() {
 }
 
 val appModule = module {
-    single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
+    single(named<AppCoroutineScope>()) {
+        val handler = CoroutineExceptionHandler { _, throwable ->
+            Timber.e(throwable, "AppCoroutineScope uncaught")
+        }
+        CoroutineScope(SupervisorJob() + Dispatchers.Default + handler)
+    }
 
     single<ProjectSource> { AssetProjectSource(androidContext(), root = M9A_ASSET_ROOT) }
     single { ProjectLoader(get(), localeProvider = AppLocales::currentProjectTag) }
@@ -63,7 +73,14 @@ val appModule = module {
     single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
 
     // UI 阶段绑定 StubRunnerPort；接入 JNI 后替换为 MaaFrameworkRunnerPort
-    single<RunnerPort> { StubRunnerPort(scope = get()) }
+    single<RunnerPort> { StubRunnerPort(scope = get(named<AppCoroutineScope>())) }
 
-    viewModel { SessionViewModel(get(), get(), get()) }
+    viewModel {
+        SessionViewModel(
+            projectRepository = get(),
+            configurationStore = get(),
+            runnerPort = get(),
+            localeController = AppLocales,
+        )
+    }
 }
