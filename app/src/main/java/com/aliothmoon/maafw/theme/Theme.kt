@@ -20,7 +20,7 @@ import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 
-// 暖石色（stone）中性系，对齐 proto 原型观感
+// 暖石色（stone）中性系，对齐早期原型 UI 观感
 private val LightBackground = Color(0xFFFAF9F6)
 private val LightSurface = Color(0xFFFFFFFF)
 private val LightSurfaceVariant = Color(0xFFF5F5F4)

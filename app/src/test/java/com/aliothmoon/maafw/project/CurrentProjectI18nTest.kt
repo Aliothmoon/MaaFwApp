@@ -14,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
-/** 当前打包 PI 的发布契约：所有实际加载的 $key 必须在每份声明语言中有译文。 */
+/** 当前打包 PI 的发布契约：所有实际加载的 $key 必须在每份声明语言中有译文 */
 @OptIn(ExperimentalSerializationApi::class)
 class CurrentProjectI18nTest {
 

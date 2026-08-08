@@ -49,7 +49,7 @@ import timber.log.Timber
 import java.io.File
 
 /**
- * PI description 富文本渲染：Markdown 为主、HTML 透传（与 MXU 的 marked + DOMPurify 管线同构）
+ * PI description 富文本渲染：Markdown 为主、HTML 子集透传（与桌面端 MXU 展示习惯同构）
  *
  * - `<span style>` 的 color/font-size/font-weight 由自定义 TagHandler 解析；
  *   黑白灰系颜色映射主题（深浅色都可读），彩色原样保留；
@@ -237,14 +237,14 @@ private class StyledSpanTagHandler(
     }
 }
 
-/** URL 形态 description 的拉取器：OkHttp + ETag 磁盘缓存（对齐 MXU cachedFetch） */
+/** URL 形态 description 的拉取器：OkHttp + ETag 磁盘缓存 */
 class DescriptionFetcher private constructor(context: Context) {
 
     private val client = OkHttpClient.Builder()
         .cache(Cache(File(context.cacheDir, "pi_description_http"), CACHE_SIZE_BYTES))
         .build()
 
-    /** 失败时回落返回原始 URL 文本（同 MXU：加载失败展示原文） */
+    /** 失败时回落返回原始 URL 文本 */
     suspend fun fetch(url: String): String = withContext(Dispatchers.IO) {
         try {
             client.newCall(Request.Builder().url(url).build()).execute().use { response ->

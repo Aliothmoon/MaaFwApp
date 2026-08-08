@@ -55,7 +55,7 @@ data class PiInterfaceContent(
 )
 
 /**
- * 解析期文本物化钩子（对齐 MXU contentResolver 语义）：
+ * 解析期文本物化钩子（对齐桌面端 MXU 对 label/description 的处理习惯）：
  * label 级字段只做 $i18n 查表；description 级字段追加文件形态读取
  * URL 形态一律原样保留，由 UI 层懒加载
  */
@@ -70,7 +70,7 @@ interface PiTextResolver {
  */
 object PiParser {
 
-    // PI 生态普遍使用 JSONC（注释 + 尾逗号），与 MXU 的 parseJsonc 对齐
+    // PI 生态普遍使用 JSONC（注释 + 尾逗号），与 MXU 等客户端的宽容解析一致
     @OptIn(ExperimentalSerializationApi::class)
     private val json = Json {
         ignoreUnknownKeys = true
@@ -225,7 +225,7 @@ object PiParser {
             pipelineOverride = obj.objectOrEmpty("pipeline_override"),
             controllers = obj.stringList("controller"),
             resources = obj.stringList("resource"),
-            // 规范键 default_check（官方/MXU）优先，静默兼容早期数据的 check
+            // 规范键 default_check 优先，静默兼容早期数据的 check
             defaultCheck = obj.boolean("default_check") ?: obj.boolean("check") ?: false,
         )
     }
@@ -285,7 +285,7 @@ object PiParser {
                 OptionDefinition.Input(name, label, description, fields, obj.objectOrEmpty("pipeline_override"))
             }
 
-            // MXU 合法类型，但热键是桌面端语义，Android 端跳过不投影
+            // 协议允许的类型，但热键是桌面端语义，Android 端跳过不投影
             "hotkey" -> {
                 diagnostics += warning(
                     source,

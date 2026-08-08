@@ -14,7 +14,7 @@ import org.junit.BeforeClass
 import org.junit.Test
 import java.io.File
 
-/** 基于文件系统的 ProjectSource，供 JVM 测试直接读取仓库内置 PI。 */
+/** 基于文件系统的 ProjectSource，供 JVM 测试直接读取仓库内置 PI */
 class FileProjectSource(private val root: File) : ProjectSource {
     override val projectName: String = root.name
 
@@ -122,7 +122,7 @@ class ProjectLoaderTest {
     }
 }
 
-/** 内存 ProjectSource：按路径前缀模拟目录结构，供分组/解析规则的合成用例使用。 */
+/** 内存 ProjectSource：按路径前缀模拟目录结构，供分组/解析规则的合成用例使用 */
 private class MapProjectSource(private val files: Map<String, String>) : ProjectSource {
     override val projectName: String = "synthetic"
 
@@ -139,7 +139,7 @@ private class MapProjectSource(private val files: Map<String, String>) : Project
         files[path] ?: throw IllegalArgumentException("no file: $path")
 }
 
-/** 生成合法的 V2 根文件：interface_version + import 声明，body 追加其余顶层字段。 */
+/** 生成合法的 V2 根文件：interface_version + import 声明，body 追加其余顶层字段 */
 private fun piRoot(vararg imports: String, body: String = ""): String {
     val importJson = imports.joinToString(",") { "\"$it\"" }
     val extra = if (body.isBlank()) "" else ",$body"

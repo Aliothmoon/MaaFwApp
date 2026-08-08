@@ -59,7 +59,7 @@ class DefaultProjectRepositoryTest {
             override fun list(path: String): List<String> = emptyList()
             override fun read(path: String): String {
                 val n = ++readCount
-                // 第一次读用 wall-clock 等待模拟慢请求；测试用真实 IO 调度。
+                // 第一次读用真实时钟等待模拟慢请求；测试用真实 IO 调度
                 if (n == 1) Thread.sleep(80)
                 return """
                     {

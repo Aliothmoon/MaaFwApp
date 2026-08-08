@@ -141,7 +141,7 @@ class RunPlanBuilderTest {
         assertTrue("Unset 无默认值不应有活动 case", switch.activeCases.isEmpty())
     }
 
-    /** 自定义关卡 3-9 的常规作战任务；其余 option 选定避免级联出 Unset 诊断。 */
+    /** 自定义关卡 3-9 的常规作战任务；其余 option 选定避免级联出 Unset 诊断 */
     private fun customStageTask() = ConfiguredTask(
         taskName = "常规作战",
         enabled = true,
@@ -155,7 +155,7 @@ class RunPlanBuilderTest {
         ),
     )
 
-    /** 选择无子 option 的 case，避免测试再级联出 Unset 诊断。 */
+    /** 选择无子 option 的 case，避免测试再级联出 Unset 诊断 */
     private fun firstCaseOf(optionName: String): OptionValue.SingleCase {
         val option = definition.options.getValue(optionName)
         check(option is OptionDefinition.Choice) { "非 choice option: $optionName" }
@@ -163,13 +163,13 @@ class RunPlanBuilderTest {
         return OptionValue.SingleCase(case.name)
     }
 
-    /** 提取 SelectCombatStage.action.param.custom_action_param.stage。 */
+    /** 提取 SelectCombatStage.action.param.custom_action_param.stage */
     private fun JsonObject.stageValue(): String? = runCatching {
         this["SelectCombatStage"]!!.jsonObject["action"]!!.jsonObject["param"]!!
             .jsonObject["custom_action_param"]!!.jsonObject["stage"]!!.jsonPrimitive.content
     }.getOrNull()
 
-    /** 提取 CombatStageGate.recognition.param.custom_recognition_param.expression。 */
+    /** 提取 CombatStageGate.recognition.param.custom_recognition_param.expression */
     private fun JsonObject.expressionValue(): String? = runCatching {
         this["CombatStageGate"]!!.jsonObject["recognition"]!!.jsonObject["param"]!!
             .jsonObject["custom_recognition_param"]!!.jsonObject["expression"]!!.jsonPrimitive.content

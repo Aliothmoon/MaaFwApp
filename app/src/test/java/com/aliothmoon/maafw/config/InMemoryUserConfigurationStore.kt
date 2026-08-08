@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** 内存版 UserConfigurationStore，供 JVM 单测与 Stub 场景使用。 */
+/** 内存版 UserConfigurationStore，供 JVM 单测与 Stub 场景使用 */
 class InMemoryUserConfigurationStore(
     initial: UserConfiguration = UserConfiguration(),
 ) : UserConfigurationStore {

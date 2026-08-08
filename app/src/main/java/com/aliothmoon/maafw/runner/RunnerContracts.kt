@@ -4,7 +4,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
-/** 与 MaaFramework 的唯一执行 seam；隐藏 JNI / handle / callback */
+/** 与 MaaFramework 的唯一执行边界；隐藏 JNI / handle / callback */
 interface RunnerPort {
     val state: StateFlow<RunnerState>
     val events: Flow<RunnerEvent>

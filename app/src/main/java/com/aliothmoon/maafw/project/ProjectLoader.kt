@@ -19,10 +19,11 @@ sealed interface ProjectLoadResult {
 }
 
 /**
- * 按 PI V2 语义加载项目：根 interface.json 声明 + import[] 分片按序合并（对齐 MXU），
+ * 按 PI V2 语义加载项目：根 interface.json 声明 + import[] 分片按序合并
+ * （行为与桌面端 MXU 一致处见 docs/pi-compatibility.md），
  * 并做跨文件校验：重名 task/option、悬空 option 引用、option cycle、preset 引用缺失
  *
- * 文本物化（对齐 MXU contentResolver）：$i18n 按 languages 声明查表（查无回落 key），
+ * 文本物化：$i18n 按 languages 声明查表（查无回落 key），
  * description 级字段的文件路径形态在加载期读入；URL 形态原样保留给 UI 懒加载
  *
  * @param localeProvider 每次 load 时查询期望语言 tag（如 zh-CN）；null 表示跟随系统默认
@@ -56,7 +57,7 @@ class ProjectLoader(
         val projectInterface = PiParser.parseInterface(interfacePath, interfaceContent)
         diagnostics += projectInterface.diagnostics
 
-        // 对齐官方/MXU：interface_version 必须为 2，否则拒绝加载
+        // PI V2：interface_version 必须为 2，否则拒绝加载
         if (projectInterface.interfaceVersion != 2L) {
             diagnostics += error(
                 interfacePath,
@@ -72,7 +73,7 @@ class ProjectLoader(
         val text = buildTextResolver(translations, diagnostics)
 
         // 根文件自身作为首个分片（task/option/preset/group），import 分片按声明顺序追加；
-        // 重名一律先定义优先缺失分片降级为 warning 跳过（MXU 同款容错）
+        // 重名一律先定义优先；缺失分片降级为 warning 跳过
         // 根 JSON 复用 parseInterface 的解析结果（version 校验通过则 root 必非 null）
         val state = MergeState()
         projectInterface.root?.let {
@@ -167,7 +168,7 @@ class ProjectLoader(
 
     /**
      * 按 languages 声明加载当前语言的翻译表：精确 tag -> 语言前缀 -> 首个声明
-     * tag 比较前统一小写并把 '_' 归一为 '-'，兼容 MXU 生态的 zh_cn 风格键
+     * tag 比较前统一小写并把 '_' 归一为 '-'，兼容 zh_cn 这类下划线风格键
      */
     private fun loadTranslations(
         projectInterface: PiInterfaceContent,
@@ -194,7 +195,7 @@ class ProjectLoader(
         return PiParser.parseTranslations(path, content) { diagnostics += it }
     }
 
-    /** $i18n 查表（查无回落 key，同 MXU）；description 追加文件形态物化 */
+    /** $i18n 查表（查无回落 key）；description 追加文件形态物化 */
     private fun buildTextResolver(
         translations: Map<String, String>,
         diagnostics: MutableList<Diagnostic>,
@@ -222,7 +223,7 @@ class ProjectLoader(
     }
 
     /**
-     * 以顶层 group[] 声明为准归一化任务分组（对齐 MXU v2.4.0）：
+     * 以顶层 group[] 声明为准归一化任务分组（PI v2.4.0）：
      * - 无任何声明即无分组：任务级引用被忽略，全部归入「未分组」；
      * - 有声明时任务只保留命中声明的引用，未命中引用丢弃并记 warning；
      * - 有效引用为空的任务落「未分组」，该组仅在需要时追加为最后一组

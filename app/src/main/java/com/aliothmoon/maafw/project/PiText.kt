@@ -1,8 +1,8 @@
 package com.aliothmoon.maafw.project
 
 /**
- * description 内容形态判定（对齐 MXU contentResolver 的启发式）：
- * URL / 文件路径 / 直接文本$i18n 形态在进入判定前已由加载期物化
+ * description 内容形态判定（URL / 文件路径 / 直接文本）：
+ * $i18n 形态在进入判定前已由加载期物化
  */
 
 /** http(s) URL：加载期原样保留，UI 层懒加载 */
