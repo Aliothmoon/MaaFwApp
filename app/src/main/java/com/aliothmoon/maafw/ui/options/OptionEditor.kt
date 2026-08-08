@@ -32,10 +32,8 @@ import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 
 /**
- * 动态 option 编辑器：按 OptionEditorState 树递归渲染，
- * 活动分支的子 option 以小缩进（8dp/层）+ 逐层递减字号平铺（docs/ui-implementation-notes.md B4）。
- * 状态变更一律通过 onSetOption(optionName, value) 发出，子 option 与父共用同一 task 作用域 value map。
- * carded = true 时顶层 option 各自包白卡片（option 名为卡片标题），子 option 仍在父卡内平铺。
+ * 按 OptionEditorState 树渲染；子 option 与父共用 task 级 value map
+ * carded：顶层各包白卡；缩进/字号见 docs/ui-implementation-notes.md B4
  */
 @Composable
 fun OptionEditorList(
@@ -61,7 +59,6 @@ fun OptionEditorList(
     }
 }
 
-/** 卡片形态：option 名升为卡片标题（容器实体名角色），标准两态 Switch 直接放标题行尾。 */
 @Composable
 private fun CardedOptionItem(
     option: OptionEditorState,
@@ -122,7 +119,6 @@ private fun OptionDescriptionAndChildren(
             )
         }
     }
-    // 活动分支子 option 递归渲染（卡片内不再嵌套卡片），每层 8dp 缩进
     val children = option.activeCases.flatMap { it.children }
     if (children.isNotEmpty()) {
         OptionEditorList(
@@ -134,7 +130,6 @@ private fun OptionDescriptionAndChildren(
     }
 }
 
-/** option 名字号随嵌套层级递减（17/15/13sp），与缩进共同构成层级线索。 */
 @Composable
 private fun optionLabelStyle(depth: Int) = when {
     depth <= 1 -> MaterialTheme.typography.bodyLarge
@@ -205,7 +200,6 @@ private fun SwitchEditor(
 ) {
     val cases = option.standardSwitchCases()
     if (cases == null) {
-        // 非标准两态 switch 回退为 chip 平铺
         SelectEditor(option, locked, onSetOption)
         return
     }
@@ -228,7 +222,6 @@ private fun CheckboxEditor(
     }
 }
 
-/** 多选 case 与单选同为胶囊平铺，仅切换语义不同（增删选中集合）。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CheckboxCases(
@@ -249,7 +242,7 @@ private fun CheckboxCases(
                 enabled = !locked,
                 onClick = {
                     val updated = if (case.active) activeNames - case.name else activeNames + case.name
-                    // 明确的空选择也是合法值（MultipleCases(emptyList())），与 Unset 区分
+                    // emptyList() 合法，与 Unset 区分
                     onSetOption(option.name, OptionValue.MultipleCases(updated))
                 },
             )
@@ -277,7 +270,7 @@ private fun InputFields(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
         option.inputs.forEach { field ->
-            // 本地保留正在输入的候选值；仅合法候选立即提交（UI 立即拒绝，Builder 再校验）
+            // 仅合法候选立即提交；UI 先拒，Builder 再验
             var text by remember(option.name, field.name, field.value) { mutableStateOf(field.value) }
             val valid = validateInputCandidate(field.pipelineType, field.verify, text)
             OutlinedTextField(

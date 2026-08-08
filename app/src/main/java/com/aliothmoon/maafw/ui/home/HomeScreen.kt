@@ -32,7 +32,7 @@ import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 
-/** 首页：项目 / 当前配置 / 运行状态摘要 + Start/Stop。 */
+/** 首页：项目 / 当前配置 / 运行状态摘要 + Start/Stop */
 @Composable
 fun HomeScreen(
     state: SessionUiState,

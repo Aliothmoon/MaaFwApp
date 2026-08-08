@@ -9,10 +9,7 @@ value class RunConfigurationId(val value: String)
 
 enum class ThemeMode { System, Light, Dark }
 
-/**
- * 用户配置的唯一事实来源（持久化聚合根）。
- * 只保存用户选择，不复制 PI 定义；schemaVersion 信封在序列化层处理。
- */
+/** 持久化聚合根：只存用户选择，不复制 PI；schemaVersion 在序列化层 */
 @Serializable
 data class UserConfiguration(
     val initialized: Boolean = false,
@@ -30,7 +27,7 @@ data class UserConfiguration(
         id?.let { target -> configurations.firstOrNull { it.id == target } }
 }
 
-/** 用户可编辑的一份运行配置；名称允许重复，定位一律使用 id。 */
+/** 名称可重复；定位一律用 id */
 @Serializable
 data class RunConfiguration(
     val id: RunConfigurationId,
@@ -38,7 +35,7 @@ data class RunConfiguration(
     val tasks: List<ConfiguredTask> = emptyList(),
 )
 
-/** 复制为独立配置：保留任务设置，但为配置和任务实例换用新的身份。 */
+/** 保留任务设置，配置与任务实例换新身份 */
 fun RunConfiguration.duplicate(
     id: RunConfigurationId,
     name: String,
@@ -49,9 +46,8 @@ fun RunConfiguration.duplicate(
 )
 
 /**
- * 同一 RunConfiguration 内允许重复 taskName（每次添加生成独立实例，
- * 各自持有 enabled / optionValues）；实例定位一律使用 instanceId。
- * 旧持久化数据缺失 instanceId 时由默认值在解码时补齐，首次写回后固定。
+ * 同配置内可重复 taskName；定位用 instanceId
+ * 旧数据缺 instanceId 时解码补默认值，首次写回后固定
  */
 @Serializable
 data class ConfiguredTask(
@@ -64,8 +60,8 @@ data class ConfiguredTask(
 fun newTaskInstanceId(): String = java.util.UUID.randomUUID().toString()
 
 /**
- * 用户对某个 option 的当前选择。Unset（从未配置）表示为 value map 中不存在该键，
- * 与 MultipleCases(emptyList())（明确不选）必须区分。
+ * Unset = value map 无该键
+ * MultipleCases(emptyList()) = 明确不选，二者不可混用
  */
 @Serializable
 sealed interface OptionValue {

@@ -120,17 +120,12 @@ import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.i18n.localized
 
-/**
- * 任务页：配置选择 + 任务列表 + 添加任务/option 编辑（bottom sheet）。
- * 前置态（C9）：项目 Loading/Error 时不渲染配置 UI。
- */
 @Composable
 fun TasksScreen(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 前置态切换（Loading/Error/Ready）整体淡入淡出
     Crossfade(
         targetState = state.projectState,
         animationSpec = MaaMotion.enter(),
@@ -177,10 +172,7 @@ private fun TasksContent(
     var showAddTasks by rememberSaveable { mutableStateOf(false) }
     var editingTaskInstanceId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // 配置选择 sheet；新建/模板预览/重命名全部内嵌在 sheet 内部
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
-
-    // 服务器（资源）切换 sheet：入口在配置卡右侧 chip，项目无候选时不展示
     var showServerSheet by rememberSaveable { mutableStateOf(false) }
     val environment = state.environment
     val serverCandidates = environment?.resourceCandidates.orEmpty()
@@ -188,7 +180,7 @@ private fun TasksContent(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        // 外层 AppRoot 的 Scaffold 已应用状态栏/导航栏 inset，内层不再重复消费
+        // AppRoot 已消费系统栏 inset，内层 Scaffold 不再重复
         contentWindowInsets = WindowInsets(),
     ) { padding ->
         Column(
@@ -197,7 +189,6 @@ private fun TasksContent(
                 .padding(padding)
                 .padding(horizontal = MaaDesignTokens.Spacing.lg),
         ) {
-            // 上半区自带 md 间距；与底部启动栏分离，避免 list 底 padding + spacedBy 叠成过大空隙
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
@@ -224,7 +215,7 @@ private fun TasksContent(
                         modifier = Modifier.weight(1f),
                     )
                 } else {
-                    // 拖拽期间用本地顺序渲染，松手后发 MoveTask，等 DataStore 回流后回到权威顺序
+                    // 拖拽用本地顺序，松手发 MoveTask；DataStore 回流后以权威顺序为准
                     val canonicalIds = remember(active.tasks) { active.tasks.map { it.instanceId } }
                     val canonicalState = rememberUpdatedState(canonicalIds)
                     var pendingOrder by remember(active.id) { mutableStateOf<List<String>?>(null) }
@@ -232,7 +223,6 @@ private fun TasksContent(
                     fun currentOrder(): List<String> {
                         val canonical = canonicalState.value
                         val pending = pendingOrder
-                        // 集合已变化（增删任务）时废弃本地顺序
                         return if (pending != null && pending.toSet() == canonical.toSet()) pending else canonical
                     }
 
@@ -275,7 +265,6 @@ private fun TasksContent(
                                 style = MaterialTheme.typography.titleSmall,
                                 modifier = Modifier.weight(1f),
                             )
-                            // 轻量文字添加钮：主色文字无底色，不与白底任务卡抢层级
                             val addTint = if (locked) {
                                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                             } else {
@@ -336,7 +325,6 @@ private fun TasksContent(
                                         onClick = {
                                             if (task.hasOptions) editingTaskInstanceId = task.instanceId
                                         },
-                                        // 增删/换位时的位置与淡入动画（reorderable 兼容）
                                         modifier = Modifier.animateItem(),
                                     )
                                 }
@@ -345,7 +333,6 @@ private fun TasksContent(
                     }
                 }
             }
-            // 列表与启动栏、启动栏与底栏之间只留 xs，避免原先 md+lg 叠出大空隙
             Spacer(Modifier.height(MaaDesignTokens.Spacing.xs))
             RunnerToggleButton(
                 state = state,
@@ -414,11 +401,7 @@ private fun TasksContent(
 
 }
 
-/**
- * 底部运行区 split button：左段为原启停开关——Idle 显示「开始」，
- * 运行/准备中切换为「停止」，停止中降级为不可点的「停止中…」；
- * 右段为运行选项弹出（仅 UI 展示），与运行不冲突，不随运行锁定。
- */
+/** 左段启停；右段运行选项仅 UI，不随 configurationLocked */
 @Composable
 private fun RunnerToggleButton(
     state: SessionUiState,
@@ -429,8 +412,6 @@ private fun RunnerToggleButton(
     var extraOptionsExpanded by remember { mutableStateOf(false) }
     var muteGame by rememberSaveable { mutableStateOf(false) }
     var screensaverAutoplay by rememberSaveable { mutableStateOf(false) }
-    // 外缘使用紧凑 8dp 圆角，分割处保留更小圆角，2dp 分缝形成 split 视觉；
-    // 外层 Surface 只负责统一底色和轮廓，不加投影，避免底部栏向导航区落阴影。
     val outer = MaaDesignTokens.CornerRadius.inner
     val inner = 4.dp
     BoxWithConstraints(modifier = modifier) {
@@ -440,7 +421,6 @@ private fun RunnerToggleButton(
             shape = RoundedCornerShape(outer),
             color = MaterialTheme.colorScheme.surface,
         ) {
-            // 保留 M3 默认 ≥48dp 最小触控；栏高可能略增于视觉贴边
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 val toggleShape = RoundedCornerShape(
                     topStart = outer,
@@ -524,9 +504,6 @@ private fun RunnerToggleButton(
     }
 }
 
-/**
- * 启动键右段：打开由整条运行栏锚定的运行选项菜单。
- */
 @Composable
 private fun ExtraOptionsSegment(
     shape: RoundedCornerShape,
@@ -577,10 +554,7 @@ private fun ExtraOptionSwitchRow(
     }
 }
 
-/**
- * 实时截图（Live Preview）占位区域：固定 16:9。
- * 不进入 RunnerState/RunnerEvent，后续单独实现（docs/android-ui-contract.md §10）。
- */
+/** Live Preview 占位；不进 RunnerState/RunnerEvent（docs/android-ui-contract.md §10） */
 @Composable
 private fun LivePreviewPlaceholder() {
     MaaCardSurface(
@@ -610,10 +584,8 @@ private fun LivePreviewPlaceholder() {
     }
 }
 
-/** 服务器（资源）选择行：独立于配置卡，整行点击弹服务器 sheet；无候选时调用方不渲染。 */
 @Composable
 private fun ServerSelectorRow(
-    /** 当前服务器（资源）label；未选择时由调用方传入占位文案。 */
     label: String,
     locked: Boolean,
     onClick: () -> Unit,
@@ -629,7 +601,6 @@ private fun ServerSelectorRow(
             .maaClickable(enabled = !locked, onClick = onClick),
     ) {
         Row(
-            // 去掉图标/标题后行内只剩文字，垂直 padding 加大保证触控高度
             modifier = Modifier.padding(
                 horizontal = MaaDesignTokens.Spacing.md,
                 vertical = MaaDesignTokens.Spacing.md,
@@ -655,7 +626,6 @@ private fun ServerSelectorRow(
     }
 }
 
-/** 当前配置卡片：点击弹出锚定切换菜单。 */
 @Composable
 private fun ConfigurationSelectorCard(
     active: ResolvedRunConfiguration?,
@@ -675,7 +645,6 @@ private fun ConfigurationSelectorCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            // 配置标识图标块：卡片的视觉锚点
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -712,7 +681,6 @@ private fun ConfigurationSelectorCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            // 圆形 tonal 按钮：明确可点 affordance
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -731,9 +699,8 @@ private fun ConfigurationSelectorCard(
     }
 }
 
-/** 配置 sheet 内部页面：主页 / 模板预览 / 新建空配置，全程不离开 sheet。 */
 private sealed interface ConfigSheetPage {
-    /** 导航层级：决定页面切换的滑动方向（前进右进、返回左进）。 */
+    /** 导航深度；AnimatedContent 用 depth 差决定滑入方向 */
     val depth: Int
 
     data object Home : ConfigSheetPage {
@@ -753,7 +720,6 @@ private sealed interface ConfigSheetPage {
     }
 }
 
-/** 底部上弹抽屉：配置卡片 + 模板区；模板预览与新建空配置内嵌为子页，免去二次弹窗。 */
 @Composable
 private fun ConfigurationSheet(
     state: SessionUiState,
@@ -768,7 +734,6 @@ private fun ConfigurationSheet(
     onDismiss: () -> Unit,
 ) {
     var page by remember { mutableStateOf<ConfigSheetPage>(ConfigSheetPage.Home) }
-    // 主页双页签：0 = 选择配置，1 = 从模板新建；从模板预览返回时保持在模板页
     var homeTab by rememberSaveable { mutableStateOf(0) }
     val existingNames = state.configurationList.map { it.name }
 
@@ -807,7 +772,6 @@ private fun ConfigurationSheet(
                 is ConfigSheetPage.Rename -> {
                     val configuration = state.configurationList.firstOrNull { it.id == current.id }
                     if (configuration == null) {
-                        // 目标配置已消失（并发删除/重载）时退回主页
                         LaunchedEffect(current) { page = ConfigSheetPage.Home }
                     } else {
                         RenameConfigurationPage(
@@ -833,7 +797,6 @@ private fun ConfigurationSheet(
                 is ConfigSheetPage.TemplatePreview -> {
                     val template = templates.firstOrNull { it.name == current.templateName }
                     if (template == null) {
-                        // 模板已消失（项目重载）时退回主页
                         LaunchedEffect(current) { page = ConfigSheetPage.Home }
                     } else {
                         TemplatePreviewPage(
@@ -853,7 +816,6 @@ private fun ConfigurationSheet(
     }
 }
 
-/** 配置 sheet 主页：「选择配置 / 从模板新建」双页签，分别承载配置列表与模板列表。 */
 @Composable
 private fun ConfigSheetHomePage(
     state: SessionUiState,
@@ -941,7 +903,6 @@ private fun ConfigSheetHomePage(
     }
 }
 
-/** 模板预览页：命名 + 挑选任务 + 创建并使用，一步完成。 */
 @Composable
 private fun TemplatePreviewPage(
     template: ConfigurationTemplate,
@@ -955,7 +916,7 @@ private fun TemplatePreviewPage(
     var name by rememberSaveable(template.name) {
         mutableStateOf(uniqueConfigurationName(template.label, existingNames))
     }
-    // 带入任务集合：默认全选，创建时由模板声明顺序决定最终顺序
+    // 默认全选；创建顺序由模板声明序决定，不按勾选顺序
     val included = remember(template) {
         mutableStateListOf<String>().apply { templateTasks.forEach { add(it.taskName) } }
     }
@@ -1020,7 +981,6 @@ private fun TemplatePreviewPage(
     }
 }
 
-/** 模板任务行：整行可点切换是否带入；模板内停用的任务保留提示。 */
 @Composable
 private fun TemplateTaskRow(
     task: TemplateTask,
@@ -1048,7 +1008,6 @@ private fun TemplateTaskRow(
     }
 }
 
-/** 新建空配置页：命名后直接创建并使用。 */
 @Composable
 private fun CreateEmptyPage(
     writeEnabled: Boolean,
@@ -1085,7 +1044,6 @@ private fun CreateEmptyPage(
     }
 }
 
-/** 重命名配置页：预填当前名并全选，直接输入即整体替换；与新建/模板预览同为 sheet 子页。 */
 @Composable
 private fun RenameConfigurationPage(
     configuration: ResolvedRunConfiguration,
@@ -1130,7 +1088,7 @@ private fun RenameConfigurationPage(
     }
 }
 
-/** 生成不与现有配置重名的预填名称：base、base 2、base 3…（仅预填，不强制唯一）。 */
+/** 预填不重名建议名（仅预填，不强制唯一） */
 private fun uniqueConfigurationName(base: String, existing: Collection<String>): String {
     if (base !in existing) return base
     var index = 2
@@ -1138,7 +1096,6 @@ private fun uniqueConfigurationName(base: String, existing: Collection<String>):
     return "$base $index"
 }
 
-/** 新建空配置入口卡：描边占位样式，与配置卡片同尺寸。 */
 @Composable
 private fun CreateEmptyCard(
     writeEnabled: Boolean,
@@ -1176,7 +1133,6 @@ private fun CreateEmptyCard(
     }
 }
 
-/** 配置卡片：active 主色描边 + 容器底色 + 单选圈；行尾复制/重命名（滑入子页）/删除。 */
 @Composable
 private fun ConfigRowCard(
     configuration: ResolvedRunConfiguration,
@@ -1218,7 +1174,6 @@ private fun ConfigRowCard(
             ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 单选圈：active 实心主色 + 对勾
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -1303,7 +1258,6 @@ private fun TemplateCard(
         modifier = Modifier
             .maaClickable(enabled = writeEnabled, onClick = onClick)
             .alpha(if (writeEnabled) 1f else 0.5f),
-        // 行卡密度：与同 sheet 的配置行卡同档（单行 ~48dp）
         contentPadding = PaddingValues(MaaDesignTokens.Spacing.md),
     ) {
         Row(
@@ -1319,7 +1273,6 @@ private fun TemplateCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                // 复数档位由总数决定
                 text = pluralStringResource(
                     R.plurals.template_task_count,
                     template.tasks.size,
@@ -1347,7 +1300,7 @@ private fun TaskRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 未勾选的任务内容整体降透明度，只保留 Checkbox 与操作按钮的正常态
+    // 未勾选只淡化文案区；Checkbox/删除钮保持可辨
     val contentAlpha by animateFloatAsState(
         targetValue = if (task.enabled) 1f else 0.55f,
         animationSpec = MaaMotion.enter(),
@@ -1362,7 +1315,6 @@ private fun TaskRow(
         modifier = modifier
             .shadow(elevation = dragElevation, shape = MaterialTheme.shapes.medium)
             .maaClickable(enabled = task.hasOptions, onClick = onClick),
-        // 行卡密度：Checkbox 与操作钮自带 48dp 触控留白，贴边侧只留 4dp
         contentPadding = PaddingValues(
             horizontal = MaaDesignTokens.Spacing.xs,
             vertical = MaaDesignTokens.Spacing.xs,
@@ -1403,7 +1355,6 @@ private fun TaskRow(
                     )
                 }
             }
-            // 可点性提示：仅有 option 的任务行可打开设置 sheet，无 option 的行不渲染箭头
             if (task.hasOptions) {
                 Icon(
                     imageVector = Icons.Outlined.ChevronRight,

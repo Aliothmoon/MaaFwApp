@@ -49,12 +49,12 @@ import timber.log.Timber
 import java.io.File
 
 /**
- * PI description 富文本渲染：Markdown 为主、HTML 透传（与 MXU 的 marked + DOMPurify 管线同构）。
+ * PI description 富文本渲染：Markdown 为主、HTML 透传（与 MXU 的 marked + DOMPurify 管线同构）
  *
  * - `<span style>` 的 color/font-size/font-weight 由自定义 TagHandler 解析；
  *   黑白灰系颜色映射主题（深浅色都可读），彩色原样保留；
  * - 相对路径图片映射到 PI assets 目录，网络图直连；
- * - URL 形态的 description 懒加载（OkHttp + ETag 磁盘缓存），失败回落显示原始 URL。
+ * - URL 形态的 description 懒加载（OkHttp + ETag 磁盘缓存），失败回落显示原始 URL
  */
 @Composable
 fun MaaMarkdown(
@@ -64,7 +64,7 @@ fun MaaMarkdown(
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     maxLines: Int = Int.MAX_VALUE,
     linksClickable: Boolean = true,
-    /** PI 资源根（assets 相对路径），由上层注入，避免 UI 写死产品 id。 */
+    /** PI 资源根（assets 相对路径），由上层注入，避免 UI 写死产品 id */
     assetRoot: String = M9A_ASSET_ROOT,
 ) {
     val context = LocalContext.current
@@ -147,7 +147,7 @@ private fun buildMarkwon(
 private val MARKDOWN_RELATIVE_IMAGE = Regex("""(!\[[^\]]*]\()(?!https?://|file:|data:)([^)\s]+)""")
 private val HTML_RELATIVE_IMAGE = Regex("""(<img[^>]*\bsrc=")(?!https?://|file:|data:)([^"]+)""", RegexOption.IGNORE_CASE)
 
-/** 相对路径图片（md 与 <img>）重写为 PI assets URI；http/file/data 原样保留。 */
+/** 相对路径图片（md 与 <img>）重写为 PI assets URI；http/file/data 原样保留 */
 private fun rewriteRelativeImages(body: String, assetRoot: String = M9A_ASSET_ROOT): String {
     val prefix = "file:///android_asset/$assetRoot/"
     return body
@@ -160,9 +160,9 @@ private fun rewriteRelativeImages(body: String, assetRoot: String = M9A_ASSET_RO
 }
 
 /**
- * `<span style="color:…;font-size:…px;font-weight:bold">` 处理器。
+ * `<span style="color:…;font-size:…px;font-weight:bold">` 处理器
  * Markwon HtmlPlugin 默认丢弃内联 CSS，这里补齐并做主题映射：
- * 黑/白 -> onSurface，灰系 -> onSurfaceVariant，其余彩色尊重作者原意。
+ * 黑/白 -> onSurface，灰系 -> onSurfaceVariant，其余彩色尊重作者原意
  */
 private class StyledSpanTagHandler(
     private val onSurface: Int,
@@ -216,7 +216,7 @@ private class StyledSpanTagHandler(
         Regex("""(\d+)\s*px""").find(raw.trim())?.groupValues?.get(1)?.toIntOrNull()
 
     companion object {
-        /** Android Color.parseColor 不认识的常用 CSS 颜色名。 */
+        /** Android Color.parseColor 不认识的常用 CSS 颜色名 */
         private val CSS_COLORS: Map<String, Int> = mapOf(
             "crimson" to 0xFFDC143C.toInt(),
             "tomato" to 0xFFFF6347.toInt(),
@@ -237,14 +237,14 @@ private class StyledSpanTagHandler(
     }
 }
 
-/** URL 形态 description 的拉取器：OkHttp + ETag 磁盘缓存（对齐 MXU cachedFetch）。 */
+/** URL 形态 description 的拉取器：OkHttp + ETag 磁盘缓存（对齐 MXU cachedFetch） */
 class DescriptionFetcher private constructor(context: Context) {
 
     private val client = OkHttpClient.Builder()
         .cache(Cache(File(context.cacheDir, "pi_description_http"), CACHE_SIZE_BYTES))
         .build()
 
-    /** 失败时回落返回原始 URL 文本（同 MXU：加载失败展示原文）。 */
+    /** 失败时回落返回原始 URL 文本（同 MXU：加载失败展示原文） */
     suspend fun fetch(url: String): String = withContext(Dispatchers.IO) {
         try {
             client.newCall(Request.Builder().url(url).build()).execute().use { response ->

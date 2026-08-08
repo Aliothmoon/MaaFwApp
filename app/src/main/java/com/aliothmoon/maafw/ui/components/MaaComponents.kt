@@ -47,7 +47,6 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.i18n.localized
 
-/** M3 Card 之上的统一卡片封装（自建设计系统的 Maa* wrapper 层）。 */
 @Composable
 fun MaaCard(
     modifier: Modifier = Modifier,
@@ -83,10 +82,7 @@ fun MaaCard(
     }
 }
 
-/**
- * 动态标签与固定尾控件的安全横排：尾控件保留固有宽度，标签只使用剩余空间并自然换行。
- * 避免本地化文案或 PI label 先占满整行后把 Switch/Icon 挤出容器。
- */
+/** 尾控件固宽，标签占剩余并换行，避免长 label 挤掉 Switch/Icon */
 @Composable
 fun MaaLabeledControlRow(
     label: String,
@@ -115,10 +111,7 @@ fun MaaLabeledControlRow(
     }
 }
 
-/**
- * 卡片视觉的低层 Surface：设计系统卡片配方（medium 圆角 + 轻投影 + 发丝描边）。
- * 供需要 Surface 语义（可点行卡、自定义底色/描边）的容器复用，普通内容卡用 [MaaCard]。
- */
+/** 卡片配方 Surface；普通内容卡用 [MaaCard] */
 @Composable
 fun MaaCardSurface(
     modifier: Modifier = Modifier,
@@ -136,11 +129,7 @@ fun MaaCardSurface(
     )
 }
 
-/**
- * 主题把 outline 定义为发丝分隔线色（与 surfaceContainerHighest 同值），
- * M3 Switch 未选中态的滑块/描边默认取 outline，会与轨道糊成一个纯色药丸；
- * 这里统一改用 onSurfaceVariant 保证滑块可辨识。
- */
+/** outline 作分隔线色时 M3 未选中滑块会糊进轨道；改用 onSurfaceVariant */
 @Composable
 fun MaaSwitch(
     checked: Boolean,
@@ -160,7 +149,6 @@ fun MaaSwitch(
     )
 }
 
-/** 诊断行统一渲染：Error 红色、其余弱化；showSeverity 追加 [severity] 前缀。 */
 @Composable
 fun MaaDiagnosticList(
     diagnostics: List<Diagnostic>,
@@ -182,10 +170,7 @@ fun MaaDiagnosticList(
     }
 }
 
-/**
- * 无涟漪设计下的按压反馈：按下缩放 0.97、松手回弹。
- * indication 走主题的 NoIndication，只保留缩放手感。
- */
+/** 无涟漪；按下缩放 0.97 */
 fun Modifier.maaClickable(
     enabled: Boolean = true,
     onClick: () -> Unit,
@@ -213,7 +198,6 @@ fun Modifier.maaClickable(
         )
 }
 
-/** 键值信息行。 */
 @Composable
 fun MaaInfoRow(label: String, value: String) {
     Row(
@@ -236,7 +220,6 @@ fun MaaInfoRow(label: String, value: String) {
     }
 }
 
-/** 语义色小徽章：容器底色圆角块，用于状态标签、计数与轻量操作提示。 */
 @Composable
 fun MaaToneBadge(
     text: String,

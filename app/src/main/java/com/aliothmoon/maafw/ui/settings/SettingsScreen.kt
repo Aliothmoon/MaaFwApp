@@ -79,7 +79,7 @@ private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> U
 private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     MaaCard(title = stringResource(R.string.settings_language)) {
         // 事实来源在平台侧 per-app locale（AppLocales），不进 UserConfiguration；
-        // 切换后 Activity 重建，本处在新组合中重新读取，无需观察流。
+        // 切换后 Activity 重建，本处在新组合中重新读取，无需观察流
         // 语言名按惯例保持本族语原文，不随界面语言翻译
         val options = listOf<Pair<String?, String>>(
             null to stringResource(R.string.settings_follow_system),

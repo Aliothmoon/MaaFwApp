@@ -21,7 +21,7 @@ import com.aliothmoon.maafw.R
 
 /**
  * 就地展开的提示图标 + 内容区（移植自 MaaMeow 的 ExpandableTip 模式）：
- * 小 Info 图标点击切换，内容在原位置垂直展开，不打断当前上下文。
+ * 小 Info 图标点击切换，内容在原位置垂直展开，不打断当前上下文
  */
 @Composable
 fun ExpandableTipIcon(

@@ -26,10 +26,7 @@ import com.aliothmoon.maafw.domain.UnavailableReason
 import com.aliothmoon.maafw.domain.UserConfiguration
 import java.util.UUID
 
-/**
- * 定义与用户状态的只读投影。纯函数，不持久化、不产生副作用；
- * 派生的 effectiveEnabled / applicable 不写回 DataStore。
- */
+/** 定义 × 用户状态投影；纯函数，effectiveEnabled/applicable 不写回 DataStore */
 object ConfigurationResolver {
 
     private const val MAX_OPTION_DEPTH = 8
@@ -80,9 +77,9 @@ object ConfigurationResolver {
         )
     }
 
-    /** 首次初始化：每个 PI preset 创建一个独立 RunConfiguration；没有 preset 保持空列表。 */
+    /** 每个 preset 一份配置；无 preset 则空列表 */
     fun initialize(definition: ProjectDefinition, config: UserConfiguration): UserConfiguration {
-        // 与用户手动「从模板创建」走同一条投影，保证两条路径不漂移
+        // 与「从模板创建」同路径，避免两条入口语义漂移
         val configurations = definition.templates.mapNotNull { createFromTemplate(definition, it.name) }
         return config.copy(
             initialized = true,
@@ -94,9 +91,8 @@ object ConfigurationResolver {
     }
 
     /**
-     * 从模板创建新配置：仅创建瞬间复制内容，不保存模板引用。
-     * configurationName 为空白/null 时沿用模板展示名（label）；taskNames 为 null 表示全部任务，
-     * 非 null 时按模板声明顺序保留其中出现的任务。
+     * 创建瞬间复制模板，不保存模板引用
+     * configurationName 空白/null 沿用 label；taskNames null = 全部，非 null 按声明序过滤
      */
     fun createFromTemplate(
         definition: ProjectDefinition,
@@ -169,7 +165,7 @@ object ConfigurationResolver {
         )
     }
 
-    /** 返回 null 表示适用；否则返回结构化不可用原因（文案由 UI 层本地化）。 */
+    /** null = 适用；否则结构化原因，文案由 UI 本地化 */
     fun checkApplicability(
         definition: ProjectDefinition,
         task: TaskDefinition,
@@ -210,10 +206,7 @@ object ConfigurationResolver {
         }.filter { it.tasks.isNotEmpty() }
     }
 
-    /**
-     * 构建 option 编辑树：只物化活动分支（active branch），
-     * dormant 值保留在持久层；防御 cycle 与超深嵌套。
-     */
+    /** 只物化 active branch；dormant 留持久层；防 cycle / 过深嵌套 */
     private fun buildOptionEditors(
         definition: ProjectDefinition,
         optionNames: List<String>,
@@ -239,7 +232,7 @@ object ConfigurationResolver {
         val value = values[option.name]
         return when (option) {
             is OptionDefinition.Choice -> {
-                // Unset 且没有 defaultCase 时保持无活动 case，不隐式选第一项
+                // Unset 且无 defaultCase 时不隐式选第一项
                 val selected = (value as? OptionValue.SingleCase)?.case
                     ?.takeIf { s -> option.cases.any { it.name == s } }
                     ?: option.defaultCase
@@ -256,7 +249,7 @@ object ConfigurationResolver {
             }
 
             is OptionDefinition.Checkbox -> {
-                // MultipleCases(emptyList()) 是明确的“全不选”，仅 Unset 才回退默认值
+                // emptyList() = 明确全不选；仅 Unset 才回退默认
                 val selected = (value as? OptionValue.MultipleCases)?.cases ?: option.defaultCases
                 OptionEditorState(
                     name = option.name,
@@ -297,7 +290,7 @@ object ConfigurationResolver {
         }
     }
 
-    /** Choice/Checkbox 共用的 case 投影：仅活动 case 物化子树。 */
+    /** 仅活动 case 物化子树 */
     private fun buildCaseStates(
         definition: ProjectDefinition,
         cases: List<OptionCaseDefinition>,

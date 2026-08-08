@@ -6,8 +6,8 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
 
 /**
- * 统一动效规范（M3 Expressive emphasized 缓动）。
- * 进入用减速曲线（先快后慢），退出用加速曲线（先慢后快）。
+ * 统一动效规范（M3 Expressive emphasized 缓动）
+ * 进入用减速曲线（先快后慢），退出用加速曲线（先慢后快）
  */
 object MaaMotion {
     const val DURATION_SHORT = 150

@@ -24,9 +24,9 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
  * 统一的 modal sheet 脚手架：固定 3/5 高度、跳过半展开、禁用手势拖拽
- * （内容区滚动不牵动 sheet，关闭走标题栏按钮/遮罩/返回键）、无拖拽把手。
+ * （内容区滚动不牵动 sheet，关闭走标题栏按钮/遮罩/返回键）、无拖拽把手
  * content 收到的 Modifier 已带高度/水平边距/顶部间距/导航栏 inset，
- * 调用方按需追加 imePadding、底部间距等。
+ * 调用方按需追加 imePadding、底部间距等
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +50,7 @@ fun MaaModalSheet(
     }
 }
 
-/** 无拖拽把手 sheet 的统一标题栏：可选返回键 + 标题 + 关闭钮（M3 默认 ≥48dp 触控）。 */
+/** 无拖拽把手 sheet 的统一标题栏：可选返回键 + 标题 + 关闭钮（M3 默认 ≥48dp 触控） */
 @Composable
 fun MaaSheetHeader(
     title: String,

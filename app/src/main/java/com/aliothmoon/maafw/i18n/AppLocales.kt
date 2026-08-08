@@ -4,10 +4,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import java.util.Locale
 
-/**
- * App 外壳当前只提供英文与简体中文。PI 必须使用同一支持范围，避免跟随未支持的
- * 系统语言时出现「外壳简中、项目内容日/韩/繁中」的混合界面。
- */
+/** 外壳仅 en/zh-CN；PI 同步此范围，避免外壳与项目语言混用 */
 object AppLanguagePolicy {
     fun projectLocaleTag(appLocaleTag: String?, systemLocaleTag: String): String {
         val requested = appLocaleTag?.takeIf { it.isNotBlank() } ?: systemLocaleTag
@@ -16,29 +13,26 @@ object AppLanguagePolicy {
     }
 }
 
-/** App 语言切换 seam，便于 ViewModel 单测注入。 */
+/** 便于 ViewModel 单测注入 */
 fun interface LocaleController {
     fun apply(tag: String?)
 }
 
 /**
- * APP 语言的唯一事实来源是平台侧 per-app locale：
- * API 33+ 由系统持久化（与系统设置的应用语言入口互通，manifest 已声明 localeConfig），
- * API 32- 由 appcompat autoStoreLocales 持久化并在 Activity 附着前回放。
- * 不在 DataStore 另存副本，避免两处存储漂移。
+ * 事实来源为平台 per-app locale，不进 DataStore
+ * API 33+ 系统持久化；API 32- appcompat autoStoreLocales
  */
 object AppLocales : LocaleController {
 
-    /** 当前 App 级 locale tag（如 zh-CN）；null 表示跟随系统。 */
+    /** null = 跟随系统 */
     fun currentTag(): String? = AppCompatDelegate.getApplicationLocales()[0]?.toLanguageTag()
 
-    /** 当前 PI 应使用的语言；与 App 外壳实际支持范围保持一致。 */
     fun currentProjectTag(): String = AppLanguagePolicy.projectLocaleTag(
         appLocaleTag = currentTag(),
         systemLocaleTag = Locale.getDefault().toLanguageTag(),
     )
 
-    /** 切换 App 语言（null 恢复跟随系统），已启动的 Activity 会随之重建。 */
+    /** null 恢复跟随系统；已启动 Activity 会重建 */
     override fun apply(tag: String?) {
         AppCompatDelegate.setApplicationLocales(
             if (tag == null) LocaleListCompat.getEmptyLocaleList()

@@ -2,10 +2,10 @@ package com.aliothmoon.maafw.project
 
 /**
  * description 内容形态判定（对齐 MXU contentResolver 的启发式）：
- * URL / 文件路径 / 直接文本。$i18n 形态在进入判定前已由加载期物化。
+ * URL / 文件路径 / 直接文本$i18n 形态在进入判定前已由加载期物化
  */
 
-/** http(s) URL：加载期原样保留，UI 层懒加载。 */
+/** http(s) URL：加载期原样保留，UI 层懒加载 */
 fun isRemoteUrl(content: String): Boolean =
     content.startsWith("https://") || content.startsWith("http://")
 
@@ -16,8 +16,8 @@ private val UPPERCASE_NAME = Regex("""^[A-Z][A-Z0-9_\-]*$""")
 
 /**
  * 文件路径特征：./ 或 ../ 前缀；简单文件名的常见文档扩展名；
- * 或不含空白/HTML 标签的简单文件名（全大写如 LICENSE，或带路径分隔符）。
- * 带空格的路径需显式使用 ./ 或 ../，避免把以 .html 等结尾的本地化正文误判为路径。
+ * 或不含空白/HTML 标签的简单文件名（全大写如 LICENSE，或带路径分隔符）
+ * 带空格的路径需显式使用 ./ 或 ../，避免把以 .html 等结尾的本地化正文误判为路径
  */
 fun isFilePath(content: String): Boolean {
     if (isRemoteUrl(content)) return false

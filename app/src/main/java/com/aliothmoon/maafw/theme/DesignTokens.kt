@@ -32,7 +32,7 @@ object MaaDesignTokens {
     }
 
     object Sheet {
-        /** 全部 modal sheet 统一固定高度：屏幕的 3/5。 */
+        /** 全部 modal sheet 统一固定高度：屏幕的 3/5 */
         const val heightFraction = 0.6f
     }
 }

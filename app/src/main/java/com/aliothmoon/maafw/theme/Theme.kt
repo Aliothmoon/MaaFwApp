@@ -121,10 +121,10 @@ private val BlueDark = createDarkColorScheme(
     onPrimaryContainer = Color(0xFFDBEAFE)
 )
 
-/** 徽章/状态用的语义配色对：content + container。 */
+/** 徽章/状态用的语义配色对：content + container */
 data class MaaTone(val content: Color, val container: Color)
 
-/** M3 colorScheme 之外的语义扩展色（成功/警示/信息/强调），随主题明暗切换。 */
+/** M3 colorScheme 之外的语义扩展色（成功/警示/信息/强调），随主题明暗切换 */
 data class MaaPalette(
     val success: MaaTone,
     val warning: MaaTone,
@@ -132,7 +132,7 @@ data class MaaPalette(
     val violet: MaaTone,
     val neutral: MaaTone,
 ) {
-    /** 按稳定顺序取一组强调色，用于分组徽章、任务色条等。 */
+    /** 按稳定顺序取一组强调色，用于分组徽章、任务色条等 */
     val accents: List<MaaTone> get() = listOf(info, violet, warning, success)
 }
 

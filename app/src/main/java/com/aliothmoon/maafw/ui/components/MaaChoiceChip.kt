@@ -24,8 +24,8 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
  * 单选胶囊 chip：宽度随文字自适应，配合 FlowRow 平铺换行；
- * 选中态 primaryContainer 底 + primary 描边（选项胶囊与分组页签共用此实现）。
- * leading 为可选前置装饰（如分组色点）。
+ * 选中态 primaryContainer 底 + primary 描边（选项胶囊与分组页签共用此实现）
+ * leading 为可选前置装饰（如分组色点）
  */
 @Composable
 fun MaaChoiceChip(
@@ -92,7 +92,7 @@ fun MaaChoiceChip(
     }
 }
 
-/** 内容宽度单选组；空间不足时整颗 chip 换行，不在等分单元内挤压标签。 */
+/** 内容宽度单选组；空间不足时整颗 chip 换行，不在等分单元内挤压标签 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun <T> MaaSingleChoiceFlow(

@@ -13,7 +13,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 /**
  * 描述面板：secondaryContainer 浅底色 + 内圆角的静态容器，
  * 用于 option 描述、任务说明等常驻说明文本；
- * ExpandableTipContent 的展开面板复用同一视觉，保证全局描述观感一致。
+ * ExpandableTipContent 的展开面板复用同一视觉，保证全局描述观感一致
  */
 @Composable
 fun MaaDescriptionPanel(

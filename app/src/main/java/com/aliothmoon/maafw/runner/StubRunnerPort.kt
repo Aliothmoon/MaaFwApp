@@ -29,10 +29,7 @@ data class StubRunnerScenario(
     val emitProgress: Boolean = true,
 )
 
-/**
- * 模拟 RunnerPort 领域行为的 Stub，用于 UI 开发与 ViewModel 测试。
- * 不写 UserConfiguration，不调用 Builder，不解析 PI。
- */
+/** Stub：不写配置、不调 Builder、不解析 PI */
 class StubRunnerPort(
     private val scope: CoroutineScope,
     private val scenario: StubRunnerScenario = StubRunnerScenario(),
@@ -49,7 +46,7 @@ class StubRunnerPort(
 
     private val commandMutex = Mutex()
 
-    /** stopRequested 属于唯一 executionId 对应的执行上下文，不跨轮次共享。 */
+    /** stopRequested 绑定单次 executionId，不跨轮次 */
     private var currentContext: ExecutionContext? = null
 
     private class ExecutionContext(val executionId: String) {
@@ -81,7 +78,6 @@ class StubRunnerPort(
         if (context == null || phase == RunnerPhase.Idle || phase is RunnerPhase.Unavailable) {
             return RunnerCommandResult.Rejected("NotRunning")
         }
-        // 重复 Stop 只重复置位，无额外副作用
         context.stopRequested.set(true)
         _state.update { it.copy(phase = RunnerPhase.Stopping) }
         RunnerCommandResult.Accepted
@@ -116,7 +112,7 @@ class StubRunnerPort(
             delay(scenario.taskDelayMillis)
             if (context.stopRequested.get()) break
 
-            // 子任务失败隔离：单个失败不终止后续任务
+            // 单任务失败不终止后续
             val result = when (val outcome = scenario.taskOutcomes[task.taskName] ?: StubTaskOutcome.Success) {
                 is StubTaskOutcome.Success -> TaskResult(task.taskName, success = true)
                 is StubTaskOutcome.Failure -> TaskResult(task.taskName, success = false, message = outcome.message)

@@ -55,7 +55,7 @@ class SessionViewModel(
     private val effectChannel = Channel<SessionEffect>(Channel.BUFFERED)
     val effects: Flow<SessionEffect> = effectChannel.receiveAsFlow()
 
-    /** Intent 经单一 Channel 串行消费，保证用户配置串行更新。 */
+    // Intent 串行消费，保证配置写入不交错
     private val intents = Channel<SessionIntent>(Channel.UNLIMITED)
 
     init {
@@ -64,7 +64,6 @@ class SessionViewModel(
             for (intent in intents) handle(intent)
         }
         viewModelScope.launch {
-            // 首次初始化：项目就绪且未初始化时按 preset 建立初始配置
             combine(projectRepository.state, configurationStore.data) { p, c -> p to c }
                 .collect { (project, config) ->
                     if (project is ProjectState.Ready && !config.initialized) {
@@ -81,8 +80,7 @@ class SessionViewModel(
         intents.trySend(intent)
     }
 
-    // resolve 只依赖 (project, config)；runner tick 触发的 combine 直接复用上次结果。
-    // combine transform 串行执行，无并发访问。
+    // resolve 只依赖 (project, config)；runner tick 触发 combine 时复用缓存
     private var resolveCacheKey: Pair<ProjectState, UserConfiguration>? = null
     private var resolveCacheValue: ResolvedProjectSession? = null
 
@@ -185,7 +183,6 @@ class SessionViewModel(
 
             is SessionIntent.ConfirmAddTasks -> guarded {
                 mutateConfiguration(intent.configurationId) { configuration ->
-                    // 允许重复 taskName：每个名称都追加为独立实例
                     val added = intent.orderedTaskNames.map { ConfiguredTask(taskName = it) }
                     configuration.copy(tasks = configuration.tasks + added)
                 }
@@ -224,14 +221,14 @@ class SessionViewModel(
                 configurationStore.update { it.copy(activeResourceName = intent.resourceName) }
             }
 
-            // 纯展示偏好不参与锁定，也不触发 ProjectDefinition 或 RunPlan 改变
+            // 展示偏好不锁配置、不改变 Definition/RunPlan
             is SessionIntent.SetThemeMode ->
                 configurationStore.update { it.copy(themeMode = intent.mode) }
 
             is SessionIntent.SetDeveloperMode ->
                 configurationStore.update { it.copy(developerMode = intent.enabled) }
 
-            // 语言切换连带项目重载（翻译在加载期物化），运行期间与其他配置修改同样拦截
+            // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {
                 localeController.apply(intent.localeTag)
             }
@@ -245,10 +242,7 @@ class SessionViewModel(
         }
     }
 
-    /**
-     * ConfigurationMutationGate：写入前读取最新 RunnerState 再次拒绝，
-     * 是 Screen 禁用之外的第二层锁（契约要求，非纯 UI）。
-     */
+    /** Screen 禁用之外的第二层写锁：写入前再读 RunnerState */
     private suspend fun guarded(block: suspend () -> Unit) {
         if (locked()) {
             effectChannel.send(SessionEffect.ShowMessage(SessionMessage.ConfigurationLocked))
@@ -259,7 +253,6 @@ class SessionViewModel(
 
     private fun locked(): Boolean = runnerPort.state.value.phase.isBusy
 
-    /** 新建配置统一动作：追加到列表末尾并立即设为活动配置。 */
     private suspend fun appendAndActivate(configuration: RunConfiguration) {
         configurationStore.update { config ->
             config.copy(

@@ -11,7 +11,7 @@ import kotlinx.serialization.json.Json
 import java.io.InputStream
 import java.io.OutputStream
 
-/** UserConfiguration 的读写 seam；DataStore 是唯一事实来源。 */
+/** DataStore 为唯一事实来源 */
 interface UserConfigurationStore {
     val data: Flow<UserConfiguration>
     suspend fun update(transform: (UserConfiguration) -> UserConfiguration): UserConfiguration
@@ -27,7 +27,7 @@ class DataStoreUserConfigurationStore(
         dataStore.updateData(transform)
 }
 
-/** schemaVersion 信封属于序列化层内部实现，不出现在领域名称中。 */
+/** schemaVersion 信封仅序列化层使用，不进领域名 */
 @Serializable
 private data class PersistedUserConfiguration(
     val schemaVersion: Int,
@@ -35,9 +35,9 @@ private data class PersistedUserConfiguration(
 )
 
 /**
- * 版本策略见 docs/persistence-diagnostics.md §9：
- * schemaVersion 不受支持时不做猜测式转换，重置为未初始化状态重走首次初始化；
- * 信封级损坏数据抛 CorruptionException，由 ReplaceFileCorruptionHandler 兜底。
+ * 见 docs/persistence-diagnostics.md §9
+ * 不支持的 schemaVersion 不猜迁移，重置未初始化
+ * 信封损坏抛 CorruptionException，由 ReplaceFileCorruptionHandler 兜底
  */
 object UserConfigurationSerializer : Serializer<UserConfiguration> {
 

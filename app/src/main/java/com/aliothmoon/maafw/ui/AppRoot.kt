@@ -78,10 +78,7 @@ private enum class TopDestination(
     Settings(R.string.nav_settings, Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
-/**
- * Route 层：生命周期感知收集、Effect 消费与顶层导航。
- * SessionViewModel 为 Activity 作用域，三个 tab 观察同一实例。
- */
+/** Route：收集 state、消费 Effect、承载三 tab；VM 为 Activity 作用域 */
 @Composable
 fun AppRoot(
     onDarkThemeChanged: (Boolean) -> Unit,
@@ -89,8 +86,7 @@ fun AppRoot(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // 语言变化的唯一重载触发点：App 内切换与系统设置入口都以 Activity 重建落地，
-    // 重建后这里发现 locale tag 与上次不同，以新语言重载 PI 定义（翻译在加载期物化）。
+    // 语言重载唯一触发点：App/系统切语言都经 Activity 重建后到此
     val localeTag = LocalConfiguration.current.locales[0]?.toLanguageTag().orEmpty()
     var lastLocaleTag by rememberSaveable { mutableStateOf(localeTag) }
     LaunchedEffect(localeTag) {
@@ -108,7 +104,6 @@ fun AppRoot(
     LaunchedEffect(darkTheme) { onDarkThemeChanged(darkTheme) }
 
     MaaFwTheme(darkTheme = darkTheme) {
-        // pager 是选中 tab 的唯一事实来源：滑动切页、点 tab 平滑滚动
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
         val scope = rememberCoroutineScope()
         val snackbarHostState = remember { SnackbarHostState() }
@@ -131,9 +126,8 @@ fun AppRoot(
             containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-                // 自定义紧凑底栏：M3 NavigationBar 默认 80dp 且内部 padding 不可调，自建 56dp 版本
+                // M3 NavigationBar 固定 80dp 且 padding 不可调，自建 56dp
                 Column {
-                    // 发丝顶部分隔线，替代默认 tonal elevation 的着色阴影
                     HorizontalDivider(
                         thickness = MaaDesignTokens.Separator.thickness,
                         color = MaterialTheme.colorScheme.outline,

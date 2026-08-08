@@ -68,10 +68,8 @@ import com.aliothmoon.maafw.ui.i18n.localized
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 
 /**
- * 任务目录选择器：按 PI group 分组线性平铺，checkbox 多选后一次确认。
- * draft 只存在 UI 态，保持点选顺序，只有确认才发 ConfirmAddTasks；
- * 不标记也不限制已在配置中的任务，确认后一律追加为独立实例。
- * 支持搜索过滤。
+ * 任务目录多选；draft 仅 UI 态，确认才发 ConfirmAddTasks
+ * 不限制已添加任务，一律追加独立实例
  */
 @Composable
 fun AddTasksSheet(
@@ -80,14 +78,13 @@ fun AddTasksSheet(
     onConfirm: (List<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // 有序 draft：同一 taskName 跨分组共享选中态
+    // 有序 draft；同 taskName 跨分组共享选中态
     val selected = remember(catalog) { mutableStateListOf<String>() }
     var query by rememberSaveable { mutableStateOf("") }
-    // 顶部分组页签选中的组；目录变化时回落到首组
     var selectedGroupName by rememberSaveable(catalog) {
         mutableStateOf(catalog.firstOrNull()?.groupName.orEmpty())
     }
-    // 分组色调按完整目录固定，过滤时不跳色
+    // 色调按完整目录固定，搜索过滤时不跳色
     val accents = MaaTheme.palette.accents
     val toneByGroup = remember(catalog, accents) {
         catalog.mapIndexed { index, group -> group.groupName to accents[index % accents.size] }.toMap()
@@ -151,7 +148,6 @@ fun AddTasksSheet(
                     )
                 }
 
-                // 搜索态：跨全部分组过滤，保留组头标识来源
                 query.isNotBlank() -> LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
@@ -174,7 +170,6 @@ fun AddTasksSheet(
                     }
                 }
 
-                // 浏览态：顶部分组页签 + 当前组任务列表
                 else -> {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
                         items(catalog, key = { it.groupName }) { group ->
@@ -223,7 +218,6 @@ fun AddTasksSheet(
 
 }
 
-/** 分组页签：MaaChoiceChip + 前置分组色点。 */
 @Composable
 private fun GroupTabChip(
     label: String,
@@ -246,7 +240,7 @@ private fun GroupTabChip(
     )
 }
 
-/** 有序 draft 的勾选切换：加入保持点选顺序，重复勾选不追加。 */
+/** 有序 draft：加入保持点选序，重复勾选不追加 */
 internal fun MutableList<String>.setPresent(name: String, present: Boolean) {
     if (present) {
         if (name !in this) add(name)
@@ -255,7 +249,6 @@ internal fun MutableList<String>.setPresent(name: String, present: Boolean) {
     }
 }
 
-/** 分组标题：accents 循环色点 + 同色组名（docs：分组徽章）。 */
 @Composable
 private fun GroupHeader(group: TaskCatalogGroup, tone: MaaTone) {
     Row(
@@ -280,7 +273,6 @@ private fun GroupHeader(group: TaskCatalogGroup, tone: MaaTone) {
     }
 }
 
-/** 目录任务行：checkbox 多选，整行可点切换；不标记已添加状态。 */
 @Composable
 private fun CatalogRow(
     item: TaskCatalogItem,
@@ -288,7 +280,6 @@ private fun CatalogRow(
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    // 就地展开态：列表回收后收起即可，无需跨会话保存
     var expanded by remember(item.taskName) { mutableStateOf(false) }
     Row(
         modifier = Modifier
@@ -320,7 +311,6 @@ private fun CatalogRow(
                     color = MaterialTheme.colorScheme.error,
                 )
 
-                // 收起时不显示描述，说明只经 tip 图标展开（同 MaaMeow 语义）
                 !item.description.isNullOrBlank() -> ExpandableTipContent(visible = expanded) {
                     MaaMarkdown(
                         text = item.description,
@@ -332,7 +322,6 @@ private fun CatalogRow(
     }
 }
 
-/** 单个任务的 option 编辑 sheet：承载该任务全部 option 及活动子树。 */
 @Composable
 fun TaskOptionSheet(
     task: ResolvedConfiguredTask,
@@ -374,10 +363,7 @@ fun TaskOptionSheet(
     }
 }
 
-/**
- * 服务器（资源）切换 sheet：点选即切换并收起。
- * 与设置页资源卡走同一条 SelectResource 链路，两处状态天然同步。
- */
+/** 点选即切换；与设置页共用 SelectResource */
 @Composable
 fun ServerSwitchSheet(
     candidates: List<ResolvedResource>,
@@ -408,7 +394,6 @@ fun ServerSwitchSheet(
     }
 }
 
-/** 服务器候选行：单选圈 + 高亮样式与配置列表同款。 */
 @Composable
 private fun ServerRowCard(
     resource: ResolvedResource,

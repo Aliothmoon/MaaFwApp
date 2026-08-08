@@ -12,10 +12,7 @@ import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
 
-/**
- * Session* 指跨页面共享的整个工作会话（Activity 作用域），
- * 所有顶层目的地观察同一实例。UI 只观察聚合状态。
- */
+/** 跨页工作会话聚合态；Activity 作用域单实例，UI 只读 */
 data class SessionUiState(
     val projectState: ProjectState = ProjectState.Loading,
     val configurationList: List<ResolvedRunConfiguration> = emptyList(),
@@ -27,26 +24,24 @@ data class SessionUiState(
     val themeMode: ThemeMode = ThemeMode.System,
     val developerMode: Boolean = false,
 ) {
-    /** 锁定唯一规则：runner 忙碌（见 RunnerPhase.isBusy）。 */
+    /** 唯一锁定规则：RunnerPhase.isBusy */
     val configurationLocked: Boolean
         get() = runner.phase.isBusy
 
-    /** 面向用户的诊断合流：项目加载诊断 + 会话解析诊断（各页统一读这里）。 */
+    /** 项目加载诊断 + 会话解析诊断合流 */
     val visibleDiagnostics: List<Diagnostic>
         get() = (projectState as? ProjectState.Ready)?.diagnostics.orEmpty() + sessionDiagnostics
 
-    /** 启动按钮可用性的单一出处；Builder 侧仍会对可执行任务做最终校验。 */
     val canStart: Boolean
         get() = runner.phase == RunnerPhase.Idle && activeConfiguration != null
 }
 
-/** 封闭的语义 Intent，Screen 不直接构造 copy。 */
 sealed interface SessionIntent {
     data class CreateConfiguration(val name: String) : SessionIntent
 
     /**
-     * configurationName 为空白/null 时沿用模板名；taskNames 为 null 表示带入模板全部任务，
-     * 非 null 时按模板声明顺序保留其中出现的任务。
+     * configurationName 空白/null 沿用模板名
+     * taskNames null = 模板全部任务，非 null 按模板声明序过滤
      */
     data class CreateFromTemplate(
         val templateName: String,
@@ -58,7 +53,7 @@ sealed interface SessionIntent {
     data class RenameConfiguration(val id: RunConfigurationId, val name: String) : SessionIntent
     data class DeleteConfiguration(val id: RunConfigurationId) : SessionIntent
 
-    /** 允许重复 taskName：每个名称都新建一个独立 ConfiguredTask 实例。 */
+    /** 每个名称追加独立 ConfiguredTask 实例（可重复 taskName） */
     data class ConfirmAddTasks(
         val configurationId: RunConfigurationId,
         val orderedTaskNames: List<String>,
@@ -75,7 +70,7 @@ sealed interface SessionIntent {
         val enabled: Boolean,
     ) : SessionIntent
 
-    /** targetIndex 为移除原位置后目标插入位置。 */
+    /** targetIndex：移除原位置后的插入下标 */
     data class MoveTask(
         val configurationId: RunConfigurationId,
         val taskInstanceId: String,
@@ -93,8 +88,8 @@ sealed interface SessionIntent {
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent
 
     /**
-     * 切换 App 语言（null = 跟随系统）。事实来源在平台侧 per-app locale（AppLocales），
-     * 落地路径：Activity 重建 -> AppRoot 检测 locale 变化 -> ReloadProject 以新语言重载 PI。
+     * null = 跟随系统；事实来源 AppLocales
+     * 落地：Activity 重建 → AppRoot 检测 locale → ReloadProject
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
     data class SetDeveloperMode(val enabled: Boolean) : SessionIntent
@@ -104,16 +99,13 @@ sealed interface SessionIntent {
     data object Stop : SessionIntent
 }
 
-/** 一次性消息，不长期存进 UiState，不在重组时重复触发。 */
+/** 一次性 Effect，不进 UiState */
 sealed interface SessionEffect {
     data class ShowMessage(val message: SessionMessage) : SessionEffect
     data class ShowDiagnostics(val diagnostics: List<Diagnostic>) : SessionEffect
 }
 
-/**
- * VM 一次性提示的结构化语义：VM 无 Context，文案由 UI 层映射 string 资源。
- * reason 载荷来自 Runner 契约，是面向排查的技术性文本，原样拼进提示尾部。
- */
+/** VM 无 Context；reason 为 Runner 技术文本，UI 拼进提示尾部 */
 sealed interface SessionMessage {
     data object ConfigurationLocked : SessionMessage
     data object ProjectNotLoaded : SessionMessage

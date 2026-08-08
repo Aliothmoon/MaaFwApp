@@ -32,7 +32,7 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import timber.log.Timber
 
-/** 进程级后台 scope 标记，避免与其它 CoroutineScope 绑定冲突。 */
+/** 进程级 scope 限定符，避免与其它 CoroutineScope 绑定冲突 */
 object AppCoroutineScope
 
 class MaaFwApp : Application() {
@@ -65,14 +65,14 @@ val appModule = module {
     single<DataStore<UserConfiguration>> {
         DataStoreFactory.create(
             serializer = UserConfigurationSerializer,
-            // 信封级损坏数据：重置为未初始化，重走首次初始化（docs/persistence-diagnostics.md §9）
+            // 信封损坏 → 未初始化，重走首次初始化（docs/persistence-diagnostics.md §9）
             corruptionHandler = ReplaceFileCorruptionHandler { UserConfiguration() },
             produceFile = { androidContext().dataStoreFile("user_configuration.json") },
         )
     }
     single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
 
-    // UI 阶段绑定 StubRunnerPort；接入 JNI 后替换为 MaaFrameworkRunnerPort
+    // 接入 JNI 后替换为 MaaFrameworkRunnerPort
     single<RunnerPort> { StubRunnerPort(scope = get(named<AppCoroutineScope>())) }
 
     viewModel {

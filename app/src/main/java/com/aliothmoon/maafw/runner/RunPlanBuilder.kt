@@ -20,23 +20,19 @@ sealed interface RunPlanResult {
     data class Success(val plan: RunPlan) : RunPlanResult
     data class Invalid(val diagnostics: List<Diagnostic>) : RunPlanResult
 
-    /** 无活动配置、空配置、全部禁用或全部不适用统一映射到这里。 */
+    /** 无活动配置 / 空配置 / 全禁用 / 全不适用 */
     data object NoExecutableTasks : RunPlanResult
 }
 
-/**
- * 纯配置编译模块：ProjectDefinition + UserConfiguration -> RunPlan。
- * 不执行任务、不持有 native handle；UI 不得绕过它拼 pipeline JSON。
- */
+/** ProjectDefinition + UserConfiguration → RunPlan；UI 不得绕过此模块拼 pipeline JSON */
 object RunPlanBuilder {
 
-    // 闭括号必须转义：Android ICU regex 对孤立 } 抛 PatternSyntaxException（JVM 单测环境则宽容）
+    // 闭括号必须转义：Android ICU 对孤立 } 抛 PatternSyntaxException（JVM 单测则宽容）
     private val PLACEHOLDER = Regex("""\{([^{}]+)\}""")
 
     fun build(definition: ProjectDefinition, config: UserConfiguration): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
-        // 共享环境：固定 Android controller + activeResourceName（缺失回退首个资源）
         val resource = definition.resources.firstOrNull { it.name == config.activeResourceName }
             ?: definition.resources.firstOrNull()
         if (resource == null) {
@@ -60,14 +56,14 @@ object RunPlanBuilder {
                 }
                 continue
             }
-            // Resolver 的自动禁用用于 UI 反馈，这里是运行时兜底
+            // Resolver 自动禁用供 UI；此处为运行时兜底
             val applicable = ConfigurationResolver.checkApplicability(definition, task, resource.name) == null
             if (!configured.enabled || !applicable) continue
 
             val patches = mutableListOf<JsonObject>()
             if (task.pipelineOverride.isNotEmpty()) patches += task.pipelineOverride
-            // patch 顺序：task 基础 patch -> global -> resource -> controller -> task option。
-            // 当前 Android ProjectDefinition 尚未建模 global/controller/resource 作用域 option。
+            // 顺序：task 基础 → global → resource → controller → task option
+            // 当前尚未建模 global/controller/resource 作用域 option
             compileOptions(
                 definition = definition,
                 optionNames = task.optionNames,
@@ -96,7 +92,7 @@ object RunPlanBuilder {
         )
     }
 
-    /** 每个作用域使用独立 processed set；同名 option 在一个作用域内最多处理一次。 */
+    /** 每作用域独立 processed set；同名 option 至多处理一次 */
     private fun compileOptions(
         definition: ProjectDefinition,
         optionNames: List<String>,
@@ -146,7 +142,7 @@ object RunPlanBuilder {
                             DiagnosticMessage.SelectedCaseMissing(name, it),
                         )
                     }
-                    // 用户选择顺序不改变 patch 顺序：按 case definition 声明顺序编译
+                    // patch 按 definition 声明序，不按用户勾选序
                     for (case in option.cases) {
                         if (case.name !in selected) continue
                         if (case.pipelineOverride.isNotEmpty()) patches += case.pipelineOverride
@@ -183,7 +179,6 @@ object RunPlanBuilder {
         optionNames.forEach { compile(it) }
     }
 
-    /** 递归替换 placeholder，覆盖 JsonObject 与 JsonArray。 */
     private fun substitute(
         element: JsonObject,
         fields: Map<String, Pair<InputFieldDefinition, String>>,
@@ -224,16 +219,14 @@ object RunPlanBuilder {
         optionName: String,
         diagnostics: MutableList<Diagnostic>,
     ): JsonElement {
-        // 未命中 input 的 {…} 不是错误：M9A 等项目在 override 里写
-        // "{节点名}<{输入名}" 这类运行期表达式，节点引用必须原样透传给框架
-        // 整个 string token 恰好是 placeholder 时保留目标类型
+        // 未命中的 {…} 原样透传：可能是运行期节点表达式，不全是 input 引用
+        // 整个 string 恰好是 placeholder 时按 pipelineType 保留类型
         val whole = PLACEHOLDER.matchEntire(content)
         if (whole != null) {
             val (field, raw) = fields[whole.groupValues[1]] ?: return JsonPrimitive(content)
             return typedPrimitive(field.pipelineType, raw, scopeLabel, optionName, diagnostics)
                 ?: JsonPrimitive(content)
         }
-        // 嵌入文本时保持字符串
         val replaced = PLACEHOLDER.replace(content) { match ->
             fields[match.groupValues[1]]?.second ?: match.value
         }

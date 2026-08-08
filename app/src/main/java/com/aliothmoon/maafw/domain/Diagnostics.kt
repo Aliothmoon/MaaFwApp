@@ -3,8 +3,8 @@ package com.aliothmoon.maafw.domain
 enum class DiagnosticSeverity { Warning, Error }
 
 /**
- * 跨 ProjectLoad / Session / Runtime 的结构化诊断语义。
- * source 保留技术定位；message 只携带稳定语义与参数，由 UI 统一本地化。
+ * 跨 ProjectLoad / Session / Runtime 的结构化诊断语义
+ * source 保留技术定位；message 只携带稳定语义与参数，由 UI 统一本地化
  */
 sealed interface DiagnosticMessage {
     data class InterfaceReadFailed(val detail: String) : DiagnosticMessage

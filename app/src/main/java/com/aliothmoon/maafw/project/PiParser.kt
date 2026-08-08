@@ -22,7 +22,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
-/** 单个 PI 分片文件（task[] / option{} / preset[] / group[]）的解析结果。 */
+/** 单个 PI 分片文件（task[] / option{} / preset[] / group[]）的解析结果 */
 data class PiFileContent(
     val tasks: List<TaskDefinition> = emptyList(),
     val options: Map<String, OptionDefinition> = emptyMap(),
@@ -31,33 +31,33 @@ data class PiFileContent(
     val diagnostics: List<Diagnostic> = emptyList(),
 )
 
-/** translations 加载前的 resource 声明；label 仍保留 PI 原始值。 */
+/** translations 加载前的 resource 声明；label 仍保留 PI 原始值 */
 data class PiResourceContent(
     val name: String,
     val paths: List<String>,
     val label: String?,
 )
 
-/** PI 根 interface.json 中当前领域模型需要的项目元数据。 */
+/** PI 根 interface.json 中当前领域模型需要的项目元数据 */
 data class PiInterfaceContent(
     val name: String?,
     val version: String?,
-    /** 顶层 interface_version；PI V2 要求恒为 2，缺失或非法由 loader 硬失败。 */
+    /** 顶层 interface_version；PI V2 要求恒为 2，缺失或非法由 loader 硬失败 */
     val interfaceVersion: Long?,
     val resources: List<PiResourceContent>,
-    /** v2 languages 声明：语言 tag -> 翻译文件相对路径。 */
+    /** v2 languages 声明：语言 tag -> 翻译文件相对路径 */
     val languages: Map<String, String>,
-    /** v2.2.0 import 分片声明，按数组顺序加载；路径相对 interface.json 目录。 */
+    /** v2.2.0 import 分片声明，按数组顺序加载；路径相对 interface.json 目录 */
     val imports: List<String>,
     val diagnostics: List<Diagnostic>,
-    /** 已解析的根 JSON（解析失败为 null），供 loader 二次提取内容时免去重复解析。 */
+    /** 已解析的根 JSON（解析失败为 null），供 loader 二次提取内容时免去重复解析 */
     val root: JsonObject? = null,
 )
 
 /**
  * 解析期文本物化钩子（对齐 MXU contentResolver 语义）：
- * label 级字段只做 $i18n 查表；description 级字段追加文件形态读取。
- * URL 形态一律原样保留，由 UI 层懒加载。
+ * label 级字段只做 $i18n 查表；description 级字段追加文件形态读取
+ * URL 形态一律原样保留，由 UI 层懒加载
  */
 interface PiTextResolver {
     fun label(raw: String?): String?
@@ -65,8 +65,8 @@ interface PiTextResolver {
 }
 
 /**
- * PI V2 分片文件解析器。宽容解析：字段级错误降级为诊断并跳过该条目，
- * 不让单个坏条目阻断整个项目加载。
+ * PI V2 分片文件解析器宽容解析：字段级错误降级为诊断并跳过该条目，
+ * 不让单个坏条目阻断整个项目加载
  */
 object PiParser {
 
@@ -79,10 +79,10 @@ object PiParser {
     }
 
     /**
-     * 解析根 interface.json 的项目元数据（版本 / 资源 / 语言 / import 声明）。
+     * 解析根 interface.json 的项目元数据（版本 / 资源 / 语言 / import 声明）
      * 根文件自身声明的 task/option/preset/group 在翻译表就绪后由 [parseFile] 基于
      * 返回的 [PiInterfaceContent.root] 再次提取（只解析一次 JSON），
-     * 避免元数据阶段无法物化 $i18n 的鸡生蛋问题。
+     * 避免元数据阶段无法物化 $i18n 的鸡生蛋问题
      */
     fun parseInterface(source: String, content: String): PiInterfaceContent {
         val diagnostics = mutableListOf<Diagnostic>()
@@ -148,7 +148,7 @@ object PiParser {
         return parseFile(source, root, text)
     }
 
-    /** 已解析根对象的内容提取：根 interface.json 复用 [parseInterface] 的解析结果走这里。 */
+    /** 已解析根对象的内容提取：根 interface.json 复用 [parseInterface] 的解析结果走这里 */
     fun parseFile(source: String, root: JsonObject, text: PiTextResolver): PiFileContent {
         val diagnostics = mutableListOf<Diagnostic>()
         val tasks = (root["task"] as? JsonArray).orEmpty().mapNotNull { element ->
@@ -166,7 +166,7 @@ object PiParser {
         return PiFileContent(tasks, options, templates, groups, diagnostics)
     }
 
-    /** v2.4.0 顶层 group[] 声明：根 interface.json 与 import 分片均可出现。 */
+    /** v2.4.0 顶层 group[] 声明：根 interface.json 与 import 分片均可出现 */
     private fun parseGroups(
         source: String,
         root: JsonObject,
@@ -428,7 +428,7 @@ object PiParser {
         )
     }
 
-    /** preset 的 option 值形态：string -> SingleCase，array -> MultipleCases，object -> Inputs。 */
+    /** preset 的 option 值形态：string -> SingleCase，array -> MultipleCases，object -> Inputs */
     private fun parsePresetOptionValues(element: JsonElement?): Map<String, OptionValue> {
         val obj = element as? JsonObject ?: return emptyMap()
         return buildMap {
@@ -468,7 +468,7 @@ object PiParser {
     private fun JsonObject.objectOrEmpty(key: String): JsonObject =
         (this[key] as? JsonObject) ?: JsonObject(emptyMap())
 
-    /** 翻译文件：扁平的 key -> 译文 JSON 对象。 */
+    /** 翻译文件：扁平的 key -> 译文 JSON 对象 */
     fun parseTranslations(
         source: String,
         content: String,
