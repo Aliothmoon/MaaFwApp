@@ -63,10 +63,16 @@ val appModule = module {
     }
 
     single {
+        val context = androidContext()
         PiInstaller(
-            pkg = AssetPiPackage(androidContext(), root = PI_ASSET_ROOT),
-            baseDir = File(androidContext().filesDir, PI_ASSET_ROOT),
-            fingerprint = readPiFingerprint(androidContext()),
+            pkg = AssetPiPackage(context, root = PI_ASSET_ROOT),
+            // 落外部私有目录而非 filesDir：特权进程是 shell 身份，进不去 0700 的 app 私有目录
+            baseDir = {
+                checkNotNull(context.getExternalFilesDir(null)) {
+                    "外部私有目录不可用（外部存储未挂载），PI 无法解包"
+                }
+            },
+            fingerprint = readPiFingerprint(context),
         )
     }
     single<ProjectSource> { InstalledProjectSource(get()) }

@@ -3,14 +3,17 @@ package com.aliothmoon.maafw.project
 import android.content.Context
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 /**
  * 打包进 APK 的 PI 只读包
  * 不复用 ProjectSource：解包要按字节搬运图片与模型，read(String) 的文本语义不够用
  */
 interface PiPackage {
-    /** 目录的直接子项；路径不是目录时返回空 */
-    fun list(path: String): List<String>
+    /** 构建期 writePiIndex 产出的解包清单，元素是相对 PI 根的文件路径 */
+    fun manifest(): List<String>
 
     fun open(path: String): InputStream
 }
@@ -20,24 +23,27 @@ class AssetPiPackage(context: Context, private val root: String) : PiPackage {
 
     private val assets = context.applicationContext.assets
 
-    override fun list(path: String): List<String> =
-        assets.list(assetPath(path))?.toList().orEmpty()
+    override fun manifest(): List<String> =
+        assets.open(PI_MANIFEST_ASSET).bufferedReader().useLines { lines ->
+            lines.map(String::trim).filter(String::isNotEmpty).toList()
+        }
 
-    override fun open(path: String): InputStream = assets.open(assetPath(path))
-
-    private fun assetPath(path: String): String = if (path.isEmpty()) root else "$root/$path"
+    override fun open(path: String): InputStream = assets.open("$root/$path")
 }
 
 /**
- * 把打包的 PI 解包到应用私有目录
- * native MaaFramework 只认文件系统路径，而 APK 内的 assets 条目不是文件，拿不到路径
+ * 把打包的 PI 解包到应用外部私有目录
+ * native MaaFramework 只认文件系统路径，而 APK 内的 assets 条目不是文件；落点不能用 filesDir——
+ * 特权进程是 shell 身份，进不去 0700 的 app 私有目录（docs/privileged-runtime.md §9）
  *
- * 指纹由构建期的 writePiFingerprint 算出；变化即重解包，旧版本目录一并清理
+ * 指纹由构建期算出并随 assets 分发，与标记文件不符即整体重解
  */
 class PiInstaller(
     private val pkg: PiPackage,
-    private val baseDir: File,
+    /** 外部私有目录不可用时抛出，交由 ProjectLoader 记成可读诊断，不在此处静默回落 */
+    private val baseDir: () -> File,
     private val fingerprint: String,
+    private val parallelism: Int = Runtime.getRuntime().availableProcessors(),
 ) {
 
     /**
@@ -46,47 +52,81 @@ class PiInstaller(
      */
     @Synchronized
     fun ensureInstalled(): File {
-        val target = File(baseDir, fingerprint)
-        if (target.isDirectory) return target
+        val base = baseDir()
+        val target = File(base, PI_DIR_NAME)
+        val marker = File(base, PI_MARKER_NAME)
+        if (target.isDirectory && marker.isFile && marker.readText().trim() == fingerprint) {
+            return target
+        }
 
-        // 先落到暂存目录再整体改名：改名是原子的，目录存在即代表内容完整，
-        // 解包中途掉电只会留下暂存目录，下次重来
-        val staging = File(baseDir, STAGING_DIR)
-        staging.deleteRecursively()
-        staging.mkdirs()
-        unpack("", staging)
-
-        baseDir.listFiles()?.forEach { if (it != staging) it.deleteRecursively() }
-        check(staging.renameTo(target)) { "PI 解包落位失败: $target" }
+        // 顺序不能换：标记先失效，解包中途掉电时残留内容不会被当成完整的一份
+        marker.delete()
+        target.deleteRecursively()
+        target.mkdirs()
+        unpack(target)
+        ensureNoMedia(base)
+        marker.writeText(fingerprint)
         return target
     }
 
-    private fun unpack(path: String, dest: File) {
-        val children = pkg.list(path)
-        if (children.isEmpty()) {
-            // assets 不区分文件与空目录：打得开就是文件，打不开按空目录跳过
-            val stream = try {
-                pkg.open(path)
-            } catch (e: Exception) {
-                return
+    private fun unpack(dest: File) {
+        val entries = pkg.manifest()
+        if (entries.isEmpty()) return
+
+        // 先建目录再并发写文件：mkdirs 并发调用会有一方返回 false，单线程建好省掉这层不确定
+        entries.mapNotNullTo(mutableSetOf()) { File(dest, it).parentFile }.forEach { it.mkdirs() }
+
+        val pool = Executors.newFixedThreadPool(parallelism)
+        // 每线程一块大 buffer：默认 8 KB 拷几十 MB 会被 read/write 次数拖死
+        val buffers = ThreadLocal.withInitial { ByteArray(COPY_BUFFER_BYTES) }
+        try {
+            val tasks = entries.map { entry ->
+                Callable {
+                    pkg.open(entry).use { input ->
+                        File(dest, entry).outputStream().use { output ->
+                            input.copyTo(output, buffers.get())
+                        }
+                    }
+                }
             }
-            dest.parentFile?.mkdirs()
-            stream.use { input -> dest.outputStream().use(input::copyTo) }
-            return
+            // 任一条目失败即整体失败：解包不完整比解包失败更难查
+            pool.invokeAll(tasks).forEach { it.get() }
+        } finally {
+            pool.shutdown()
         }
-        dest.mkdirs()
-        children.forEach { child ->
-            unpack(if (path.isEmpty()) child else "$path/$child", File(dest, child))
+    }
+
+    /** 外部私有目录会被媒体扫描，PI 里的 PNG 会整片进相册 */
+    private fun ensureNoMedia(base: File) {
+        val noMedia = File(base, NO_MEDIA_NAME)
+        if (!noMedia.exists()) {
+            runCatching { noMedia.createNewFile() }
+        }
+    }
+
+    private fun InputStream.copyTo(out: OutputStream, buffer: ByteArray) {
+        while (true) {
+            val read = read(buffer)
+            if (read <= 0) break
+            out.write(buffer, 0, read)
         }
     }
 
     companion object {
-        private const val STAGING_DIR = ".staging"
+        /** 解包内容的固定目录名；路径稳定，版本靠标记文件而非目录名区分 */
+        const val PI_DIR_NAME = "pi"
+
+        /** 提交标记：解包全部成功后才写，内容是构建期指纹 */
+        const val PI_MARKER_NAME = "pi.fingerprint"
+
+        private const val NO_MEDIA_NAME = ".nomedia"
+        private const val COPY_BUFFER_BYTES = 128 * 1024
     }
 }
 
-/** 构建期 writePiFingerprint 落在 assets 根的指纹文件 */
+/** 构建期 writePiIndex 落在 assets 根的两个索引文件 */
 private const val PI_FINGERPRINT_ASSET = "pi.fingerprint"
+private const val PI_MANIFEST_ASSET = "pi.manifest"
 
 /** 缺指纹说明这个包没经过 syncPiAssets；回落固定值即「永不过期」，不影响已解包的内容可用 */
 private const val UNKNOWN_FINGERPRINT = "unknown"

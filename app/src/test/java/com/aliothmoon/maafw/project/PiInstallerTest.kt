@@ -2,29 +2,25 @@ package com.aliothmoon.maafw.project
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.FileNotFoundException
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.InputStream
 
-/** 内存 PiPackage，语义对齐 AssetManager：目录返回子项，文件返回空 */
+/** 内存 PiPackage；清单由构建期产出，这里直接给 */
 private class MapPiPackage(private val files: Map<String, String>) : PiPackage {
 
+    @Volatile
     var openCount = 0
         private set
 
-    override fun list(path: String): List<String> {
-        val prefix = if (path.isEmpty()) "" else "$path/"
-        return files.keys
-            .filter { it.startsWith(prefix) && it != path }
-            .map { it.removePrefix(prefix).substringBefore('/') }
-            .distinct()
-            .sorted()
-    }
+    override fun manifest(): List<String> = files.keys.sorted()
 
+    @Synchronized
     override fun open(path: String): InputStream {
         val content = files[path] ?: throw FileNotFoundException(path)
         openCount++
@@ -43,55 +39,84 @@ class PiInstallerTest {
         "resource/base/pipeline/x.json" to "{}",
     )
 
-    @Test
-    fun `首次解包产出完整目录树`() {
-        val root = PiInstaller(MapPiPackage(files), temp.newFolder("pi"), "fp1").ensureInstalled()
+    private fun installer(base: File, pkg: PiPackage, fingerprint: String) =
+        PiInstaller(pkg, { base }, fingerprint)
 
-        assertEquals("fp1", root.name)
+    @Test
+    fun `首次解包产出完整目录树并写下标记`() {
+        val base = temp.newFolder("external")
+        val root = installer(base, MapPiPackage(files), "fp1").ensureInstalled()
+
+        assertEquals(PiInstaller.PI_DIR_NAME, root.name)
         assertEquals("""{"interface_version":2}""", File(root, "interface.json").readText())
         assertTrue(File(root, "tasks/a.json").isFile)
         assertTrue(File(root, "resource/base/pipeline/x.json").isFile)
+        assertEquals("fp1", File(base, PiInstaller.PI_MARKER_NAME).readText())
+        assertTrue("外部私有目录要挡住媒体扫描", File(base, ".nomedia").isFile)
     }
 
     @Test
-    fun `指纹未变时复用已解包目录`() {
+    fun `标记与指纹一致时复用已解包目录`() {
+        val base = temp.newFolder("external")
         val pkg = MapPiPackage(files)
-        val installer = PiInstaller(pkg, temp.newFolder("pi"), "fp1")
 
-        installer.ensureInstalled()
+        installer(base, pkg, "fp1").ensureInstalled()
         val afterFirst = pkg.openCount
-        installer.ensureInstalled()
+        installer(base, pkg, "fp1").ensureInstalled()
 
         assertEquals("指纹未变不应重复解包", afterFirst, pkg.openCount)
     }
 
     @Test
-    fun `指纹变化时重解包并清理旧版本`() {
-        val base = temp.newFolder("pi")
-        PiInstaller(MapPiPackage(files), base, "fp1").ensureInstalled()
+    fun `指纹变化时整体重解并清掉旧内容`() {
+        val base = temp.newFolder("external")
+        installer(base, MapPiPackage(files), "fp1").ensureInstalled()
 
-        val updated = files + ("tasks/b.json" to "{}")
-        val root = PiInstaller(MapPiPackage(updated), base, "fp2").ensureInstalled()
+        val updated = files - "tasks/a.json" + ("tasks/b.json" to "{}")
+        val root = installer(base, MapPiPackage(updated), "fp2").ensureInstalled()
 
-        assertEquals("fp2", root.name)
         assertTrue(File(root, "tasks/b.json").isFile)
-        assertEquals(listOf("fp2"), base.listFiles().orEmpty().map { it.name })
+        assertFalse("旧版本才有的条目不该残留", File(root, "tasks/a.json").exists())
+        assertEquals("fp2", File(base, PiInstaller.PI_MARKER_NAME).readText())
     }
 
-    /** assets 不区分文件与空目录，打不开的条目跳过而不是让整次解包失败 */
+    /** 标记是提交点：内容在但标记缺失，说明上次解包没走完 */
     @Test
-    fun `打不开的条目被跳过`() {
-        val pkg = object : PiPackage {
-            override fun list(path: String): List<String> =
-                if (path.isEmpty()) listOf("empty", "interface.json") else emptyList()
+    fun `标记缺失时重解`() {
+        val base = temp.newFolder("external")
+        val pkg = MapPiPackage(files)
+        installer(base, pkg, "fp1").ensureInstalled()
+        val afterFirst = pkg.openCount
+
+        File(base, PiInstaller.PI_MARKER_NAME).delete()
+        installer(base, pkg, "fp1").ensureInstalled()
+
+        assertTrue("标记缺失应触发重解", pkg.openCount > afterFirst)
+    }
+
+    /** 解包不完整比解包失败更难查，任一条目失败即整体失败且不留标记 */
+    @Test
+    fun `条目读取失败时整体失败且不写标记`() {
+        val base = temp.newFolder("external")
+        val broken = object : PiPackage {
+            override fun manifest(): List<String> = listOf("interface.json", "tasks/a.json")
 
             override fun open(path: String): InputStream =
                 if (path == "interface.json") "{}".byteInputStream() else throw FileNotFoundException(path)
         }
 
-        val root = PiInstaller(pkg, temp.newFolder("pi"), "fp1").ensureInstalled()
+        assertThrows(Exception::class.java) {
+            PiInstaller(broken, { base }, "fp1").ensureInstalled()
+        }
+        assertFalse(File(base, PiInstaller.PI_MARKER_NAME).exists())
+    }
 
-        assertTrue(File(root, "interface.json").isFile)
-        assertFalse("空目录条目不该产出文件", File(root, "empty").isFile)
+    @Test
+    fun `空清单不报错`() {
+        val base = temp.newFolder("external")
+        val root = installer(base, MapPiPackage(emptyMap()), "fp1").ensureInstalled()
+
+        assertTrue(root.isDirectory)
+        assertEquals("fp1", File(base, PiInstaller.PI_MARKER_NAME).readText())
     }
 }

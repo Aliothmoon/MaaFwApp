@@ -38,7 +38,7 @@ class InstalledProjectSource(private val installer: PiInstaller) : ProjectSource
 
     private val delegate: ProjectSource by lazy { DirectoryProjectSource(installer.ensureInstalled()) }
 
-    // 解包目录名是指纹，不适合当兜底展示名；PI 未声明 name 时回落中性值
+    // 解包目录名是外壳定的固定值，不带项目信息；PI 未声明 name 时回落它作中性兜底
     override val projectName: String = PI_ASSET_ROOT
 
     override fun list(path: String): List<String> = delegate.list(path)

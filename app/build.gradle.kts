@@ -81,35 +81,41 @@ val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
     }
 }
 
-// 运行时据此判断已解包的 PI 是否过期
-// 不用 BuildConfig：指纹要等 syncPiAssets 执行完才算得出，而 BuildConfig 的值在 configuration 阶段就得定
-val writePiFingerprint = tasks.register("writePiFingerprint") {
+// 指纹判断已解包的 PI 是否过期；清单让解包按行直取，免去逐层 AssetManager.list()（每层都是 native 调用）
+// 不用 BuildConfig：两者都要等 syncPiAssets 执行完才算得出，而 BuildConfig 的值在 configuration 阶段就得定
+val writePiIndex = tasks.register("writePiIndex") {
     group = "build"
-    description = "算出同步后 PI 的内容指纹，落成 assets/pi.fingerprint"
+    description = "算出同步后 PI 的内容指纹与解包清单，落成 assets/pi.fingerprint 与 assets/pi.manifest"
     dependsOn(syncPiAssets)
     val piDir = piAssetsDir.map { it.dir("pi") }
-    val outFile = piAssetsDir.map { it.file("pi.fingerprint") }
+    val fingerprintFile = piAssetsDir.map { it.file("pi.fingerprint") }
+    val manifestFile = piAssetsDir.map { it.file("pi.manifest") }
     inputs.dir(piDir).withPathSensitivity(PathSensitivity.RELATIVE)
-    outputs.file(outFile)
+    outputs.file(fingerprintFile)
+    outputs.file(manifestFile)
     doLast {
         val root = piDir.get().asFile
         val digest = MessageDigest.getInstance("SHA-256")
-        // 路径一并入摘要：只比内容会漏掉纯改名
-        root.walkTopDown()
+        val entries = root.walkTopDown()
             .filter { it.isFile }
-            .sortedBy { it.toRelativeString(root).replace('\\', '/') }
-            .forEach { file ->
-                digest.update(file.toRelativeString(root).replace('\\', '/').toByteArray())
-                file.inputStream().use { stream ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val read = stream.read(buffer)
-                        if (read <= 0) break
-                        digest.update(buffer, 0, read)
-                    }
+            .map { it.toRelativeString(root).replace('\\', '/') }
+            .sorted()
+            .toList()
+        entries.forEach { entry ->
+            // 路径一并入摘要：只比内容会漏掉纯改名
+            digest.update(entry.toByteArray())
+            File(root, entry).inputStream().use { stream ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = stream.read(buffer)
+                    if (read <= 0) break
+                    digest.update(buffer, 0, read)
                 }
             }
-        outFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
+        }
+        fingerprintFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
+        // 一行一条相对路径，运行时按行读，app 侧不必解析 JSON
+        manifestFile.get().asFile.writeText(entries.joinToString("\n"))
     }
 }
 
@@ -126,6 +132,19 @@ android {
         println("Build version: versionCode=$versionCode, versionName=$versionName")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            // jniLibs 里只有这两个 ABI；显式声明避免误打包其它架构的空目录
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // 必须解压成真实文件：launcher 要被 execv 执行，
+            // MaaFramework 又靠 dladdr 取自身 .so 所在目录再 dlopen 兄弟库（MaaUtils 的 library_dir()）
+            useLegacyPackaging = true
+        }
     }
 
     signingConfigs {
@@ -173,7 +192,7 @@ android {
 }
 
 tasks.named("preBuild") {
-    dependsOn(writePiFingerprint)
+    dependsOn(writePiIndex)
 }
 
 // AGP 9 不再接受 Provider 形式的 sourceSet srcDir，只能走 Variant API
