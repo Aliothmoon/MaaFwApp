@@ -13,7 +13,7 @@ import java.io.PrintStream;
  */
 public final class Ln {
 
-    private static final String TAG = "MaaMeow";
+    private static final String TAG = "MaaFw";
     private static final String PREFIX = "[MC] ";
 
     private static final PrintStream CONSOLE_OUT = new PrintStream(new FileOutputStream(FileDescriptor.out));

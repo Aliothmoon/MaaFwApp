@@ -11,7 +11,7 @@
 
 说明:
   - release 产物是 zip（`MAA-android-<arch>-<tag>.zip`），.so 在压缩包的 bin/ 下
-  - libc++_shared.so 由 NDK 提供，不用上游那份
+  - libc++_shared.so 保留上游那份：MaaFramework 各 so 都链接它
   - bin/plugins/ 是 MaaPluginDemo 的示例插件，默认不打包，要的话加 --with-plugins
   - 目标目录每次铺之前先清空，避免残留上个版本的 .so
 """
@@ -42,8 +42,10 @@ ABI_MAP = {
     "android-x86_64": "x86_64",
 }
 
-# libc++_shared.so 由 NDK 工具链提供，混用上游那份会和 CMake 编出的 bridge 冲突
-EXCLUDE_SO = {"libc++_shared.so"}
+# 默认不排除任何 so
+# 特别注意 libc++_shared.so：MaaFramework 的各个 so 都动态链接它，且是上游那套 NDK 编的；
+# 换成本地 NDK 的那份等于同进程混两套 libc++。bridge 侧改用 c++_static，不参与竞争
+EXCLUDE_SO: set[str] = set()
 
 # 示例插件，默认不打包
 PLUGIN_DIR_PART = "plugins"

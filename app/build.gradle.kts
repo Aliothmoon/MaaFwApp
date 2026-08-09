@@ -147,7 +147,9 @@ android {
         externalNativeBuild {
             cmake {
                 // launcher 是 C，bridge 是 C++；两者各自的编译选项写在 CMakeLists 里
-                arguments += "-DANDROID_STL=c++_shared"
+                // 静态链接 libc++：进程里已有 MaaFramework 自带的 libc++_shared.so，
+                // 再让 bridge 依赖一份本地 NDK 编的会变成同进程两套 libc++
+                arguments += "-DANDROID_STL=c++_static"
             }
         }
     }

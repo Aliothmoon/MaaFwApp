@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <cstring>
 #include "bridge_input.h"
 
 static JavaVM *g_jvm = nullptr;
@@ -39,8 +40,14 @@ UpcallInputControl(JNIEnv *env, MethodType method, int x, int y, int keyCode, in
 
 static int UpcallStartApp(JNIEnv *env, const char *packageName, int displayId, bool forceStop) {
     if (!env || !packageName || !g_driver_clz || !g_start_app_method) {
+        LOGE("UpcallStartApp: not ready env=%p pkg=%p clz=%p mid=%p",
+             (void *) env, (void *) packageName, (void *) g_driver_clz, (void *) g_start_app_method);
         return -1;
     }
+
+    /* 上游传进来的是 std::string::c_str()，理论上带 NUL；出过越界读就把长度打出来定位 */
+    LOGI("UpcallStartApp: env=%p len=%zu display=%d forceStop=%d",
+         (void *) env, strnlen(packageName, 4096), displayId, (int) forceStop);
 
     jstring jPackageName = env->NewStringUTF(packageName);
     jboolean result = env->CallStaticBooleanMethod(g_driver_clz, g_start_app_method, jPackageName,
@@ -51,6 +58,7 @@ static int UpcallStartApp(JNIEnv *env, const char *packageName, int displayId, b
 
 bool InitInputBridge(JavaVM *vm, JNIEnv *env, const char *driverClassName) {
     g_jvm = vm;
+    LOGI("InitInputBridge: vm=%p env=%p class=%s", (void *) vm, (void *) env, driverClassName);
     if (!env || !driverClassName) {
         return false;
     }
@@ -111,6 +119,8 @@ struct JniThreadAttacher {
             } else {
                 LOGE("JniThreadAttacher: attach failed for thread %d", gettid());
             }
+        } else {
+            LOGI("JniThreadAttacher: thread %d already attached, env=%p", gettid(), (void *) env);
         }
     }
 
