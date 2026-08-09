@@ -26,3 +26,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MaaFwApp"
 include(":app")
+include(":hidden-api")

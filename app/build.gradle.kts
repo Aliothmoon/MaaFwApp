@@ -44,6 +44,17 @@ val piSourceDir: String? = (localProperties.getProperty("pi.sourceDir")
 
 val piAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/piAssets")
 
+// 发布要覆盖的 ABI；jniLibs 里就这两份
+val shippedAbis: List<String> = listOf("arm64-v8a", "x86_64")
+
+// 本地迭代只编一个 ABI 能省掉一半 CMake 与打包时间；release 不受影响
+// local.properties: build.debugAbi=arm64-v8a
+val debugAbiFilters: List<String> = (localProperties.getProperty("build.debugAbi") ?: "")
+    .split(',')
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+    .ifEmpty { shippedAbis }
+
 // 只对可枚举的顶层项做白名单，命中的目录整体拷贝
 // 不用黑名单：PI 协议允许 description 与图片引用子目录里的任意 md 和资源，
 // 按扩展名通配排除会误伤 announcement、locales 等目录下被引用的正文
@@ -133,11 +144,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        ndk {
-            // jniLibs 里只有这两个 ABI；显式声明避免误打包其它架构的空目录
-            abiFilters += listOf("arm64-v8a", "x86_64")
-        }
-
         externalNativeBuild {
             cmake {
                 // launcher 是 C，bridge 是 C++；两者各自的编译选项写在 CMakeLists 里
@@ -178,7 +184,16 @@ android {
     }
 
     buildTypes {
+        debug {
+            ndk {
+                abiFilters += debugAbiFilters
+            }
+        }
         release {
+            ndk {
+                // 发布始终两个 ABI 都打，不受 build.debugAbi 影响
+                abiFilters += shippedAbis
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -225,6 +240,16 @@ kotlin {
 }
 
 dependencies {
+    // 只在编译期解析隐藏系统 API，运行时由系统提供
+    compileOnly(project(":hidden-api"))
+
+    // 提权与 native 接入
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
+    implementation(libs.libsu)
+    // aar 里带 libjnidispatch.so，用 jar 会在设备上找不到 native 分发库
+    implementation(libs.jna) { artifact { type = "aar" } }
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
