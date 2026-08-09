@@ -9,7 +9,6 @@ import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
-import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.LocaleController
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -36,7 +35,7 @@ class SessionViewModel(
     private val projectRepository: ProjectRepository,
     private val configurationStore: UserConfigurationStore,
     private val runnerPort: RunnerPort,
-    private val localeController: LocaleController = AppLocales,
+    private val localeController: LocaleController,
 ) : ViewModel() {
 
     val uiState: StateFlow<SessionUiState> = combine(

@@ -67,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -734,7 +735,7 @@ private fun ConfigurationSheet(
     onDismiss: () -> Unit,
 ) {
     var page by remember { mutableStateOf<ConfigSheetPage>(ConfigSheetPage.Home) }
-    var homeTab by rememberSaveable { mutableStateOf(0) }
+    var homeTab by rememberSaveable { mutableIntStateOf(0) }
     val existingNames = state.configurationList.map { it.name }
 
     MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
@@ -742,10 +743,10 @@ private fun ConfigurationSheet(
             targetState = page,
             transitionSpec = {
                 val forward = targetState.depth > initialState.depth
-                val enter = fadeIn(MaaMotion.enter<Float>()) + slideInHorizontally(MaaMotion.enter()) {
+                val enter = fadeIn(MaaMotion.enter()) + slideInHorizontally(MaaMotion.enter()) {
                     if (forward) it / 3 else -it / 3
                 }
-                val exit = fadeOut(MaaMotion.exit<Float>()) + slideOutHorizontally(MaaMotion.exit()) {
+                val exit = fadeOut(MaaMotion.exit()) + slideOutHorizontally(MaaMotion.exit()) {
                     if (forward) -it / 3 else it / 3
                 }
                 enter.togetherWith(exit)
