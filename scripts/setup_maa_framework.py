@@ -45,7 +45,7 @@ ABI_MAP = {
 # 默认不排除任何 so
 # 特别注意 libc++_shared.so：MaaFramework 的各个 so 都动态链接它，且是上游那套 NDK 编的；
 # 换成本地 NDK 的那份等于同进程混两套 libc++。bridge 侧改用 c++_static，不参与竞争
-EXCLUDE_SO: set[str] = set()
+EXCLUDE_SO: set[str] = {"libc++_shared.so"}
 
 # 示例插件，默认不打包
 PLUGIN_DIR_PART = "plugins"

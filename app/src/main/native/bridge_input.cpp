@@ -11,6 +11,16 @@ static jmethodID g_key_down_method = nullptr;
 static jmethodID g_key_up_method = nullptr;
 static jmethodID g_start_app_method = nullptr;
 
+/* upcall 落到 DriverClass -> InputControlUtils/ActivityUtils，那边全是对隐藏 API 的反射，
+ * 各家 ROM 上抛异常是常态。异常挂在 JNIEnv 上不清掉，下一次 JNI 调用就是未定义行为——
+ * 实测表现为下一轮 upcall 开头的 NewStringUTF 里 SIGSEGV。每次 upcall 后必须清。 */
+static int FinishUpcall(JNIEnv *env, jboolean result, const char *context) {
+    if (CheckJNIException(env, context)) {
+        return -1;
+    }
+    return result ? 0 : -1;
+}
+
 static int
 UpcallInputControl(JNIEnv *env, MethodType method, int x, int y, int keyCode, int displayId) {
     if (!env || !g_driver_clz) {
@@ -19,20 +29,30 @@ UpcallInputControl(JNIEnv *env, MethodType method, int x, int y, int keyCode, in
 
     switch (method) {
         case TOUCH_DOWN:
-            return env->CallStaticBooleanMethod(g_driver_clz, g_touch_down_method, x, y, displayId)
-                   ? 0 : -1;
+            return FinishUpcall(env,
+                                env->CallStaticBooleanMethod(g_driver_clz, g_touch_down_method, x,
+                                                             y, displayId),
+                                "DriverClass.touchDown");
         case TOUCH_MOVE:
-            return env->CallStaticBooleanMethod(g_driver_clz, g_touch_move_method, x, y, displayId)
-                   ? 0 : -1;
+            return FinishUpcall(env,
+                                env->CallStaticBooleanMethod(g_driver_clz, g_touch_move_method, x,
+                                                             y, displayId),
+                                "DriverClass.touchMove");
         case TOUCH_UP:
-            return env->CallStaticBooleanMethod(g_driver_clz, g_touch_up_method, x, y, displayId)
-                   ? 0 : -1;
+            return FinishUpcall(env,
+                                env->CallStaticBooleanMethod(g_driver_clz, g_touch_up_method, x, y,
+                                                             displayId),
+                                "DriverClass.touchUp");
         case KEY_DOWN:
-            return env->CallStaticBooleanMethod(g_driver_clz, g_key_down_method, keyCode, displayId)
-                   ? 0 : -1;
+            return FinishUpcall(env,
+                                env->CallStaticBooleanMethod(g_driver_clz, g_key_down_method,
+                                                             keyCode, displayId),
+                                "DriverClass.keyDown");
         case KEY_UP:
-            return env->CallStaticBooleanMethod(g_driver_clz, g_key_up_method, keyCode, displayId)
-                   ? 0 : -1;
+            return FinishUpcall(env,
+                                env->CallStaticBooleanMethod(g_driver_clz, g_key_up_method, keyCode,
+                                                             displayId),
+                                "DriverClass.keyUp");
         default:
             return -1;
     }
@@ -50,10 +70,14 @@ static int UpcallStartApp(JNIEnv *env, const char *packageName, int displayId, b
          (void *) env, strnlen(packageName, 4096), displayId, (int) forceStop);
 
     jstring jPackageName = env->NewStringUTF(packageName);
+    if (!jPackageName || CheckJNIException(env, "NewStringUTF(packageName)")) {
+        return -1;
+    }
     jboolean result = env->CallStaticBooleanMethod(g_driver_clz, g_start_app_method, jPackageName,
                                                    displayId, static_cast<jboolean>(forceStop));
+    int ret = FinishUpcall(env, result, "DriverClass.startApp");
     env->DeleteLocalRef(jPackageName);
-    return result ? 0 : -1;
+    return ret;
 }
 
 bool InitInputBridge(JavaVM *vm, JNIEnv *env, const char *driverClassName) {
