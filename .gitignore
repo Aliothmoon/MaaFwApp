@@ -36,3 +36,8 @@ android/.cxx
 
 # 上游 PI 项目的本地参考副本，仅供人工比对，不是构建输入
 /sample/
+
+# MaaFramework 的 Android 产物：与 PI 同理不进仓库，由 scripts/setup_maa_framework.py 拉取
+/app/src/main/jniLibs/
+/.maa-cache/
+/.maafwversion
