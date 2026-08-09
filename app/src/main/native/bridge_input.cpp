@@ -129,36 +129,33 @@ void ReleaseInputBridge(JNIEnv *env) {
     g_driver_clz = nullptr;
     g_jvm = nullptr;
 }
+// JNA callback 发力了不得不这样做了
+struct JniThreadDetacher {
+    bool armed = false;
 
-struct JniThreadAttacher {
-    JNIEnv *env = nullptr;
-    bool needs_detach = false;
-
-    JniThreadAttacher() {
-        if (!g_jvm) return;
-        if (g_jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
-            if (g_jvm->AttachCurrentThreadAsDaemon(&env, nullptr) == JNI_OK) {
-                needs_detach = true;
-                LOGI("JniThreadAttacher: attached thread %d", gettid());
-            } else {
-                LOGE("JniThreadAttacher: attach failed for thread %d", gettid());
-            }
-        } else {
-            LOGI("JniThreadAttacher: thread %d already attached, env=%p", gettid(), (void *) env);
-        }
-    }
-
-    ~JniThreadAttacher() {
-        if (needs_detach && g_jvm) {
-            LOGI("JniThreadAttacher: detaching thread %d", gettid());
+    ~JniThreadDetacher() {
+        if (armed && g_jvm) {
             g_jvm->DetachCurrentThread();
         }
     }
 };
 
+
 static JNIEnv *GetJNIEnv() {
-    thread_local JniThreadAttacher attacher;
-    return attacher.env;
+    if (!g_jvm) {
+        return nullptr;
+    }
+    JNIEnv *env = nullptr;
+    if (g_jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK && env) {
+        return env;
+    }
+    if (g_jvm->AttachCurrentThreadAsDaemon(&env, nullptr) != JNI_OK || !env) {
+        LOGE("GetJNIEnv: attach failed for thread %d", gettid());
+        return nullptr;
+    }
+    thread_local JniThreadDetacher detacher;
+    detacher.armed = true;
+    return env;
 }
 
 BRIDGE_API int DispatchInputMessage(MethodParam param) {
