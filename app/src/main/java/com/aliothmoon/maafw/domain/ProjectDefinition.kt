@@ -18,10 +18,17 @@ data class ProjectDefinition(
     private val taskIndex: Map<String, TaskDefinition> by lazy { tasks.associateBy { it.name } }
 }
 
-/** 固定 Android/ADB，无需用户选择 */
+/**
+ * PI 声明的 controller 投影
+ * 设备上 type 为 Adb 的项由 Android native controller 实现，见 docs/pi-compatibility.md
+ */
 data class ControllerDefinition(
     val name: String = "Android",
     val type: String = "ADB",
+    /** 三者互斥，都缺省时由 Runner 按默认分辨率兜底 */
+    val displayShortSide: Int? = null,
+    val displayLongSide: Int? = null,
+    val displayRaw: Boolean = false,
 )
 
 data class ResourceDefinition(

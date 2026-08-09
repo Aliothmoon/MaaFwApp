@@ -138,7 +138,13 @@ class ProjectLoader(
             diagnostics += warning(source, DiagnosticMessage.NoAdbController)
             return ControllerDefinition()
         }
-        return ControllerDefinition(name = adb.name, type = adb.type)
+        return ControllerDefinition(
+            name = adb.name,
+            type = adb.type,
+            displayShortSide = adb.displayShortSide,
+            displayLongSide = adb.displayLongSide,
+            displayRaw = adb.displayRaw,
+        )
     }
 
     /** 分片内容合并进累计状态：task/option 重名 → error，preset/group 重名 → warning，一律先定义优先 */

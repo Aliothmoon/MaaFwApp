@@ -99,6 +99,9 @@ object VirtualDisplayManager {
 
     fun getDisplayId(): Int = displayId.get()
 
+    /** 帧缓冲与触摸坐标空间都按它算，交给 native controller 的 screen_resolution 必须与之一致 */
+    fun getConfig(): DisplayConfig = config.get()
+
     private fun startInternal(): Int {
         try {
             val cfg = config.get()

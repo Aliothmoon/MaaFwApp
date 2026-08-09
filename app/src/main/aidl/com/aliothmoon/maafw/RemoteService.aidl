@@ -2,6 +2,7 @@ package com.aliothmoon.maafw;
 
 import android.view.Surface;
 import com.aliothmoon.maafw.ITouchEventCallback;
+import com.aliothmoon.maafw.IMaaRunnerCallback;
 
 /**
  * 特权进程的服务面（docs/privileged-runtime.md §6）
@@ -59,4 +60,18 @@ interface RemoteService {
 
     // ── 目标应用 ──
     boolean isPackageInstalled(String packageName) = 40;
+
+    // ── 执行 ──
+    oneway void setRunnerCallback(IMaaRunnerCallback callback) = 50;
+
+    /** payload 是 RunPlanPayload 的 JSON；立即返回是否受理，进度与结果走回调 */
+    boolean startRun(String runPlanJson) = 51;
+
+    /** 幂等；未在跑时也返回 true */
+    boolean stopRun() = 52;
+
+    boolean isRunning() = 53;
+
+    /** MaaFramework 版本；未加载返回 null */
+    String maaVersion() = 54;
 }

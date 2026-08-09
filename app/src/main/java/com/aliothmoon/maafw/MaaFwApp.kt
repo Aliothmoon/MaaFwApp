@@ -21,8 +21,8 @@ import com.aliothmoon.maafw.project.ProjectSource
 import com.aliothmoon.maafw.privileged.RemoteBackend
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.project.readPiFingerprint
+import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.RunnerPort
-import com.aliothmoon.maafw.runner.StubRunnerPort
 import com.aliothmoon.maafw.session.SessionViewModel
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -93,8 +93,14 @@ val appModule = module {
     }
     single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
 
-    // 接入 JNI 后替换为 MaaFrameworkRunnerPort
-    single<RunnerPort> { StubRunnerPort(scope = get(named<AppCoroutineScope>())) }
+    // StubRunnerPort 保留给测试与 Preview，不再进 DI
+    single<RunnerPort> {
+        MaaFrameworkRunnerPort(
+            installer = get(),
+            scope = get(named<AppCoroutineScope>()),
+            ioDispatcher = Dispatchers.IO,
+        )
+    }
 
     viewModel {
         SessionViewModel(

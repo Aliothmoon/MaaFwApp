@@ -45,6 +45,10 @@ data class PiResourceContent(
 data class PiControllerContent(
     val name: String,
     val type: String,
+    /** 三者互斥；都缺省时由外壳按默认分辨率兜底 */
+    val displayShortSide: Int? = null,
+    val displayLongSide: Int? = null,
+    val displayRaw: Boolean = false,
 )
 
 /** PI 根 interface.json 中当前领域模型需要的项目元数据 */
@@ -153,7 +157,13 @@ object PiParser {
                         DiagnosticMessage.RequiredFieldMissing("controller", "type", owner = name),
                     )
                 }
-            PiControllerContent(name, type)
+            PiControllerContent(
+                name = name,
+                type = type,
+                displayShortSide = obj.int("display_short_side"),
+                displayLongSide = obj.int("display_long_side"),
+                displayRaw = obj.boolean("display_raw") ?: false,
+            )
         }
 
         val languages = buildMap {
@@ -501,6 +511,9 @@ object PiParser {
 
     private fun JsonObject.boolean(key: String): Boolean? =
         (this[key] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+
+    private fun JsonObject.int(key: String): Int? =
+        (this[key] as? JsonPrimitive)?.content?.toIntOrNull()
 
     private fun JsonObject.stringList(key: String): List<String> = when (val value = this[key]) {
         is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.content }

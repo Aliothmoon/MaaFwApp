@@ -1,11 +1,13 @@
 package com.aliothmoon.maafw.remote
 
+import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.ITouchEventCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.bridge.InputControlUtils
 import com.aliothmoon.maafw.bridge.NativeBridgeLib
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
+import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.remote.internal.PowerController
@@ -31,6 +33,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     private val appPid = AtomicInteger(0)
     private val destroyed = AtomicBoolean(false)
     private var piRoot: String? = null
+    private val runner = MaaRunner()
 
     init {
         RemoteBootTrace.mark("CTOR_START")
@@ -46,6 +49,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         if (!destroyed.compareAndSet(false, true)) return
         Ln.i("$TAG: destroy()")
         InputControlUtils.setTouchCallback(null)
+        runner.destroy()
         cleanup()
         exitProcess(0)
     }
@@ -169,6 +173,23 @@ class RemoteServiceImpl : RemoteService.Stub() {
         val displayId = VirtualDisplayManager.getDisplayId()
         if (displayId != DefaultDisplayConfig.DISPLAY_NONE) action(displayId)
     }
+
+    // ── 执行 ──
+
+    override fun setRunnerCallback(callback: IMaaRunnerCallback?) {
+        runner.setCallback(callback)
+    }
+
+    override fun startRun(runPlanJson: String?): Boolean {
+        if (runPlanJson.isNullOrBlank()) return false
+        return runner.start(runPlanJson)
+    }
+
+    override fun stopRun(): Boolean = runner.stop()
+
+    override fun isRunning(): Boolean = runner.isRunning()
+
+    override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
 
     override fun isPackageInstalled(packageName: String): Boolean = try {
         FakeContext.get().packageManager.getPackageInfo(packageName, 0)
