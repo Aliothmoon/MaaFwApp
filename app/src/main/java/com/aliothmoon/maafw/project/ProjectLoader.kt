@@ -331,7 +331,7 @@ class ProjectLoader(
     /** interface.json 未提供可用声明时，从 resource/ 目录派生兜底资源 */
     private fun deriveResources(diagnostics: MutableList<Diagnostic>): List<ResourceDefinition> {
         val dirs = try {
-            source.list("resource").filter { it !in NON_RESOURCE_DIRS && source.list("resource/$it").isNotEmpty() }
+            source.list("resource").filter { source.list("resource/$it").isNotEmpty() }
         } catch (e: Exception) {
             diagnostics += warning(
                 "resource",
@@ -359,8 +359,5 @@ class ProjectLoader(
     companion object {
         /** 合成「未分组」的内部组名；身份判定走 isUngrouped，显示名由 UI 层用资源本地化 */
         const val UNGROUPED = "未分组"
-
-        /** M9A 生态惯例的非资源目录（公告等），fallback 枚举资源变体时排除 */
-        private val NON_RESOURCE_DIRS = setOf("announcement")
     }
 }

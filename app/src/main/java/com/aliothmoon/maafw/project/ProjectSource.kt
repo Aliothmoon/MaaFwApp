@@ -16,7 +16,8 @@ interface ProjectSource {
     fun read(path: String): String
 }
 
-const val M9A_ASSET_ROOT = "PI/M9A"
+/** 构建期 syncPiAssets 的固定落点；外壳不认具体 PI 项目，只认这个位置 */
+const val PI_ASSET_ROOT = "pi"
 
 /** 从 APK assets 读取内置 PI */
 class AssetProjectSource(

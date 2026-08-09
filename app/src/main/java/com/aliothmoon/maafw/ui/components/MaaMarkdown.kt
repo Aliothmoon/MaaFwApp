@@ -23,7 +23,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.viewinterop.AndroidView
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.project.M9A_ASSET_ROOT
+import com.aliothmoon.maafw.project.PI_ASSET_ROOT
 import com.aliothmoon.maafw.project.isRemoteUrl
 import com.aliothmoon.maafw.project.normalizeProjectPath
 import io.noties.markwon.AbstractMarkwonPlugin
@@ -65,7 +65,7 @@ fun MaaMarkdown(
     maxLines: Int = Int.MAX_VALUE,
     linksClickable: Boolean = true,
     /** PI 资源根（assets 相对路径），由上层注入，避免 UI 写死产品 id */
-    assetRoot: String = M9A_ASSET_ROOT,
+    assetRoot: String = PI_ASSET_ROOT,
 ) {
     val context = LocalContext.current
     var body by remember(text) { mutableStateOf(if (isRemoteUrl(text)) null else text) }
@@ -148,7 +148,7 @@ private val MARKDOWN_RELATIVE_IMAGE = Regex("""(!\[[^\]]*]\()(?!https?://|file:|
 private val HTML_RELATIVE_IMAGE = Regex("""(<img[^>]*\bsrc=")(?!https?://|file:|data:)([^"]+)""", RegexOption.IGNORE_CASE)
 
 /** 相对路径图片（md 与 <img>）重写为 PI assets URI；http/file/data 原样保留 */
-private fun rewriteRelativeImages(body: String, assetRoot: String = M9A_ASSET_ROOT): String {
+private fun rewriteRelativeImages(body: String, assetRoot: String = PI_ASSET_ROOT): String {
     val prefix = "file:///android_asset/$assetRoot/"
     return body
         .replace(MARKDOWN_RELATIVE_IMAGE) {

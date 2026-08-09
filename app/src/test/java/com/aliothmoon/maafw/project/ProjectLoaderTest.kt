@@ -37,7 +37,7 @@ class ProjectLoaderTest {
         fun loadProject() {
             // locale 显式固定，不依赖运行机默认语言
             val result = ProjectLoader(
-                FileProjectSource(File("src/test/fixtures", M9A_ASSET_ROOT)),
+                FileProjectSource(File("src/test/fixtures/PI/M9A")),
                 localeProvider = { "zh-CN" },
             ).load()
             assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)

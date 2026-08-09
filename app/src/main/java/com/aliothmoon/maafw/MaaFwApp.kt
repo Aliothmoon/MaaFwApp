@@ -12,7 +12,7 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.project.AssetProjectSource
 import com.aliothmoon.maafw.project.DefaultProjectRepository
-import com.aliothmoon.maafw.project.M9A_ASSET_ROOT
+import com.aliothmoon.maafw.project.PI_ASSET_ROOT
 import com.aliothmoon.maafw.project.ProjectLoader
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectSource
@@ -58,7 +58,7 @@ val appModule = module {
         CoroutineScope(SupervisorJob() + Dispatchers.Default + handler)
     }
 
-    single<ProjectSource> { AssetProjectSource(androidContext(), root = M9A_ASSET_ROOT) }
+    single<ProjectSource> { AssetProjectSource(androidContext(), root = PI_ASSET_ROOT) }
     single { ProjectLoader(get(), localeProvider = AppLocales::currentProjectTag) }
     single<ProjectRepository> { DefaultProjectRepository(get(), Dispatchers.IO) }
 
