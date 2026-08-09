@@ -1,4 +1,4 @@
-package com.aliothmoon.maafw.maa;
+package com.aliothmoon.maafw.bridge;
 
 import android.app.UiAutomation;
 import android.os.RemoteException;

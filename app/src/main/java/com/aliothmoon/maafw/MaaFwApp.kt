@@ -18,6 +18,8 @@ import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.ProjectLoader
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectSource
+import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerPort
@@ -51,6 +53,8 @@ class MaaFwApp : Application() {
             androidContext(this@MaaFwApp)
             modules(appModule)
         }
+        // 后端选择尚无持久化落点，暂时固定 Shizuku（见 TODO）
+        RemoteServiceManager.initialize(this) { RemoteBackend.SHIZUKU }
     }
 }
 

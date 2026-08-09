@@ -1,7 +1,6 @@
-package com.aliothmoon.maafw.maa;
+package com.aliothmoon.maafw.bridge;
 
 
-import com.aliothmoon.maafw.bridge.NativeBridgeLib;
 import com.aliothmoon.maafw.remote.internal.ActivityUtils;
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager;
 import com.aliothmoon.maafw.third.Ln;

@@ -19,7 +19,7 @@ out/
 # Gradle/Android Studio
 versionname.txt
 versioncode.txt
-android/.cxx
+**/.cxx/
 
 # Log Files
 *.log

@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Shizuku 后端：由 Shizuku 服务校验，未装时无副作用 -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
     <application
         android:name=".MaaFwApp"
         android:allowBackup="true"
@@ -39,6 +42,26 @@
                 android:value="true" />
         </service>
 
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false" />
+
+        <!-- Root 后端的 binder 回投口：特权进程经 getContentProviderExternal 打到这里，
+             provider 内按 uid ∈ {0, 2000} 与一次性 token 校验（docs/privileged-runtime.md §3） -->
+        <provider
+            android:name=".root.RootServiceBootstrapProvider"
+            android:authorities="${applicationId}.root.bootstrap"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false" />
+
     </application>
+
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+    </queries>
 
 </manifest>

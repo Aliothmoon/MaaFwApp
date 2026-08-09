@@ -215,6 +215,8 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+        // 特权进程的服务面走 AIDL，AGP 默认不开
+        aidl = true
     }
 
     experimentalProperties["android.experimental.enableScreenshotTest"] = true

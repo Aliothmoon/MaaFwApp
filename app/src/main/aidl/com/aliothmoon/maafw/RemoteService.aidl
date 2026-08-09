@@ -1,0 +1,62 @@
+package com.aliothmoon.maafw;
+
+import android.view.Surface;
+import com.aliothmoon.maafw.ITouchEventCallback;
+
+/**
+ * 特权进程的服务面（docs/privileged-runtime.md §6）
+ *
+ * transaction id 必须显式写死且只增不改：app 升级后旧特权进程可能仍存活，
+ * 双方按 transaction code 通信，改动方法顺序会错位
+ * destroy() 的 16777114 是 Shizuku user service 的保留 id
+ */
+interface RemoteService {
+
+    oneway void destroy() = 16777114;
+
+    // ── 生命周期 ──
+    void exit() = 1;
+
+    String version() = 2;
+
+    int pid() = 3;
+
+    /** app 侧上报自己的 pid，特权进程据此做 /proc 看门狗，app 消失即自杀 */
+    oneway void heartbeat(int appPid) = 4;
+
+    /** piRoot 是解包后的 PI 根目录绝对路径 */
+    boolean setup(String piRoot, boolean isDebug) = 5;
+
+    // ── 显示 ──
+    boolean setVirtualDisplayMode(int mode) = 10;
+
+    void setVirtualDisplayResolution(int width, int height, int dpi) = 11;
+
+    /** 返回 display id，失败返回 -1 */
+    int startVirtualDisplay() = 12;
+
+    void stopVirtualDisplay() = 13;
+
+    boolean isAppOnVirtualDisplay(String packageName) = 14;
+
+    boolean moveAppToVirtualDisplay(String packageName) = 15;
+
+    oneway void setForceFullscreenOnVirtualDisplay(boolean enabled) = 16;
+
+    oneway void setDisplayPower(boolean on) = 17;
+
+    // ── 预览 ──
+    void setMonitorSurface(in Surface surface) = 20;
+
+    oneway void setTouchCallback(ITouchEventCallback callback) = 21;
+
+    // ── 预览上的手动操作 ──
+    oneway void touchDown(int x, int y) = 30;
+
+    oneway void touchMove(int x, int y) = 31;
+
+    oneway void touchUp(int x, int y) = 32;
+
+    // ── 目标应用 ──
+    boolean isPackageInstalled(String packageName) = 40;
+}
