@@ -9,7 +9,7 @@ import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
-import com.aliothmoon.maafw.project.FileProjectSource
+import com.aliothmoon.maafw.project.DirectoryProjectSource
 import com.aliothmoon.maafw.project.ProjectLoadResult
 import com.aliothmoon.maafw.project.ProjectLoader
 import kotlinx.serialization.json.JsonObject
@@ -32,7 +32,7 @@ class RunPlanBuilderTest {
         fun loadProject() {
             // 夹具固定在 test/fixtures，不随打包资源更换而变；locale 显式固定，不依赖运行机默认语言
             val result = ProjectLoader(
-                FileProjectSource(File("src/test/fixtures/PI/M9A")),
+                DirectoryProjectSource(File("src/test/fixtures/PI/M9A")),
                 localeProvider = { "zh-CN" },
             ).load()
             definition = (result as ProjectLoadResult.Ready).definition

@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -80,6 +81,38 @@ val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
     }
 }
 
+// 运行时据此判断已解包的 PI 是否过期
+// 不用 BuildConfig：指纹要等 syncPiAssets 执行完才算得出，而 BuildConfig 的值在 configuration 阶段就得定
+val writePiFingerprint = tasks.register("writePiFingerprint") {
+    group = "build"
+    description = "算出同步后 PI 的内容指纹，落成 assets/pi.fingerprint"
+    dependsOn(syncPiAssets)
+    val piDir = piAssetsDir.map { it.dir("pi") }
+    val outFile = piAssetsDir.map { it.file("pi.fingerprint") }
+    inputs.dir(piDir).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(outFile)
+    doLast {
+        val root = piDir.get().asFile
+        val digest = MessageDigest.getInstance("SHA-256")
+        // 路径一并入摘要：只比内容会漏掉纯改名
+        root.walkTopDown()
+            .filter { it.isFile }
+            .sortedBy { it.toRelativeString(root).replace('\\', '/') }
+            .forEach { file ->
+                digest.update(file.toRelativeString(root).replace('\\', '/').toByteArray())
+                file.inputStream().use { stream ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = stream.read(buffer)
+                        if (read <= 0) break
+                        digest.update(buffer, 0, read)
+                    }
+                }
+            }
+        outFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
+    }
+}
+
 android {
     namespace = "com.aliothmoon.maafw"
     compileSdk = 37
@@ -140,7 +173,7 @@ android {
 }
 
 tasks.named("preBuild") {
-    dependsOn(syncPiAssets)
+    dependsOn(writePiFingerprint)
 }
 
 // AGP 9 不再接受 Provider 形式的 sourceSet srcDir，只能走 Variant API

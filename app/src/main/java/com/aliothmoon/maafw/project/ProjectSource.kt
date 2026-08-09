@@ -1,6 +1,6 @@
 package com.aliothmoon.maafw.project
 
-import android.content.Context
+import java.io.File
 
 /**
  * PI 文件读取边界：Loader 只依赖它，便于 JVM 测试注入内存实现
@@ -19,22 +19,29 @@ interface ProjectSource {
 /** 构建期 syncPiAssets 的固定落点；外壳不认具体 PI 项目，只认这个位置 */
 const val PI_ASSET_ROOT = "pi"
 
-/** 从 APK assets 读取内置 PI */
-class AssetProjectSource(
-    context: Context,
-    private val root: String,
-) : ProjectSource {
+/** 从文件系统读 PI；native 接入后与 MaaFramework 共用同一份解包目录 */
+class DirectoryProjectSource(private val root: File) : ProjectSource {
 
-    private val assets = context.applicationContext.assets
-
-    override val projectName: String = root.substringAfterLast('/')
+    override val projectName: String = root.name
 
     override fun list(path: String): List<String> =
-        assets.list(assetPath(path))?.toList().orEmpty()
+        File(root, path).listFiles()?.map { it.name }?.sorted().orEmpty()
 
-    override fun read(path: String): String =
-        assets.open(assetPath(path)).bufferedReader(Charsets.UTF_8).use { it.readText() }
+    override fun read(path: String): String = File(root, path).readText(Charsets.UTF_8)
+}
 
-    private fun assetPath(path: String): String =
-        if (path.isEmpty()) root else "$root/$path"
+/**
+ * 首次访问时解包，之后委托给解包目录
+ * 解包是阻塞 IO，由 ProjectRepository 在 IO dispatcher 上触发 load 来保证不占主线程
+ */
+class InstalledProjectSource(private val installer: PiInstaller) : ProjectSource {
+
+    private val delegate: ProjectSource by lazy { DirectoryProjectSource(installer.ensureInstalled()) }
+
+    // 解包目录名是指纹，不适合当兜底展示名；PI 未声明 name 时回落中性值
+    override val projectName: String = PI_ASSET_ROOT
+
+    override fun list(path: String): List<String> = delegate.list(path)
+
+    override fun read(path: String): String = delegate.read(path)
 }

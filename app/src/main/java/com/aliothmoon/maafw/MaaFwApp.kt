@@ -10,12 +10,15 @@ import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.AppLocales
-import com.aliothmoon.maafw.project.AssetProjectSource
+import com.aliothmoon.maafw.project.AssetPiPackage
 import com.aliothmoon.maafw.project.DefaultProjectRepository
+import com.aliothmoon.maafw.project.InstalledProjectSource
 import com.aliothmoon.maafw.project.PI_ASSET_ROOT
+import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.ProjectLoader
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectSource
+import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerPort
 import com.aliothmoon.maafw.session.SessionViewModel
@@ -23,6 +26,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.io.File
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -58,7 +62,14 @@ val appModule = module {
         CoroutineScope(SupervisorJob() + Dispatchers.Default + handler)
     }
 
-    single<ProjectSource> { AssetProjectSource(androidContext(), root = PI_ASSET_ROOT) }
+    single {
+        PiInstaller(
+            pkg = AssetPiPackage(androidContext(), root = PI_ASSET_ROOT),
+            baseDir = File(androidContext().filesDir, PI_ASSET_ROOT),
+            fingerprint = readPiFingerprint(androidContext()),
+        )
+    }
+    single<ProjectSource> { InstalledProjectSource(get()) }
     single { ProjectLoader(get(), localeProvider = AppLocales::currentProjectTag) }
     single<ProjectRepository> { DefaultProjectRepository(get(), Dispatchers.IO) }
 

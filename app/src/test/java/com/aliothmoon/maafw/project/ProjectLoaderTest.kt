@@ -17,17 +17,6 @@ import org.junit.BeforeClass
 import org.junit.Test
 import java.io.File
 
-/** 基于文件系统的 ProjectSource，供 JVM 测试直接读取仓库内置 PI */
-class FileProjectSource(private val root: File) : ProjectSource {
-    override val projectName: String = root.name
-
-    override fun list(path: String): List<String> =
-        File(root, path).listFiles()?.map { it.name }?.sorted().orEmpty()
-
-    override fun read(path: String): String =
-        File(root, path).readText(Charsets.UTF_8)
-}
-
 class ProjectLoaderTest {
 
     companion object {
@@ -40,7 +29,7 @@ class ProjectLoaderTest {
         fun loadProject() {
             // locale 显式固定，不依赖运行机默认语言
             val result = ProjectLoader(
-                FileProjectSource(File("src/test/fixtures/PI/M9A")),
+                DirectoryProjectSource(File("src/test/fixtures/PI/M9A")),
                 localeProvider = { "zh-CN" },
             ).load()
             assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)

@@ -32,7 +32,7 @@ class CurrentProjectI18nTest {
 
     private fun sourceOrSkip(): ProjectSource {
         assumeTrue("未同步 PI（未配置 pi.sourceDir）", File(piRoot, "interface.json").isFile)
-        return FileProjectSource(piRoot)
+        return DirectoryProjectSource(piRoot)
     }
 
     @Test
