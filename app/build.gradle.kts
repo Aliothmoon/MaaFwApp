@@ -137,6 +137,20 @@ android {
             // jniLibs 里只有这两个 ABI；显式声明避免误打包其它架构的空目录
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
+
+        externalNativeBuild {
+            cmake {
+                // launcher 是 C，bridge 是 C++；两者各自的编译选项写在 CMakeLists 里
+                arguments += "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/native/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     packaging {
