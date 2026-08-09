@@ -36,6 +36,50 @@ val gitVersionName: String by lazy {
     }
 }
 
+// PI 内容不进仓库：由 pi.sourceDir 指向的外部 PI 项目在构建期同步进 assets
+// 换一个 PI 只改这处配置并重新出包，代码与仓库都不感知具体项目
+val piSourceDir: String? = (localProperties.getProperty("pi.sourceDir")
+    ?: System.getenv("PI_SOURCE_DIR"))?.takeIf { it.isNotBlank() }
+
+val piAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/piAssets")
+
+// 只对可枚举的顶层项做白名单，命中的目录整体拷贝
+// 不用黑名单：PI 协议允许 description 与图片引用子目录里的任意 md 和资源，
+// 按扩展名通配排除会误伤 announcement、locales 等目录下被引用的正文
+val piIncludePatterns: List<String> = listOf(
+    "interface.json",
+    "tasks/**",
+    "resource/**",
+    "resource_*/**",
+    "data/**",
+    "locales/**",
+    "CONTACT",
+    "LICENSE",
+) + (localProperties.getProperty("pi.includeExtra") ?: "")
+    .split(',')
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+
+val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
+    group = "build"
+    description = "把 pi.sourceDir 指向的 PI 项目同步为 assets/pi"
+    // 与 PI_ASSET_ROOT 对应：srcDir 挂在上一级，APK 内路径才是 assets/pi
+    into(piAssetsDir.map { it.dir("pi") })
+    if (piSourceDir != null) {
+        from(piSourceDir) {
+            piIncludePatterns.forEach { include(it) }
+            // 白名单已能排除它们，显式剪枝只为免去遍历上游仓库的 .git 等大目录
+            exclude(".git/**", "node_modules/**", ".venv/**", "__pycache__/**")
+        }
+    } else {
+        // 软失败：单元测试用 src/test/fixtures，不该被 PI 配置阻塞
+        // 缺 PI 的包在运行时自然落到 ProjectState.Error
+        doFirst {
+            logger.warn("未配置 pi.sourceDir（local.properties）或 PI_SOURCE_DIR，构建产物将不含 PI")
+        }
+    }
+}
+
 android {
     namespace = "com.aliothmoon.maafw"
     compileSdk = 37
@@ -93,6 +137,19 @@ android {
     }
 
     experimentalProperties["android.experimental.enableScreenshotTest"] = true
+}
+
+tasks.named("preBuild") {
+    dependsOn(syncPiAssets)
+}
+
+// AGP 9 不再接受 Provider 形式的 sourceSet srcDir，只能走 Variant API
+// 选静态目录而非 generated：各 variant 共享同一份产物，避免 debug/release 各拷一遍
+// 代价是不自动携带 task 依赖，由上面的 preBuild dependsOn 兜住
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addStaticSourceDirectory(piAssetsDir.get().asFile.absolutePath)
+    }
 }
 
 kotlin {

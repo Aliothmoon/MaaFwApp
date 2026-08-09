@@ -33,3 +33,6 @@ android/.cxx
 /app/release
 /app/debug
 /gradle/gradle-daemon-jvm.properties
+
+# 上游 PI 项目的本地参考副本，仅供人工比对，不是构建输入
+/sample/

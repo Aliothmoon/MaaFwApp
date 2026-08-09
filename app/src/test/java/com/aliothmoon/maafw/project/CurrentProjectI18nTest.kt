@@ -1,7 +1,7 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticMessage
-import com.aliothmoon.maafw.domain.casesOrEmpty
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -9,12 +9,16 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
-/** 当前打包 PI 的发布契约：所有实际加载的 $key 必须在每份声明语言中有译文 */
+/**
+ * 构建期同步进来的 PI 的发布契约：声明了 languages 就必须覆盖全部 $key
+ * 契约只约束「声明了就要完整」，不要求每个 PI 都做 i18n；
+ * 未配置 pi.sourceDir 或该 PI 不做 i18n 时跳过，外壳不绑定任何具体项目
+ */
 @OptIn(ExperimentalSerializationApi::class)
 class CurrentProjectI18nTest {
 
@@ -23,16 +27,23 @@ class CurrentProjectI18nTest {
         allowTrailingComma = true
     }
 
+    /** syncPiAssets 的落点；单元测试工作目录是 app/ */
+    private val piRoot = File("build/generated/piAssets/pi")
+
+    private fun sourceOrSkip(): ProjectSource {
+        assumeTrue("未同步 PI（未配置 pi.sourceDir）", File(piRoot, "interface.json").isFile)
+        return FileProjectSource(piRoot)
+    }
+
     @Test
-    fun `当前打包 PI 的每种语言覆盖全部 i18n 引用`() {
-        val source = FileProjectSource(File("src/main/assets", M9A_ASSET_ROOT))
-        val interfaceContent = source.read("interface.json")
-        val projectInterface = PiParser.parseInterface("interface.json", interfaceContent)
-        assertTrue("当前打包 PI 应声明 languages", projectInterface.languages.isNotEmpty())
+    fun `打包 PI 的每种声明语言覆盖全部 i18n 引用`() {
+        val source = sourceOrSkip()
+        val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
         assertTrue(
             "合法的 language path 不应产生诊断: ${projectInterface.diagnostics}",
             projectInterface.diagnostics.none { it.message is DiagnosticMessage.LanguagePathInvalid },
         )
+        assumeTrue("该 PI 未声明 languages", projectInterface.languages.isNotEmpty())
 
         val loadedFiles = listOf("interface.json") + projectInterface.imports
         val references = loadedFiles
@@ -40,7 +51,7 @@ class CurrentProjectI18nTest {
             .toSortedSet()
 
         projectInterface.languages.forEach { (language, path) ->
-            val diagnostics = mutableListOf<com.aliothmoon.maafw.domain.Diagnostic>()
+            val diagnostics = mutableListOf<Diagnostic>()
             val translations = PiParser.parseTranslations(path, source.read(normalizeProjectPath(path))) {
                 diagnostics += it
             }
@@ -51,9 +62,10 @@ class CurrentProjectI18nTest {
     }
 
     @Test
-    fun `当前打包 PI 的各语言加载时无 i18n 诊断`() {
-        val source = FileProjectSource(File("src/main/assets", M9A_ASSET_ROOT))
+    fun `打包 PI 的各语言加载时无 i18n 诊断`() {
+        val source = sourceOrSkip()
         val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
+        assumeTrue("该 PI 未声明 languages", projectInterface.languages.isNotEmpty())
 
         projectInterface.languages.keys.forEach { language ->
             val ready = ProjectLoader(source) { language }.load() as ProjectLoadResult.Ready
@@ -70,21 +82,6 @@ class CurrentProjectI18nTest {
             }
             assertTrue("$language 不应产生 i18n 诊断: $i18nDiagnostics", i18nDiagnostics.isEmpty())
         }
-    }
-
-    @Test
-    fun `英文 Sell Products 不暴露中文内部 case 名`() {
-        val source = FileProjectSource(File("src/main/assets", M9A_ASSET_ROOT))
-        val ready = ProjectLoader(source) { "en-US" }.load() as ProjectLoadResult.Ready
-        val labelsByName = ready.definition.options.values
-            .flatMap { it.casesOrEmpty() }
-            .filter { it.name in setOf("无", "全部售出", "保留指定份数") }
-            .groupBy({ it.name }, { it.label })
-            .mapValues { (_, labels) -> labels.toSet() }
-
-        assertEquals(setOf("None"), labelsByName["无"])
-        assertEquals(setOf("Sell all"), labelsByName["全部售出"])
-        assertEquals(setOf("Reserve specified quantity"), labelsByName["保留指定份数"])
     }
 
     private fun collectI18nReferences(element: JsonElement): List<String> = when (element) {
