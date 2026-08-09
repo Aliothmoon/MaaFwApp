@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.ui.tasks
 
+// 与 material3.Surface 同名，用别名区分
+import android.view.Surface as PlatformSurface
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
@@ -69,6 +71,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -103,6 +106,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TemplateTask
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.DisplayResolution
+import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
@@ -120,12 +124,14 @@ import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
+import com.aliothmoon.maafw.ui.components.MaaTouchOverlay
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.i18n.localized
 
 @Composable
 fun TasksScreen(
     state: SessionUiState,
+    previewMarkers: List<PreviewTouchMarker>,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -157,7 +163,7 @@ fun TasksScreen(
                 }
             }
 
-            is ProjectState.Ready -> TasksContent(state, onIntent)
+            is ProjectState.Ready -> TasksContent(state, previewMarkers, onIntent)
         }
     }
 }
@@ -165,6 +171,7 @@ fun TasksScreen(
 @Composable
 private fun TasksContent(
     state: SessionUiState,
+    previewMarkers: List<PreviewTouchMarker>,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -179,8 +186,28 @@ private fun TasksContent(
     val environment = state.environment
     val serverCandidates = environment?.resourceCandidates.orEmpty()
 
+    // 预览面在内嵌卡片与全屏之间搬家，两处调用点都得在同一棵组合树里 movableContent 才成立，
+    // 所以宿主状态提到这一层
+    var previewFullscreen by rememberSaveable { mutableStateOf(false) }
+    var previewSurfaceReady by remember { mutableStateOf(false) }
+    val previewContent = state.previewResolution?.let { resolution ->
+        rememberMovablePreview(
+            resolution = resolution,
+            markers = previewMarkers,
+            onSurfaceAvailable = {
+                previewSurfaceReady = true
+                onIntent(SessionIntent.AttachPreviewSurface(it))
+            },
+            onSurfaceDestroyed = {
+                previewSurfaceReady = false
+                onIntent(SessionIntent.DetachPreviewSurface)
+            },
+        )
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         // AppRoot 已消费系统栏 inset，内层 Scaffold 不再重复
         contentWindowInsets = WindowInsets(),
@@ -197,7 +224,11 @@ private fun TasksContent(
             ) {
                 LivePreview(
                     resolution = state.previewResolution,
-                    onIntent = onIntent,
+                    surfaceReady = previewSurfaceReady,
+                    running = state.runner.phase.isBusy,
+                    // 全屏时这里让位，同一份 previewContent 搬到下面的全屏宿主
+                    content = previewContent.takeUnless { previewFullscreen },
+                    onEnterFullscreen = { previewFullscreen = true },
                 )
                 if (serverCandidates.isNotEmpty()) {
                     ServerSelectorRow(
@@ -345,6 +376,14 @@ private fun TasksContent(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+
+    if (previewFullscreen && previewContent != null) {
+        FullscreenPreview(
+            onExit = { previewFullscreen = false },
+            content = previewContent,
+        )
+    }
     }
 
     if (showServerSheet && serverCandidates.isNotEmpty()) {
@@ -560,28 +599,103 @@ private fun ExtraOptionSwitchRow(
 }
 
 /**
- * 虚拟屏实时预览；画面本身不进 RunnerState/RunnerEvent（docs/android-ui-contract.md §10）
- * 项目未就绪时拿不到虚拟屏尺寸，退回占位卡
+ * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一个 SurfaceView
+ * 重建会销毁 Surface，得跟特权进程重新握手一次，画面要黑一下
+ *
+ * 闭包里读到的值必须走 rememberUpdatedState：movableContentOf 只创建一次，直接捕获会永远停在首帧
+ */
+@Composable
+private fun rememberMovablePreview(
+    resolution: DisplayResolution,
+    markers: List<PreviewTouchMarker>,
+    onSurfaceAvailable: (PlatformSurface) -> Unit,
+    onSurfaceDestroyed: () -> Unit,
+): @Composable () -> Unit {
+    val currentResolution by rememberUpdatedState(resolution)
+    val currentMarkers by rememberUpdatedState(markers)
+    val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
+    val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
+    return remember {
+        movableContentOf {
+            MaaPreviewSurface(
+                resolution = currentResolution,
+                onSurfaceAvailable = { currentAvailable(it) },
+                onSurfaceDestroyed = { currentDestroyed() },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                MaaTouchOverlay(
+                    markers = currentMarkers,
+                    resolution = currentResolution,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 虚拟屏实时预览的内嵌宿主；画面本身不进 RunnerState/RunnerEvent（docs/android-ui-contract.md §10）
+ * [content] 为 null 表示项目未就绪或画面已搬去全屏，两种情况都显示占位
  */
 @Composable
 private fun LivePreview(
     resolution: DisplayResolution?,
-    onIntent: (SessionIntent) -> Unit,
+    surfaceReady: Boolean,
+    running: Boolean,
+    content: (@Composable () -> Unit)?,
+    onEnterFullscreen: () -> Unit,
 ) {
     val cardModifier = Modifier
         .fillMaxWidth()
         .padding(top = MaaDesignTokens.Spacing.md)
-    if (resolution == null) {
-        MaaCardSurface(modifier = cardModifier.aspectRatio(16f / 9f)) {
-            LivePreviewIdleArt()
-        }
+        .aspectRatio(resolution?.aspectRatio ?: (16f / 9f))
+    if (content == null) {
+        MaaCardSurface(modifier = cardModifier) { LivePreviewIdleArt() }
         return
     }
-    MaaCardSurface(modifier = cardModifier) {
-        MaaPreviewSurface(
-            resolution = resolution,
-            onSurfaceAvailable = { onIntent(SessionIntent.AttachPreviewSurface(it)) },
-            onSurfaceDestroyed = { onIntent(SessionIntent.DetachPreviewSurface) },
+    MaaCardSurface(modifier = cardModifier.maaClickable(onClick = onEnterFullscreen)) {
+        Box(Modifier.fillMaxSize()) {
+            content()
+            PreviewStatusMask(surfaceReady = surfaceReady, running = running)
+        }
+    }
+}
+
+/** 全屏宿主；与内嵌卡片共用同一份 movableContent，点任意处退出 */
+@Composable
+private fun FullscreenPreview(
+    onExit: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .maaClickable(onClick = onExit),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
+}
+
+/** 画面还没上来时盖一层说明，免得黑屏看着像坏了 */
+@Composable
+private fun PreviewStatusMask(surfaceReady: Boolean, running: Boolean) {
+    val text = when {
+        !surfaceReady -> stringResource(R.string.tasks_preview_waiting_surface)
+        !running -> stringResource(R.string.tasks_preview_idle)
+        else -> return
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

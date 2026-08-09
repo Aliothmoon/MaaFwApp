@@ -14,6 +14,7 @@ import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.PreviewPort
+import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.runner.RunPlanBuilder
 import com.aliothmoon.maafw.runner.RunPlanResult
 import com.aliothmoon.maafw.runner.RunnerCommandResult
@@ -53,6 +54,12 @@ class SessionViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = SessionUiState(),
         )
+
+    /**
+     * 预览上的触点，单独一条流不进 SessionUiState：
+     * 一次滑动能连发几十个触点，混进聚合态会让整棵树按触摸频率重组
+     */
+    val previewMarkers: StateFlow<List<PreviewTouchMarker>> = previewPort.markers
 
     private val effectChannel = Channel<SessionEffect>(Channel.BUFFERED)
     val effects: Flow<SessionEffect> = effectChannel.receiveAsFlow()

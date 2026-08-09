@@ -21,6 +21,8 @@
     <string name="tasks_run_order">Task list</string>
     <!-- "active" is an adjective and does not inflect with quantity. -->
     <string name="tasks_live_preview">Live preview</string>
+    <string name="tasks_preview_waiting_surface">Waiting for frames</string>
+    <string name="tasks_preview_idle">Not running</string>
     <string name="tasks_remove">Remove</string>
     <string name="tasks_drag_reorder">Drag to reorder</string>
     <string name="tasks_description_title">Task description</string>

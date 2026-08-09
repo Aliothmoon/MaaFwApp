@@ -85,6 +85,8 @@ fun AppRoot(
     viewModel: SessionViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // 触点单独一条流，不并进 SessionUiState（见 SessionViewModel.previewMarkers）
+    val previewMarkers by viewModel.previewMarkers.collectAsStateWithLifecycle()
 
     // 语言重载唯一触发点：App/系统切语言都经 Activity 重建后到此
     val localeTag = LocalConfiguration.current.locales[0]?.toLanguageTag().orEmpty()
@@ -189,7 +191,12 @@ fun AppRoot(
             ) { page ->
                 when (TopDestination.entries[page]) {
                     TopDestination.Home -> HomeScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
-                    TopDestination.Tasks -> TasksScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
+                    TopDestination.Tasks -> TasksScreen(
+                        state = state,
+                        previewMarkers = previewMarkers,
+                        onIntent = viewModel::onIntent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                     TopDestination.Settings -> SettingsScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
                 }
             }

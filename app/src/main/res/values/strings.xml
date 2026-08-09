@@ -20,6 +20,8 @@
     <string name="tasks_add_task">添加任务</string>
     <string name="tasks_run_order">任务列表</string>
     <string name="tasks_live_preview">实时预览</string>
+    <string name="tasks_preview_waiting_surface">等待画面</string>
+    <string name="tasks_preview_idle">未在运行</string>
     <string name="tasks_remove">移除</string>
     <string name="tasks_drag_reorder">拖动排序</string>
     <string name="tasks_description_title">任务说明</string>
