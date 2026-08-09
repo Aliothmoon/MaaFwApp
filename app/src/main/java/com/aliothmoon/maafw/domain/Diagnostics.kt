@@ -20,6 +20,9 @@ sealed interface DiagnosticMessage {
     ) : DiagnosticMessage
 
     data class ResourcePathMissing(val resource: String) : DiagnosticMessage
+
+    /** PI 未声明 Adb controller：该 PI 不面向 Android，带 controller 限定的任务都会不适用 */
+    data object NoAdbController : DiagnosticMessage
     data class LanguagePathInvalid(val language: String) : DiagnosticMessage
     data class ImportReadFailed(val detail: String) : DiagnosticMessage
     data object ProjectHasNoTasks : DiagnosticMessage

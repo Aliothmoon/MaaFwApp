@@ -38,6 +38,15 @@ data class PiResourceContent(
     val label: String?,
 )
 
+/**
+ * controller 声明的原样投影；挑哪一个由 loader 按平台决定
+ * [name] 是 task 的 controller[] 实际引用的标识，不能用 type 代替
+ */
+data class PiControllerContent(
+    val name: String,
+    val type: String,
+)
+
 /** PI 根 interface.json 中当前领域模型需要的项目元数据 */
 data class PiInterfaceContent(
     val name: String?,
@@ -45,6 +54,7 @@ data class PiInterfaceContent(
     /** 顶层 interface_version；PI V2 要求恒为 2，缺失或非法由 loader 硬失败 */
     val interfaceVersion: Long?,
     val resources: List<PiResourceContent>,
+    val controllers: List<PiControllerContent>,
     /** v2 languages 声明：语言 tag -> 翻译文件相对路径 */
     val languages: Map<String, String>,
     /** v2.2.0 import 分片声明，按数组顺序加载；路径相对 interface.json 目录 */
@@ -90,7 +100,16 @@ object PiParser {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
             diagnostics += error(source, DiagnosticMessage.JsonParseFailed(e.message.orEmpty()))
-            return PiInterfaceContent(null, null, null, emptyList(), emptyMap(), emptyList(), diagnostics)
+            return PiInterfaceContent(
+                name = null,
+                version = null,
+                interfaceVersion = null,
+                resources = emptyList(),
+                controllers = emptyList(),
+                languages = emptyMap(),
+                imports = emptyList(),
+                diagnostics = diagnostics,
+            )
         }
 
         val resources = (root["resource"] as? JsonArray).orEmpty().mapNotNull { element ->
@@ -114,6 +133,29 @@ object PiParser {
             }
         }
 
+        // name/type 缺一不可：缺 name 无法被 task 引用，缺 type 无法判定平台
+        val controllers = (root["controller"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val obj = element as? JsonObject
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("controller"))
+                }
+            val name = obj.string("name")
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessage.RequiredFieldMissing("controller", "name"),
+                    )
+                }
+            val type = obj.string("type")
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessage.RequiredFieldMissing("controller", "type", owner = name),
+                    )
+                }
+            PiControllerContent(name, type)
+        }
+
         val languages = buildMap {
             (root["languages"] as? JsonObject)?.forEach { (lang, element) ->
                 val path = (element as? JsonPrimitive)?.contentOrNull
@@ -130,6 +172,7 @@ object PiParser {
             version = root.string("version"),
             interfaceVersion = (root["interface_version"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull(),
             resources = resources,
+            controllers = controllers,
             languages = languages,
             imports = root.stringList("import").map(::normalizeProjectPath),
             diagnostics = diagnostics,

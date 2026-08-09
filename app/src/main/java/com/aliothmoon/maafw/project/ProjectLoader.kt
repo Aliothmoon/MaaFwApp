@@ -109,7 +109,7 @@ class ProjectLoader(
         val definition = ProjectDefinition(
             name = projectInterface.name ?: source.projectName,
             version = projectInterface.version,
-            controller = ControllerDefinition(),
+            controller = resolveController(interfacePath, projectInterface, diagnostics),
             resources = projectInterface.resources
                 .map { ResourceDefinition(it.name, it.paths, text.label(it.label) ?: it.name) }
                 .takeIf { it.isNotEmpty() }
@@ -120,6 +120,25 @@ class ProjectLoader(
             templates = templates,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
+    }
+
+    /**
+     * Android 外壳只驱动 Adb controller，从 PI 声明里取该项的真实 name
+     * task 的 controller[] 引用的是 controller 名，写死名字会让换一个 PI 后全部任务被判不适用
+     * 未声明 Adb 说明该 PI 不面向 Android：记 warning 并回落默认，不阻断加载
+     */
+    private fun resolveController(
+        source: String,
+        projectInterface: PiInterfaceContent,
+        diagnostics: MutableList<Diagnostic>,
+    ): ControllerDefinition {
+        val adb = projectInterface.controllers
+            .firstOrNull { it.type.equals(ADB_CONTROLLER_TYPE, ignoreCase = true) }
+        if (adb == null) {
+            diagnostics += warning(source, DiagnosticMessage.NoAdbController)
+            return ControllerDefinition()
+        }
+        return ControllerDefinition(name = adb.name, type = adb.type)
     }
 
     /** 分片内容合并进累计状态：task/option 重名 → error，preset/group 重名 → warning，一律先定义优先 */
@@ -359,5 +378,8 @@ class ProjectLoader(
     companion object {
         /** 合成「未分组」的内部组名；身份判定走 isUngrouped，显示名由 UI 层用资源本地化 */
         const val UNGROUPED = "未分组"
+
+        /** PI 协议里 Adb controller 的 type 字面量 */
+        private const val ADB_CONTROLLER_TYPE = "Adb"
     }
 }

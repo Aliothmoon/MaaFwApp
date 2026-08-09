@@ -2,13 +2,16 @@ package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.UnavailableReason
 import com.aliothmoon.maafw.domain.UserConfiguration
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Test
@@ -593,5 +596,74 @@ class ProjectLoaderProtocolTest {
         val byName = ready.definition.tasks.associateBy { it.name }
         assertEquals("显示名", byName.getValue("T1").label)
         assertEquals("T2", byName.getValue("T2").label)
+    }
+}
+
+class ProjectLoaderControllerTest {
+
+    private fun load(files: Map<String, String>): ProjectLoadResult.Ready {
+        val result = ProjectLoader(MapProjectSource(files)).load()
+        assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
+        return result as ProjectLoadResult.Ready
+    }
+
+    @Test
+    fun `controller 取 PI 声明的 Adb 项而非写死名称`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"controller":[{"name":"PC","type":"Win32"},{"name":"安卓","type":"Adb"}]""",
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+            ),
+        )
+        assertEquals("安卓", ready.definition.controller.name)
+        assertEquals("Adb", ready.definition.controller.type)
+    }
+
+    /** 回归：曾写死 name=Android/type=ADB，只有恰好把 controller 命名为 ADB 的 PI 才匹配得上 */
+    @Test
+    fun `任务按 PI 声明的 controller 名判定适用性`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"controller":[{"name":"安卓","type":"Adb"},{"name":"PC","type":"Win32"}]""",
+                ),
+                "tasks/a.json" to """
+                    {"task":[
+                        {"name":"T1","entry":"E1","controller":["安卓"]},
+                        {"name":"T2","entry":"E2","controller":["PC"]}
+                    ]}
+                """.trimIndent(),
+            ),
+        )
+        val definition = ready.definition
+        assertNull(ConfigurationResolver.checkApplicability(definition, definition.task("T1")!!, null))
+        assertTrue(
+            ConfigurationResolver.checkApplicability(definition, definition.task("T2")!!, null)
+                is UnavailableReason.ControllerMismatch,
+        )
+    }
+
+    @Test
+    fun `未声明 Adb controller 记 warning 并回落默认`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"controller":[{"name":"PC","type":"Win32"}]""",
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+            ),
+        )
+        assertTrue(
+            ready.diagnostics.any {
+                it.severity == DiagnosticSeverity.Warning &&
+                    it.message == DiagnosticMessage.NoAdbController
+            },
+        )
+        assertEquals(ControllerDefinition(), ready.definition.controller)
     }
 }

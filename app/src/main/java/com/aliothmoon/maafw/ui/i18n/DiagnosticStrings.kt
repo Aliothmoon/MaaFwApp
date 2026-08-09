@@ -41,6 +41,8 @@ fun DiagnosticMessage.localized(): String = when (this) {
     is DiagnosticMessage.ResourcePathMissing ->
         stringResource(R.string.diagnostic_resource_path_missing, resource)
 
+    DiagnosticMessage.NoAdbController -> stringResource(R.string.diagnostic_no_adb_controller)
+
     is DiagnosticMessage.LanguagePathInvalid ->
         stringResource(R.string.diagnostic_language_path_invalid, language)
 
