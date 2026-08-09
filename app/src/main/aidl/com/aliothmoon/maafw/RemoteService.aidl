@@ -25,8 +25,11 @@ interface RemoteService {
     /** app 侧上报自己的 pid，特权进程据此做 /proc 看门狗，app 消失即自杀 */
     oneway void heartbeat(int appPid) = 4;
 
-    /** piRoot 是解包后的 PI 根目录绝对路径 */
-    boolean setup(String piRoot, boolean isDebug) = 5;
+    /**
+     * piRoot 是解包后的 PI 根目录绝对路径
+     * logDir 交给 MaaFramework 落 maa.log 与 Screencap 动作的产物；不设时它按进程 CWD 算，特权进程的 CWD 不可写
+     */
+    boolean setup(String piRoot, String logDir, boolean isDebug) = 5;
 
     // ── 显示 ──
     boolean setVirtualDisplayMode(int mode) = 10;

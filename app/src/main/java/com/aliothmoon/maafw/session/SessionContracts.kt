@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.session
 
+import android.view.Surface
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
@@ -8,6 +9,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
@@ -23,6 +25,8 @@ data class SessionUiState(
     val runner: RunnerState = RunnerState(),
     val themeMode: ThemeMode = ThemeMode.System,
     val developerMode: Boolean = false,
+    /** 虚拟屏尺寸，由 PI controller 的 display_* 推导；项目未就绪时为 null */
+    val previewResolution: DisplayResolution? = null,
 ) {
     /** 唯一锁定规则：RunnerPhase.isBusy */
     val configurationLocked: Boolean
@@ -97,6 +101,13 @@ sealed interface SessionIntent {
 
     data object Start : SessionIntent
     data object Stop : SessionIntent
+
+    /**
+     * 预览 Surface 的生死；Surface 归 UI 所有，VM 只转发句柄
+     * 尺寸对不上虚拟屏时不要发：特权进程按 Surface 尺寸贴图，对不上就是拉伸的画面
+     */
+    data class AttachPreviewSurface(val surface: Surface) : SessionIntent
+    data object DetachPreviewSurface : SessionIntent
 }
 
 /** 一次性 Effect，不进 UiState */

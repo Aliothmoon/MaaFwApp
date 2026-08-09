@@ -5,12 +5,15 @@ import com.aliothmoon.maafw.bridge.NativeBridgeLib
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.maa.MaaFrameworkLibrary
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
+import com.aliothmoon.maafw.maa.MaaGlobalOption
+import com.aliothmoon.maafw.maa.MaaLoggingLevel
 import com.aliothmoon.maafw.maa.MaaStatus
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.runner.RunOutcome
 import com.aliothmoon.maafw.runner.RunPlanPayload
 import com.aliothmoon.maafw.runner.runPlanWireJson
 import com.aliothmoon.maafw.third.Ln
+import com.sun.jna.Memory
 import com.sun.jna.Pointer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -44,6 +47,7 @@ class MaaRunner {
 
     /** JNA 回调必须被强引用住，否则会被 GC，native 回调时踩空 */
     private val eventSink = MaaFrameworkLibrary.MaaEventCallback { _, message, detailsJson, _ ->
+        Ln.i("MaaEventCallback on $message")
         runCatching {
             callbackRef.get()?.onEvent(message.orEmpty(), detailsJson.orEmpty())
         }.onFailure {
@@ -54,6 +58,47 @@ class MaaRunner {
 
     fun setCallback(callback: IMaaRunnerCallback?) {
         callbackRef.set(callback)
+    }
+
+    /**
+     * 全局选项是进程级单例，setup 时设一次即可
+     *
+     * 不设 LOG_DIR 时 MaaFramework 按进程 CWD 解析 `maa.log` 与 Screencap 动作的落点，
+     * 特权进程的 CWD 不可写，Screencap 会直接失败
+     */
+    fun applyGlobalOptions(logDir: String, debug: Boolean) {
+        val lib = MaaFrameworkLoader.library ?: return
+        if (!setStringOption(lib, MaaGlobalOption.LOG_DIR, logDir)) {
+            Ln.w("MaaRunner: set LOG_DIR failed: $logDir")
+        }
+        setIntOption(
+            lib,
+            MaaGlobalOption.STDOUT_LEVEL,
+            if (debug) MaaLoggingLevel.INFO else MaaLoggingLevel.ERROR,
+        )
+        // 节点出错时自动存一张现场图，比事后复现便宜；SAVE_DRAW 会每次识别都写盘，暂不开
+        setBoolOption(lib, MaaGlobalOption.SAVE_ON_ERROR, debug)
+        Ln.i("MaaRunner: global options applied, logDir=$logDir debug=$debug")
+    }
+
+    private fun setStringOption(lib: MaaFrameworkLibrary, key: Int, value: String): Boolean {
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        // MaaFramework 按 val_size 截取，不看结尾 NUL；Memory 不能申请 0 字节
+        val memory = Memory(bytes.size.coerceAtLeast(1).toLong())
+        memory.write(0, bytes, 0, bytes.size)
+        return lib.MaaGlobalSetOption(key, memory, bytes.size.toLong()).toInt() != 0
+    }
+
+    private fun setIntOption(lib: MaaFrameworkLibrary, key: Int, value: Int): Boolean {
+        val memory = Memory(Int.SIZE_BYTES.toLong())
+        memory.setInt(0, value)
+        return lib.MaaGlobalSetOption(key, memory, Int.SIZE_BYTES.toLong()).toInt() != 0
+    }
+
+    private fun setBoolOption(lib: MaaFrameworkLibrary, key: Int, value: Boolean): Boolean {
+        val memory = Memory(1)
+        memory.setByte(0, if (value) 1 else 0)
+        return lib.MaaGlobalSetOption(key, memory, 1).toInt() != 0
     }
 
     fun isRunning(): Boolean = running.get()
@@ -176,7 +221,11 @@ class MaaRunner {
                 ?: return "MaaAndroidNativeControllerCreate 失败: $config"
             lib.MaaControllerAddSink(ctrl, eventSink, null)
             val ctrlId = lib.MaaControllerPostConnection(ctrl)
-            if (ctrlId == INVALID_ID || lib.MaaControllerWait(ctrl, ctrlId) != MaaStatus.SUCCEEDED) {
+            if (ctrlId == INVALID_ID || lib.MaaControllerWait(
+                    ctrl,
+                    ctrlId
+                ) != MaaStatus.SUCCEEDED
+            ) {
                 lib.MaaControllerDestroy(ctrl)
                 return "controller 连接失败"
             }

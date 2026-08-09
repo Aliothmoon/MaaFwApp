@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.RecordingPreviewPort
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.StubRunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerScenario
@@ -94,7 +95,7 @@ class SessionViewModelTest {
         ),
         locale: (String?) -> Unit = {},
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
-        val vm = SessionViewModel(project, store, runner, locale)
+        val vm = SessionViewModel(project, store, runner, RecordingPreviewPort(), locale)
         return Triple(vm, store, runner)
     }
 

@@ -102,6 +102,7 @@ import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TemplateTask
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
@@ -117,6 +118,7 @@ import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
+import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.i18n.localized
@@ -130,7 +132,6 @@ fun TasksScreen(
     Crossfade(
         targetState = state.projectState,
         animationSpec = MaaMotion.enter(),
-        label = "projectState",
         modifier = modifier,
     ) { projectState ->
         when (projectState) {
@@ -194,7 +195,10 @@ private fun TasksContent(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
             ) {
-                LivePreviewPlaceholder()
+                LivePreview(
+                    resolution = state.previewResolution,
+                    onIntent = onIntent,
+                )
                 if (serverCandidates.isNotEmpty()) {
                     ServerSelectorRow(
                         label = environment?.resource?.label ?: stringResource(R.string.settings_not_selected),
@@ -555,32 +559,51 @@ private fun ExtraOptionSwitchRow(
     }
 }
 
-/** Live Preview 占位；不进 RunnerState/RunnerEvent（docs/android-ui-contract.md §10） */
+/**
+ * 虚拟屏实时预览；画面本身不进 RunnerState/RunnerEvent（docs/android-ui-contract.md §10）
+ * 项目未就绪时拿不到虚拟屏尺寸，退回占位卡
+ */
 @Composable
-private fun LivePreviewPlaceholder() {
-    MaaCardSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = MaaDesignTokens.Spacing.md)
-            .aspectRatio(16f / 9f),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.OndemandVideo,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    modifier = Modifier.size(32.dp),
-                )
-                Text(
-                    text = stringResource(R.string.tasks_live_preview),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                )
-            }
+private fun LivePreview(
+    resolution: DisplayResolution?,
+    onIntent: (SessionIntent) -> Unit,
+) {
+    val cardModifier = Modifier
+        .fillMaxWidth()
+        .padding(top = MaaDesignTokens.Spacing.md)
+    if (resolution == null) {
+        MaaCardSurface(modifier = cardModifier.aspectRatio(16f / 9f)) {
+            LivePreviewIdleArt()
+        }
+        return
+    }
+    MaaCardSurface(modifier = cardModifier) {
+        MaaPreviewSurface(
+            resolution = resolution,
+            onSurfaceAvailable = { onIntent(SessionIntent.AttachPreviewSurface(it)) },
+            onSurfaceDestroyed = { onIntent(SessionIntent.DetachPreviewSurface) },
+        )
+    }
+}
+
+@Composable
+private fun LivePreviewIdleArt() {
+    Box(contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.OndemandVideo,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.size(32.dp),
+            )
+            Text(
+                text = stringResource(R.string.tasks_live_preview),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            )
         }
     }
 }

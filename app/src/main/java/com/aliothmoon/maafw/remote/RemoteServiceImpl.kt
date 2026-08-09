@@ -69,7 +69,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         appPid.set(pid)
     }
 
-    override fun setup(piRoot: String?, isDebug: Boolean): Boolean {
+    override fun setup(piRoot: String?, logDir: String?, isDebug: Boolean): Boolean {
         if (piRoot.isNullOrBlank() || !File(piRoot).isDirectory) {
             Ln.e("$TAG: setup failed - PI root not readable: $piRoot")
             return false
@@ -77,8 +77,23 @@ class RemoteServiceImpl : RemoteService.Stub() {
         this.piRoot = piRoot
         // Android 12 起子进程会被 phantom process killer 收割，接 native 前先关掉
         PermissionGrantHelper.disablePhantomProcessKiller()
+        // 特权进程是 shell/root 身份，app 建的目录未必可写，这里自己建一遍
+        if (!logDir.isNullOrBlank() && ensureWritableDir(logDir)) {
+            runner.applyGlobalOptions(logDir, isDebug)
+        } else {
+            Ln.w("$TAG: log dir unusable, MaaFramework 将按进程 CWD 落盘: $logDir")
+        }
         Ln.i("$TAG: setup ok, piRoot=$piRoot")
         return true
+    }
+
+    private fun ensureWritableDir(path: String): Boolean {
+        val dir = File(path)
+        if (!dir.isDirectory && !dir.mkdirs()) {
+            Ln.e("$TAG: mkdirs failed: $path")
+            return false
+        }
+        return dir.canWrite()
     }
 
     // ── 显示 ──

@@ -5,7 +5,6 @@ import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
-import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.project.PiInstaller
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,10 +22,6 @@ import timber.log.Timber
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-import android.content.res.Resources
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * RunnerPort 的真实实现：本对象跑在 app 进程，MaaFramework 实例在特权进程里，两者经 binder 通信
@@ -34,6 +29,8 @@ import kotlin.math.roundToInt
  */
 class MaaFrameworkRunnerPort(
     private val installer: PiInstaller,
+    /** MaaFramework 的 maa.log 与 Screencap 动作的落点；须是特权进程（shell/root 身份）可写的目录 */
+    private val logDir: () -> File,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val serviceManager: RemoteServiceManager = RemoteServiceManager,
@@ -162,13 +159,13 @@ class MaaFrameworkRunnerPort(
     }
 
     private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): String? {
-        if (!service.setup(piRoot.absolutePath, BuildConfig.DEBUG)) {
+        if (!service.setup(piRoot.absolutePath, logDir().absolutePath, BuildConfig.DEBUG)) {
             return "特权进程 setup 失败"
         }
         if (!service.setVirtualDisplayMode(DisplayMode.BACKGROUND)) {
             return "切换后台虚拟屏失败"
         }
-        val (width, height) = resolveResolution(plan.controller)
+        val (width, height) = resolveDisplayResolution(plan.controller)
         service.setVirtualDisplayResolution(width, height, DefaultDisplayConfig.DPI)
         if (service.startVirtualDisplay() == DefaultDisplayConfig.DISPLAY_NONE) {
             return "虚拟显示器启动失败"
@@ -195,30 +192,6 @@ class MaaFrameworkRunnerPort(
         return null
     }
 
-    /**
-     * 由 PI controller 的 display_* 声明推导虚拟屏分辨率（docs/privileged-runtime.md §5）
-     * 官方语义是「截图缩放到该边长」；这里是自己建屏，直接按目标边长建，省掉再缩放一次
-     *
-     * 方向固定横屏：虚拟屏与设备旋转无关，PI 的模板一般按横屏截取——这是本项目的假设，不是协议规定
-     * 边长取偶数：奇数宽在部分编码器上会导致 stride 与预期不符
-     */
-    private fun resolveResolution(controller: ControllerDefinition): Pair<Int, Int> {
-        val metrics = Resources.getSystem().displayMetrics
-        val rawLong = max(metrics.widthPixels, metrics.heightPixels)
-        val rawShort = min(metrics.widthPixels, metrics.heightPixels)
-        if (controller.displayRaw || rawShort <= 0) {
-            return rawLong.alignEven() to rawShort.alignEven()
-        }
-        val aspect = rawLong.toDouble() / rawShort
-        controller.displayLongSide?.takeIf { it > 0 }?.let { long ->
-            return long.alignEven() to (long / aspect).roundToInt().alignEven()
-        }
-        val short = controller.displayShortSide?.takeIf { it > 0 } ?: DEFAULT_SHORT_SIDE
-        return (short * aspect).roundToInt().alignEven() to short.alignEven()
-    }
-
-    private fun Int.alignEven(): Int = this and 1.inv()
-
     private fun failPreparation(reason: String): RunnerCommandResult {
         _state.value = RunnerState(
             phase = RunnerPhase.Idle,
@@ -239,9 +212,6 @@ class MaaFrameworkRunnerPort(
     }
 
     private companion object {
-        /** PI V2 的 display_short_side 默认值 */
-        const val DEFAULT_SHORT_SIDE = 720
-
         const val NODE_PREFIX = "Node."
         const val TASKER_PREFIX = "Tasker."
         const val RESOURCE_PREFIX = "Resource."

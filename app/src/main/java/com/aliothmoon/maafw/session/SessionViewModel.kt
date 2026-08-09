@@ -13,12 +13,14 @@ import com.aliothmoon.maafw.i18n.LocaleController
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
+import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.RunPlanBuilder
 import com.aliothmoon.maafw.runner.RunPlanResult
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
+import com.aliothmoon.maafw.runner.resolveDisplayResolution
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +37,7 @@ class SessionViewModel(
     private val projectRepository: ProjectRepository,
     private val configurationStore: UserConfigurationStore,
     private val runnerPort: RunnerPort,
+    private val previewPort: PreviewPort,
     private val localeController: LocaleController,
 ) : ViewModel() {
 
@@ -112,6 +115,7 @@ class SessionViewModel(
             taskCatalog = session.taskCatalog,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
+            previewResolution = resolveDisplayResolution(project.definition.controller),
         )
     }
 
@@ -238,6 +242,10 @@ class SessionViewModel(
 
             SessionIntent.Start -> start()
             SessionIntent.Stop -> stop()
+
+            // 不走 guarded：预览与配置写入无关，运行中反而更需要它
+            is SessionIntent.AttachPreviewSurface -> previewPort.attachSurface(intent.surface)
+            SessionIntent.DetachPreviewSurface -> previewPort.detachSurface()
         }
     }
 

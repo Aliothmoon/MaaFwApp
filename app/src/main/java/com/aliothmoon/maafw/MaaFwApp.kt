@@ -22,6 +22,8 @@ import com.aliothmoon.maafw.privileged.RemoteBackend
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
+import com.aliothmoon.maafw.runner.PreviewPort
+import com.aliothmoon.maafw.runner.RemotePreviewPort
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.session.SessionViewModel
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -40,6 +42,9 @@ import timber.log.Timber
 
 /** 进程级 scope 限定符，避免与其它 CoroutineScope 绑定冲突 */
 object AppCoroutineScope
+
+/** 外部私有目录下的 MaaFramework 落盘目录：maa.log 与 Screencap 动作的产物都在这 */
+private const val MAA_LOG_DIR_NAME = "log"
 
 class MaaFwApp : Application() {
 
@@ -95,10 +100,27 @@ val appModule = module {
 
     // StubRunnerPort 保留给测试与 Preview，不再进 DI
     single<RunnerPort> {
+        val context = androidContext()
         MaaFrameworkRunnerPort(
             installer = get(),
+            // 与 PI 同在外部私有目录：特权进程写得进，adb pull 也拿得到
+            logDir = {
+                File(
+                    checkNotNull(context.getExternalFilesDir(null)) {
+                        "外部私有目录不可用（外部存储未挂载）"
+                    },
+                    MAA_LOG_DIR_NAME,
+                )
+            },
             scope = get(named<AppCoroutineScope>()),
             ioDispatcher = Dispatchers.IO,
+        )
+    }
+
+    single<PreviewPort> {
+        RemotePreviewPort(
+            scope = get(named<AppCoroutineScope>()),
+            serviceManager = RemoteServiceManager,
         )
     }
 
@@ -107,6 +129,7 @@ val appModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
+            previewPort = get(),
             localeController = AppLocales,
         )
     }
