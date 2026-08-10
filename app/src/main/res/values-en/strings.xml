@@ -80,7 +80,7 @@
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
     <string name="home_name">Name</string>
-    <string name="home_resource">Resource</string>
+    <string name="home_resource">Server</string>
     <string name="home_none">None</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
     <plurals name="home_diagnostics_summary_with_errors">
@@ -118,8 +118,8 @@
     <string name="settings_run_mode_foreground">Primary display</string>
     <string name="settings_run_mode_hint_background">Runs on a separate virtual display so the phone stays usable; resolution derived from the project declaration</string>
     <string name="settings_run_mode_hint_foreground">Drives the current screen directly, occupying the phone while running; the target app is not restarted and preview touch is disabled</string>
-    <string name="settings_resource">Resource</string>
-    <string name="settings_no_resources">The project provides no selectable resources</string>
+    <string name="settings_resource">Server selection</string>
+    <string name="settings_no_resources">The project provides no selectable servers</string>
     <string name="settings_current_resource">Current resource</string>
     <string name="settings_not_selected">Not selected</string>
     <string name="settings_resource_hint">Switching resources affects task applicability; unavailable while running</string>
