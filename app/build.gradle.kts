@@ -4,7 +4,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.compose.screenshot)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -325,8 +324,6 @@ android {
         aidl = true
     }
 
-    experimentalProperties["android.experimental.enableScreenshotTest"] = true
-
     androidResources {
         // agent 运行时归档内部已经 deflate 过，APK 里再压一遍只是白烧构建时间；
         // 存成 STORED 之后运行时读它是直读，不必先把整条目 inflate 出来
@@ -425,8 +422,6 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
-    screenshotTestImplementation(libs.compose.screenshot.validation)
-    screenshotTestImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
