@@ -24,12 +24,15 @@ import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RunMode
@@ -45,7 +49,6 @@ import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
-import com.aliothmoon.maafw.ui.components.MaaSwitch
 
 /**
  * 底部启停条
@@ -211,14 +214,14 @@ internal fun TasksQuickOptionsPanel(
 
                 GroupLabel(stringResource(R.string.quick_settings_title))
                 if (state.runMode == RunMode.BACKGROUND) {
-                    SettingSwitchRow(
+                    SettingToggleRow(
                         icon = Icons.Outlined.Nightlight,
                         label = stringResource(R.string.settings_screen_saver_auto),
                         checked = state.screenSaverEnabled,
                         onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
                     )
                 }
-                SettingSwitchRow(
+                SettingToggleRow(
                     icon = Icons.Outlined.Code,
                     label = stringResource(R.string.settings_developer_mode),
                     checked = state.developerMode,
@@ -288,9 +291,17 @@ private fun ActionTile(
     }
 }
 
-/** 整行可点，不要求用户去够右边那个小开关 */
+/** 勾选框缩到 20dp 并解除 48dp 最小触控：整行都可点，触控目标由行本身提供 */
+private val CompactCheckboxSize = 20.dp
+
+/**
+ * 整行可点，不要求用户去够右边那个小方框
+ *
+ * 这里用 Checkbox 而设置页同一项用 Switch——面板是密排的快捷入口，Switch 的宽度会把
+ * 每行撑高一档。破了「一个领域动作只有一副形态」（docs/design-system.md §4.4），是有意的
+ */
 @Composable
-private fun SettingSwitchRow(
+private fun SettingToggleRow(
     icon: ImageVector,
     label: String,
     checked: Boolean,
@@ -300,7 +311,7 @@ private fun SettingSwitchRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .padding(vertical = MaaDesignTokens.Spacing.xxs),
+            .padding(vertical = MaaDesignTokens.Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
     ) {
@@ -315,6 +326,12 @@ private fun SettingSwitchRow(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
-        MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.size(CompactCheckboxSize),
+            )
+        }
     }
 }
