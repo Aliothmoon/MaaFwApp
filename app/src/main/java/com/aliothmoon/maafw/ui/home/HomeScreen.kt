@@ -38,7 +38,9 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
@@ -53,11 +55,15 @@ import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
+import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.MaaSwitch
+import com.aliothmoon.maafw.ui.components.ResourceSelectorRow
+import com.aliothmoon.maafw.ui.components.ResourceSwitchSheet
 import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
- * 首页版面对齐 MaaMeow：概览 -> 权限 -> 服务入口 -> 业务卡
- * 运行模式与悬浮窗归设置页管，不像 MaaMeow 那样在首页再放一份
+ * 首页版面对齐 MaaMeow：概览 -> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
+ * 资源选择与运行模式从设置页迁来，避免与任务页重复
  */
 @Composable
 fun HomeScreen(
@@ -73,6 +79,8 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
     ) {
         OverviewCard(state)
+        ResourceCard(state, onIntent)
+        RunModeCard(state, onIntent)
         PermissionCard(state, onIntent)
         ServiceActionButtons(state, onIntent)
         ProjectDiagnosticsCard(state)
@@ -363,3 +371,122 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
     }
 }
 
+@Composable
+private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_run_mode)) {
+        val modes = listOf(
+            RunMode.BACKGROUND to stringResource(R.string.settings_run_mode_background),
+            RunMode.FOREGROUND to stringResource(R.string.settings_run_mode_foreground),
+        )
+        MaaSingleChoiceFlow(
+            options = modes,
+            selected = state.runMode,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SetRunMode(it)) },
+        )
+        Text(
+            text = when (state.runMode) {
+                RunMode.BACKGROUND -> stringResource(R.string.settings_run_mode_hint_background)
+                RunMode.FOREGROUND -> stringResource(R.string.settings_run_mode_hint_foreground)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    // 两张卡按模式二选一：控制层只有前台用得上，屏保只有后台用得上
+    when (state.runMode) {
+        RunMode.FOREGROUND -> OverlayModeCard(state, onIntent)
+        RunMode.BACKGROUND -> ScreenSaverCard(state, onIntent)
+    }
+}
+
+@Composable
+private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_overlay_mode)) {
+        MaaSingleChoiceFlow(
+            options = listOf(
+                OverlayControlMode.FLOAT_BALL to stringResource(R.string.settings_overlay_mode_ball),
+                OverlayControlMode.ACCESSIBILITY to stringResource(R.string.settings_overlay_mode_accessibility),
+            ),
+            selected = state.overlayControlMode,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SetOverlayControlMode(it)) },
+        )
+        Text(
+            text = when (state.overlayControlMode) {
+                OverlayControlMode.FLOAT_BALL -> stringResource(R.string.settings_overlay_mode_hint_ball)
+                OverlayControlMode.ACCESSIBILITY ->
+                    stringResource(R.string.settings_overlay_mode_hint_accessibility)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = { onIntent(SessionIntent.ShowOverlay) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.settings_overlay_show))
+        }
+    }
+}
+
+@Composable
+private fun ScreenSaverCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_screen_saver)) {
+        MaaLabeledControlRow(
+            label = stringResource(R.string.settings_screen_saver_auto),
+            trailing = {
+                MaaSwitch(
+                    checked = state.screenSaverEnabled,
+                    onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
+                )
+            },
+        )
+        Text(
+            text = stringResource(R.string.settings_screen_saver_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = { onIntent(SessionIntent.ShowScreenSaver) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.settings_screen_saver_show))
+        }
+    }
+}
+
+@Composable
+private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_resource)) {
+        val environment = state.environment
+        if (environment == null || environment.resourceCandidates.isEmpty()) {
+            Text(
+                text = stringResource(R.string.settings_no_resources),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            var showSheet by remember { mutableStateOf(false) }
+            Text(stringResource(R.string.settings_current_resource), style = MaterialTheme.typography.bodyLarge)
+            ResourceSelectorRow(
+                label = environment.resource?.label ?: stringResource(R.string.settings_not_selected),
+                enabled = !state.configurationLocked,
+                onClick = { showSheet = true },
+            )
+            Text(
+                text = stringResource(R.string.settings_resource_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (showSheet) {
+                ResourceSwitchSheet(
+                    candidates = environment.resourceCandidates,
+                    currentName = environment.resource?.name,
+                    onSelect = { onIntent(SessionIntent.SelectResource(it)) },
+                    onDismiss = { showSheet = false },
+                )
+            }
+        }
+    }
+}

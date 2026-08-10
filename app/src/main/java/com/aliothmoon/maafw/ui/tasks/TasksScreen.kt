@@ -37,8 +37,6 @@ import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
-import com.aliothmoon.maafw.ui.components.ResourceSelectorRow
-import com.aliothmoon.maafw.ui.components.ResourceSwitchSheet
 
 /**
  * [previewContent] 由 AppRoot 创建并持有：全屏宿主必须在 pager 之外才能盖住底部 tab 栏，
@@ -112,11 +110,8 @@ private fun TasksContent(
     var editingTaskInstanceId by rememberSaveable { mutableStateOf<String?>(null) }
 
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
-    var showResourceSheet by rememberSaveable { mutableStateOf(false) }
     var showRunLog by rememberSaveable { mutableStateOf(false) }
     var showQuickOptions by rememberSaveable { mutableStateOf(false) }
-    val environment = state.environment
-    val resourceCandidates = environment?.resourceCandidates.orEmpty()
 
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -142,14 +137,6 @@ private fun TasksContent(
                         content = previewContent,
                         onEnterFullscreen = onEnterFullscreen,
                     )
-                    if (resourceCandidates.isNotEmpty()) {
-                        ResourceSelectorRow(
-                            label = environment?.resource?.label
-                                ?: stringResource(R.string.settings_not_selected),
-                            enabled = !locked,
-                            onClick = { showResourceSheet = true },
-                        )
-                    }
                     ConfigurationSelectorCard(
                         active = active,
                         locked = locked,
@@ -203,14 +190,6 @@ private fun TasksContent(
         )
     }
 
-    if (showResourceSheet && resourceCandidates.isNotEmpty()) {
-        ResourceSwitchSheet(
-            candidates = resourceCandidates,
-            currentName = environment?.resource?.name,
-            onSelect = { onIntent(SessionIntent.SelectResource(it)) },
-            onDismiss = { showResourceSheet = false },
-        )
-    }
 
     if (showAddTasks && active != null) {
         AddTasksSheet(
