@@ -262,7 +262,7 @@
     <string name="permission_overlay">Display over other apps</string>
     <string name="permission_storage">All files access</string>
     <string name="permission_accessibility">Accessibility service</string>
-    <string name="permission_keepalive_hint">If the system reclaims the app process while tasks run in the background, the virtual display goes with it. Notification and the battery whitelist reduce that risk.</string>
+    <string name="permission_keepalive_hint">While a background task is running, the app or the game may be cleared by system power-management policies. Lock the game in the recent-apps screen and allow it high-power background running in its battery settings.</string>
     <string name="home_overview">Overview</string>
     <string name="home_display_resolution">Screen resolution</string>
     <string name="home_service_status">Service status</string>

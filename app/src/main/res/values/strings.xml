@@ -253,7 +253,7 @@
     <string name="permission_overlay">悬浮窗</string>
     <string name="permission_storage">存储访问</string>
     <string name="permission_accessibility">无障碍服务</string>
-    <string name="permission_keepalive_hint">后台跑任务期间 app 进程被系统清理会连带释放虚拟屏，通知与电源管理白名单能降低被清理的概率</string>
+    <string name="permission_keepalive_hint">后台任务运行期间，应用或游戏有可能会被系统策略清理。建议在系统最近任务里锁定游戏后台、并在游戏电池设置里允许后台高耗电运行</string>
     <string name="home_overview">概览</string>
     <string name="home_display_resolution">屏幕分辨率</string>
     <string name="home_service_status">服务状态</string>
