@@ -26,7 +26,8 @@ fun resolveDisplayResolution(controller: ControllerDefinition): DisplayResolutio
     if (controller.displayRaw || rawShort <= 0) {
         return DisplayResolution(rawLong.alignEven(), rawShort.alignEven())
     }
-    val aspect = rawLong.toDouble() / rawShort
+    // 固定 16:9（对齐 MaaMeow 的虚拟屏比例）：不随设备物理比例变，否则竖屏长条设备会算出非标准分辨率
+    val aspect = 16.0 / 9.0
     controller.displayLongSide?.takeIf { it > 0 }?.let { long ->
         return DisplayResolution(long.alignEven(), (long / aspect).roundToInt().alignEven())
     }
