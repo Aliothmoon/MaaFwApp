@@ -1,5 +1,9 @@
 package com.aliothmoon.maafw.domain
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
+
 /** 定义 × 用户状态的只读投影；不持久化、非执行结果 */
 data class ResolvedProjectSession(
     val configurationList: List<ResolvedRunConfiguration>,
@@ -31,11 +35,18 @@ data class ResolvedRunConfiguration(
     val effectiveTaskCount: Int get() = tasks.count { it.effectiveEnabled }
 }
 
-/** 领域只表达语义；文案由 UI 映射 string 资源 */
-sealed interface UnavailableReason {
-    data object MissingDefinition : UnavailableReason
-    data class ControllerMismatch(val required: List<String>) : UnavailableReason
-    data class ResourceMismatch(val required: List<String>) : UnavailableReason
+/**
+ * 任务不适用的原因文案
+ * `applicable` 才是判定位；这里只承担展示，切语言后由 UI 重新解析
+ */
+object UnavailableReasons {
+    fun missingDefinition(): UiText = uiTextOf(R.string.task_unavailable_missing)
+
+    fun controllerMismatch(required: List<String>): UiText =
+        uiTextOf(R.string.task_unavailable_controller, required.joinToString())
+
+    fun resourceMismatch(required: List<String>): UiText =
+        uiTextOf(R.string.task_unavailable_resource, required.joinToString())
 }
 
 data class ResolvedConfiguredTask(
@@ -46,7 +57,7 @@ data class ResolvedConfiguredTask(
     val enabled: Boolean,
     val applicable: Boolean,
     val missingDefinition: Boolean,
-    val unavailableReason: UnavailableReason?,
+    val unavailableReason: UiText?,
     val options: List<OptionEditorState>,
 ) {
     /** 派生态，不写回；环境恢复后 enabled 意图自动生效 */
@@ -67,7 +78,7 @@ data class TaskCatalogItem(
     val label: String,
     val description: String?,
     val applicable: Boolean,
-    val unavailableReason: UnavailableReason?,
+    val unavailableReason: UiText?,
     val defaultChecked: Boolean,
 )
 

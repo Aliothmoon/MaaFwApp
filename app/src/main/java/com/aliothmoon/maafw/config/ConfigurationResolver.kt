@@ -3,7 +3,7 @@ package com.aliothmoon.maafw.config
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.InputFieldState
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionCaseState
@@ -22,7 +22,8 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TaskCatalogItem
 import com.aliothmoon.maafw.domain.TaskDefinition
-import com.aliothmoon.maafw.domain.UnavailableReason
+import com.aliothmoon.maafw.domain.UnavailableReasons
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.domain.UserConfiguration
 import java.util.UUID
 
@@ -42,7 +43,7 @@ object ConfigurationResolver {
             config.activeResourceName != null -> {
                 diagnostics += warning(
                     "resource",
-                    DiagnosticMessage.ResourceSelectionMissing(
+                    DiagnosticMessages.resourceSelectionMissing(
                         selected = config.activeResourceName,
                         fallback = resourceNames.firstOrNull(),
                     ),
@@ -65,7 +66,7 @@ object ConfigurationResolver {
         }
         val activeConfiguration = configurationList.firstOrNull { it.isActive }
         if (config.activeConfigurationId != null && activeConfiguration == null) {
-            diagnostics += warning("configuration", DiagnosticMessage.ActiveConfigurationMissing)
+            diagnostics += warning("configuration", DiagnosticMessages.activeConfigurationMissing())
         }
 
         return ResolvedProjectSession(
@@ -125,7 +126,7 @@ object ConfigurationResolver {
             if (taskDefinition == null) {
                 diagnostics += warning(
                     "configuration:${runConfiguration.name}",
-                    DiagnosticMessage.ConfiguredTaskMissing(configured.taskName),
+                    DiagnosticMessages.configuredTaskMissing(configured.taskName),
                 )
                 ResolvedConfiguredTask(
                     instanceId = configured.instanceId,
@@ -135,7 +136,7 @@ object ConfigurationResolver {
                     enabled = configured.enabled,
                     applicable = false,
                     missingDefinition = true,
-                    unavailableReason = UnavailableReason.MissingDefinition,
+                    unavailableReason = UnavailableReasons.missingDefinition(),
                     options = emptyList(),
                 )
             } else {
@@ -165,21 +166,21 @@ object ConfigurationResolver {
         )
     }
 
-    /** null = 适用；否则结构化原因，文案由 UI 本地化 */
+    /** null = 适用；否则给出不适用的原因文案 */
     fun checkApplicability(
         definition: ProjectDefinition,
         task: TaskDefinition,
         resourceName: String?,
-    ): UnavailableReason? {
+    ): UiText? {
         val controllerOk = task.controllers.isEmpty() ||
             task.controllers.any {
                 it.equals(definition.controller.type, ignoreCase = true) ||
                     it.equals(definition.controller.name, ignoreCase = true)
             }
-        if (!controllerOk) return UnavailableReason.ControllerMismatch(task.controllers)
+        if (!controllerOk) return UnavailableReasons.controllerMismatch(task.controllers)
         val resourceOk = task.resources.isEmpty() ||
             (resourceName != null && task.resources.any { it == resourceName })
-        if (!resourceOk) return UnavailableReason.ResourceMismatch(task.resources)
+        if (!resourceOk) return UnavailableReasons.resourceMismatch(task.resources)
         return null
     }
 

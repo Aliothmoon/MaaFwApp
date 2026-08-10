@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -32,6 +33,7 @@ import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.runner.physicalDisplayResolution
 import com.aliothmoon.maafw.runner.resolveDisplayResolution
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -217,7 +219,7 @@ class SessionViewModel(
                     )
                 }
                 if (created == null) {
-                    effectChannel.send(SessionEffect.ShowMessage(SessionMessage.TemplateNotFound(intent.templateName)))
+                    effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_template_not_found, intent.templateName)))
                 } else {
                     appendAndActivate(created)
                 }
@@ -357,7 +359,7 @@ class SessionViewModel(
     /** Screen 禁用之外的第二层写锁：写入前再读 RunnerState */
     private suspend fun guarded(block: suspend () -> Unit) {
         if (locked()) {
-            effectChannel.send(SessionEffect.ShowMessage(SessionMessage.ConfigurationLocked))
+            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_locked_while_running)))
             return
         }
         block()
@@ -404,13 +406,13 @@ class SessionViewModel(
     private suspend fun start() {
         val project = projectRepository.state.value
         if (project !is ProjectState.Ready) {
-            effectChannel.send(SessionEffect.ShowMessage(SessionMessage.ProjectNotLoaded))
+            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
             return
         }
         val config = configurationStore.data.first()
         when (val result = RunPlanBuilder.build(project.definition, config)) {
             is RunPlanResult.NoExecutableTasks ->
-                effectChannel.send(SessionEffect.ShowMessage(SessionMessage.NoExecutableTasks))
+                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_no_executable_tasks)))
 
             is RunPlanResult.Invalid ->
                 effectChannel.send(SessionEffect.ShowDiagnostics(result.diagnostics))
@@ -423,7 +425,7 @@ class SessionViewModel(
                         effectChannel.send(SessionEffect.StartRunForegroundService)
 
                     is RunnerCommandResult.Rejected ->
-                        effectChannel.send(SessionEffect.ShowMessage(SessionMessage.CannotStart(command.reason)))
+                        effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_start, command.reason)))
                 }
             }
         }
@@ -433,7 +435,7 @@ class SessionViewModel(
         when (val command = runnerPort.stop()) {
             is RunnerCommandResult.Accepted -> Unit
             is RunnerCommandResult.Rejected ->
-                effectChannel.send(SessionEffect.ShowMessage(SessionMessage.CannotStop(command.reason)))
+                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_stop, command.reason)))
         }
     }
 }

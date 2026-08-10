@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
@@ -161,7 +162,7 @@ sealed interface SessionIntent {
 
 /** 一次性 Effect，不进 UiState */
 sealed interface SessionEffect {
-    data class ShowMessage(val message: SessionMessage) : SessionEffect
+    data class ShowMessage(val message: UiText) : SessionEffect
     data class ShowDiagnostics(val diagnostics: List<Diagnostic>) : SessionEffect
 
     /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
@@ -171,14 +172,4 @@ sealed interface SessionEffect {
 
     /** 执行已受理，拉起保活前台服务；启 Service 同样要 Context */
     data object StartRunForegroundService : SessionEffect
-}
-
-/** VM 无 Context；reason 为 Runner 技术文本，UI 拼进提示尾部 */
-sealed interface SessionMessage {
-    data object ConfigurationLocked : SessionMessage
-    data object ProjectNotLoaded : SessionMessage
-    data object NoExecutableTasks : SessionMessage
-    data class TemplateNotFound(val templateName: String) : SessionMessage
-    data class CannotStart(val reason: String) : SessionMessage
-    data class CannotStop(val reason: String) : SessionMessage
 }

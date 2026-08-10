@@ -11,6 +11,8 @@ import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.domain.UserConfiguration
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
@@ -202,7 +204,8 @@ class SessionViewModelTest {
         assertEquals(before, store.current)
         assertTrue(
             effects.any {
-                it is SessionEffect.ShowMessage && it.message is SessionMessage.ConfigurationLocked
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.msg_locked_while_running)
             },
         )
     }
@@ -221,7 +224,8 @@ class SessionViewModelTest {
 
         assertTrue(
             effects.any {
-                it is SessionEffect.ShowMessage && it.message is SessionMessage.NoExecutableTasks
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.msg_no_executable_tasks)
             },
         )
         assertEquals(RunnerPhase.Idle, vm.uiState.value.runner.phase)

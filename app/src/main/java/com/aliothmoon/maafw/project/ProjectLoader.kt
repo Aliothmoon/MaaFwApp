@@ -5,7 +5,7 @@ import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
@@ -50,7 +50,7 @@ class ProjectLoader(
         } catch (e: Exception) {
             diagnostics += error(
                 interfacePath,
-                DiagnosticMessage.InterfaceReadFailed(e.message.orEmpty()),
+                DiagnosticMessages.interfaceReadFailed(e.message.orEmpty()),
             )
             return ProjectLoadResult.Failure(diagnostics)
         }
@@ -62,8 +62,8 @@ class ProjectLoader(
             diagnostics += error(
                 interfacePath,
                 when (val v = projectInterface.interfaceVersion) {
-                    null -> DiagnosticMessage.MissingInterfaceVersion
-                    else -> DiagnosticMessage.UnsupportedInterfaceVersion(v)
+                    null -> DiagnosticMessages.missingInterfaceVersion()
+                    else -> DiagnosticMessages.unsupportedInterfaceVersion(v)
                 },
             )
             return ProjectLoadResult.Failure(diagnostics)
@@ -83,13 +83,13 @@ class ProjectLoader(
             val content = try {
                 source.read(path)
             } catch (e: Exception) {
-                diagnostics += warning(path, DiagnosticMessage.ImportReadFailed(e.message.orEmpty()))
+                diagnostics += warning(path, DiagnosticMessages.importReadFailed(e.message.orEmpty()))
                 continue
             }
             mergeContent(state, PiParser.parseFile(path, content, text), path, diagnostics)
         }
         if (state.tasks.isEmpty()) {
-            diagnostics += warning(interfacePath, DiagnosticMessage.ProjectHasNoTasks)
+            diagnostics += warning(interfacePath, DiagnosticMessages.projectHasNoTasks())
         }
 
         validateOptionReferences(state.tasks, state.options, diagnostics)
@@ -136,7 +136,7 @@ class ProjectLoader(
         val adb = projectInterface.controllers
             .firstOrNull { it.type.equals(ADB_CONTROLLER_TYPE, ignoreCase = true) }
         if (adb == null) {
-            diagnostics += warning(source, DiagnosticMessage.NoAdbController)
+            diagnostics += warning(source, DiagnosticMessages.noAdbController())
             return ControllerDefinition()
         }
         return ControllerDefinition(
@@ -158,14 +158,14 @@ class ProjectLoader(
         diagnostics += parsed.diagnostics
         for (task in parsed.tasks) {
             if (state.tasks.any { it.name == task.name }) {
-                diagnostics += error(file, DiagnosticMessage.DuplicateDeclaration("task", task.name))
+                diagnostics += error(file, DiagnosticMessages.duplicateDeclaration("task", task.name))
             } else {
                 state.tasks += task
             }
         }
         for ((name, option) in parsed.options) {
             if (state.options.containsKey(name)) {
-                diagnostics += error(file, DiagnosticMessage.DuplicateDeclaration("option", name))
+                diagnostics += error(file, DiagnosticMessages.duplicateDeclaration("option", name))
             } else {
                 state.options[name] = option
             }
@@ -174,7 +174,7 @@ class ProjectLoader(
             if (state.templates.any { it.name == template.name }) {
                 diagnostics += warning(
                     file,
-                    DiagnosticMessage.DuplicateDeclaration("preset", template.name),
+                    DiagnosticMessages.duplicateDeclaration("preset", template.name),
                 )
             } else {
                 state.templates += template
@@ -184,7 +184,7 @@ class ProjectLoader(
             if (state.declaredGroups.any { it.name == group.name }) {
                 diagnostics += warning(
                     file,
-                    DiagnosticMessage.DuplicateDeclaration("group", group.name),
+                    DiagnosticMessages.duplicateDeclaration("group", group.name),
                 )
             } else {
                 state.declaredGroups += group
@@ -215,7 +215,7 @@ class ProjectLoader(
         val content = try {
             source.read(path)
         } catch (e: Exception) {
-            diagnostics += warning(path, DiagnosticMessage.TranslationReadFailed(e.message.orEmpty()))
+            diagnostics += warning(path, DiagnosticMessages.translationReadFailed(e.message.orEmpty()))
             return emptyMap()
         }
         return PiParser.parseTranslations(path, content) { diagnostics += it }
@@ -242,7 +242,7 @@ class ProjectLoader(
             return try {
                 source.read(path)
             } catch (e: Exception) {
-                diagnostics += warning(path, DiagnosticMessage.DescriptionReadFailed(e.message.orEmpty()))
+                diagnostics += warning(path, DiagnosticMessages.descriptionReadFailed(e.message.orEmpty()))
                 resolved
             }
         }
@@ -271,7 +271,7 @@ class ProjectLoader(
             task.groups.filterNot { it in declaredNames }.forEach { ref ->
                 diagnostics += warning(
                     "task:${task.name}",
-                    DiagnosticMessage.MissingReference("group", ref),
+                    DiagnosticMessages.missingReference("group", ref),
                 )
             }
             if (kept.isEmpty()) hasUngrouped = true
@@ -294,7 +294,7 @@ class ProjectLoader(
                 if (ref !in options) {
                     diagnostics += error(
                         "task:${task.name}",
-                        DiagnosticMessage.MissingReference("option", ref),
+                        DiagnosticMessages.missingReference("option", ref),
                     )
                 }
             }
@@ -305,7 +305,7 @@ class ProjectLoader(
                     if (child !in options) {
                         diagnostics += error(
                             "option:${option.name}/case:${case.name}",
-                            DiagnosticMessage.MissingReference("option", child),
+                            DiagnosticMessages.missingReference("option", child),
                         )
                     }
                 }
@@ -325,7 +325,7 @@ class ProjectLoader(
             if (!visiting.add(name)) {
                 diagnostics += error(
                     "option:$name",
-                    DiagnosticMessage.OptionCycle("${visiting.joinToString(" -> ")} -> $name"),
+                    DiagnosticMessages.optionCycle("${visiting.joinToString(" -> ")} -> $name"),
                 )
                 return
             }
@@ -348,7 +348,7 @@ class ProjectLoader(
             template.tasks.filter { it.taskName !in taskNames }.forEach {
                 diagnostics += warning(
                     "preset:${template.name}",
-                    DiagnosticMessage.MissingReference("task", it.taskName),
+                    DiagnosticMessages.missingReference("task", it.taskName),
                 )
             }
         }
@@ -361,12 +361,12 @@ class ProjectLoader(
         } catch (e: Exception) {
             diagnostics += warning(
                 "resource",
-                DiagnosticMessage.DirectoryEnumerationFailed("resource", e.message.orEmpty()),
+                DiagnosticMessages.directoryEnumerationFailed("resource", e.message.orEmpty()),
             )
             emptyList()
         }
         if (dirs.isEmpty()) {
-            diagnostics += warning("resource", DiagnosticMessage.NoAvailableResource)
+            diagnostics += warning("resource", DiagnosticMessages.noAvailableResource())
             return emptyList()
         }
         val hasBase = "base" in dirs

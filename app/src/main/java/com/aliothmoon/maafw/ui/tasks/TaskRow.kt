@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTone
@@ -95,7 +96,7 @@ internal fun TaskRow(
                 )
                 task.unavailableReason?.let {
                     MaaToneBadge(
-                        text = it.localized(),
+                        text = it.asString(),
                         tone = MaaTone(
                             MaterialTheme.colorScheme.error,
                             MaterialTheme.colorScheme.errorContainer,

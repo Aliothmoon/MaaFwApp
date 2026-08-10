@@ -5,7 +5,7 @@ import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
@@ -106,7 +106,7 @@ object PiParser {
         val root = try {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
-            diagnostics += error(source, DiagnosticMessage.JsonParseFailed(e.message.orEmpty()))
+            diagnostics += error(source, DiagnosticMessages.jsonParseFailed(e.message.orEmpty()))
             return PiInterfaceContent(
                 name = null,
                 version = null,
@@ -122,18 +122,18 @@ object PiParser {
         val resources = (root["resource"] as? JsonArray).orEmpty().mapNotNull { element ->
             val obj = element as? JsonObject
                 ?: return@mapNotNull null.also {
-                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("resource"))
+                    diagnostics += error(source, DiagnosticMessages.entryNotObject("resource"))
                 }
             val name = obj.string("name")
                 ?: return@mapNotNull null.also {
                     diagnostics += error(
                         source,
-                        DiagnosticMessage.RequiredFieldMissing("resource", "name"),
+                        DiagnosticMessages.requiredFieldMissing("resource", "name"),
                     )
                 }
             val paths = obj.stringList("path").map(::normalizeProjectPath)
             if (paths.isEmpty()) {
-                diagnostics += error(source, DiagnosticMessage.ResourcePathMissing(name))
+                diagnostics += error(source, DiagnosticMessages.resourcePathMissing(name))
                 null
             } else {
                 PiResourceContent(name, paths, obj.string("label"))
@@ -144,20 +144,20 @@ object PiParser {
         val controllers = (root["controller"] as? JsonArray).orEmpty().mapNotNull { element ->
             val obj = element as? JsonObject
                 ?: return@mapNotNull null.also {
-                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("controller"))
+                    diagnostics += error(source, DiagnosticMessages.entryNotObject("controller"))
                 }
             val name = obj.string("name")
                 ?: return@mapNotNull null.also {
                     diagnostics += error(
                         source,
-                        DiagnosticMessage.RequiredFieldMissing("controller", "name"),
+                        DiagnosticMessages.requiredFieldMissing("controller", "name"),
                     )
                 }
             val type = obj.string("type")
                 ?: return@mapNotNull null.also {
                     diagnostics += error(
                         source,
-                        DiagnosticMessage.RequiredFieldMissing("controller", "type", owner = name),
+                        DiagnosticMessages.requiredFieldMissing("controller", "type", owner = name),
                     )
                 }
             PiControllerContent(
@@ -175,7 +175,7 @@ object PiParser {
                 if (path != null) {
                     put(lang, path)
                 } else {
-                    diagnostics += warning(source, DiagnosticMessage.LanguagePathInvalid(lang))
+                    diagnostics += warning(source, DiagnosticMessages.languagePathInvalid(lang))
                 }
             }
         }
@@ -211,13 +211,13 @@ object PiParser {
         return entries.mapNotNull { element ->
             val obj = element as? JsonObject
                 ?: return@mapNotNull null.also {
-                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("agent"))
+                    diagnostics += error(source, DiagnosticMessages.entryNotObject("agent"))
                 }
             val childExec = obj.string("child_exec")?.takeIf(String::isNotBlank)
                 ?: return@mapNotNull null.also {
                     diagnostics += error(
                         source,
-                        DiagnosticMessage.RequiredFieldMissing("agent", "child_exec"),
+                        DiagnosticMessages.requiredFieldMissing("agent", "child_exec"),
                     )
                 }
             AgentDefinition(childExec = childExec, childArgs = obj.stringList("child_args"))
@@ -229,7 +229,7 @@ object PiParser {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
             return PiFileContent(
-                diagnostics = listOf(error(source, DiagnosticMessage.JsonParseFailed(e.message.orEmpty()))),
+                diagnostics = listOf(error(source, DiagnosticMessages.jsonParseFailed(e.message.orEmpty()))),
             )
         }
         return parseFile(source, root, text)
@@ -263,13 +263,13 @@ object PiParser {
         (root["group"] as? JsonArray).orEmpty().mapNotNull { element ->
             val obj = element as? JsonObject
                 ?: return@mapNotNull null.also {
-                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("group"))
+                    diagnostics += error(source, DiagnosticMessages.entryNotObject("group"))
                 }
             val name = obj.string("name")
                 ?: return@mapNotNull null.also {
                     diagnostics += error(
                         source,
-                        DiagnosticMessage.RequiredFieldMissing("group", "name"),
+                        DiagnosticMessages.requiredFieldMissing("group", "name"),
                     )
                 }
             TaskGroupDefinition(
@@ -289,17 +289,17 @@ object PiParser {
     ): TaskDefinition? {
         val obj = element as? JsonObject
             ?: return null.also {
-                diagnostics += error(source, DiagnosticMessage.EntryNotObject("task"))
+                diagnostics += error(source, DiagnosticMessages.entryNotObject("task"))
             }
         val name = obj.string("name")
             ?: return null.also {
-                diagnostics += error(source, DiagnosticMessage.RequiredFieldMissing("task", "name"))
+                diagnostics += error(source, DiagnosticMessages.requiredFieldMissing("task", "name"))
             }
         val entry = obj.string("entry")
             ?: return null.also {
                 diagnostics += error(
                     source,
-                    DiagnosticMessage.RequiredFieldMissing("task", "entry", owner = name),
+                    DiagnosticMessages.requiredFieldMissing("task", "entry", owner = name),
                 )
             }
         return TaskDefinition(
@@ -326,7 +326,7 @@ object PiParser {
     ): OptionDefinition? {
         val obj = element as? JsonObject
             ?: return null.also {
-                diagnostics += error(source, DiagnosticMessage.EntryNotObject("option \"$name\""))
+                diagnostics += error(source, DiagnosticMessages.entryNotObject("option \"$name\""))
             }
         val label = text.label(obj.string("label")) ?: name
         val description = text.description(obj.string("description"))
@@ -335,7 +335,7 @@ object PiParser {
                 val cases = parseCases(source, name, obj, diagnostics, text)
                 val defaultCase = obj.string("default_case")?.also {
                     if (cases.none { c -> c.name == it }) {
-                        diagnostics += warning(source, DiagnosticMessage.DefaultCaseMissing(name, it))
+                        diagnostics += warning(source, DiagnosticMessages.defaultCaseMissing(name, it))
                     }
                 }?.takeIf { d -> cases.any { it.name == d } }
                 if (type == "select") {
@@ -355,7 +355,7 @@ object PiParser {
                 }.filter { d ->
                     cases.any { it.name == d }.also { found ->
                         if (!found) {
-                            diagnostics += warning(source, DiagnosticMessage.DefaultCaseMissing(name, d))
+                            diagnostics += warning(source, DiagnosticMessages.defaultCaseMissing(name, d))
                         }
                     }
                 }
@@ -367,7 +367,7 @@ object PiParser {
                     parseInputField(source, name, field, diagnostics, text)
                 }
                 if (fields.isEmpty()) {
-                    diagnostics += warning(source, DiagnosticMessage.InputHasNoFields(name))
+                    diagnostics += warning(source, DiagnosticMessages.inputHasNoFields(name))
                 }
                 OptionDefinition.Input(name, label, description, fields, obj.objectOrEmpty("pipeline_override"))
             }
@@ -376,13 +376,13 @@ object PiParser {
             "hotkey" -> {
                 diagnostics += warning(
                     source,
-                    DiagnosticMessage.UnsupportedOptionType(name, "hotkey"),
+                    DiagnosticMessages.unsupportedOptionType(name, "hotkey"),
                 )
                 null
             }
 
             else -> {
-                diagnostics += error(source, DiagnosticMessage.InvalidOptionType(name, type))
+                diagnostics += error(source, DiagnosticMessages.invalidOptionType(name, type))
                 null
             }
         }
@@ -398,11 +398,11 @@ object PiParser {
         (obj["cases"] as? JsonArray).orEmpty().mapNotNull { element ->
             val case = element as? JsonObject
                 ?: return@mapNotNull null.also {
-                    diagnostics += error(source, DiagnosticMessage.OptionCaseNotObject(optionName))
+                    diagnostics += error(source, DiagnosticMessages.optionCaseNotObject(optionName))
                 }
             val caseName = case.string("name")
                 ?: return@mapNotNull null.also {
-                    diagnostics += error(source, DiagnosticMessage.OptionCaseNameMissing(optionName))
+                    diagnostics += error(source, DiagnosticMessages.optionCaseNameMissing(optionName))
                 }
             OptionCaseDefinition(
                 name = caseName,
@@ -422,13 +422,13 @@ object PiParser {
     ): InputFieldDefinition? {
         val obj = element as? JsonObject
             ?: return null.also {
-                diagnostics += error(source, DiagnosticMessage.EntryNotObject("input field"))
+                diagnostics += error(source, DiagnosticMessages.entryNotObject("input field"))
             }
         val name = obj.string("name")
             ?: return null.also {
                 diagnostics += error(
                     source,
-                    DiagnosticMessage.RequiredFieldMissing("input field", "name", owner = optionName),
+                    DiagnosticMessages.requiredFieldMissing("input field", "name", owner = optionName),
                 )
             }
         val pipelineType = when (val t = obj.string("pipeline_type")?.lowercase()) {
@@ -438,7 +438,7 @@ object PiParser {
             else -> {
                 diagnostics += warning(
                     source,
-                    DiagnosticMessage.InvalidPipelineType(optionName, name, t),
+                    DiagnosticMessages.invalidPipelineType(optionName, name, t),
                 )
                 PipelineType.StringType
             }
@@ -450,7 +450,7 @@ object PiParser {
             } catch (e: Exception) {
                 diagnostics += error(
                     source,
-                    DiagnosticMessage.RegexCompileFailed(
+                    DiagnosticMessages.regexCompileFailed(
                         option = optionName,
                         input = name,
                         detail = e.message.orEmpty(),
@@ -483,22 +483,22 @@ object PiParser {
     ): ConfigurationTemplate? {
         val obj = element as? JsonObject
             ?: return null.also {
-                diagnostics += error(source, DiagnosticMessage.EntryNotObject("preset"))
+                diagnostics += error(source, DiagnosticMessages.entryNotObject("preset"))
             }
         val name = obj.string("name")
             ?: return null.also {
-                diagnostics += error(source, DiagnosticMessage.RequiredFieldMissing("preset", "name"))
+                diagnostics += error(source, DiagnosticMessages.requiredFieldMissing("preset", "name"))
             }
         val tasks = (obj["task"] as? JsonArray).orEmpty().mapNotNull { taskElement ->
             val task = taskElement as? JsonObject
                 ?: return@mapNotNull null.also {
-                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("preset task"))
+                    diagnostics += error(source, DiagnosticMessages.entryNotObject("preset task"))
                 }
             val taskName = task.string("name")
                 ?: return@mapNotNull null.also {
                     diagnostics += error(
                         source,
-                        DiagnosticMessage.RequiredFieldMissing("preset task", "name", owner = name),
+                        DiagnosticMessages.requiredFieldMissing("preset task", "name", owner = name),
                     )
                 }
             TemplateTask(
@@ -568,7 +568,7 @@ object PiParser {
             json.parseToJsonElement(content).jsonObject
         } catch (e: Exception) {
             onDiagnostic(
-                error(source, DiagnosticMessage.TranslationJsonParseFailed(e.message.orEmpty())),
+                error(source, DiagnosticMessages.translationJsonParseFailed(e.message.orEmpty())),
             )
             return emptyMap()
         }

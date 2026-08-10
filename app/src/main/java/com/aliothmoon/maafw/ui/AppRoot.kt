@@ -61,6 +61,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
+import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
@@ -167,7 +168,7 @@ fun AppRoot(
             viewModel.effects.collect { effect ->
                 when (effect) {
                     is SessionEffect.ShowMessage ->
-                        snackbarHostState.showSnackbar(effect.message.localized(context))
+                        snackbarHostState.showSnackbar(effect.message.resolve(context))
 
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
 

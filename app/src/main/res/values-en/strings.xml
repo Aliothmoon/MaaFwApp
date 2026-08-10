@@ -157,8 +157,6 @@
     <string name="notification_channel_schedule_desc">Appears briefly when a schedule fires</string>
     <string name="notification_schedule_title">Schedule</string>
     <string name="notification_schedule_triggered">Triggered</string>
-    <string name="schedule_log_strategy_missing">Rule no longer exists</string>
-    <string name="schedule_log_execution_not_wired">Woken up; task execution is not wired yet</string>
 
     <string name="schedule_title">Schedules</string>
     <string name="schedule_add">New rule</string>
@@ -273,7 +271,7 @@
     <string name="run_log_clear">Clear</string>
     <string name="run_log_empty">No entries yet. MaaFramework callbacks show up here once a run starts.</string>
 
-    <!-- Structured diagnostics (domain DiagnosticMessage -> ui/i18n/DiagnosticStrings) -->
+    <!-- Diagnostic texts; built by DiagnosticMessages in domain/Diagnostics.kt -->
     <string name="diagnostic_severity_warning">Warning</string>
     <string name="diagnostic_severity_error">Error</string>
     <string name="diagnostic_interface_read_failed">Failed to read interface.json: %1$s</string>

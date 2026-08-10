@@ -3,7 +3,8 @@ package com.aliothmoon.maafw.config
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionKind
@@ -15,7 +16,6 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.TemplateTask
-import com.aliothmoon.maafw.domain.UnavailableReason
 import com.aliothmoon.maafw.domain.UserConfiguration
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
@@ -126,7 +126,7 @@ class ConfigurationResolverTest {
         assertEquals("官服", session.environment.resource?.name)
         assertTrue(
             session.diagnostics.any {
-                it.message is DiagnosticMessage.ResourceSelectionMissing
+                it.message.isResource(R.string.diagnostic_resource_selection_missing)
             },
         )
     }
@@ -150,7 +150,7 @@ class ConfigurationResolverTest {
         )
         val task = session.activeConfiguration!!.tasks.single()
         assertFalse(task.applicable)
-        assertTrue(task.unavailableReason is UnavailableReason.ResourceMismatch)
+        assertTrue(task.unavailableReason.isResource(R.string.task_unavailable_resource))
     }
 
     @Test
@@ -244,7 +244,7 @@ class ConfigurationResolverTest {
         )
         val task = session.activeConfiguration!!.tasks.single()
         assertTrue(task.missingDefinition)
-        assertEquals(UnavailableReason.MissingDefinition, task.unavailableReason)
+        assertTrue(task.unavailableReason.isResource(R.string.task_unavailable_missing))
     }
 
     @Test

@@ -148,8 +148,6 @@
     <string name="notification_channel_schedule_desc">定时到点时短暂出现</string>
     <string name="notification_schedule_title">定时任务</string>
     <string name="notification_schedule_triggered">已触发</string>
-    <string name="schedule_log_strategy_missing">规则已被删除</string>
-    <string name="schedule_log_execution_not_wired">已叫醒，暂未接入任务执行</string>
 
     <string name="schedule_title">定时任务</string>
     <string name="schedule_add">新建规则</string>
@@ -264,7 +262,7 @@
     <string name="run_log_clear">清空</string>
     <string name="run_log_empty">还没有日志；开始任务后这里会出现 MaaFramework 的原始回调</string>
 
-    <!-- 结构化诊断（domain DiagnosticMessage -> ui/i18n/DiagnosticStrings） -->
+    <!-- 诊断文案；构造点在 domain/Diagnostics.kt 的 DiagnosticMessages -->
     <string name="diagnostic_severity_warning">警告</string>
     <string name="diagnostic_severity_error">错误</string>
     <string name="diagnostic_interface_read_failed">读取 interface.json 失败：%1$s</string>

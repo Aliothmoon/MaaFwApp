@@ -3,7 +3,8 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ConfiguredTask
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
@@ -144,7 +145,7 @@ class RunPlanBuilderTest {
         val diagnostics = (result as RunPlanResult.Invalid).diagnostics
         assertTrue(
             diagnostics.any {
-                it.message == DiagnosticMessage.OptionUnsetWithoutDefault("自定义作战关卡")
+                it.message.isResource(R.string.diagnostic_option_unset_without_default, "自定义作战关卡")
             },
         )
     }

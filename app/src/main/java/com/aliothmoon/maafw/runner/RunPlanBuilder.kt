@@ -3,7 +3,8 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.domain.DiagnosticMessages
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
@@ -36,7 +37,7 @@ object RunPlanBuilder {
         val resource = definition.resources.firstOrNull { it.name == config.activeResourceName }
             ?: definition.resources.firstOrNull()
         if (resource == null) {
-            diagnostics += runtimeError("environment", DiagnosticMessage.RuntimeNoResource)
+            diagnostics += runtimeError("environment", DiagnosticMessages.runtimeNoResource())
             return RunPlanResult.Invalid(diagnostics)
         }
 
@@ -51,7 +52,7 @@ object RunPlanBuilder {
                 if (configured.enabled) {
                     diagnostics += runtimeError(
                         "task:${configured.taskName}",
-                        DiagnosticMessage.EnabledTaskMissingDefinition(configured.taskName),
+                        DiagnosticMessages.enabledTaskMissingDefinition(configured.taskName),
                     )
                 }
                 continue
@@ -108,7 +109,7 @@ object RunPlanBuilder {
             if (!processed.add(name)) return
             val option = definition.options[name]
             if (option == null) {
-                diagnostics += runtimeError(scopeLabel, DiagnosticMessage.MissingReference("option", name))
+                diagnostics += runtimeError(scopeLabel, DiagnosticMessages.missingReference("option", name))
                 return
             }
             when (option) {
@@ -118,7 +119,7 @@ object RunPlanBuilder {
                     if (selectedName == null) {
                         diagnostics += runtimeError(
                             scopeLabel,
-                            DiagnosticMessage.OptionUnsetWithoutDefault(name),
+                            DiagnosticMessages.optionUnsetWithoutDefault(name),
                         )
                         return
                     }
@@ -126,7 +127,7 @@ object RunPlanBuilder {
                     if (case == null) {
                         diagnostics += runtimeError(
                             scopeLabel,
-                            DiagnosticMessage.SelectedCaseMissing(name, selectedName),
+                            DiagnosticMessages.selectedCaseMissing(name, selectedName),
                         )
                         return
                     }
@@ -140,7 +141,7 @@ object RunPlanBuilder {
                     (selected - option.cases.mapTo(mutableSetOf()) { it.name }).forEach {
                         diagnostics += runtimeError(
                             scopeLabel,
-                            DiagnosticMessage.SelectedCaseMissing(name, it),
+                            DiagnosticMessages.selectedCaseMissing(name, it),
                         )
                     }
                     // patch 按 definition 声明序，不按用户勾选序
@@ -160,7 +161,7 @@ object RunPlanBuilder {
                         if (!validateInputCandidate(field.pipelineType, field.verify, raw)) {
                             diagnostics += runtimeError(
                                 scopeLabel,
-                                DiagnosticMessage.InvalidInput(
+                                DiagnosticMessages.invalidInput(
                                     option = name,
                                     input = field.name,
                                     detail = field.patternMessage ?: raw,
@@ -245,7 +246,7 @@ object RunPlanBuilder {
         PipelineType.IntType -> raw.toLongOrNull()?.let { JsonPrimitive(it) } ?: run {
             diagnostics += runtimeError(
                 scopeLabel,
-                DiagnosticMessage.IntegerConversionFailed(optionName, raw),
+                DiagnosticMessages.integerConversionFailed(optionName, raw),
             )
             null
         }
@@ -253,11 +254,11 @@ object RunPlanBuilder {
         PipelineType.BoolType -> raw.toBooleanStrictOrNull()?.let { JsonPrimitive(it) } ?: run {
             diagnostics += runtimeError(
                 scopeLabel,
-                DiagnosticMessage.BooleanConversionFailed(optionName, raw),
+                DiagnosticMessages.booleanConversionFailed(optionName, raw),
             )
             null
         }
     }
 
-    private fun runtimeError(source: String, message: DiagnosticMessage) = Diagnostic.error(source, message)
+    private fun runtimeError(source: String, message: UiText) = Diagnostic.error(source, message)
 }

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.i18n.localized
@@ -153,7 +154,7 @@ fun MaaDiagnosticList(
         diagnostics.forEach {
             val prefix = if (showSeverity) "[${it.severity.localized()}] " else ""
             Text(
-                text = "$prefix${it.source}: ${it.message.localized()}",
+                text = "$prefix${it.source}: ${it.message.asString()}",
                 style = MaterialTheme.typography.bodySmall,
                 color = if (it.severity == DiagnosticSeverity.Error) {
                     MaterialTheme.colorScheme.error

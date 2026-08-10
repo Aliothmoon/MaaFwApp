@@ -12,6 +12,10 @@ import java.io.File
  *
  * 与 `ExecutionResult` 不同，这个必须落盘：闹钟触发时 app 多半没在前台，用户回头查
  * 「昨晚那条到底响没响」只能靠它。文件在外部私有目录，adb pull 拿得到
+ *
+ * **只存稳定语义**：[result] 是枚举，文案由 UI 现场解析。这里若存已解析的字符串，
+ * 写入那一刻的语言会被冻进文件，之后切语言旧记录还是旧语言；`UiText` 也不能存，
+ * 它带的 resId 跨版本会变
  */
 @Serializable
 data class TriggerLogEntry(
@@ -22,7 +26,6 @@ data class TriggerLogEntry(
     /** 实际被叫醒的时刻；与上一项的差值就是 Doze 与厂商省电策略的延迟 */
     val actualAt: Long,
     val result: TriggerResult,
-    val message: String? = null,
 )
 
 /**

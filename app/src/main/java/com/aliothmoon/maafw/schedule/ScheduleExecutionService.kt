@@ -94,7 +94,6 @@ class ScheduleExecutionService : Service() {
                     scheduledAt = scheduledTimeMs,
                     actualAt = now,
                     result = TriggerResult.FAILED_VALIDATION,
-                    message = getString(R.string.schedule_log_strategy_missing),
                 ),
             )
             store.recordTrigger(strategyId, TriggerResult.FAILED_VALIDATION, triggeredAt = now)
@@ -109,7 +108,6 @@ class ScheduleExecutionService : Service() {
                 scheduledAt = scheduledTimeMs,
                 actualAt = now,
                 result = TriggerResult.TRIGGERED,
-                message = getString(R.string.schedule_log_execution_not_wired),
             ),
         )
         store.recordTrigger(strategy.id, TriggerResult.TRIGGERED, triggeredAt = now)

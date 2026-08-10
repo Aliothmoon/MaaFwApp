@@ -1,7 +1,8 @@
 package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.domain.Diagnostic
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.isResource
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -41,7 +42,7 @@ class CurrentProjectI18nTest {
         val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
         assertTrue(
             "合法的 language path 不应产生诊断: ${projectInterface.diagnostics}",
-            projectInterface.diagnostics.none { it.message is DiagnosticMessage.LanguagePathInvalid },
+            projectInterface.diagnostics.none { it.message.isResource(R.string.diagnostic_language_path_invalid) },
         )
         assumeTrue("该 PI 未声明 languages", projectInterface.languages.isNotEmpty())
 
@@ -69,20 +70,20 @@ class CurrentProjectI18nTest {
 
         projectInterface.languages.keys.forEach { language ->
             val ready = ProjectLoader(source) { language }.load() as ProjectLoadResult.Ready
-            val i18nDiagnostics = ready.diagnostics.filter {
-                when (it.message) {
-                    is DiagnosticMessage.LanguagePathInvalid,
-                    is DiagnosticMessage.TranslationReadFailed,
-                    is DiagnosticMessage.TranslationJsonParseFailed,
-                    is DiagnosticMessage.DescriptionReadFailed,
-                    -> true
-
-                    else -> false
-                }
+            val i18nDiagnostics = ready.diagnostics.filter { diagnostic ->
+                I18N_DIAGNOSTIC_RES.any { diagnostic.message.isResource(it) }
             }
             assertTrue("$language 不应产生 i18n 诊断: $i18nDiagnostics", i18nDiagnostics.isEmpty())
         }
     }
+
+    /** 加载期与 i18n 有关的四类诊断；任一出现即说明翻译链有问题 */
+    private val I18N_DIAGNOSTIC_RES = listOf(
+        R.string.diagnostic_language_path_invalid,
+        R.string.diagnostic_translation_read_failed,
+        R.string.diagnostic_translation_json_parse_failed,
+        R.string.diagnostic_description_read_failed,
+    )
 
     private fun collectI18nReferences(element: JsonElement): List<String> = when (element) {
         is JsonObject -> element.values.flatMap(::collectI18nReferences)

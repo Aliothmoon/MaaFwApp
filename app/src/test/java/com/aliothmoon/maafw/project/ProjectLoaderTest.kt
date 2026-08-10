@@ -4,11 +4,11 @@ import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
-import com.aliothmoon.maafw.domain.DiagnosticMessage
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
-import com.aliothmoon.maafw.domain.UnavailableReason
 import com.aliothmoon.maafw.domain.UserConfiguration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -172,7 +172,7 @@ class ProjectLoaderGroupTest {
         assertTrue(
             ready.diagnostics.any {
                 it.severity == DiagnosticSeverity.Warning &&
-                    it.message == DiagnosticMessage.DuplicateDeclaration("group", "g1")
+                    it.message.isResource(R.string.diagnostic_duplicate_declaration, "group", "g1")
             },
         )
     }
@@ -198,7 +198,7 @@ class ProjectLoaderGroupTest {
         assertEquals(listOf("g1", ProjectLoader.UNGROUPED), definition.groups.map { it.name })
         assertEquals(
             2,
-            ready.diagnostics.count { it.message is DiagnosticMessage.MissingReference },
+            ready.diagnostics.count { it.message.isResource(R.string.diagnostic_missing_reference) },
         )
     }
 
@@ -388,7 +388,7 @@ class ProjectLoaderGroupTest {
         ).load() as ProjectLoadResult.Ready
 
         assertEquals(description, ready.definition.tasks.single().description)
-        assertTrue(ready.diagnostics.none { it.message is DiagnosticMessage.DescriptionReadFailed })
+        assertTrue(ready.diagnostics.none { it.message.isResource(R.string.diagnostic_description_read_failed) })
     }
 
     @Test
@@ -420,7 +420,7 @@ class ProjectLoaderGroupTest {
         assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
         assertTrue(
             ready.diagnostics.any {
-                it.message == DiagnosticMessage.UnsupportedOptionType("Keymap", "hotkey") &&
+                it.message.isResource(R.string.diagnostic_unsupported_option_type, "Keymap", "hotkey") &&
                     it.severity == DiagnosticSeverity.Warning
             },
         )
@@ -438,7 +438,7 @@ class ProjectLoaderProtocolTest {
         val diagnostics = (result as ProjectLoadResult.Failure).diagnostics
         assertTrue(
             diagnostics.any {
-                it.message == DiagnosticMessage.MissingInterfaceVersion &&
+                it.message.isResource(R.string.diagnostic_missing_interface_version) &&
                     it.severity == DiagnosticSeverity.Error
             },
         )
@@ -515,7 +515,7 @@ class ProjectLoaderProtocolTest {
             ready.diagnostics.any {
                 "tasks/missing.json" == it.source &&
                     it.severity == DiagnosticSeverity.Warning &&
-                    it.message is DiagnosticMessage.ImportReadFailed
+                    it.message.isResource(R.string.diagnostic_import_read_failed)
             },
         )
         assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
@@ -530,7 +530,7 @@ class ProjectLoaderProtocolTest {
         val diagnostics = (ready as ProjectLoadResult.Ready).diagnostics
         assertTrue(
             diagnostics.any {
-                it.message == DiagnosticMessage.ProjectHasNoTasks &&
+                it.message.isResource(R.string.diagnostic_project_has_no_tasks) &&
                     it.severity == DiagnosticSeverity.Warning
             },
         )
@@ -632,7 +632,7 @@ class ProjectLoaderControllerTest {
         assertNull(ConfigurationResolver.checkApplicability(definition, definition.task("T1")!!, null))
         assertTrue(
             ConfigurationResolver.checkApplicability(definition, definition.task("T2")!!, null)
-                is UnavailableReason.ControllerMismatch,
+                .isResource(R.string.task_unavailable_controller, "PC"),
         )
     }
 
@@ -650,7 +650,7 @@ class ProjectLoaderControllerTest {
         assertTrue(
             ready.diagnostics.any {
                 it.severity == DiagnosticSeverity.Warning &&
-                    it.message == DiagnosticMessage.NoAdbController
+                    it.message.isResource(R.string.diagnostic_no_adb_controller)
             },
         )
         assertEquals(ControllerDefinition(), ready.definition.controller)
@@ -708,7 +708,7 @@ class ProjectLoaderAgentTest {
         assertTrue(
             ready.diagnostics.any {
                 it.severity == DiagnosticSeverity.Error &&
-                    it.message == DiagnosticMessage.RequiredFieldMissing("agent", "child_exec")
+                    it.message.isResource(R.string.diagnostic_required_field_missing, "agent", "child_exec")
             },
         )
     }
