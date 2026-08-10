@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.remote
 
-import android.system.Os
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.bridge.NativeBridgeLib
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
@@ -288,13 +287,12 @@ class MaaRunner(private val agentHost: AgentHost) {
         if (reusable) return null
 
         releaseAgents()
-        ensureTempDir()
 
         val workingDir = projectRoot ?: return "PI 根未就绪，agent 无法确定工作目录"
         val started = mutableListOf<ActiveAgent>()
         payload.agents.forEachIndexed { index, agent ->
-            val client = agentLib.MaaAgentClientCreateV2(null)
-                ?: return failAgents(started, "MaaAgentClientCreateV2 失败")
+            val client = agentLib.MaaAgentClientCreateTcp(AUTO_PORT)
+                ?: return failAgents(started, "MaaAgentClientCreateTcp 失败")
             if (agentLib.MaaAgentClientBindResource(client, resource).toInt() == 0) {
                 agentLib.MaaAgentClientDestroy(client)
                 return failAgents(started, "agent 绑定 resource 失败")
@@ -356,16 +354,6 @@ class MaaRunner(private val agentHost: AgentHost) {
     private fun failAgents(started: List<ActiveAgent>, reason: String): String {
         started.forEach { releaseAgent(it) }
         return reason
-    }
-
-    /**
-     * Android 没有 `/tmp`，`std::filesystem::temp_directory_path()` 查不到 TMPDIR 就返回不存在的路径，
-     * AgentClient 的 socket 直接 bind 失败
-     * 而 `Transceiver.cpp` 的 kTempDir 是函数内 static，首次调用即锁死——必须赶在建 client 之前设
-     */
-    private fun ensureTempDir() {
-        runCatching { Os.setenv("TMPDIR", AGENT_TEMP_DIR, true) }
-            .onFailure { Ln.w("MaaRunner: setenv TMPDIR failed: ${it.message}") }
     }
 
     private fun releaseAgents() {
@@ -451,7 +439,12 @@ class MaaRunner(private val agentHost: AgentHost) {
         /** 解释器这类 child 冷启动要几秒，超时给宽一点；连不上会整批任务失败，宁可多等 */
         const val AGENT_CONNECT_TIMEOUT_MILLIS = 30_000L
 
-        /** AgentClient 与 child 的 unix socket 落点；shell 与 root 都可写 */
-        const val AGENT_TEMP_DIR = "/data/local/tmp"
+        /**
+         * 让系统分配回环端口；identifier 随即变成实际端口，原样传给 child
+         *
+         * 代价是同机任何带 INTERNET 权限的应用都能连上这个端口冒充 agent；
+         * 但 unix socket 那条在 shell 域下建不出 sock_file，没有别的选择
+         */
+        const val AUTO_PORT: Short = 0
     }
 }
