@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
@@ -51,6 +52,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.session.ServiceStatus
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.StatusTone
+import com.aliothmoon.maafw.runner.screenSize
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
@@ -111,11 +113,13 @@ fun HomeScreen(
 
 @Composable
 private fun OverviewCard(state: SessionUiState) {
+    // 分辨率展示用设备真实屏幕尺寸（Misc.getScreenSize），与前后台 / 虚拟屏偏好无关
+    val context = LocalContext.current
+    val screen = remember(context) { screenSize(context) }
     MaaCard(title = stringResource(R.string.home_overview)) {
         MaaInfoRow(
             stringResource(R.string.home_display_resolution),
-            state.previewResolution?.let { "${it.width} × ${it.height}" }
-                ?: stringResource(R.string.home_none),
+            "${screen.width} × ${screen.height}",
         )
         MaaInfoRow(
             stringResource(R.string.home_resource),
