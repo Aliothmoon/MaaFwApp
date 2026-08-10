@@ -61,6 +61,17 @@ interface RemoteService {
 
     oneway void touchUp(int x, int y) = 32;
 
+    // ── 代授权限 ──
+
+    /**
+     * 用特权身份给 app 自己授权，省掉用户逐个点系统页
+     *
+     * permissions 与返回值都是 PrivilegedGrant 的位掩码，返回实际授到的那些
+     * 用位掩码而不是 Parcelable：Parcelable 的线格式跟着 Kotlin 类布局走，
+     * app 升级但旧特权进程仍存活时会解不出来（同本文件开头的 transaction id 约定）
+     */
+    int grantPermissions(String packageName, int uid, int permissions) = 41;
+
     // ── 目标应用 ──
     boolean isPackageInstalled(String packageName) = 40;
 

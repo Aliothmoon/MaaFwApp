@@ -12,6 +12,7 @@ import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.remote.internal.PowerController
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
+import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
@@ -205,6 +206,32 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun isRunning(): Boolean = runner.isRunning()
 
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
+
+    /**
+     * 逐项独立执行：一项失败不影响其余，返回实际授到的位
+     * 失败不抛——app 侧据返回值决定要不要再引导用户手点
+     */
+    override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int {
+        if (packageName.isNullOrBlank()) return 0
+        var granted = 0
+        if (permissions and PrivilegedGrant.NOTIFICATION != 0 &&
+            PermissionGrantHelper.grantNotificationPermission(packageName, uid)
+        ) {
+            granted = granted or PrivilegedGrant.NOTIFICATION
+        }
+        if (permissions and PrivilegedGrant.BATTERY != 0 &&
+            PermissionGrantHelper.grantBatteryOptimizationExemption(packageName)
+        ) {
+            granted = granted or PrivilegedGrant.BATTERY
+        }
+        if (permissions and PrivilegedGrant.BACKGROUND != 0 &&
+            PermissionGrantHelper.grantBackgroundUnrestricted(packageName, uid)
+        ) {
+            granted = granted or PrivilegedGrant.BACKGROUND
+        }
+        Ln.i("$TAG: grantPermissions($packageName) requested=$permissions granted=$granted")
+        return granted
+    }
 
     override fun isPackageInstalled(packageName: String): Boolean = try {
         FakeContext.get().packageManager.getPackageInfo(packageName, 0)

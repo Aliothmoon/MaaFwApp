@@ -141,27 +141,19 @@ private fun ServiceStatusIndicator(connected: Boolean) {
  *
  * 只列 manifest 里真正声明的：MaaMeow 的悬浮窗/无障碍/存储对应它的前台模式，本项目没有
  */
+/**
+ * 折叠态只剩主授权行，与 MaaMeow 一致：后端选择、保活两项、说明文字都收进展开区
+ *
+ * 保活两项平时由特权进程代授（见 PermissionManager.grantViaPrivileged），
+ * 这里的手点入口只是特权进程没起来时的兜底，不该占折叠态的版面
+ */
 @Composable
 private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val access = state.remoteAccess
     MaaCard(title = stringResource(R.string.permission_section)) {
-        MaaSingleChoiceFlow(
-            options = RemoteBackend.entries.map { entry ->
-                val suffix = if (access.isAvailable(entry)) {
-                    ""
-                } else {
-                    "（${stringResource(R.string.permission_backend_unavailable)}）"
-                }
-                entry to "${entry.display}$suffix"
-            },
-            selected = access.configuredBackend,
-            enabled = !state.configurationLocked,
-            onSelect = { onIntent(SessionIntent.SetRemoteBackend(it)) },
-        )
-
         PermissionRow(
-            label = stringResource(R.string.permission_backend),
+            label = access.configuredBackend.display,
             granted = state.remoteAccessGranted,
             loading = state.remoteAccessGranting,
             onRequest = { onIntent(SessionIntent.RequestRemoteAccess) },
@@ -171,6 +163,24 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
 
         AnimatedVisibility(visible = expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaSingleChoiceFlow(
+                    options = RemoteBackend.entries.map { entry ->
+                        val suffix = if (access.isAvailable(entry)) {
+                            ""
+                        } else {
+                            "（${stringResource(R.string.permission_backend_unavailable)}）"
+                        }
+                        entry to "${entry.display}$suffix"
+                    },
+                    selected = access.configuredBackend,
+                    enabled = !state.configurationLocked,
+                    onSelect = { onIntent(SessionIntent.SetRemoteBackend(it)) },
+                )
+                Text(
+                    text = stringResource(R.string.permission_backend_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 PermissionRow(
                     label = stringResource(R.string.permission_notification),
                     granted = state.systemPermissions.notification,
@@ -195,12 +205,6 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                 )
             }
         }
-
-        Text(
-            text = stringResource(R.string.permission_backend_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

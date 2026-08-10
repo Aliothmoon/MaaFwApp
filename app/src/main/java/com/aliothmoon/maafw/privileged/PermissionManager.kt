@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * 提权授权的唯一入口：状态汇总、发起授权、切后端
@@ -86,6 +88,10 @@ class PermissionManager(
                 .filter { it }
                 .collect { RemoteServiceManager.bind() }
         }
+        // 特权进程一上线就代授，省掉用户逐个点系统页
+        scope.launch {
+            serviceConnected.filter { it }.collect { grantViaPrivileged() }
+        }
         RemoteServiceManager.initialize(appContext) { appSettings.startupBackend.value }
     }
 
@@ -98,6 +104,26 @@ class PermissionManager(
         RemoteAccessCoordinator.refresh()
         _systemPermissions.value = readSystemPermissions()
         refreshTrigger.update { it + 1 }
+    }
+
+    /**
+     * 用特权身份给自己授权
+     *
+     * 这是保活权限的主路径，首页那两个手点入口只是特权进程没起来时的兜底。
+     * 走 shell/root 身份直接改 AppOps 与 deviceidle 白名单，用户看不到任何系统弹窗
+     */
+    private suspend fun grantViaPrivileged() {
+        val granted = withContext(Dispatchers.IO) {
+            runCatching {
+                RemoteServiceManager.getInstanceOrNull()?.grantPermissions(
+                    appContext.packageName,
+                    appContext.applicationInfo.uid,
+                    PrivilegedGrant.ALL,
+                )
+            }.onFailure { Timber.w(it, "特权代授失败") }.getOrNull()
+        }
+        Timber.i("特权代授结果 granted=%s", granted)
+        refresh()
     }
 
     /** 这两项没有变更回调，只能在 onResume 与手动 refresh 时重读 */
