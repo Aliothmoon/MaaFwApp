@@ -64,6 +64,20 @@ class AgentRuntimeDescriptorTest {
     }
 
     @Test
+    fun `argsPrefix 也认占位符，PI 的 child_args 不认`() {
+        // argsPrefix 是构建期自己写的配置，child_args 来自 PI——
+        // PI 作者可能就是要把花括号原样交给 agent，外壳不替他解释
+        val entry = AgentRuntimeDescriptor.parse(
+            """{"runtimes":[{"location":"bundle","executable":"bin/python3",
+               "argsPrefix":["-u","{bundle}/tools/wrapper.py"]}]}""",
+        ).runtimes.single()
+        assertEquals(
+            listOf("-u", "/tmp/rt/tools/wrapper.py"),
+            entry.argsPrefix.map { it.resolveAgentPlaceholders("/tmp/rt", "/libs") },
+        )
+    }
+
+    @Test
     fun `非占位符内容原样保留`() {
         assertEquals(
             "a=1;b={unknown}",

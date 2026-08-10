@@ -38,9 +38,13 @@ class ExecAgentHost : AgentHost {
         }
 
         // 顺序对齐上游 Runner.cpp：child_args 之后追加 identifier，identifier 恒在末位
+        // argsPrefix 是构建期自己写的，认占位符；child_args 来自 PI，一律原样透传——
+        // PI 作者可能就是要把花括号原样交给 agent，外壳不该替他解释
         val command = buildList {
             add(executable.absolutePath)
-            addAll(entry.argsPrefix)
+            entry.argsPrefix.mapTo(this) {
+                it.resolveAgentPlaceholders(bundleDir, request.nativeLibraryDir)
+            }
             addAll(request.agent.childArgs)
             add(request.identifier)
         }
