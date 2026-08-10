@@ -41,9 +41,16 @@ data class SessionUiState(
     val screenSaverEnabled: Boolean = false,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
-     * 前台模式是设备物理屏尺寸。项目未就绪时为 null
+     * 前台模式即设备屏幕尺寸。项目未就绪时为 null
      */
     val previewResolution: DisplayResolution? = null,
+
+    /**
+     * 设备当前的屏幕尺寸，即 `wm size` 那一份
+     *
+     * 与 [previewResolution] 分开：后台模式下那个是虚拟屏，挂在「屏幕分辨率」标签下会误导
+     */
+    val screenResolution: DisplayResolution? = null,
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     /** 授权请求进行中；只压按钮，不进 configurationLocked */
     val remoteAccessGranting: Boolean = false,

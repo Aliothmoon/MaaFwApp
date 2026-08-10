@@ -10,15 +10,16 @@ data class DisplayResolution(val width: Int, val height: Int) {
 }
 
 /**
- * 设备物理屏尺寸的读取口
+ * 当前生效的屏幕尺寸，即 `wm size` 那一份（含被改过的 forced size），不是面板的物理尺寸
  *
- * 抽出来是因为它原本走 `Resources.getSystem()` 这个全局静态，而调用点在
- * [com.aliothmoon.maafw.session.SessionViewModel] 构建聚合态的路径上——单测里那句
- * 静态调用会抛 `Method getSystem not mocked`，且只在该分支被走到时才抛，表现成偶发失败
+ * 抽成接口是因为实现要问系统服务，而调用点在
+ * [com.aliothmoon.maafw.session.SessionViewModel] 构建聚合态的路径上——原先那句
+ * `Resources.getSystem()` 在单测里抛 `Method getSystem not mocked`，
+ * 且只在该分支被走到时才抛，表现成偶发失败
  *
- * 随设备旋转变化，每次调用现读，不缓存
+ * 随旋转与 `wm size` 变化，每次调用现读，不缓存
  */
-fun interface PhysicalDisplaySource {
+fun interface ScreenSizeSource {
     fun current(): DisplayResolution
 }
 

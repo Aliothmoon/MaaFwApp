@@ -97,7 +97,7 @@ private fun OverviewCard(state: SessionUiState) {
         )
         MaaInfoRow(
             stringResource(R.string.home_display_resolution),
-            state.previewResolution?.let { "${it.width} × ${it.height}" }
+            state.screenResolution?.let { "${it.width} × ${it.height}" }
                 ?: stringResource(R.string.home_none),
         )
         MaaInfoRow(

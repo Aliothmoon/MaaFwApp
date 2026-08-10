@@ -37,7 +37,7 @@ class MaaFrameworkRunnerPort(
     private val nativeLibraryDir: String,
     /** 每轮开始时现读，不缓存：用户可能在两轮之间改了运行模式 */
     private val runMode: () -> RunMode,
-    private val displaySource: PhysicalDisplaySource,
+    private val displaySource: ScreenSizeSource,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val servicePort: PrivilegedServicePort,

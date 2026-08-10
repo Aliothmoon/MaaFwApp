@@ -36,13 +36,13 @@ import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
-import com.aliothmoon.maafw.runner.PhysicalDisplaySource
+import com.aliothmoon.maafw.runner.ScreenSizeSource
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.RemotePreviewPort
 import com.aliothmoon.maafw.runner.RunKeepAlive
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunnerPort
-import com.aliothmoon.maafw.runner.SystemPhysicalDisplaySource
+import com.aliothmoon.maafw.runner.SystemScreenSizeSource
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager
 import com.aliothmoon.maafw.schedule.ScheduleStrategyStore
 import com.aliothmoon.maafw.schedule.ScheduleTriggerLog
@@ -133,7 +133,7 @@ val appModule = module {
     // 两个提权面的进程级单例；object 保留做实现，装配在这里，调用点只认接口
     single<PrivilegedServicePort> { RemoteServiceManager }
     single<RemoteAccessPort> { RemoteAccessCoordinator }
-    single<PhysicalDisplaySource> { SystemPhysicalDisplaySource }
+    single<ScreenSizeSource> { SystemScreenSizeSource(androidContext()) }
 
     // StubRunnerPort 保留给测试与 Preview，不再进 DI
     single<RunnerPort> {

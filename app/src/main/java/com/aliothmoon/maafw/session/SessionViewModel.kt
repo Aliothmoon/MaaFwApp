@@ -34,7 +34,7 @@ import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
-import com.aliothmoon.maafw.runner.PhysicalDisplaySource
+import com.aliothmoon.maafw.runner.ScreenSizeSource
 import com.aliothmoon.maafw.runner.resolveDisplayResolution
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
@@ -78,7 +78,7 @@ class SessionViewModel(
     private val permissionGateway: PermissionGateway,
     private val appSettings: AppSettingsGateway,
     private val localeController: LocaleController,
-    private val displaySource: PhysicalDisplaySource,
+    private val displaySource: ScreenSizeSource,
 ) : ViewModel() {
 
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
@@ -206,6 +206,7 @@ class SessionViewModel(
             shizukuReadiness = privileged.readiness,
             privilegedService = privileged.serviceState,
             systemPermissions = privileged.systemPermissions,
+            screenResolution = displaySource.current(),
         )
         if (project !is ProjectState.Ready) return base
         val session = resolveCached(project, config)

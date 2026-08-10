@@ -10,5 +10,5 @@ class RecordingRunKeepAlive : RunKeepAlive {
     }
 }
 
-/** 固定尺寸的物理屏，免得单测碰 `Resources.getSystem()` */
-val TestDisplaySource = PhysicalDisplaySource { DisplayResolution(2340, 1080) }
+/** 固定屏幕尺寸，免得单测去问 WindowManager */
+val TestDisplaySource = ScreenSizeSource { DisplayResolution(2340, 1080) }
