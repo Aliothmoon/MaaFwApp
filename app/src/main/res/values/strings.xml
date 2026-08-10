@@ -131,30 +131,29 @@
 
     <!-- 前台模式控制层 -->
     <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板。只拦按键，不读取屏幕内容</string>
-    <string name="overlay_panel_title">运行控制</string>
+    <string name="overlay_panel_title">操作面板</string>
     <string name="overlay_back_to_app">回到应用</string>
     <string name="overlay_lock">锁定位置</string>
     <string name="overlay_unlock">解除锁定</string>
     <string name="overlay_ball_idle">空闲</string>
-    <string name="overlay_ball_preparing">准备中</string>
+    <string name="overlay_ball_preparing">启动中</string>
     <string name="overlay_ball_running">运行中</string>
     <string name="overlay_ball_stopping">停止中</string>
     <string name="overlay_ball_unavailable">不可用</string>
-    <string name="settings_overlay_mode">控制层唤起方式</string>
-    <string name="settings_overlay_mode_ball">悬浮球</string>
-    <string name="settings_overlay_mode_accessibility">音量键</string>
-    <string name="settings_overlay_mode_hint_ball">屏边常驻一个小球，点开就是控制面板</string>
-    <string name="settings_overlay_mode_hint_accessibility">同时按音量 + 与音量 − 唤起面板，屏幕上零占用；需要无障碍服务</string>
-    <string name="settings_overlay_show">开启控制层</string>
-    <string name="settings_overlay_mode_only_foreground">仅前台主屏模式下生效</string>
+    <string name="settings_overlay_mode">悬浮窗模式</string>
+    <string name="settings_overlay_mode_ball">悬浮球模式</string>
+    <string name="settings_overlay_mode_accessibility">快捷键模式</string>
+    <string name="settings_overlay_mode_hint_ball">点击悬浮球切换面板</string>
+    <string name="settings_overlay_mode_hint_accessibility">音量上下键同时按切换面板，需要无障碍服务</string>
+    <string name="settings_overlay_show">打开操作面板</string>
 
     <!-- 运行期屏保 -->
-    <string name="settings_screen_saver">运行期屏保</string>
-    <string name="settings_screen_saver_auto">运行时自动盖上</string>
-    <string name="settings_screen_saver_hint">后台模式跑任务时把整屏压黑，只留时钟、电量与最新一条日志；滑动解锁撤掉，任务结束会自动撤掉</string>
-    <string name="settings_screen_saver_show">立即盖上</string>
-    <string name="screensaver_idle">待机中</string>
-    <string name="screensaver_swipe_to_unlock">滑动解锁</string>
+    <string name="settings_screen_saver">熄屏挂机</string>
+    <string name="settings_screen_saver_auto">运行时自动熄屏</string>
+    <string name="settings_screen_saver_hint">后台跑任务时把整屏压黑，只留时钟、电量与最新一条日志；向右滑动解锁，任务结束自动撤掉</string>
+    <string name="settings_screen_saver_show">立即熄屏</string>
+    <string name="screensaver_idle">等待任务开始…</string>
+    <string name="screensaver_swipe_to_unlock">向右滑动解锁</string>
 
     <!-- 定时任务 -->
     <string name="notification_channel_schedule">定时触发</string>
@@ -232,44 +231,44 @@
     <string name="resource_switch_title">资源</string>
     <string name="runner_quick_options">快捷选项</string>
     <string name="quick_actions_title">快捷操作</string>
-    <string name="quick_settings_title">运行设置</string>
-    <string name="quick_action_screen_saver">息屏</string>
+    <string name="quick_settings_title">自动设置</string>
+    <string name="quick_action_screen_saver">熄屏挂机</string>
 
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
-    <string name="permission_section">权限</string>
+    <string name="permission_section">权限管理</string>
     <string name="permission_backend">提权后端</string>
     <string name="permission_backend_hint">特权进程靠它启动；没有它就跑不了虚拟屏</string>
     <string name="permission_granted">已授权</string>
-    <string name="permission_request">请求授权</string>
+    <string name="permission_request">请求权限</string>
     <string name="permission_requesting">授权中…</string>
     <string name="permission_backend_unavailable">不可用</string>
     <string name="permission_service_connected">特权进程已连接</string>
     <string name="permission_service_disconnected">特权进程未连接</string>
-    <string name="permission_open_shizuku">打开 Shizuku</string>
+    <string name="permission_open_shizuku">Shizuku 快捷入口</string>
     <string name="permission_expand">展开其他权限</string>
     <string name="permission_collapse">收起其他权限</string>
-    <string name="permission_notification">通知</string>
-    <string name="permission_battery">电池优化白名单</string>
-    <string name="permission_battery_added">已加入</string>
+    <string name="permission_notification">通知权限</string>
+    <string name="permission_battery">电源管理白名单</string>
+    <string name="permission_battery_added">已添加</string>
     <string name="permission_keepalive_hint">后台跑任务期间 app 进程被系统清理会连带释放虚拟屏，这两项能降低被清理的概率</string>
     <string name="home_overview">概览</string>
-    <string name="home_display_resolution">虚拟屏分辨率</string>
+    <string name="home_display_resolution">屏幕分辨率</string>
     <string name="home_service_status">服务状态</string>
 
     <!-- 服务状态行：连接态 / 项目加载 / 运行态归约成一句 -->
-    <string name="home_status_connecting">连接中</string>
-    <string name="home_status_died">连接已断开</string>
-    <string name="home_status_error">连接失败</string>
-    <string name="home_status_disconnected">未连接</string>
-    <string name="home_status_project_loading">项目加载中</string>
+    <string name="home_status_connecting">服务启动中…</string>
+    <string name="home_status_died">服务已断开</string>
+    <string name="home_status_error">服务异常</string>
+    <string name="home_status_disconnected">未启动</string>
+    <string name="home_status_project_loading">项目加载中…</string>
     <string name="home_status_project_failed">项目加载失败</string>
     <string name="home_status_runner_unavailable">执行器不可用</string>
-    <string name="home_status_preparing">准备中</string>
+    <string name="home_status_preparing">任务启动中…</string>
     <string name="home_status_running">运行中</string>
-    <string name="home_status_stopping">停止中</string>
+    <string name="home_status_stopping">任务停止中…</string>
     <string name="home_status_ready">就绪</string>
-    <string name="home_service_connect">连接特权进程</string>
-    <string name="home_service_disconnect">断开特权进程</string>
+    <string name="home_service_connect">重新加载服务</string>
+    <string name="home_service_disconnect">关闭服务</string>
     <string name="dialog_shizuku_not_installed_title">未检测到 Shizuku</string>
     <string name="dialog_shizuku_not_installed_message">本应用依赖 Shizuku 服务运行，检测到设备未安装 Shizuku，请先安装。</string>
     <string name="dialog_shizuku_install_confirm">快捷安装 Shizuku</string>

@@ -140,30 +140,29 @@
 
     <!-- Foreground control layer -->
     <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
-    <string name="overlay_panel_title">Run control</string>
+    <string name="overlay_panel_title">Control panel</string>
     <string name="overlay_back_to_app">Back to app</string>
     <string name="overlay_lock">Lock position</string>
     <string name="overlay_unlock">Unlock position</string>
     <string name="overlay_ball_idle">Idle</string>
-    <string name="overlay_ball_preparing">Preparing</string>
+    <string name="overlay_ball_preparing">Starting</string>
     <string name="overlay_ball_running">Running</string>
     <string name="overlay_ball_stopping">Stopping</string>
     <string name="overlay_ball_unavailable">Unavailable</string>
-    <string name="settings_overlay_mode">Control layer</string>
-    <string name="settings_overlay_mode_ball">Floating ball</string>
-    <string name="settings_overlay_mode_accessibility">Volume keys</string>
-    <string name="settings_overlay_mode_hint_ball">A small ball stays at the screen edge; tap it for the control panel</string>
-    <string name="settings_overlay_mode_hint_accessibility">Press volume up and down together to open the panel; nothing occupies the screen, but an accessibility service is required</string>
-    <string name="settings_overlay_show">Enable control layer</string>
-    <string name="settings_overlay_mode_only_foreground">Applies to primary-display mode only</string>
+    <string name="settings_overlay_mode">Overlay mode</string>
+    <string name="settings_overlay_mode_ball">Floating ball mode</string>
+    <string name="settings_overlay_mode_accessibility">Shortcut mode</string>
+    <string name="settings_overlay_mode_hint_ball">Tap the floating ball to toggle the panel</string>
+    <string name="settings_overlay_mode_hint_accessibility">Press volume up + down together to toggle the panel; an accessibility service is required</string>
+    <string name="settings_overlay_show">Open control panel</string>
 
     <!-- Screen saver -->
-    <string name="settings_screen_saver">Screen saver</string>
-    <string name="settings_screen_saver_auto">Cover the screen while running</string>
-    <string name="settings_screen_saver_hint">Blacks out the screen while a background run is in progress, leaving only the clock, battery and the latest log line; swipe to unlock, and it is removed automatically when the run ends</string>
-    <string name="settings_screen_saver_show">Cover now</string>
-    <string name="screensaver_idle">Standing by</string>
-    <string name="screensaver_swipe_to_unlock">Slide to unlock</string>
+    <string name="settings_screen_saver">Screen off</string>
+    <string name="settings_screen_saver_auto">Turn the screen off while running</string>
+    <string name="settings_screen_saver_hint">Blacks out the screen while a background run is in progress, leaving only the clock, battery and the latest log line; swipe right to unlock, and it is removed automatically when the run ends</string>
+    <string name="settings_screen_saver_show">Turn off now</string>
+    <string name="screensaver_idle">Waiting for task to start…</string>
+    <string name="screensaver_swipe_to_unlock">Swipe right to unlock</string>
 
     <!-- Schedules -->
     <string name="notification_channel_schedule">Schedule triggers</string>
@@ -239,10 +238,10 @@
 
     <!-- Server switching & run options -->
     <string name="resource_switch_title">Resource</string>
-    <string name="runner_quick_options">Quick options</string>
+    <string name="runner_quick_options">Options</string>
     <string name="quick_actions_title">Quick actions</string>
-    <string name="quick_settings_title">Run settings</string>
-    <string name="quick_action_screen_saver">Blank screen</string>
+    <string name="quick_settings_title">Automation</string>
+    <string name="quick_action_screen_saver">Screen off</string>
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>
@@ -254,31 +253,31 @@
     <string name="permission_backend_unavailable">Unavailable</string>
     <string name="permission_service_connected">Privileged process connected</string>
     <string name="permission_service_disconnected">Privileged process not connected</string>
-    <string name="permission_open_shizuku">Open Shizuku</string>
+    <string name="permission_open_shizuku">Shizuku shortcut</string>
     <string name="permission_expand">Show more permissions</string>
     <string name="permission_collapse">Hide more permissions</string>
-    <string name="permission_notification">Notifications</string>
-    <string name="permission_battery">Battery optimization allowlist</string>
+    <string name="permission_notification">Notification</string>
+    <string name="permission_battery">Battery whitelist</string>
     <string name="permission_battery_added">Added</string>
     <string name="permission_keepalive_hint">If the system reclaims the app process while tasks run in the background, the virtual display goes with it. These two reduce that risk.</string>
     <string name="home_overview">Overview</string>
-    <string name="home_display_resolution">Virtual display</string>
+    <string name="home_display_resolution">Screen resolution</string>
     <string name="home_service_status">Service status</string>
 
     <!-- Service status line -->
-    <string name="home_status_connecting">Connecting</string>
-    <string name="home_status_died">Connection lost</string>
-    <string name="home_status_error">Connection failed</string>
-    <string name="home_status_disconnected">Not connected</string>
-    <string name="home_status_project_loading">Loading project</string>
-    <string name="home_status_project_failed">Project failed to load</string>
+    <string name="home_status_connecting">Starting…</string>
+    <string name="home_status_died">Service disconnected</string>
+    <string name="home_status_error">Service error</string>
+    <string name="home_status_disconnected">Not started</string>
+    <string name="home_status_project_loading">Loading project…</string>
+    <string name="home_status_project_failed">Project load failed</string>
     <string name="home_status_runner_unavailable">Runner unavailable</string>
-    <string name="home_status_preparing">Preparing</string>
+    <string name="home_status_preparing">Starting task…</string>
     <string name="home_status_running">Running</string>
-    <string name="home_status_stopping">Stopping</string>
+    <string name="home_status_stopping">Stopping task…</string>
     <string name="home_status_ready">Ready</string>
-    <string name="home_service_connect">Connect privileged process</string>
-    <string name="home_service_disconnect">Disconnect privileged process</string>
+    <string name="home_service_connect">Reload service</string>
+    <string name="home_service_disconnect">Close service</string>
     <string name="dialog_shizuku_not_installed_title">Shizuku Not Installed</string>
     <string name="dialog_shizuku_not_installed_message">This app depends on the Shizuku service. Shizuku was not detected on your device; please install it first.</string>
     <string name="dialog_shizuku_install_confirm">Install Shizuku</string>
