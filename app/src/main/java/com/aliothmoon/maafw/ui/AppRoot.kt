@@ -101,8 +101,9 @@ fun AppRoot(
     viewModel: SessionViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    // 触点单独一条流，不并进 SessionUiState（见 SessionViewModel.previewMarkers）
+    // 触点与运行日志各自单独一条流，不并进 SessionUiState（见 SessionViewModel）
     val previewMarkers by viewModel.previewMarkers.collectAsStateWithLifecycle()
+    val runLog by viewModel.runLog.collectAsStateWithLifecycle()
 
     // 语言重载唯一触发点：App/系统切语言都经 Activity 重建后到此
     val localeTag = LocalConfiguration.current.locales[0]?.toLanguageTag().orEmpty()
@@ -259,6 +260,7 @@ fun AppRoot(
                         previewSurfaceReady = previewSurfaceReady,
                         // 全屏时这里让位，同一份 previewContent 搬到下面的全屏宿主
                         previewContent = previewContent.takeUnless { previewFullscreen },
+                        runLog = runLog,
                         onEnterFullscreen = { previewFullscreen = true },
                         onIntent = viewModel::onIntent,
                         modifier = Modifier.fillMaxSize(),

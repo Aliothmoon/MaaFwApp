@@ -147,6 +147,8 @@ sealed interface SessionIntent {
 
     /** 从系统权限页回来后重读；这两项没有变更回调 */
     data object RefreshPermissions : SessionIntent
+
+    data object ClearRunLog : SessionIntent
 }
 
 /** 一次性 Effect，不进 UiState */

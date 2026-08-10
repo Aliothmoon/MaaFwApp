@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -44,6 +45,7 @@ import com.aliothmoon.maafw.ui.components.MaaSwitch
 internal fun RunnerToggleButton(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
+    onOpenRunLog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
@@ -127,6 +129,13 @@ internal fun RunnerToggleButton(
                 ),
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             ) {
+                ExtraOptionActionRow(
+                    label = stringResource(R.string.run_log_title),
+                    onClick = {
+                        extraOptionsExpanded = false
+                        onOpenRunLog()
+                    },
+                )
                 ExtraOptionSwitchRow(
                     label = stringResource(R.string.extra_mute_game),
                     checked = muteGame,
@@ -162,6 +171,39 @@ private fun ExtraOptionsSegment(
             contentDescription = stringResource(R.string.runner_extra_options),
             modifier = Modifier.size(MaaDesignTokens.IconSize.md),
         )
+    }
+}
+
+/** 与 [ExtraOptionSwitchRow] 同一行样式，尾部换成右向箭头表示会开新面 */
+@Composable
+private fun ExtraOptionActionRow(label: String, onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
+        onClick = onClick,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = MaaDesignTokens.Spacing.lg,
+                    vertical = MaaDesignTokens.Spacing.sm,
+                ),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Outlined.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+            )
+        }
     }
 }
 

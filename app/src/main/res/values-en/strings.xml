@@ -202,6 +202,12 @@
     <string name="dialog_shizuku_need_auth_message">Shizuku is running but has not authorized this app yet. Please grant access. This prompt keeps showing until access is granted.</string>
     <string name="common_got_it">Got it</string>
 
+    <!-- Run log -->
+    <string name="run_log_title">Run log</string>
+    <string name="run_log_count">%1$d entries</string>
+    <string name="run_log_clear">Clear</string>
+    <string name="run_log_empty">No entries yet. MaaFramework callbacks show up here once a run starts.</string>
+
     <!-- Structured diagnostics (domain DiagnosticMessage -> ui/i18n/DiagnosticStrings) -->
     <string name="diagnostic_severity_warning">Warning</string>
     <string name="diagnostic_severity_error">Error</string>

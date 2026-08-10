@@ -19,7 +19,11 @@ import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
+import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
+import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunPlanBuilder
+import com.aliothmoon.maafw.runner.toLogKind
+import com.aliothmoon.maafw.runner.toLogText
 import com.aliothmoon.maafw.runner.RunPlanResult
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -29,14 +33,18 @@ import com.aliothmoon.maafw.runner.resolveDisplayResolution
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
 private data class PrivilegedSnapshot(
@@ -86,6 +94,12 @@ class SessionViewModel(
      */
     val previewMarkers: StateFlow<List<PreviewTouchMarker>> = previewPort.markers
 
+    /** 运行日志，同样单独一条流：一次长跑上千条，混进聚合态会让整棵树按日志频率重组 */
+    private val _runLog = MutableStateFlow<List<RunLogEntry>>(emptyList())
+    val runLog: StateFlow<List<RunLogEntry>> = _runLog.asStateFlow()
+
+    private val runLogId = AtomicLong(0L)
+
     private val effectChannel = Channel<SessionEffect>(Channel.BUFFERED)
     val effects: Flow<SessionEffect> = effectChannel.receiveAsFlow()
 
@@ -96,6 +110,18 @@ class SessionViewModel(
         viewModelScope.launch { projectRepository.reload() }
         viewModelScope.launch {
             for (intent in intents) handle(intent)
+        }
+        viewModelScope.launch {
+            runnerPort.events.collect { event ->
+                appendLog(
+                    RunLogEntry(
+                        id = runLogId.incrementAndGet(),
+                        atMillis = System.currentTimeMillis(),
+                        kind = event.toLogKind(),
+                        text = event.toLogText(),
+                    ),
+                )
+            }
         }
         viewModelScope.launch {
             combine(projectRepository.state, configurationStore.data) { p, c -> p to c }
@@ -112,6 +138,13 @@ class SessionViewModel(
 
     fun onIntent(intent: SessionIntent) {
         intents.trySend(intent)
+    }
+
+    private fun appendLog(entry: RunLogEntry) {
+        _runLog.update { current ->
+            val start = (current.size - RUN_LOG_CAPACITY + 1).coerceAtLeast(0)
+            current.subList(start, current.size) + entry
+        }
     }
 
     // resolve 只依赖 (project, config)；runner tick 触发 combine 时复用缓存
@@ -301,6 +334,8 @@ class SessionViewModel(
                 effectChannel.send(SessionEffect.RequestSystemPermission(intent.permission))
 
             SessionIntent.RefreshPermissions -> permissionGateway.refresh()
+
+            SessionIntent.ClearRunLog -> _runLog.value = emptyList()
         }
     }
 

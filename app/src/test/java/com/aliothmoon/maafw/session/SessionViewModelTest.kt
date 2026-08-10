@@ -14,8 +14,13 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
+import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
+import com.aliothmoon.maafw.runner.RunLogKind
+import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
+import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerScenario
 import com.aliothmoon.maafw.runner.isBusy
@@ -106,6 +111,47 @@ class SessionViewModelTest {
             locale,
         )
         return Triple(vm, store, runner)
+    }
+
+    /** 只换 RunnerPort 的构造点；createVm 的返回三元组绑死了 StubRunnerPort */
+    private fun createVmWithRunner(runner: RunnerPort): SessionViewModel = SessionViewModel(
+        FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
+        readyStore(),
+        runner,
+        RecordingPreviewPort(),
+        FakePermissionGateway(),
+        {},
+    )
+
+    @Test
+    fun `run log keeps only the latest entries and clears on intent`() = runTest(mainDispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val vm = createVmWithRunner(runner)
+
+        repeat(RUN_LOG_CAPACITY + 20) { index -> runner.emit(RunnerEvent.Log("line $index")) }
+
+        assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.size)
+        // 丢的是最老的，最新一条必须还在
+        assertEquals("line ${RUN_LOG_CAPACITY + 19}", vm.runLog.value.last().text)
+
+        vm.onIntent(SessionIntent.ClearRunLog)
+        assertTrue(vm.runLog.value.isEmpty())
+    }
+
+    @Test
+    fun `run log maps every event kind`() = runTest(mainDispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val vm = createVmWithRunner(runner)
+
+        runner.emit(RunnerEvent.Progress("启动游戏", 1, 3))
+        runner.emit(RunnerEvent.TaskObservation("启动游戏", "Node.Hit"))
+        runner.emit(RunnerEvent.MalformedCallback("{}"))
+
+        assertEquals(
+            listOf(RunLogKind.Progress, RunLogKind.Observation, RunLogKind.Malformed),
+            vm.runLog.value.map { it.kind },
+        )
+        assertEquals("启动游戏 1/3", vm.runLog.value.first().text)
     }
 
     @Test

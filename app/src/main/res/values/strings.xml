@@ -193,6 +193,12 @@
     <string name="dialog_shizuku_need_auth_message">Shizuku 服务正在运行但尚未授权本应用，请完成授权。授权成功前会持续提示。</string>
     <string name="common_got_it">知道了</string>
 
+    <!-- 运行日志 -->
+    <string name="run_log_title">运行日志</string>
+    <string name="run_log_count">%1$d 条</string>
+    <string name="run_log_clear">清空</string>
+    <string name="run_log_empty">还没有日志；开始任务后这里会出现 MaaFramework 的原始回调</string>
+
     <!-- 结构化诊断（domain DiagnosticMessage -> ui/i18n/DiagnosticStrings） -->
     <string name="diagnostic_severity_warning">警告</string>
     <string name="diagnostic_severity_error">错误</string>

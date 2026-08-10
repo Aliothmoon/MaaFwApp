@@ -52,7 +52,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.PreviewTouchMarker
+import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
@@ -74,6 +74,7 @@ fun TasksScreen(
     state: SessionUiState,
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
+    runLog: List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
@@ -110,6 +111,7 @@ fun TasksScreen(
                 state = state,
                 previewSurfaceReady = previewSurfaceReady,
                 previewContent = previewContent,
+                runLog = runLog,
                 onEnterFullscreen = onEnterFullscreen,
                 onIntent = onIntent,
             )
@@ -122,6 +124,7 @@ private fun TasksContent(
     state: SessionUiState,
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
+    runLog: List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
@@ -134,6 +137,7 @@ private fun TasksContent(
 
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
     var showResourceSheet by rememberSaveable { mutableStateOf(false) }
+    var showRunLog by rememberSaveable { mutableStateOf(false) }
     val environment = state.environment
     val resourceCandidates = environment?.resourceCandidates.orEmpty()
 
@@ -197,10 +201,19 @@ private fun TasksContent(
                 RunnerToggleButton(
                     state = state,
                     onIntent = onIntent,
+                    onOpenRunLog = { showRunLog = true },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
+    }
+
+    if (showRunLog) {
+        RunLogSheet(
+            entries = runLog,
+            onClear = { onIntent(SessionIntent.ClearRunLog) },
+            onDismiss = { showRunLog = false },
+        )
     }
 
     if (showResourceSheet && resourceCandidates.isNotEmpty()) {
