@@ -1,38 +1,45 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Nightlight
+import androidx.compose.material.icons.outlined.PowerSettingsNew
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
@@ -40,199 +47,274 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 
-/** 左段启停；右段运行选项仅 UI，不随 configurationLocked */
+/**
+ * 底部启停条
+ *
+ * 次级按钮按内容取宽而不参与等分：它只是入口，剩下的宽度都该留给主操作
+ * 面板的开合态由调用方持有——面板要盖满整屏，得挂在 Screen 的根 Box 上
+ */
 @Composable
 internal fun RunnerToggleButton(
     state: SessionUiState,
+    quickOptionsOpen: Boolean,
     onIntent: (SessionIntent) -> Unit,
-    onOpenRunLog: () -> Unit,
+    onToggleQuickOptions: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
-    var extraOptionsExpanded by remember { mutableStateOf(false) }
-    var muteGame by rememberSaveable { mutableStateOf(false) }
-    var screensaverAutoplay by rememberSaveable { mutableStateOf(false) }
-    val outer = MaaDesignTokens.CornerRadius.inner
-    val inner = MaaDesignTokens.CornerRadius.segment
-    BoxWithConstraints(modifier = modifier) {
-        val menuWidth = maxWidth
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(outer),
-            color = MaterialTheme.colorScheme.surface,
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs)) {
-                val toggleShape = RoundedCornerShape(
-                    topStart = outer,
-                    bottomStart = outer,
-                    topEnd = inner,
-                    bottomEnd = inner,
-                )
-                val toggleModifier = Modifier.weight(1f)
-                if (phase.isBusy) {
-                    OutlinedButton(
-                        onClick = { onIntent(SessionIntent.Stop) },
-                        enabled = phase != RunnerPhase.Stopping,
-                        shape = toggleShape,
-                        modifier = toggleModifier,
-                    ) {
-                        Text(
-                            stringResource(
-                                if (phase == RunnerPhase.Stopping) {
-                                    R.string.runner_stopping
-                                } else {
-                                    R.string.runner_stop
-                                },
-                            ),
-                        )
-                    }
-                } else {
-                    Button(
-                        onClick = { onIntent(SessionIntent.Start) },
-                        enabled = state.canStart,
-                        shape = toggleShape,
-                        modifier = toggleModifier,
-                    ) {
-                        Text(stringResource(R.string.runner_start))
-                    }
-                }
-                ExtraOptionsSegment(
-                    shape = RoundedCornerShape(
-                        topStart = inner,
-                        bottomStart = inner,
-                        topEnd = outer,
-                        bottomEnd = outer,
+    val shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner)
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+    ) {
+        val toggleModifier = Modifier.weight(1f)
+        if (phase.isBusy) {
+            OutlinedButton(
+                onClick = { onIntent(SessionIntent.Stop) },
+                enabled = phase != RunnerPhase.Stopping,
+                shape = shape,
+                modifier = toggleModifier,
+            ) {
+                Text(
+                    stringResource(
+                        if (phase == RunnerPhase.Stopping) R.string.runner_stopping else R.string.runner_stop,
                     ),
-                    onClick = { extraOptionsExpanded = true },
                 )
+            }
+        } else {
+            Button(
+                onClick = { onIntent(SessionIntent.Start) },
+                enabled = state.canStart,
+                shape = shape,
+                modifier = toggleModifier,
+            ) {
+                Text(stringResource(R.string.runner_start))
             }
         }
-        DropdownMenu(
-            expanded = extraOptionsExpanded,
-            onDismissRequest = { extraOptionsExpanded = false },
-            offset = DpOffset(x = 0.dp, y = -MaaDesignTokens.Spacing.sm),
-            modifier = Modifier.width(menuWidth),
+        // 展开时描边与文字一起转 primary，让按钮自己表示面板的开合
+        val accent = if (quickOptionsOpen) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+        OutlinedButton(
+            onClick = onToggleQuickOptions,
+            shape = shape,
+            contentPadding = PaddingValues(horizontal = MaaDesignTokens.Spacing.md),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+            border = BorderStroke(
+                MaaDesignTokens.Border.selected,
+                if (quickOptionsOpen) accent else MaterialTheme.colorScheme.outline,
+            ),
         ) {
-            Text(
-                text = stringResource(R.string.runner_extra_options),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(
-                    horizontal = MaaDesignTokens.Spacing.lg,
-                    vertical = MaaDesignTokens.Spacing.sm,
-                ),
+            Icon(
+                imageVector = Icons.Outlined.MoreVert,
+                contentDescription = null,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
             )
-            Column(
-                modifier = Modifier.padding(
-                    start = MaaDesignTokens.Spacing.sm,
-                    end = MaaDesignTokens.Spacing.sm,
-                    bottom = MaaDesignTokens.Spacing.sm,
-                ),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-            ) {
-                ExtraOptionActionRow(
-                    label = stringResource(R.string.run_log_title),
-                    onClick = {
-                        extraOptionsExpanded = false
-                        onOpenRunLog()
-                    },
-                )
-                ExtraOptionSwitchRow(
-                    label = stringResource(R.string.extra_mute_game),
-                    checked = muteGame,
-                    onCheckedChange = { muteGame = it },
-                )
-                ExtraOptionSwitchRow(
-                    label = stringResource(R.string.extra_screensaver_autoplay),
-                    checked = screensaverAutoplay,
-                    onCheckedChange = { screensaverAutoplay = it },
-                )
-            }
+            Box(Modifier.size(MaaDesignTokens.Spacing.xs))
+            Text(text = stringResource(R.string.runner_quick_options), maxLines = 1)
         }
     }
 }
 
-/** 分段按钮右段固宽 64dp：只放一个图标，跟着左段一起伸缩会变形 */
-private val ExtraOptionsSegmentWidth = 64.dp
-
+/**
+ * 贴着启停条弹出的快捷操作面板
+ *
+ * 不用 [com.aliothmoon.maafw.ui.components.MaaSheet]：那是模态底部抽屉，用在选配置、看日志
+ * 这类要占满注意力的场面。这里要的恰恰相反——一张贴着按钮的小卡，点外面就走
+ *
+ * 只放已经接通的动作。运行模式决定息屏与控制层只出现其中一个：两者互斥（docs/privileged-runtime.md §7.2）
+ */
 @Composable
-private fun ExtraOptionsSegment(
-    shape: RoundedCornerShape,
-    onClick: () -> Unit,
+internal fun TasksQuickOptionsPanel(
+    state: SessionUiState,
+    onIntent: (SessionIntent) -> Unit,
+    onOpenRunLog: () -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    FilledTonalButton(
-        onClick = onClick,
-        shape = shape,
-        contentPadding = PaddingValues(0.dp),
-        modifier = modifier.width(ExtraOptionsSegmentWidth),
+    val scrimInteraction = remember { MutableInteractionSource() }
+    val cardInteraction = remember { MutableInteractionSource() }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss),
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Tune,
-            contentDescription = stringResource(R.string.runner_extra_options),
-            modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-        )
-    }
-}
-
-/** 与 [ExtraOptionSwitchRow] 同一行样式，尾部换成右向箭头表示会开新面 */
-@Composable
-private fun ExtraOptionActionRow(label: String, onClick: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
-        onClick = onClick,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+        Surface(
             modifier = Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(
-                    horizontal = MaaDesignTokens.Spacing.lg,
-                    vertical = MaaDesignTokens.Spacing.sm,
-                ),
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    bottom = PanelBottomInset,
+                )
+                // 吞掉卡片上的点击，否则会穿到下面的 scrim 上把自己关掉
+                .clickable(interactionSource = cardInteraction, indication = null, onClick = {}),
+            shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.card),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outlineVariant),
+            shadowElevation = MaaDesignTokens.Card.elevation,
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                imageVector = Icons.Outlined.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-            )
+            Column(
+                modifier = Modifier.padding(MaaDesignTokens.Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                GroupLabel(stringResource(R.string.quick_actions_title))
+                Row(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                    ActionTile(
+                        icon = Icons.Outlined.History,
+                        label = stringResource(R.string.run_log_title),
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = {
+                            onDismiss()
+                            onOpenRunLog()
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    when (state.runMode) {
+                        RunMode.BACKGROUND -> ActionTile(
+                            icon = Icons.Outlined.PowerSettingsNew,
+                            label = stringResource(R.string.quick_action_screen_saver),
+                            accent = MaterialTheme.colorScheme.tertiary,
+                            onClick = {
+                                onDismiss()
+                                onIntent(SessionIntent.ShowScreenSaver)
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+
+                        RunMode.FOREGROUND -> ActionTile(
+                            icon = Icons.Outlined.Layers,
+                            label = stringResource(R.string.settings_overlay_show),
+                            accent = MaterialTheme.colorScheme.tertiary,
+                            onClick = {
+                                onDismiss()
+                                onIntent(SessionIntent.ShowOverlay)
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                ActionTile(
+                    icon = Icons.Outlined.Refresh,
+                    label = stringResource(R.string.settings_reload_project),
+                    accent = MaterialTheme.colorScheme.secondary,
+                    enabled = !state.configurationLocked,
+                    onClick = {
+                        onDismiss()
+                        onIntent(SessionIntent.ReloadProject)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                GroupLabel(stringResource(R.string.quick_settings_title))
+                if (state.runMode == RunMode.BACKGROUND) {
+                    SettingSwitchRow(
+                        icon = Icons.Outlined.Nightlight,
+                        label = stringResource(R.string.settings_screen_saver_auto),
+                        checked = state.screenSaverEnabled,
+                        onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
+                    )
+                }
+                SettingSwitchRow(
+                    icon = Icons.Outlined.Code,
+                    label = stringResource(R.string.settings_developer_mode),
+                    checked = state.developerMode,
+                    onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ExtraOptionSwitchRow(
+private fun GroupLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold,
+    )
+}
+
+/** 面板离底的距离：让开下面那条启停条，否则会盖住自己的入口 */
+private val PanelBottomInset = 56.dp
+
+/** 动作块高度；比一行文字略高，两块并排时才不显得挤 */
+private val ActionTileHeight = 36.dp
+
+/**
+ * 一格动作：底色与描边都从 accent 派生
+ *
+ * 不用 Button：它的 40dp 最小高度与填充色会让两三格并排时喧宾夺主，
+ * 而这些是次级动作，主操作是旁边那颗开始
+ */
+@Composable
+private fun ActionTile(
+    icon: ImageVector,
+    label: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val tint = if (enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(ActionTileHeight),
+        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
+        color = tint.copy(alpha = 0.08f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(MaaDesignTokens.Separator.thickness, tint.copy(alpha = 0.2f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = MaaDesignTokens.Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+                tint = tint,
+            )
+            Text(text = label, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+/** 整行可点，不要求用户去够右边那个小开关 */
+@Composable
+private fun SettingSwitchRow(
+    icon: ImageVector,
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = MaaDesignTokens.Spacing.xxs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = MaaDesignTokens.Spacing.lg,
-                    vertical = MaaDesignTokens.Spacing.sm,
-                ),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-            )
-            MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

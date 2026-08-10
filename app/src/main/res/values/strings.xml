@@ -230,9 +230,10 @@
 
     <!-- 资源切换与运行选项 -->
     <string name="resource_switch_title">资源</string>
-    <string name="runner_extra_options">运行选项</string>
-    <string name="extra_mute_game">关闭游戏声音</string>
-    <string name="extra_screensaver_autoplay">屏保自动播放</string>
+    <string name="runner_quick_options">快捷选项</string>
+    <string name="quick_actions_title">快捷操作</string>
+    <string name="quick_settings_title">运行设置</string>
+    <string name="quick_action_screen_saver">息屏</string>
 
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
     <string name="permission_section">权限</string>

@@ -239,9 +239,10 @@
 
     <!-- Server switching & run options -->
     <string name="resource_switch_title">Resource</string>
-    <string name="runner_extra_options">Run options</string>
-    <string name="extra_mute_game">Mute game audio</string>
-    <string name="extra_screensaver_autoplay">Screensaver auto-play</string>
+    <string name="runner_quick_options">Quick options</string>
+    <string name="quick_actions_title">Quick actions</string>
+    <string name="quick_settings_title">Run settings</string>
+    <string name="quick_action_screen_saver">Blank screen</string>
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>

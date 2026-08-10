@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,6 +140,7 @@ private fun TasksContent(
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
     var showResourceSheet by rememberSaveable { mutableStateOf(false) }
     var showRunLog by rememberSaveable { mutableStateOf(false) }
+    var showQuickOptions by rememberSaveable { mutableStateOf(false) }
     val environment = state.environment
     val resourceCandidates = environment?.resourceCandidates.orEmpty()
 
@@ -201,11 +203,21 @@ private fun TasksContent(
                 Spacer(Modifier.height(MaaDesignTokens.Spacing.xs))
                 RunnerToggleButton(
                     state = state,
+                    quickOptionsOpen = showQuickOptions,
                     onIntent = onIntent,
-                    onOpenRunLog = { showRunLog = true },
+                    onToggleQuickOptions = { showQuickOptions = !showQuickOptions },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+        }
+        if (showQuickOptions) {
+            BackHandler { showQuickOptions = false }
+            TasksQuickOptionsPanel(
+                state = state,
+                onIntent = onIntent,
+                onOpenRunLog = { showRunLog = true },
+                onDismiss = { showQuickOptions = false },
+            )
         }
     }
 
