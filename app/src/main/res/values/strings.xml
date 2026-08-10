@@ -159,6 +159,7 @@
     <string name="settings_overlay_mode_accessibility">音量键</string>
     <string name="settings_overlay_mode_hint_ball">屏边常驻一个小球，点开就是控制面板</string>
     <string name="settings_overlay_mode_hint_accessibility">同时按音量 + 与音量 − 唤起面板，屏幕上零占用；需要无障碍服务</string>
+    <string name="settings_overlay_show">开启控制层</string>
     <string name="settings_overlay_mode_only_foreground">仅前台主屏模式下生效</string>
 
     <!-- 定时任务 -->

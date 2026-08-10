@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
@@ -33,6 +34,7 @@ data class SessionUiState(
     val themeMode: ThemeMode = ThemeMode.System,
     val developerMode: Boolean = false,
     val runMode: RunMode = RunMode.BACKGROUND,
+    val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
      * 前台模式是设备物理屏尺寸。项目未就绪时为 null
@@ -122,6 +124,11 @@ sealed interface SessionIntent {
 
     /** 主屏 / 后台虚拟屏；运行中不允许改，下一轮才生效 */
     data class SetRunMode(val mode: RunMode) : SessionIntent
+
+    data class SetOverlayControlMode(val mode: OverlayControlMode) : SessionIntent
+
+    /** 开启前台模式的控制层；要 Application 上下文挂窗口，转成 Effect */
+    data object ShowOverlay : SessionIntent
     data object ReloadProject : SessionIntent
 
     data object Start : SessionIntent
@@ -172,4 +179,6 @@ sealed interface SessionEffect {
 
     /** 执行已受理，拉起保活前台服务；启 Service 同样要 Context */
     data object StartRunForegroundService : SessionEffect
+
+    data object ShowOverlay : SessionEffect
 }

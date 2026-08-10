@@ -5,16 +5,20 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.aliothmoon.maafw.constant.PrivilegedGrant
+import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
@@ -28,9 +32,8 @@ import timber.log.Timber
 /**
  * 提权授权的唯一入口：状态汇总、发起授权、切后端
  *
- * MaaFwApp 只需要提权后端这一项权限——manifest 里除 INTERNET 之外只声明了 Shizuku 的
- * API_V23。MaaMeow 那套悬浮窗/无障碍/存储/电池白名单/通知对应的是它的前台模式与常驻服务，
- * 本项目只跑后台虚拟屏，没有对应功能就不该要这些权限
+ * 保活三件套（通知/电池白名单/后台不受限）在两种运行模式下都要；悬浮窗与无障碍只有前台
+ * 主屏模式用得上，按 runMode 决定要不要一起代授——它们是敏感权限，用不上就不该要
  *
  * [RemoteAccessCoordinator] 只汇总两个后端的可用性，不感知持久化；
  * 后端存在哪、什么时候刷新、授权后要不要绑定，都由这一层决定
@@ -113,16 +116,29 @@ class PermissionManager(
      * 走 shell/root 身份直接改 AppOps 与 deviceidle 白名单，用户看不到任何系统弹窗
      */
     private suspend fun grantViaPrivileged() {
+        // 前台模式才要控制层的那两项：悬浮窗与无障碍都是敏感权限，
+        // 后台模式下代授等于替用户要用不上的东西
+        val requested = if (appSettings.runMode.value == RunMode.FOREGROUND) {
+            PrivilegedGrant.ALL or PrivilegedGrant.OVERLAY or PrivilegedGrant.ACCESSIBILITY
+        } else {
+            PrivilegedGrant.ALL
+        }
         val granted = withContext(Dispatchers.IO) {
             runCatching {
                 RemoteServiceManager.getInstanceOrNull()?.grantPermissions(
                     appContext.packageName,
                     appContext.applicationInfo.uid,
-                    PrivilegedGrant.ALL,
+                    requested,
                 )
             }.onFailure { Timber.w(it, "特权代授失败") }.getOrNull()
         }
-        Timber.i("特权代授结果 granted=%s", granted)
+        Timber.i("特权代授结果 requested=%s granted=%s", requested, granted)
+        // 无障碍是异步绑定的，代授返回成功不代表服务已经连上
+        if (granted != null && granted and PrivilegedGrant.ACCESSIBILITY != 0) {
+            withTimeoutOrNull(ACCESSIBILITY_BIND_TIMEOUT_MS) {
+                AccessibilityHelperService.isConnected.first { it }
+            } ?: Timber.w("无障碍服务代授后未在超时内连上")
+        }
         refresh()
     }
 
@@ -186,5 +202,10 @@ class PermissionManager(
             }
         }
         return ShizukuReadiness(stage = stage, canSwitchToRoot = remoteState.rootAvailable)
+    }
+
+    private companion object {
+        /** 系统绑定无障碍服务是异步的，3 秒等不到就当没连上，不卡住授权流程 */
+        const val ACCESSIBILITY_BIND_TIMEOUT_MS = 3_000L
     }
 }

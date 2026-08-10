@@ -63,6 +63,7 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
@@ -84,6 +85,7 @@ import com.aliothmoon.maafw.ui.tasks.TasksScreen
 import com.aliothmoon.maafw.ui.tasks.rememberMovablePreview
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 /** Compose 的 LocalContext 在对话框等场景下会是 ContextWrapper，逐层剥到 Activity */
 private tailrec fun Context.findActivity(): Activity? = when (this) {
@@ -109,6 +111,7 @@ fun AppRoot(
     onDarkThemeChanged: (Boolean) -> Unit,
     viewModel: SessionViewModel = koinViewModel(),
     scheduleViewModel: ScheduleViewModel = koinViewModel(),
+    overlayController: OverlayController = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
@@ -176,6 +179,9 @@ fun AppRoot(
                     SessionEffect.OpenShizuku -> ShizukuInstallHelper.openShizuku(context)
 
                     SessionEffect.StartRunForegroundService -> RunForegroundService.start(context)
+
+                    // 控制层挂在 WindowManager 上、跨 Activity 存活，由 Application 级单例持有
+                    SessionEffect.ShowOverlay -> overlayController.show()
 
                     is SessionEffect.RequestSystemPermission -> {
                         // 系统权限页以调用方 Activity 为宿主；拿不到就只能放弃这次请求

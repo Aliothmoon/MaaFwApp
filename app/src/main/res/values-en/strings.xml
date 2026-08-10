@@ -168,6 +168,7 @@
     <string name="settings_overlay_mode_accessibility">Volume keys</string>
     <string name="settings_overlay_mode_hint_ball">A small ball stays at the screen edge; tap it for the control panel</string>
     <string name="settings_overlay_mode_hint_accessibility">Press volume up and down together to open the panel; nothing occupies the screen, but an accessibility service is required</string>
+    <string name="settings_overlay_show">Enable control layer</string>
     <string name="settings_overlay_mode_only_foreground">Applies to primary-display mode only</string>
 
     <!-- Schedules -->

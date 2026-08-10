@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
@@ -134,6 +135,40 @@ private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+    // 控制层只在前台模式有意义，后台模式下 app 界面本来就在
+    if (state.runMode == RunMode.FOREGROUND) {
+        OverlayModeCard(state, onIntent)
+    }
+}
+
+@Composable
+private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_overlay_mode)) {
+        MaaSingleChoiceFlow(
+            options = listOf(
+                OverlayControlMode.FLOAT_BALL to stringResource(R.string.settings_overlay_mode_ball),
+                OverlayControlMode.ACCESSIBILITY to stringResource(R.string.settings_overlay_mode_accessibility),
+            ),
+            selected = state.overlayControlMode,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SetOverlayControlMode(it)) },
+        )
+        Text(
+            text = when (state.overlayControlMode) {
+                OverlayControlMode.FLOAT_BALL -> stringResource(R.string.settings_overlay_mode_hint_ball)
+                OverlayControlMode.ACCESSIBILITY ->
+                    stringResource(R.string.settings_overlay_mode_hint_accessibility)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = { onIntent(SessionIntent.ShowOverlay) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.settings_overlay_show))
+        }
     }
 }
 

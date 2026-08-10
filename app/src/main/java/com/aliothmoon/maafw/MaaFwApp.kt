@@ -10,6 +10,8 @@ import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.AppLocales
+import com.aliothmoon.maafw.log.AppLogWriter
+import com.aliothmoon.maafw.log.plantLogTrees
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
 import com.aliothmoon.maafw.overlay.border.BorderOverlayManager
@@ -60,9 +62,12 @@ class MaaFwApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
-        }
+        // 先种树再启 Koin：Koin 自身与各 single 的构造日志也要落盘
+        plantLogTrees(
+            AppLogWriter(
+                logDir = { File(getExternalFilesDir(null) ?: filesDir, MAA_LOG_DIR_NAME) },
+            ),
+        )
         val koin = startKoin {
             androidLogger(if (BuildConfig.DEBUG) Level.DEBUG else Level.NONE)
             androidContext(this@MaaFwApp)

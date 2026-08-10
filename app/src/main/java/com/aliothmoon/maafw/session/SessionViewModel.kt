@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.RunConfiguration
+import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UserConfiguration
@@ -51,6 +52,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 
+/** app 设置的一次快照；combine 的元数上限是 5，两项设置得先并成一个 */
+private data class SettingsSnapshot(
+    val runMode: RunMode,
+    val overlayControlMode: OverlayControlMode,
+)
+
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
 private data class PrivilegedSnapshot(
     val access: RemoteAccessState,
@@ -80,14 +87,19 @@ class SessionViewModel(
         PrivilegedSnapshot(access, granting, readiness, connected, system)
     }
 
+    private val settingsState: Flow<SettingsSnapshot> = combine(
+        appSettings.runMode,
+        appSettings.overlayControlMode,
+    ) { runMode, overlayMode -> SettingsSnapshot(runMode, overlayMode) }
+
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
         configurationStore.data,
         runnerPort.state,
         privilegedState,
-        appSettings.runMode,
-    ) { project, config, runner, privileged, runMode ->
-        buildUiState(project, config, runner, privileged, runMode)
+        settingsState,
+    ) { project, config, runner, privileged, settings ->
+        buildUiState(project, config, runner, privileged, settings)
     }.flowOn(Dispatchers.Default) // resolve 属重计算，不占用主线程
         .stateIn(
             scope = viewModelScope,
@@ -173,14 +185,16 @@ class SessionViewModel(
         config: UserConfiguration,
         runner: RunnerState,
         privileged: PrivilegedSnapshot,
-        runMode: RunMode,
+        settings: SettingsSnapshot,
     ): SessionUiState {
+        val runMode = settings.runMode
         val base = SessionUiState(
             projectState = project,
             runner = runner,
             themeMode = config.themeMode,
             developerMode = config.developerMode,
             runMode = runMode,
+            overlayControlMode = settings.overlayControlMode,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
@@ -318,6 +332,12 @@ class SessionViewModel(
             is SessionIntent.SetRunMode -> guarded {
                 appSettings.setRunMode(intent.mode)
             }
+
+            is SessionIntent.SetOverlayControlMode -> guarded {
+                appSettings.setOverlayControlMode(intent.mode)
+            }
+
+            SessionIntent.ShowOverlay -> effectChannel.send(SessionEffect.ShowOverlay)
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {
