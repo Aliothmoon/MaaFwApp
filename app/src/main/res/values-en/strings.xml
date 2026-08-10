@@ -245,7 +245,7 @@
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>
-    <string name="permission_backend">Privilege backend</string>
+    <string name="permission_backend">Startup mode</string>
     <string name="permission_granted">Granted</string>
     <string name="permission_request">Request</string>
     <string name="permission_requesting">Requesting…</string>

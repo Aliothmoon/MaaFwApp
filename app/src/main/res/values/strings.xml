@@ -236,7 +236,7 @@
 
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
     <string name="permission_section">权限管理</string>
-    <string name="permission_backend">提权后端</string>
+    <string name="permission_backend">启动模式</string>
     <string name="permission_granted">已授权</string>
     <string name="permission_request">请求权限</string>
     <string name="permission_requesting">授权中…</string>
