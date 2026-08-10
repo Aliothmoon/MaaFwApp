@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.Surface
 import com.aliothmoon.maafw.ITouchEventCallback
+import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -42,6 +43,14 @@ interface PreviewPort {
 
     fun attachSurface(surface: Surface)
     fun detachSurface()
+
+    /**
+     * 用户在预览上的手动操作，坐标已换算到虚拟屏坐标系
+     * 与 MaaFramework 注入的是同一条 InputControlUtils 通路，会走同一份触点回调
+     */
+    fun touchDown(x: Int, y: Int)
+    fun touchMove(x: Int, y: Int)
+    fun touchUp(x: Int, y: Int)
 }
 
 /**
@@ -95,6 +104,18 @@ class RemotePreviewPort(
         cleanupJob?.cancel()
         cleanupJob = null
         _markers.value = emptyList()
+    }
+
+    override fun touchDown(x: Int, y: Int) = withService { it.touchDown(x, y) }
+
+    override fun touchMove(x: Int, y: Int) = withService { it.touchMove(x, y) }
+
+    override fun touchUp(x: Int, y: Int) = withService { it.touchUp(x, y) }
+
+    /** 手动触摸是 oneway，发不出去就算了；预览本来就是尽力而为 */
+    private inline fun withService(action: (RemoteService) -> Unit) {
+        val service = serviceManager.getInstanceOrNull() ?: return
+        runCatching { action(service) }.onFailure { Timber.w(it, "预览手动触摸失败") }
     }
 
     /** 未绑定时静默跳过：连上时 init 里的 collect 会补发 */

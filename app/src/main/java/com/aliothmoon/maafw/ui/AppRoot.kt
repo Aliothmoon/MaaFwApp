@@ -71,7 +71,9 @@ import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
 import com.aliothmoon.maafw.ui.i18n.localized
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
+import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
+import com.aliothmoon.maafw.ui.tasks.rememberMovablePreview
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -118,6 +120,29 @@ fun AppRoot(
         ThemeMode.Dark -> true
     }
     LaunchedEffect(darkTheme) { onDarkThemeChanged(darkTheme) }
+
+    // 预览面的所有权在这一层：全屏宿主必须在 Scaffold 之外才能盖住底部 tab 栏，
+    // 而 movableContent 要求内嵌与全屏两处调用点同属一棵组合树
+    var previewFullscreen by rememberSaveable { mutableStateOf(false) }
+    var previewSurfaceReady by remember { mutableStateOf(false) }
+    val previewContent = state.previewResolution?.let { resolution ->
+        rememberMovablePreview(
+            resolution = resolution,
+            markers = previewMarkers,
+            onSurfaceAvailable = {
+                previewSurfaceReady = true
+                viewModel.onIntent(SessionIntent.AttachPreviewSurface(it))
+            },
+            onSurfaceDestroyed = {
+                previewSurfaceReady = false
+                viewModel.onIntent(SessionIntent.DetachPreviewSurface)
+            },
+        )
+    }
+    // 项目重载后分辨率可能变；此时全屏没有内容可显示，先退回来
+    LaunchedEffect(previewContent) {
+        if (previewContent == null) previewFullscreen = false
+    }
 
     MaaFwTheme(darkTheme = darkTheme) {
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
@@ -231,13 +256,29 @@ fun AppRoot(
                     TopDestination.Home -> HomeScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
                     TopDestination.Tasks -> TasksScreen(
                         state = state,
-                        previewMarkers = previewMarkers,
+                        previewSurfaceReady = previewSurfaceReady,
+                        // 全屏时这里让位，同一份 previewContent 搬到下面的全屏宿主
+                        previewContent = previewContent.takeUnless { previewFullscreen },
+                        onEnterFullscreen = { previewFullscreen = true },
                         onIntent = viewModel::onIntent,
                         modifier = Modifier.fillMaxSize(),
                     )
                     TopDestination.Settings -> SettingsScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
                 }
             }
+        }
+
+        // 挂在 Scaffold 之外，才盖得住底部 tab 栏与系统栏
+        val fullscreenResolution = state.previewResolution
+        if (previewFullscreen && previewContent != null && fullscreenResolution != null) {
+            FullscreenPreview(
+                resolution = fullscreenResolution,
+                onExit = { previewFullscreen = false },
+                onTouch = { x, y, action ->
+                    viewModel.onIntent(SessionIntent.PreviewTouch(x, y, action))
+                },
+                content = previewContent,
+            )
         }
 
         diagnosticsDialog?.let { diagnostics ->

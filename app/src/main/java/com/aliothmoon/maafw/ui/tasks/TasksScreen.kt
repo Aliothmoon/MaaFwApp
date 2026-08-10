@@ -64,10 +64,17 @@ import com.aliothmoon.maafw.ui.components.ResourceSelectorRow
 import com.aliothmoon.maafw.ui.components.ResourceSwitchSheet
 import com.aliothmoon.maafw.ui.components.maaClickable
 
+/**
+ * [previewContent] 由 AppRoot 创建并持有：全屏宿主必须在 pager 之外才能盖住底部 tab 栏，
+ * 而 movableContent 要求两处调用点在同一棵组合树里，所以整份预览面的所有权提到了顶层
+ * 为 null 表示画面已搬去全屏，这里显示占位
+ */
 @Composable
 fun TasksScreen(
     state: SessionUiState,
-    previewMarkers: List<PreviewTouchMarker>,
+    previewSurfaceReady: Boolean,
+    previewContent: (@Composable () -> Unit)?,
+    onEnterFullscreen: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -99,7 +106,13 @@ fun TasksScreen(
                 }
             }
 
-            is ProjectState.Ready -> TasksContent(state, previewMarkers, onIntent)
+            is ProjectState.Ready -> TasksContent(
+                state = state,
+                previewSurfaceReady = previewSurfaceReady,
+                previewContent = previewContent,
+                onEnterFullscreen = onEnterFullscreen,
+                onIntent = onIntent,
+            )
         }
     }
 }
@@ -107,7 +120,9 @@ fun TasksScreen(
 @Composable
 private fun TasksContent(
     state: SessionUiState,
-    previewMarkers: List<PreviewTouchMarker>,
+    previewSurfaceReady: Boolean,
+    previewContent: (@Composable () -> Unit)?,
+    onEnterFullscreen: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -121,25 +136,6 @@ private fun TasksContent(
     var showResourceSheet by rememberSaveable { mutableStateOf(false) }
     val environment = state.environment
     val resourceCandidates = environment?.resourceCandidates.orEmpty()
-
-    // 预览面在内嵌卡片与全屏之间搬家，两处调用点都得在同一棵组合树里 movableContent 才成立，
-    // 所以宿主状态提到这一层
-    var previewFullscreen by rememberSaveable { mutableStateOf(false) }
-    var previewSurfaceReady by remember { mutableStateOf(false) }
-    val previewContent = state.previewResolution?.let { resolution ->
-        rememberMovablePreview(
-            resolution = resolution,
-            markers = previewMarkers,
-            onSurfaceAvailable = {
-                previewSurfaceReady = true
-                onIntent(SessionIntent.AttachPreviewSurface(it))
-            },
-            onSurfaceDestroyed = {
-                previewSurfaceReady = false
-                onIntent(SessionIntent.DetachPreviewSurface)
-            },
-        )
-    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -162,9 +158,8 @@ private fun TasksContent(
                         resolution = state.previewResolution,
                         surfaceReady = previewSurfaceReady,
                         running = state.runner.phase.isBusy,
-                        // 全屏时这里让位，同一份 previewContent 搬到下面的全屏宿主
-                        content = previewContent.takeUnless { previewFullscreen },
-                        onEnterFullscreen = { previewFullscreen = true },
+                        content = previewContent,
+                        onEnterFullscreen = onEnterFullscreen,
                     )
                     if (resourceCandidates.isNotEmpty()) {
                         ResourceSelectorRow(
@@ -205,13 +200,6 @@ private fun TasksContent(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
-
-        if (previewFullscreen && previewContent != null) {
-            FullscreenPreview(
-                onExit = { previewFullscreen = false },
-                content = previewContent,
-            )
         }
     }
 

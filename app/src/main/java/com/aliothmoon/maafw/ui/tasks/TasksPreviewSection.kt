@@ -2,6 +2,12 @@ package com.aliothmoon.maafw.ui.tasks
 
 // 与 material3.Surface 同名，用别名区分
 import android.view.Surface as PlatformSurface
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,11 +18,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.OndemandVideo
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
@@ -24,10 +33,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
+import com.aliothmoon.maafw.session.PreviewTouchAction
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
@@ -97,21 +113,109 @@ internal fun LivePreview(
     }
 }
 
-/** 全屏宿主；与内嵌卡片共用同一份 movableContent，点任意处退出 */
+/**
+ * 全屏宿主；与内嵌卡片共用同一份 movableContent
+ *
+ * 必须挂在 AppRoot 顶层而不是 pager 里，否则盖不住底部 tab 栏
+ * 进出时接管系统栏与屏幕方向，退出时一律还原成进来前的值
+ */
 @Composable
 internal fun FullscreenPreview(
+    resolution: DisplayResolution,
     onExit: () -> Unit,
+    onTouch: (x: Int, y: Int, action: PreviewTouchAction) -> Unit,
     content: @Composable () -> Unit,
 ) {
+    val activity = LocalContext.current.findActivity()
+
+    DisposableEffect(activity) {
+        val controller = activity?.window?.let {
+            WindowCompat.getInsetsController(it, it.decorView)
+        }
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        controller?.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
+    }
+
+    // 虚拟屏是横的，竖着看只有中间一条；退出时还原用户原本的方向设置
+    DisposableEffect(activity) {
+        val original = activity?.requestedOrientation
+        if (activity?.resources?.configuration?.orientation != Configuration.ORIENTATION_LANDSCAPE) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        onDispose { if (original != null) activity.requestedOrientation = original }
+    }
+
+    BackHandler(onBack = onExit)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .maaClickable(onClick = onExit),
+            .previewTouchInput(resolution, onTouch),
         contentAlignment = Alignment.Center,
     ) {
         content()
+        IconButton(
+            onClick = onExit,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(MaaDesignTokens.Spacing.sm),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = stringResource(R.string.tasks_preview_exit_fullscreen),
+                tint = Color.White,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+            )
+        }
     }
+}
+
+/**
+ * 把手指位置换算到虚拟屏坐标再上报
+ *
+ * 画面按 contain 方式居中缩放，两侧/上下可能有黑边，落在黑边上的点直接丢掉——
+ * 那里没有对应的虚拟屏像素，硬算会得到越界坐标
+ */
+private fun Modifier.previewTouchInput(
+    resolution: DisplayResolution,
+    onTouch: (x: Int, y: Int, action: PreviewTouchAction) -> Unit,
+): Modifier = pointerInput(resolution) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull() ?: continue
+            val action = when (event.type) {
+                PointerEventType.Press -> PreviewTouchAction.Down
+                PointerEventType.Move -> if (change.pressed) PreviewTouchAction.Move else null
+                PointerEventType.Release -> PreviewTouchAction.Up
+                else -> null
+            }
+            if (action != null) {
+                val scale = minOf(
+                    size.width / resolution.width.toFloat(),
+                    size.height / resolution.height.toFloat(),
+                )
+                val offsetX = (size.width - resolution.width * scale) / 2f
+                val offsetY = (size.height - resolution.height * scale) / 2f
+                val vx = ((change.position.x - offsetX) / scale).toInt()
+                val vy = ((change.position.y - offsetY) / scale).toInt()
+                if (vx in 0 until resolution.width && vy in 0 until resolution.height) {
+                    onTouch(vx, vy, action)
+                }
+            }
+            change.consume()
+        }
+    }
+}
+
+/** Compose 的 LocalContext 可能是 ContextWrapper，逐层剥到 Activity */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 /** 画面还没上来时盖一层说明，免得黑屏看着像坏了 */

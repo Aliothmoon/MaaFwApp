@@ -20,4 +20,19 @@ class RecordingPreviewPort : PreviewPort {
     override fun detachSurface() {
         detachCount++
     }
+
+    /** 预览上的手动触摸；按 (x, y, action) 记录顺序 */
+    val touches = mutableListOf<Triple<Int, Int, String>>()
+
+    override fun touchDown(x: Int, y: Int) {
+        touches += Triple(x, y, "down")
+    }
+
+    override fun touchMove(x: Int, y: Int) {
+        touches += Triple(x, y, "move")
+    }
+
+    override fun touchUp(x: Int, y: Int) {
+        touches += Triple(x, y, "up")
+    }
 }
