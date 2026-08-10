@@ -1,18 +1,12 @@
 package com.aliothmoon.maafw.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDropDown
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -23,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ThemeMode
@@ -37,6 +30,8 @@ import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
+import com.aliothmoon.maafw.ui.components.ResourceSelectorRow
+import com.aliothmoon.maafw.ui.components.ResourceSwitchSheet
 
 @Composable
 fun SettingsScreen(
@@ -127,38 +122,26 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            var expanded by remember { mutableStateOf(false) }
+            var showSheet by remember { mutableStateOf(false) }
             Text(stringResource(R.string.settings_current_resource), style = MaterialTheme.typography.bodyLarge)
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = { expanded = true },
-                    enabled = !state.configurationLocked,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = environment.resource?.label ?: stringResource(R.string.settings_not_selected),
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
-                }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    environment.resourceCandidates.forEach { resource ->
-                        DropdownMenuItem(
-                            text = { Text(resource.label) },
-                            onClick = {
-                                expanded = false
-                                onIntent(SessionIntent.SelectResource(resource.name))
-                            },
-                        )
-                    }
-                }
-            }
+            ResourceSelectorRow(
+                label = environment.resource?.label ?: stringResource(R.string.settings_not_selected),
+                enabled = !state.configurationLocked,
+                onClick = { showSheet = true },
+            )
             Text(
                 text = stringResource(R.string.settings_resource_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (showSheet) {
+                ResourceSwitchSheet(
+                    candidates = environment.resourceCandidates,
+                    currentName = environment.resource?.name,
+                    onSelect = { onIntent(SessionIntent.SelectResource(it)) },
+                    onDismiss = { showSheet = false },
+                )
+            }
         }
     }
 }
