@@ -5,7 +5,6 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.aliothmoon.maafw.constant.PrivilegedGrant
-import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.settings.AppSettingsManager
@@ -99,14 +98,6 @@ class PermissionManager(
         scope.launch {
             serviceConnected.filter { it }.collect { grantViaPrivileged() }
         }
-        // 这两项设置决定了要哪些权限。只在连上那一刻代授的话，用户中途改设置就得等
-        // 下次特权进程重连才补得上，中间那段时间悬浮窗是加不出来的
-        scope.launch {
-            combine(appSettings.runMode, appSettings.screenSaverEnabled) { mode, saver -> mode to saver }
-                .drop(1)
-                .distinctUntilChanged()
-                .collect { if (serviceConnected.value) grantViaPrivileged() }
-        }
         RemoteServiceManager.initialize(appContext) { appSettings.startupBackend.value }
     }
 
@@ -128,12 +119,8 @@ class PermissionManager(
      * 走 shell/root 身份直接改 AppOps 与 deviceidle 白名单，用户看不到任何系统弹窗
      */
     private suspend fun grantViaPrivileged() {
-        // 悬浮窗两处要：前台的控制层，以及后台开着屏保时那层黑屏
-        // 无障碍只有前台的音量键唤起要，后台代授等于替用户要用不上的敏感权限
-        val foreground = appSettings.runMode.value == RunMode.FOREGROUND
-        var requested = PrivilegedGrant.ALL
-        if (foreground || appSettings.screenSaverEnabled.value) requested = requested or PrivilegedGrant.OVERLAY
-        if (foreground) requested = requested or PrivilegedGrant.ACCESSIBILITY
+        // 对齐 MaaMeow：特权进程上线即把全集代授一遍，不再按运行模式挑
+        val requested = PrivilegedGrant.ALL
         val granted = withContext(Dispatchers.IO) {
             runCatching {
                 RemoteServiceManager.getInstanceOrNull()?.grantPermissions(

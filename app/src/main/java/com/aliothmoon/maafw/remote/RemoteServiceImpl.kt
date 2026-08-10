@@ -244,6 +244,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
         ) {
             granted = granted or PrivilegedGrant.ACCESSIBILITY
         }
+        if (permissions and PrivilegedGrant.STORAGE != 0 &&
+            PermissionGrantHelper.grantStoragePermission(packageName, uid)
+        ) {
+            granted = granted or PrivilegedGrant.STORAGE
+        }
         Ln.i("$TAG: grantPermissions($packageName) requested=$permissions granted=$granted")
         return granted
     }
