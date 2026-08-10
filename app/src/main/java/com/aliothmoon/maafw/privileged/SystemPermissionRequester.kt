@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.privileged
 
 import android.app.Activity
 import android.content.Context
+import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.hjq.permissions.XXPermissions
 import com.hjq.permissions.permission.PermissionLists
 import com.hjq.permissions.permission.base.IPermission
@@ -10,15 +11,18 @@ import timber.log.Timber
 import kotlin.coroutines.resume
 
 /**
- * 保活相关的系统权限
+ * 首页权限卡展示的系统权限
  *
+ * 特权进程上线即代授全集；这几项是特权进程没起来时给用户手点的兜底。
  * app 进程一死，特权进程的看门狗就自杀并释放虚拟屏——实测 MIUI 的
  * `ProcessManager: SwipeUpClean` 会按 Adj=905 直接 force-stop
- * 前台服务本体还没做，这两项先让用户能自己开
  */
 enum class SystemPermission {
     Notification,
     BatteryWhitelist,
+    Overlay,
+    Storage,
+    Accessibility,
 }
 
 /**
@@ -45,5 +49,9 @@ object SystemPermissionRequester {
         SystemPermission.Notification -> PermissionLists.getPostNotificationsPermission()
         SystemPermission.BatteryWhitelist ->
             PermissionLists.getRequestIgnoreBatteryOptimizationsPermission()
+        SystemPermission.Overlay -> PermissionLists.getSystemAlertWindowPermission()
+        SystemPermission.Storage -> PermissionLists.getManageExternalStoragePermission()
+        SystemPermission.Accessibility ->
+            PermissionLists.getBindAccessibilityServicePermission(AccessibilityHelperService::class.java)
     }
 }

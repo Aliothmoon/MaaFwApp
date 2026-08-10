@@ -169,10 +169,17 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
         AnimatedVisibility(visible = expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
                 PermissionRow(
-                    label = stringResource(R.string.permission_notification),
-                    granted = state.systemPermissions.notification,
+                    label = stringResource(R.string.permission_overlay),
+                    granted = state.systemPermissions.overlay,
                     onRequest = {
-                        onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Notification))
+                        onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Overlay))
+                    },
+                )
+                PermissionRow(
+                    label = stringResource(R.string.permission_storage),
+                    granted = state.systemPermissions.storage,
+                    onRequest = {
+                        onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Storage))
                     },
                 )
                 PermissionRow(
@@ -183,6 +190,20 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                         onIntent(
                             SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
                         )
+                    },
+                )
+                PermissionRow(
+                    label = stringResource(R.string.permission_accessibility),
+                    granted = state.systemPermissions.accessibility,
+                    onRequest = {
+                        onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Accessibility))
+                    },
+                )
+                PermissionRow(
+                    label = stringResource(R.string.permission_notification),
+                    granted = state.systemPermissions.notification,
+                    onRequest = {
+                        onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Notification))
                     },
                 )
                 Text(

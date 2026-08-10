@@ -250,7 +250,10 @@
     <string name="permission_notification">通知权限</string>
     <string name="permission_battery">电源管理白名单</string>
     <string name="permission_battery_added">已添加</string>
-    <string name="permission_keepalive_hint">后台跑任务期间 app 进程被系统清理会连带释放虚拟屏，这两项能降低被清理的概率</string>
+    <string name="permission_overlay">悬浮窗</string>
+    <string name="permission_storage">存储访问</string>
+    <string name="permission_accessibility">无障碍服务</string>
+    <string name="permission_keepalive_hint">后台跑任务期间 app 进程被系统清理会连带释放虚拟屏，通知与电源管理白名单能降低被清理的概率</string>
     <string name="home_overview">概览</string>
     <string name="home_display_resolution">屏幕分辨率</string>
     <string name="home_service_status">服务状态</string>

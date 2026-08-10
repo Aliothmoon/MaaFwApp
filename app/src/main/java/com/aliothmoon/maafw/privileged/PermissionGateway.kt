@@ -64,4 +64,7 @@ sealed interface ServiceBindResult {
 data class SystemPermissionState(
     val notification: Boolean = false,
     val batteryWhitelist: Boolean = false,
+    val overlay: Boolean = false,
+    val storage: Boolean = false,
+    val accessibility: Boolean = false,
 )

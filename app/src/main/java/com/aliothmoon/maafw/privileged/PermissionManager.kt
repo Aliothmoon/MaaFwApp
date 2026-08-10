@@ -147,6 +147,9 @@ class PermissionManager(
             appContext,
             SystemPermission.BatteryWhitelist,
         ),
+        overlay = SystemPermissionRequester.isGranted(appContext, SystemPermission.Overlay),
+        storage = SystemPermissionRequester.isGranted(appContext, SystemPermission.Storage),
+        accessibility = SystemPermissionRequester.isGranted(appContext, SystemPermission.Accessibility),
     )
 
     override suspend fun requestRemoteAccess(): Boolean {
