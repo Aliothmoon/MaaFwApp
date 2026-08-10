@@ -188,11 +188,6 @@ private fun BackendCard(
             enabled = !locked,
             onSelect = { onSettingsIntent(SettingsIntent.SetBackend(it)) },
         )
-        Text(
-            text = stringResource(R.string.permission_backend_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

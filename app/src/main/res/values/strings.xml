@@ -238,11 +238,9 @@
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
     <string name="permission_section">权限管理</string>
     <string name="permission_backend">提权后端</string>
-    <string name="permission_backend_hint">特权进程靠它启动；没有它就跑不了虚拟屏</string>
     <string name="permission_granted">已授权</string>
     <string name="permission_request">请求权限</string>
     <string name="permission_requesting">授权中…</string>
-    <string name="permission_backend_unavailable">不可用</string>
     <string name="permission_service_connected">特权进程已连接</string>
     <string name="permission_service_disconnected">特权进程未连接</string>
     <string name="permission_open_shizuku">Shizuku 快捷入口</string>
