@@ -50,6 +50,15 @@ class MaaRunner(private val agentHost: AgentHost) {
     /** 已构建的 resource 对应的路径；变了就重建 */
     private var loadedResourcePaths: List<String> = emptyList()
 
+    /**
+     * 已建 controller 绑定的 display_id；变了必须重建
+     *
+     * 光判 `MaaControllerConnected` 不够：切运行模式后旧 controller 仍报 connected，
+     * 但它的 display_id 指向的屏已经销毁了，`start_app` 会拿着废 id 去 launchDisplayId
+     * 而被系统拒（`SecurityException: Permission Denial ... with launchDisplayId=<旧 id>`）
+     */
+    private var boundDisplayId: Int? = null
+
     /** agent child 的 cwd，对齐上游 MaaPiCli 的 `agent.cwd = resource_dir_` */
     private var projectRoot: String? = null
 
@@ -242,7 +251,10 @@ class MaaRunner(private val agentHost: AgentHost) {
 
         prepareAgents(lib, payload)?.let { return it }
 
-        if (controller == null || lib.MaaControllerConnected(controller).toInt() == 0) {
+        if (controller == null ||
+            boundDisplayId != displayId ||
+            lib.MaaControllerConnected(controller).toInt() == 0
+        ) {
             releaseController(lib)
             val config = buildControllerConfig(payload, displayId)
             val ctrl = lib.MaaAndroidNativeControllerCreate(config)
@@ -258,6 +270,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 return "controller 连接失败"
             }
             controller = ctrl
+            boundDisplayId = displayId
             releaseTasker(lib)
         }
 
@@ -426,6 +439,7 @@ class MaaRunner(private val agentHost: AgentHost) {
     private fun releaseController(lib: MaaFrameworkLibrary) {
         controller?.let(lib::MaaControllerDestroy)
         controller = null
+        boundDisplayId = null
     }
 
     /** agent client 绑在 resource 上，销毁 resource 前必须先把 client 与 child 收掉 */
