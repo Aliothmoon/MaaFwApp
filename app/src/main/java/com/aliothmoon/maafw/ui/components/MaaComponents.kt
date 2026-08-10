@@ -1,14 +1,8 @@
 package com.aliothmoon.maafw.ui.components
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -29,18 +26,16 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -170,32 +165,99 @@ fun MaaDiagnosticList(
     }
 }
 
-/** 无涟漪；按下缩放 0.97 */
-fun Modifier.maaClickable(
-    enabled: Boolean = true,
+/**
+ * 可选卡片：卡片配方 + 点击 + 选中态描边与底色
+ *
+ * 选中怎么表现集中在这里，各 Screen 不再各写一份 `if (selected) primaryContainer else surface`
+ * [selected] 恒为 false 时就是一张普通可点卡片
+ */
+@Composable
+fun MaaSelectableCard(
+    selected: Boolean,
     onClick: () -> Unit,
-): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    MaaCardSurface(
+        modifier = modifier
+            .fillMaxWidth()
+            .maaClickable(enabled = enabled, onClick = onClick)
+            .alpha(if (enabled) 1f else MaaDesignTokens.Alpha.disabled),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        border = BorderStroke(
+            width = if (selected) MaaDesignTokens.Border.selected else MaaDesignTokens.Separator.thickness,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outline
+            },
         ),
-        label = "maaPressScale",
+        content = content,
     )
-    this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
+}
+
+/** [MaaSelectableCard] 行首的单选标记；选中填实并打勾 */
+@Composable
+fun MaaSelectionMarker(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(MaaDesignTokens.IconContainer.xs)
+            .clip(CircleShape)
+            .border(
+                width = MaaDesignTokens.Border.marker,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                shape = CircleShape,
+            )
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent),
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = Icons.Outlined.Check,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.xs),
+            )
         }
-        .clickable(
-            interactionSource = interactionSource,
-            indication = LocalIndication.current,
-            enabled = enabled,
-            onClick = onClick,
+    }
+}
+
+/** 图标外的一层圆或圆角方底；[shape] 默认圆角方，行尾的收起钮传 CircleShape */
+@Composable
+fun MaaIconBadge(
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    containerSize: Dp = MaaDesignTokens.IconContainer.md,
+    shape: Shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.button),
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(containerSize)
+            .clip(shape)
+            .background(containerColor),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
         )
+    }
 }
 
 @Composable
@@ -243,7 +305,7 @@ fun MaaToneBadge(
                 imageVector = icon,
                 contentDescription = null,
                 tint = tone.content,
-                modifier = Modifier.size(12.dp),
+                modifier = Modifier.size(MaaDesignTokens.IconSize.xs),
             )
         }
         Text(

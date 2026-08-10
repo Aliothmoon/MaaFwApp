@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
  * 就地展开的提示图标 + 内容区（交互参考 MaaMeow 同类控件）：
@@ -45,7 +46,7 @@ fun ExpandableTipIcon(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
         )
     }
 }
