@@ -218,7 +218,6 @@ sealed interface SessionIntent {
 
     /** 向当前后端发起授权；不走 guarded，运行中也允许（授权不改配置） */
     data object RequestRemoteAccess : SessionIntent
-    data class SetRemoteBackend(val backend: RemoteBackend) : SessionIntent
 
     /**
      * 手动开关特权进程；连着就断，没连就连（缺授权时顺带发起授权）

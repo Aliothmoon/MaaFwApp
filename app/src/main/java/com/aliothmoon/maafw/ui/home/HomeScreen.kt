@@ -53,7 +53,6 @@ import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
-import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
@@ -169,24 +168,6 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
 
         AnimatedVisibility(visible = expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
-                MaaSingleChoiceFlow(
-                    options = RemoteBackend.entries.map { entry ->
-                        val suffix = if (access.isAvailable(entry)) {
-                            ""
-                        } else {
-                            "（${stringResource(R.string.permission_backend_unavailable)}）"
-                        }
-                        entry to "${entry.display}$suffix"
-                    },
-                    selected = access.configuredBackend,
-                    enabled = !state.configurationLocked,
-                    onSelect = { onIntent(SessionIntent.SetRemoteBackend(it)) },
-                )
-                Text(
-                    text = stringResource(R.string.permission_backend_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 PermissionRow(
                     label = stringResource(R.string.permission_notification),
                     granted = state.systemPermissions.notification,

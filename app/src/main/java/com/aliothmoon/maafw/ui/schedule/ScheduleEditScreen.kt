@@ -3,12 +3,14 @@ package com.aliothmoon.maafw.ui.schedule
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -18,8 +20,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,17 +33,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleStrategy
 import com.aliothmoon.maafw.schedule.ScheduleType
+import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
-import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaMultiChoiceFlow
-import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaTimePickerDialog
@@ -48,22 +53,36 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import org.koin.androidx.compose.koinViewModel
 
 /**
- * 规则编辑
+ * 规则编辑页（NavHost 推入的二级页面，不再是抽屉）
  *
- * 草稿全程留在本组合里，只有点保存才发 Intent——中途关掉 sheet 等于放弃，
- * 与配置页那几个 sheet 的行为一致
+ * 新建态按现有规则数自增命名（对齐 MaaMeow），用户可改；草稿留本组合，
+ * 保存才发 Intent——中途返回等于放弃，与配置编辑一致
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScheduleEditSheet(
-    initial: ScheduleStrategy,
-    isNew: Boolean,
-    onSave: (ScheduleStrategy) -> Unit,
-    onDelete: () -> Unit,
-    onDismiss: () -> Unit,
+fun ScheduleEditScreen(
+    strategyId: String?,
+    onBack: () -> Unit,
+    viewModel: ScheduleViewModel = koinViewModel(),
 ) {
-    // initial 只作首帧种子：sheet 一旦打开就归草稿管，外部再变也不该覆盖用户正在改的东西
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val isNew = strategyId.isNullOrBlank() || strategyId == NEW_STRATEGY
+    // 自增默认名：与 MaaMeow 一致用「现有数 + 1」，避免重名也无须让用户起名
+    val defaultName = stringResource(R.string.schedule_default_name, state.rows.size + 1)
+    val initial: ScheduleStrategy = remember(strategyId, defaultName, state.rows) {
+        if (isNew) {
+            ScheduleStrategy(name = defaultName)
+        } else {
+            // 列表已展示过这条，VM 里必有；极端情况下找不到（被删）退回新建态
+            state.rows.firstOrNull { it.strategy.id == strategyId }?.strategy
+                ?: ScheduleStrategy(name = defaultName)
+        }
+    }
+
+    // initial 只作首帧种子：打开后归草稿管，外部再变也不覆盖用户正在改的
     var draft by remember(initial.id) { mutableStateOf(initial) }
     var intervalText by remember(initial.id) {
         mutableStateOf(initial.intervalMinutes?.toString().orEmpty())
@@ -72,104 +91,129 @@ fun ScheduleEditSheet(
     var pickingStartDate by remember { mutableStateOf(false) }
     var pickingStartTime by remember { mutableStateOf(false) }
 
-    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        stringResource(
+                            if (isNew) R.string.schedule_edit_new else R.string.schedule_edit_existing,
+                        ),
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.common_back),
+                        )
+                    }
+                },
+            )
+        },
+    ) { padding ->
         Column(
-            modifier = sheetModifier.imePadding(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    bottom = MaaDesignTokens.Spacing.lg,
+                ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            MaaSheetHeader(
-                title = stringResource(
-                    if (isNew) R.string.schedule_edit_new else R.string.schedule_edit_existing,
-                ),
-                onClose = onDismiss,
+            OutlinedTextField(
+                value = draft.name,
+                onValueChange = { draft = draft.copy(name = it) },
+                label = { Text(stringResource(R.string.schedule_edit_name)) },
+                placeholder = { Text(stringResource(R.string.schedule_edit_name_placeholder)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
             )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
-            ) {
-                OutlinedTextField(
-                    value = draft.name,
-                    onValueChange = { draft = draft.copy(name = it) },
-                    label = { Text(stringResource(R.string.schedule_edit_name)) },
-                    placeholder = { Text(stringResource(R.string.schedule_edit_name_placeholder)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+
+            MaaCard(title = stringResource(R.string.schedule_edit_type)) {
+                MaaSingleChoiceFlow(
+                    options = listOf(
+                        ScheduleType.FIXED_TIME to stringResource(R.string.schedule_edit_type_fixed),
+                        ScheduleType.INTERVAL to stringResource(R.string.schedule_edit_type_interval),
+                    ),
+                    selected = draft.scheduleType,
+                    onSelect = { draft = draft.copy(scheduleType = it) },
+                )
+            }
+
+            when (draft.scheduleType) {
+                ScheduleType.FIXED_TIME -> FixedTimeSection(
+                    draft = draft,
+                    onToggleDay = { day ->
+                        val next = if (day in draft.daysOfWeek) draft.daysOfWeek - day else draft.daysOfWeek + day
+                        draft = draft.copy(daysOfWeek = next)
+                    },
+                    onEditTime = { pickingTimeIndex = it },
+                    onRemoveTime = { index ->
+                        draft = draft.copy(
+                            executionTimes = draft.executionTimes.filterIndexed { i, _ -> i != index },
+                        )
+                    },
                 )
 
-                MaaCard(title = stringResource(R.string.schedule_edit_type)) {
-                    MaaSingleChoiceFlow(
-                        options = listOf(
-                            ScheduleType.FIXED_TIME to stringResource(R.string.schedule_edit_type_fixed),
-                            ScheduleType.INTERVAL to stringResource(R.string.schedule_edit_type_interval),
-                        ),
-                        selected = draft.scheduleType,
-                        onSelect = { draft = draft.copy(scheduleType = it) },
-                    )
-                }
+                ScheduleType.INTERVAL -> IntervalSection(
+                    draft = draft,
+                    intervalText = intervalText,
+                    onIntervalTextChange = { text ->
+                        intervalText = text.filter { it.isDigit() }.take(MAX_INTERVAL_DIGITS)
+                        draft = draft.copy(intervalMinutes = intervalText.toIntOrNull())
+                    },
+                    onPickStartDate = { pickingStartDate = true },
+                    onPickStartTime = { pickingStartTime = true },
+                )
+            }
 
-                when (draft.scheduleType) {
-                    ScheduleType.FIXED_TIME -> FixedTimeSection(
-                        draft = draft,
-                        onToggleDay = { day ->
-                            val next = if (day in draft.daysOfWeek) draft.daysOfWeek - day else draft.daysOfWeek + day
-                            draft = draft.copy(daysOfWeek = next)
-                        },
-                        onEditTime = { pickingTimeIndex = it },
-                        onRemoveTime = { index ->
-                            draft = draft.copy(
-                                executionTimes = draft.executionTimes.filterIndexed { i, _ -> i != index },
-                            )
-                        },
-                    )
+            MaaCard {
+                MaaLabeledControlRow(
+                    label = stringResource(R.string.schedule_edit_enabled),
+                    trailing = {
+                        MaaSwitch(
+                            checked = draft.enabled,
+                            onCheckedChange = { draft = draft.copy(enabled = it) },
+                        )
+                    },
+                )
+            }
 
-                    ScheduleType.INTERVAL -> IntervalSection(
-                        draft = draft,
-                        intervalText = intervalText,
-                        onIntervalTextChange = { text ->
-                            intervalText = text.filter { it.isDigit() }.take(MAX_INTERVAL_DIGITS)
-                            draft = draft.copy(intervalMinutes = intervalText.toIntOrNull())
-                        },
-                        onPickStartDate = { pickingStartDate = true },
-                        onPickStartTime = { pickingStartTime = true },
-                    )
-                }
-
-                MaaCard {
-                    MaaLabeledControlRow(
-                        label = stringResource(R.string.schedule_edit_enabled),
-                        trailing = {
-                            MaaSwitch(
-                                checked = draft.enabled,
-                                onCheckedChange = { draft = draft.copy(enabled = it) },
-                            )
-                        },
-                    )
-                }
-
-                if (!draft.isComplete) {
-                    Text(
-                        text = stringResource(R.string.schedule_edit_incomplete),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+            if (!draft.isComplete) {
+                Text(
+                    text = stringResource(R.string.schedule_edit_incomplete),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = MaaDesignTokens.Spacing.md),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             ) {
                 if (!isNew) {
-                    OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.onIntent(ScheduleIntent.Delete(initial.id))
+                            onBack()
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
                         Text(stringResource(R.string.schedule_edit_delete))
                     }
                 }
                 OutlinedButton(
-                    onClick = { onSave(draft.normalized()) },
+                    onClick = {
+                        viewModel.onIntent(ScheduleIntent.Save(draft.normalized()))
+                        onBack()
+                    },
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(stringResource(R.string.schedule_edit_save))
@@ -350,3 +394,4 @@ private fun java.time.ZonedDateTime.toEpochMs(): Long = toInstant().toEpochMilli
 
 private const val DEFAULT_HOUR = 8
 private const val MAX_INTERVAL_DIGITS = 5
+private const val NEW_STRATEGY = "new"

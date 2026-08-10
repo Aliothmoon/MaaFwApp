@@ -373,7 +373,6 @@ class SessionViewModel(
 
             // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授
             SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
-            is SessionIntent.SetRemoteBackend -> permissionGateway.setBackend(intent.backend)
             SessionIntent.TogglePrivilegedService -> togglePrivilegedService()
             SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
             SessionIntent.InstallShizuku -> effectChannel.send(SessionEffect.InstallShizuku)

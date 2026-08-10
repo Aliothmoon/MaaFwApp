@@ -20,11 +20,14 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.OverlayControlMode
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
+import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
@@ -39,6 +42,8 @@ import com.aliothmoon.maafw.ui.components.ResourceSwitchSheet
 fun SettingsScreen(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
+    settingsState: SettingsUiState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -50,6 +55,7 @@ fun SettingsScreen(
     ) {
         AppearanceCard(state, onIntent)
         LanguageCard(state, onIntent)
+        BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
         RunModeCard(state, onIntent)
         ResourceCard(state, onIntent)
         DeveloperCard(state, onIntent)
@@ -265,6 +271,41 @@ private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Un
                 MaaDiagnosticList(diagnostics, showSeverity = true)
             }
         }
+    }
+}
+
+/**
+ * 后端选择：Shizuku / Root
+ *
+ * 从首页权限卡搬来——首页只显示当前后端状态，切换归设置页管（对齐 MaaMeow）
+ * 运行中禁用：切后端会断开当前特权进程，跑一半时切会丢这一轮
+ */
+@Composable
+private fun BackendCard(
+    settingsState: SettingsUiState,
+    locked: Boolean,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
+    val access = settingsState.remoteAccess
+    MaaCard(title = stringResource(R.string.permission_backend)) {
+        MaaSingleChoiceFlow(
+            options = RemoteBackend.entries.map { entry ->
+                val suffix = if (access.isAvailable(entry)) {
+                    ""
+                } else {
+                    "（${stringResource(R.string.permission_backend_unavailable)}）"
+                }
+                entry to "${entry.display}$suffix"
+            },
+            selected = access.configuredBackend,
+            enabled = !locked,
+            onSelect = { onSettingsIntent(SettingsIntent.SetBackend(it)) },
+        )
+        Text(
+            text = stringResource(R.string.permission_backend_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

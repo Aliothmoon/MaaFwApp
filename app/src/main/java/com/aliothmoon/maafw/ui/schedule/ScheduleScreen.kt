@@ -20,17 +20,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleRow
-import com.aliothmoon.maafw.schedule.ScheduleStrategy
 import com.aliothmoon.maafw.schedule.ScheduleUiState
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -50,23 +45,15 @@ import com.aliothmoon.maafw.ui.components.maaClickable
 fun ScheduleScreen(
     state: ScheduleUiState,
     onIntent: (ScheduleIntent) -> Unit,
+    onEdit: (String?) -> Unit,
+    onOpenLog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 编辑草稿是页面临时状态，不进 ScheduleUiState（docs/android-ui-contract.md §12）
-    var editing by remember { mutableStateOf<ScheduleStrategy?>(null) }
-    var editingIsNew by remember { mutableStateOf(false) }
-    var showLog by remember { mutableStateOf(false) }
-
+    // 编辑与日志都进二级页面（NavHost 推入），草稿与日志快照归各自的页面管
     Column(modifier = modifier.fillMaxSize()) {
         ScheduleHeader(
-            onAdd = {
-                editing = ScheduleStrategy(name = "")
-                editingIsNew = true
-            },
-            onOpenLog = {
-                onIntent(ScheduleIntent.LoadTriggerLog)
-                showLog = true
-            },
+            onAdd = { onEdit(null) },
+            onOpenLog = onOpenLog,
         )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -90,10 +77,7 @@ fun ScheduleScreen(
                 items(state.rows, key = { it.strategy.id }) { row ->
                     ScheduleRowCard(
                         row = row,
-                        onClick = {
-                            editing = row.strategy
-                            editingIsNew = false
-                        },
+                        onClick = { onEdit(row.strategy.id) },
                         onToggle = { onIntent(ScheduleIntent.SetEnabled(row.strategy.id, it)) },
                     )
                 }
@@ -101,29 +85,6 @@ fun ScheduleScreen(
         }
     }
 
-    editing?.let { strategy ->
-        ScheduleEditSheet(
-            initial = strategy,
-            isNew = editingIsNew,
-            onSave = {
-                onIntent(ScheduleIntent.Save(it))
-                editing = null
-            },
-            onDelete = {
-                onIntent(ScheduleIntent.Delete(strategy.id))
-                editing = null
-            },
-            onDismiss = { editing = null },
-        )
-    }
-
-    if (showLog) {
-        ScheduleTriggerLogSheet(
-            entries = state.triggerLog,
-            onClear = { onIntent(ScheduleIntent.ClearTriggerLog) },
-            onDismiss = { showLog = false },
-        )
-    }
 }
 
 @Composable

@@ -7,6 +7,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,6 +58,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
@@ -70,6 +77,8 @@ import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
+import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
@@ -79,7 +88,10 @@ import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
+import com.aliothmoon.maafw.ui.navigation.Routes
+import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
+import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
@@ -112,11 +124,13 @@ fun AppRoot(
     onDarkThemeChanged: (Boolean) -> Unit,
     viewModel: SessionViewModel = koinViewModel(),
     scheduleViewModel: ScheduleViewModel = koinViewModel(),
+    settingsViewModel: SettingsViewModel = koinViewModel(),
     overlayController: OverlayController = koinInject(),
     screenSaverManager: ScreenSaverOverlayManager = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
+    val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     // 触点与运行日志各自单独一条流，不并进 SessionUiState（见 SessionViewModel）
     val previewMarkers by viewModel.previewMarkers.collectAsStateWithLifecycle()
     val runLog by viewModel.runLog.collectAsStateWithLifecycle()
@@ -162,6 +176,8 @@ fun AppRoot(
     }
 
     MaaFwTheme(darkTheme = darkTheme) {
+        // NavHost 只承载二级页面；主 tab 仍由下面的 HorizontalPager 渲染
+        val navController = rememberNavController()
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
         val scope = rememberCoroutineScope()
         val snackbarHostState = remember { SnackbarHostState() }
@@ -217,10 +233,11 @@ fun AppRoot(
             onOpenApp = { viewModel.onIntent(SessionIntent.OpenShizuku) },
             onRequestAuth = { viewModel.onIntent(SessionIntent.RequestRemoteAccess) },
             onDismiss = { viewModel.onIntent(SessionIntent.SkipShizukuCheck) },
-            onSwitchToRoot = { viewModel.onIntent(SessionIntent.SetRemoteBackend(RemoteBackend.ROOT)) },
+            onSwitchToRoot = { settingsViewModel.onIntent(SettingsIntent.SetBackend(RemoteBackend.ROOT)) },
             isRequesting = state.remoteAccessGranting,
         )
 
+        Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
@@ -302,12 +319,54 @@ fun AppRoot(
                     TopDestination.Schedule -> ScheduleScreen(
                         state = scheduleState,
                         onIntent = scheduleViewModel::onIntent,
+                        onEdit = { id ->
+                            navController.navigate(
+                                if (id == null) Routes.SCHEDULE_EDIT_NEW else Routes.scheduleEdit(id),
+                            )
+                        },
+                        onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
                         modifier = Modifier.fillMaxSize(),
                     )
 
-                    TopDestination.Settings -> SettingsScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
+                    TopDestination.Settings -> SettingsScreen(
+                        state = state,
+                        onIntent = viewModel::onIntent,
+                        settingsState = settingsState,
+                        onSettingsIntent = settingsViewModel::onIntent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
+
+            NavHost(
+                navController = navController,
+                startDestination = Routes.HOME,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                // 主 tab 路由空占位：真实内容由上面的 HorizontalPager 渲染
+                composable(Routes.HOME) {}
+                composable(Routes.TASKS) {}
+                composable(Routes.SCHEDULE) {}
+                composable(Routes.SETTINGS) {}
+                composable(
+                    route = Routes.SCHEDULE_EDIT,
+                    arguments = listOf(
+                        navArgument(Routes.SCHEDULE_EDIT_ARG) {
+                            type = NavType.StringType
+                            defaultValue = "new"
+                        },
+                    ),
+                ) { entry ->
+                    ScheduleEditScreen(
+                        strategyId = entry.arguments?.getString(Routes.SCHEDULE_EDIT_ARG),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(Routes.SCHEDULE_TRIGGER_LOG) {
+                    ScheduleTriggerLogScreen(onBack = { navController.popBackStack() })
+                }
+            }
+        }
         }
 
         // 挂在 Scaffold 之外，才盖得住底部 tab 栏与系统栏

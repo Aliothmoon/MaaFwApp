@@ -29,6 +29,7 @@ import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.PreviewPort
@@ -211,5 +212,9 @@ val appModule = module {
             alarms = get(),
             triggerLog = get(),
         )
+    }
+
+    viewModel {
+        SettingsViewModel(permissionGateway = get())
     }
 }
