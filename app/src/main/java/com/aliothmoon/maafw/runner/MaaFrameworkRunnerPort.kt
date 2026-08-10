@@ -5,7 +5,7 @@ import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.project.PiInstaller
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -37,9 +37,10 @@ class MaaFrameworkRunnerPort(
     private val nativeLibraryDir: String,
     /** 每轮开始时现读，不缓存：用户可能在两轮之间改了运行模式 */
     private val runMode: () -> RunMode,
+    private val displaySource: PhysicalDisplaySource,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
-    private val serviceManager: RemoteServiceManager = RemoteServiceManager,
+    private val servicePort: PrivilegedServicePort,
 ) : RunnerPort {
 
     private val _state = MutableStateFlow(RunnerState())
@@ -143,7 +144,7 @@ class MaaFrameworkRunnerPort(
         }
         _state.update { it.copy(phase = RunnerPhase.Stopping) }
         return withContext(ioDispatcher) {
-            runCatching { serviceManager.getInstanceOrNull()?.stopRun() }
+            runCatching { servicePort.serviceOrNull()?.stopRun() }
                 .fold(
                     onSuccess = { RunnerCommandResult.Accepted },
                     onFailure = {
@@ -156,12 +157,12 @@ class MaaFrameworkRunnerPort(
 
     /**
      * 返回 null 表示已受理，否则返回拒绝原因
-     * 走 useRemoteService 而非 getInstance：它会先刷新授权状态、必要时发起授权请求，
+     * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
      * 后端换了也会重新绑定
      */
     private suspend fun launchOnService(plan: RunPlan): String? {
         val piRoot = installer.ensureInstalled()
-        return serviceManager.useRemoteService { service -> prepareAndStart(plan, piRoot, service) }
+        return servicePort.useService { service -> prepareAndStart(plan, piRoot, service) }
     }
 
     private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): String? {
@@ -174,7 +175,7 @@ class MaaFrameworkRunnerPort(
         }
         // 主屏模式不建屏也不设分辨率：尺寸是设备当下的物理尺寸，由特权进程侧的采集器供数
         val (width, height) = if (mode == RunMode.BACKGROUND) {
-            resolveDisplayResolution(plan.controller).also { (w, h) ->
+            resolveDisplayResolution(plan.controller, displaySource.current()).also { (w, h) ->
                 service.setVirtualDisplayResolution(w, h, DefaultDisplayConfig.DPI)
             }
         } else {

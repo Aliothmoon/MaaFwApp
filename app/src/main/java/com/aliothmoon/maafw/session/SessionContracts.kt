@@ -251,9 +251,6 @@ sealed interface SessionEffect {
     data object OpenShizuku : SessionEffect
     data class RequestSystemPermission(val permission: SystemPermission) : SessionEffect
 
-    /** 执行已受理，拉起保活前台服务；启 Service 同样要 Context */
-    data object StartRunForegroundService : SessionEffect
-
     data object ShowOverlay : SessionEffect
     data object ShowScreenSaver : SessionEffect
 }

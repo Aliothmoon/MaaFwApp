@@ -30,7 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * 闹钟落地后的执行壳
  *
  * **当前不触发任何 MaaFramework 执行**：只把 app 叫醒、记一条触发日志、接上下一次闹钟
- * 接执行时改的是 [handleTrigger] 里那一段，闹钟链与记账都不用动
+ * 接执行时改的是 [handleTrigger] 里那一段，闹钟链与记账都不用动——发起用例已经落在
+ * [com.aliothmoon.maafw.runner.RunLauncher]（进程级，与首页 Start 共用同一条），
+ * 这里 inject 它即可，不必复制 SessionViewModel 的那段
  *
  * 必须是前台服务：广播里 5 秒就被回收，而 12+ 的后台启动限制只对 exact 闹钟发出的
  * 广播开口子（见 [ScheduleAlarmManager.scheduleNext]）
@@ -100,7 +102,8 @@ class ScheduleExecutionService : Service() {
             return
         }
 
-        // 执行未接入：这里将来换成「按策略绑定的运行配置发起一轮」，其余不动
+        // 执行未接入：这里将来 inject [com.aliothmoon.maafw.runner.RunLauncher] 并按策略绑定的
+        // 运行配置发起一轮，其余不动。缺的只剩 ScheduleStrategy 上的 runConfigurationId 字段与盘上数据迁移
         triggerLog.append(
             TriggerLogEntry(
                 strategyId = strategy.id,

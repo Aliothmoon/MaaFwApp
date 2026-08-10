@@ -20,7 +20,10 @@ import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
+import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
+import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunLogKind
+import com.aliothmoon.maafw.runner.TestDisplaySource
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -110,24 +113,32 @@ class SessionViewModelTest {
             project,
             store,
             runner,
+            RunLauncher(project, store, runner, RecordingRunKeepAlive()),
             RecordingPreviewPort(),
             permissions,
             settings,
             locale,
+            TestDisplaySource,
         )
         return Triple(vm, store, runner)
     }
 
     /** 只换 RunnerPort 的构造点；createVm 的返回三元组绑死了 StubRunnerPort */
-    private fun createVmWithRunner(runner: RunnerPort): SessionViewModel = SessionViewModel(
-        FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
-        readyStore(),
-        runner,
-        RecordingPreviewPort(),
-        FakePermissionGateway(),
-        FakeAppSettingsGateway(),
-        {},
-    )
+    private fun createVmWithRunner(runner: RunnerPort): SessionViewModel {
+        val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
+        val store = readyStore()
+        return SessionViewModel(
+            project,
+            store,
+            runner,
+            RunLauncher(project, store, runner, RecordingRunKeepAlive()),
+            RecordingPreviewPort(),
+            FakePermissionGateway(),
+            FakeAppSettingsGateway(),
+            {},
+            TestDisplaySource,
+        )
+    }
 
     @Test
     fun `run log keeps only the latest entries and clears on intent`() = runTest(mainDispatcher) {

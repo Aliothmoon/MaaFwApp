@@ -82,7 +82,6 @@ import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
-import com.aliothmoon.maafw.service.RunForegroundService
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
@@ -196,7 +195,6 @@ fun AppRoot(
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
                     SessionEffect.OpenShizuku -> ShizukuInstallHelper.openShizuku(context)
 
-                    SessionEffect.StartRunForegroundService -> RunForegroundService.start(context)
 
                     // 控制层挂在 WindowManager 上、跨 Activity 存活，由 Application 级单例持有
                     SessionEffect.ShowOverlay -> overlayController.show()

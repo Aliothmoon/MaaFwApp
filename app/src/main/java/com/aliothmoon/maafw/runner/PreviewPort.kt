@@ -5,7 +5,8 @@ import android.view.MotionEvent
 import android.view.Surface
 import com.aliothmoon.maafw.ITouchEventCallback
 import com.aliothmoon.maafw.RemoteService
-import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -61,7 +62,7 @@ interface PreviewPort {
  */
 class RemotePreviewPort(
     private val scope: CoroutineScope,
-    private val serviceManager: RemoteServiceManager,
+    private val servicePort: PrivilegedServicePort,
 ) : PreviewPort {
 
     private val current = AtomicReference<Surface?>(null)
@@ -85,8 +86,8 @@ class RemotePreviewPort(
 
     init {
         scope.launch {
-            serviceManager.state.collect { state ->
-                if (state is RemoteServiceManager.ServiceState.Connected) {
+            servicePort.serviceState.collect { state ->
+                if (state == PrivilegedServiceState.Connected) {
                     push(current.get())
                 }
             }
@@ -114,13 +115,13 @@ class RemotePreviewPort(
 
     /** 手动触摸是 oneway，发不出去就算了；预览本来就是尽力而为 */
     private inline fun withService(action: (RemoteService) -> Unit) {
-        val service = serviceManager.getInstanceOrNull() ?: return
+        val service = servicePort.serviceOrNull() ?: return
         runCatching { action(service) }.onFailure { Timber.w(it, "预览手动触摸失败") }
     }
 
     /** 未绑定时静默跳过：连上时 init 里的 collect 会补发 */
     private fun push(surface: Surface?) {
-        val service = serviceManager.getInstanceOrNull() ?: return
+        val service = servicePort.serviceOrNull() ?: return
         runCatching {
             service.setMonitorSurface(surface)
             service.setTouchCallback(if (surface != null) touchCallback else null)

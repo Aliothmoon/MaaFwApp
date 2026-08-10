@@ -26,15 +26,15 @@ import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RunLogEntry
-import com.aliothmoon.maafw.runner.RunPlanBuilder
+import com.aliothmoon.maafw.runner.RunLaunchResult
+import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.toLogKind
 import com.aliothmoon.maafw.runner.toLogText
-import com.aliothmoon.maafw.runner.RunPlanResult
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
-import com.aliothmoon.maafw.runner.physicalDisplayResolution
+import com.aliothmoon.maafw.runner.PhysicalDisplaySource
 import com.aliothmoon.maafw.runner.resolveDisplayResolution
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
@@ -46,7 +46,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -74,10 +73,12 @@ class SessionViewModel(
     private val projectRepository: ProjectRepository,
     private val configurationStore: UserConfigurationStore,
     private val runnerPort: RunnerPort,
+    private val runLauncher: RunLauncher,
     private val previewPort: PreviewPort,
     private val permissionGateway: PermissionGateway,
     private val appSettings: AppSettingsGateway,
     private val localeController: LocaleController,
+    private val displaySource: PhysicalDisplaySource,
 ) : ViewModel() {
 
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
@@ -215,8 +216,9 @@ class SessionViewModel(
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
             previewResolution = when (runMode) {
-                RunMode.FOREGROUND -> physicalDisplayResolution()
-                RunMode.BACKGROUND -> resolveDisplayResolution(project.definition.controller)
+                RunMode.FOREGROUND -> displaySource.current()
+                RunMode.BACKGROUND ->
+                    resolveDisplayResolution(project.definition.controller, displaySource.current())
             },
         )
     }
@@ -455,31 +457,22 @@ class SessionViewModel(
         effectChannel.send(SessionEffect.ShowMessage(message))
     }
 
+    /** 发起本身在 [RunLauncher]（进程级，定时触发共用同一条）；这里只把结局翻成 UI 消息 */
     private suspend fun start() {
-        val project = projectRepository.state.value
-        if (project !is ProjectState.Ready) {
-            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
-            return
-        }
-        val config = configurationStore.data.first()
-        when (val result = RunPlanBuilder.build(project.definition, config)) {
-            is RunPlanResult.NoExecutableTasks ->
+        when (val result = runLauncher.launch()) {
+            RunLaunchResult.Started -> Unit
+
+            RunLaunchResult.ProjectNotReady ->
+                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
+
+            RunLaunchResult.NoExecutableTasks ->
                 effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_no_executable_tasks)))
 
-            is RunPlanResult.Invalid ->
+            is RunLaunchResult.Invalid ->
                 effectChannel.send(SessionEffect.ShowDiagnostics(result.diagnostics))
 
-            is RunPlanResult.Success -> {
-                when (val command = runnerPort.start(result.plan)) {
-                    // 受理之后才拉前台服务：它 onCreate 时读 RunnerState 判去留，
-                    // 提前发会撞上「还没进 Preparing」而当场自停
-                    is RunnerCommandResult.Accepted ->
-                        effectChannel.send(SessionEffect.StartRunForegroundService)
-
-                    is RunnerCommandResult.Rejected ->
-                        effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_start, command.reason)))
-                }
-            }
+            is RunLaunchResult.Rejected ->
+                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_start, result.reason)))
         }
     }
 

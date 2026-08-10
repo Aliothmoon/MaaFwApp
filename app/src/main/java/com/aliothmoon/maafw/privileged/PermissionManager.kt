@@ -31,15 +31,20 @@ import timber.log.Timber
 /**
  * 提权授权的唯一入口：状态汇总、发起授权、切后端
  *
- * 保活三件套（通知/电池白名单/后台不受限）在两种运行模式下都要；悬浮窗与无障碍只有前台
- * 主屏模式用得上，按 runMode 决定要不要一起代授——它们是敏感权限，用不上就不该要
+ * 代授集合固定为 [PrivilegedGrant.ALL] 全集，不按运行模式挑：用不上的位代授是空操作，
+ * 少授反而会在用户切模式时漏掉某一项
  *
- * [RemoteAccessCoordinator] 只汇总两个后端的可用性，不感知持久化；
+ * [RemoteAccessPort] 只汇总两个后端的可用性，不感知持久化；
  * 后端存在哪、什么时候刷新、授权后要不要绑定，都由这一层决定
+ *
+ * 两个 Port 由构造注入而不是直接点名 object：进程级单例该在 Koin 里装配，
+ * 而不是让每个调用点各自去 import 一个全局
  */
 class PermissionManager(
     context: Context,
     private val appSettings: AppSettingsManager,
+    private val servicePort: PrivilegedServicePort,
+    private val accessPort: RemoteAccessPort,
 ) : PermissionGateway, DefaultLifecycleObserver {
 
     private val appContext = context.applicationContext
@@ -48,11 +53,9 @@ class PermissionManager(
     private val _isGranting = MutableStateFlow(false)
     override val isGranting: StateFlow<Boolean> = _isGranting.asStateFlow()
 
-    override val state: StateFlow<RemoteAccessState> = RemoteAccessCoordinator.state
+    override val state: StateFlow<RemoteAccessState> = accessPort.state
 
-    override val serviceState: StateFlow<PrivilegedServiceState> = RemoteServiceManager.state
-        .map { it.toPrivilegedServiceState() }
-        .stateIn(scope, SharingStarted.Eagerly, PrivilegedServiceState.Disconnected)
+    override val serviceState: StateFlow<PrivilegedServiceState> = servicePort.serviceState
 
     private val serviceConnected: StateFlow<Boolean> = serviceState
         .map { it == PrivilegedServiceState.Connected }
@@ -64,7 +67,7 @@ class PermissionManager(
     private val refreshTrigger = MutableStateFlow(0)
 
     override val readiness: StateFlow<ShizukuReadiness> = combine(
-        RemoteAccessCoordinator.state,
+        accessPort.state,
         appSettings.skipShizukuCheck,
         appSettings.shizukuLaunchPackage,
         refreshTrigger,
@@ -82,23 +85,22 @@ class PermissionManager(
         scope.launch {
             appSettings.startupBackend.drop(1).distinctUntilChanged().collect {
                 // 绑定是按后端建的，换了后端不断开会连着错的特权进程
-                RemoteServiceManager.unbind()
+                servicePort.unbind()
                 refresh()
             }
         }
         // 授权到手就把特权进程连上，用户不必再手动点一次
         scope.launch {
-            RemoteAccessCoordinator.state
+            accessPort.state
                 .map { it.isGranted(it.configuredBackend) }
                 .distinctUntilChanged()
                 .filter { it }
-                .collect { RemoteServiceManager.bind() }
+                .collect { servicePort.bind() }
         }
         // 特权进程一上线就代授，省掉用户逐个点系统页
         scope.launch {
             serviceConnected.filter { it }.collect { grantViaPrivileged() }
         }
-        RemoteServiceManager.initialize(appContext) { appSettings.startupBackend.value }
     }
 
     /** 从 Shizuku 的授权界面切回来时状态已变，但没有回调会通知我们 */
@@ -107,7 +109,7 @@ class PermissionManager(
     }
 
     override fun refresh() {
-        RemoteAccessCoordinator.refresh()
+        accessPort.refresh()
         _systemPermissions.value = readSystemPermissions()
         refreshTrigger.update { it + 1 }
     }
@@ -123,7 +125,7 @@ class PermissionManager(
         val requested = PrivilegedGrant.ALL
         val granted = withContext(Dispatchers.IO) {
             runCatching {
-                RemoteServiceManager.getInstanceOrNull()?.grantPermissions(
+                servicePort.serviceOrNull()?.grantPermissions(
                     appContext.packageName,
                     appContext.applicationInfo.uid,
                     requested,
@@ -153,11 +155,11 @@ class PermissionManager(
     )
 
     override suspend fun requestRemoteAccess(): Boolean {
-        val current = RemoteAccessCoordinator.refresh()
+        val current = accessPort.refresh()
         if (current.isGranted(current.configuredBackend)) return true
         _isGranting.value = true
         return try {
-            RemoteAccessCoordinator.request(current.configuredBackend)
+            accessPort.request(current.configuredBackend)
         } finally {
             _isGranting.value = false
             refresh()
@@ -172,13 +174,13 @@ class PermissionManager(
      */
     override suspend fun bindService(): ServiceBindResult {
         if (serviceState.value == PrivilegedServiceState.Connected) return ServiceBindResult.AlreadyConnected
-        val current = RemoteAccessCoordinator.refresh()
+        val current = accessPort.refresh()
         val backend = current.configuredBackend
         if (!current.isAvailable(backend)) return ServiceBindResult.BackendUnavailable(backend)
         if (!current.isGranted(backend) && !requestRemoteAccess()) {
             return ServiceBindResult.AuthRejected(backend)
         }
-        return runCatching { RemoteServiceManager.bind() }
+        return runCatching { servicePort.bind() }
             .fold(
                 onSuccess = { ServiceBindResult.Started },
                 onFailure = {
@@ -188,7 +190,7 @@ class PermissionManager(
             )
     }
 
-    override fun unbindService() = RemoteServiceManager.unbind()
+    override fun unbindService() = servicePort.unbind()
 
     override suspend fun setBackend(backend: RemoteBackend) {
         if (appSettings.startupBackend.value == backend) return
@@ -237,10 +239,3 @@ class PermissionManager(
     }
 }
 
-private fun RemoteServiceManager.ServiceState.toPrivilegedServiceState() = when (this) {
-    is RemoteServiceManager.ServiceState.Connected -> PrivilegedServiceState.Connected
-    RemoteServiceManager.ServiceState.Connecting -> PrivilegedServiceState.Connecting
-    RemoteServiceManager.ServiceState.Died -> PrivilegedServiceState.Died
-    RemoteServiceManager.ServiceState.Disconnected -> PrivilegedServiceState.Disconnected
-    is RemoteServiceManager.ServiceState.Error -> PrivilegedServiceState.Error
-}

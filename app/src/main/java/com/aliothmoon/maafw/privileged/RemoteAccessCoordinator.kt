@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 汇总两个后端的可用性与授权状态
  * 后端选择由外部提供：本层不决定它存在哪，也不感知持久化
  */
-object RemoteAccessCoordinator {
+object RemoteAccessCoordinator : RemoteAccessPort {
 
     private val initialized = AtomicBoolean(false)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -23,7 +23,7 @@ object RemoteAccessCoordinator {
     @Volatile
     private var backendProvider: (() -> RemoteBackend)? = null
 
-    val state: StateFlow<RemoteAccessState> = _state.asStateFlow()
+    override val state: StateFlow<RemoteAccessState> = _state.asStateFlow()
 
     private val backends = mapOf(
         RemoteBackend.ROOT to RootManager,
@@ -45,7 +45,7 @@ object RemoteAccessCoordinator {
         refresh()
     }
 
-    fun refresh(): RemoteAccessState {
+    override fun refresh(): RemoteAccessState {
         val current = snapshot()
         _state.value = current
         return current
@@ -59,7 +59,7 @@ object RemoteAccessCoordinator {
         return state.value.isGranted(backend)
     }
 
-    suspend fun request(backend: RemoteBackend = configuredBackend()): Boolean {
+    override suspend fun request(backend: RemoteBackend): Boolean {
         val current = refresh()
         if (current.isGranted(backend)) {
             return true

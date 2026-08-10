@@ -26,15 +26,23 @@ import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectSource
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PermissionManager
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.RemoteAccessCoordinator
+import com.aliothmoon.maafw.privileged.RemoteAccessPort
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
+import com.aliothmoon.maafw.runner.PhysicalDisplaySource
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.RemotePreviewPort
+import com.aliothmoon.maafw.runner.RunKeepAlive
+import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunnerPort
+import com.aliothmoon.maafw.runner.SystemPhysicalDisplaySource
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager
 import com.aliothmoon.maafw.schedule.ScheduleStrategyStore
 import com.aliothmoon.maafw.schedule.ScheduleTriggerLog
@@ -75,9 +83,12 @@ class MaaFwApp : Application() {
             androidContext(this@MaaFwApp)
             modules(appModule)
         }.koin
-        // PermissionManager 的构造里带 RemoteServiceManager.initialize，
-        // 它要先读到盘上的后端选择，所以在这里显式建出来而不是等首次注入
+        // 先建 PermissionManager：它 init 里注册的那几个观察者要早于下面 initialize 触发的首次 refresh，
+        // 否则「授权到手就绑定」会漏掉启动时已授权的那一次
         koin.get<PermissionManager>()
+        // 特权进程的进程级 bootstrap 落在组合根，不塞进 PermissionManager 的构造：
+        // backendProvider 要现读盘上的后端选择，只有这里同时拿得到 Context 与 AppSettingsManager
+        RemoteServiceManager.initialize(this, koin.get<AppSettingsManager>().startupBackend::value)
         // 控制层与屏保都跟着 runMode 装卸，得在进程起来时就开始观察
         koin.get<OverlayController>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
@@ -119,6 +130,11 @@ val appModule = module {
     }
     single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
 
+    // 两个提权面的进程级单例；object 保留做实现，装配在这里，调用点只认接口
+    single<PrivilegedServicePort> { RemoteServiceManager }
+    single<RemoteAccessPort> { RemoteAccessCoordinator }
+    single<PhysicalDisplaySource> { SystemPhysicalDisplaySource }
+
     // StubRunnerPort 保留给测试与 Preview，不再进 DI
     single<RunnerPort> {
         val context = androidContext()
@@ -137,15 +153,28 @@ val appModule = module {
             apkPath = context.applicationInfo.sourceDir,
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
             runMode = get<AppSettingsManager>().runMode::value,
+            displaySource = get(),
             scope = get(named<AppCoroutineScope>()),
             ioDispatcher = Dispatchers.IO,
+            servicePort = get(),
         )
     }
 
     single<PreviewPort> {
         RemotePreviewPort(
             scope = get(named<AppCoroutineScope>()),
-            serviceManager = RemoteServiceManager,
+            servicePort = get(),
+        )
+    }
+
+    // 发起一轮执行是进程级用例：定时触发落在 Service 里，拿不到 Activity 作用域的 VM
+    single<RunKeepAlive> { ForegroundRunKeepAlive(androidContext()) }
+    single {
+        RunLauncher(
+            projectRepository = get(),
+            configurationStore = get(),
+            runnerPort = get(),
+            keepAlive = get(),
         )
     }
 
@@ -191,7 +220,7 @@ val appModule = module {
             },
         )
     }
-    single { PermissionManager(androidContext(), get()) }
+    single { PermissionManager(androidContext(), get(), get(), get()) }
     single<PermissionGateway> { get<PermissionManager>() }
 
     viewModel {
@@ -199,10 +228,12 @@ val appModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
+            runLauncher = get(),
             previewPort = get(),
             permissionGateway = get(),
             appSettings = get(),
             localeController = AppLocales,
+            displaySource = get(),
         )
     }
 

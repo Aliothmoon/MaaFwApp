@@ -11,9 +11,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
@@ -21,7 +23,7 @@ import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-object RemoteServiceManager {
+object RemoteServiceManager : PrivilegedServicePort {
 
     sealed class ServiceState {
         data object Disconnected : ServiceState()
@@ -32,6 +34,9 @@ object RemoteServiceManager {
     }
 
     private const val CONNECT_TIMEOUT_MS = 20_000L
+
+    /** [useService] 等连接就绪的上限；比 [CONNECT_TIMEOUT_MS] 短，超时兜底仍由后者负责收敛状态 */
+    private const val USE_SERVICE_TIMEOUT_MS = 12_000L
 
     // 状态迁移（boundBackend / currentBinder / _state）统一在此锁内完成
     private val lock = Any()
@@ -50,7 +55,14 @@ object RemoteServiceManager {
 
     @Volatile
     private var boundBackend: RemoteBackend? = null
-    val state: StateFlow<ServiceState> = _state.asStateFlow()
+
+    /**
+     * 对外只给不带 binder 的投影：[ServiceState.Connected] 揣着 [RemoteService]，
+     * 漏出这一层就等于把 IPC 句柄发给了 UI
+     */
+    override val serviceState: StateFlow<PrivilegedServiceState> = _state
+        .map { it.toPrivilegedServiceState() }
+        .stateIn(timeoutScope, SharingStarted.Eagerly, PrivilegedServiceState.Disconnected)
 
     // 携带绑定时的 binder，迟到的死亡通知靠身份比对丢弃
     private class BindingDeathRecipient(val binder: IBinder) : IBinder.DeathRecipient {
@@ -162,7 +174,7 @@ object RemoteServiceManager {
         }
     }
 
-    fun bind() {
+    override fun bind() {
         val backend = RemoteAccessCoordinator.refresh().configuredBackend
         if (!RemoteAccessCoordinator.isGranted(backend)) {
             val exception = IllegalStateException("${backend.display} permission not granted")
@@ -233,7 +245,7 @@ object RemoteServiceManager {
         boundBackend = null
     }
 
-    fun unbind() {
+    override fun unbind() {
         synchronized(lock) {
             if (_state.value == ServiceState.Disconnected && boundBackend == null) {
                 return
@@ -248,7 +260,7 @@ object RemoteServiceManager {
     }
 
     suspend fun getInstance(timeoutMs: Long = 10_000): RemoteService {
-        getInstanceOrNull()?.let { return it }
+        serviceOrNull()?.let { return it }
 
         bind()
         return try {
@@ -268,7 +280,7 @@ object RemoteServiceManager {
         }
     }
 
-    fun getInstanceOrNull(): RemoteService? {
+    override fun serviceOrNull(): RemoteService? {
         val current = _state.value
         return if (current is ServiceState.Connected) current.service else null
     }
@@ -278,10 +290,7 @@ object RemoteServiceManager {
         if (_state.value is ServiceState.Connected) boundBackend else null
 
 
-    suspend fun <R> useRemoteService(
-        timeoutMs: Long = 12_000,
-        action: suspend (RemoteService) -> R
-    ): R {
+    override suspend fun <R> useService(action: suspend (RemoteService) -> R): R {
         var accessState = RemoteAccessCoordinator.refresh()
         var backend = accessState.configuredBackend
         if (!accessState.isGranted(backend)) {
@@ -298,7 +307,15 @@ object RemoteServiceManager {
             unbind()
         }
 
-        val service = getInstance(timeoutMs)
+        val service = getInstance(USE_SERVICE_TIMEOUT_MS)
         return action(service)
     }
+}
+
+private fun RemoteServiceManager.ServiceState.toPrivilegedServiceState() = when (this) {
+    is RemoteServiceManager.ServiceState.Connected -> PrivilegedServiceState.Connected
+    RemoteServiceManager.ServiceState.Connecting -> PrivilegedServiceState.Connecting
+    RemoteServiceManager.ServiceState.Died -> PrivilegedServiceState.Died
+    RemoteServiceManager.ServiceState.Disconnected -> PrivilegedServiceState.Disconnected
+    is RemoteServiceManager.ServiceState.Error -> PrivilegedServiceState.Error
 }
