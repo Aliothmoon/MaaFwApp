@@ -392,7 +392,7 @@ private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
         ) {
             Text(
                 text = stringResource(R.string.settings_run_mode),
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
