@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.theme.ThemeStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -76,6 +77,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         .map { it.debugMode.toBoolean() }
         .stateIn(scope, SharingStarted.Eagerly, initialSettings.debugMode.toBoolean())
 
+    override val themeStyle: StateFlow<ThemeStyle> = settings
+        .map { parseThemeStyle(it.themeStyle) }
+        .stateIn(scope, SharingStarted.Eagerly, parseThemeStyle(initialSettings.themeStyle))
+
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
         context.dataStore.edit { it[startupBackend] = backend.name }
     }
@@ -112,6 +117,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[debugMode] = enabled.toString() }
     }
 
+    override suspend fun setThemeStyle(style: ThemeStyle): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[themeStyle] = style.name }
+    }
+
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
     private fun parseBackend(raw: String): RemoteBackend =
         runCatching { RemoteBackend.valueOf(raw) }.getOrDefault(RemoteBackend.SHIZUKU)
@@ -124,4 +133,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseResolutionPreference(raw: String): ResolutionPreference =
         runCatching { ResolutionPreference.valueOf(raw) }.getOrDefault(ResolutionPreference.P720)
+
+    private fun parseThemeStyle(raw: String): ThemeStyle =
+        runCatching { ThemeStyle.valueOf(raw) }.getOrDefault(ThemeStyle.DEFAULT)
 }

@@ -12,6 +12,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
@@ -36,6 +37,7 @@ data class SessionUiState(
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),
     val themeMode: ThemeMode = ThemeMode.System,
+    val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     val debugMode: Boolean = false,
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
@@ -179,6 +181,7 @@ sealed interface SessionIntent {
 
     data class SelectResource(val resourceName: String) : SessionIntent
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent
+    data class SetThemeStyle(val style: ThemeStyle) : SessionIntent
 
     /**
      * null = 跟随系统；事实来源 AppLocales

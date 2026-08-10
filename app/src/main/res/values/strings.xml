@@ -103,6 +103,8 @@
     <string name="settings_follow_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_style_default">默认</string>
+    <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">语言</string>
     <string name="settings_language_hint">切换语言会重新加载项目，运行期间不可切换</string>
     <string name="settings_run_mode">运行模式</string>

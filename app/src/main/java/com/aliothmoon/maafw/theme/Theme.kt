@@ -120,6 +120,74 @@ private val BlueDark = createDarkColorScheme(
     primaryContainer = Color(0xFF1E3A8A),
     onPrimaryContainer = Color(0xFFDBEAFE)
 )
+/** 可选主题风格；DEFAULT 是暖石色 + 蓝，SEMI_DESIGN 取 Semi Design 的冷灰 + 品牌蓝 */
+enum class ThemeStyle { DEFAULT, SEMI_DESIGN }
+
+// Semi Design 默认主题配色；色值取自 @douyinfe/semi-theme-default 的 _palette.scss / global.scss
+// （primary=blue-5 #0064FA，中性 grey 冷灰，暗色 palette 反转）
+private val SemiLight = lightColorScheme(
+    primary = Color(0xFF0064FA),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFEAF5FF),
+    onPrimaryContainer = Color(0xFF004FB3),
+    secondary = Color(0xFF6B7075),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFF9F9F9),
+    onSecondaryContainer = Color(0xFF1C1F23),
+    tertiary = Color(0xFF0064FA),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFEAF5FF),
+    onTertiaryContainer = Color(0xFF004FB3),
+    background = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF1C1F23),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF1C1F23),
+    surfaceVariant = Color(0xFFF9F9F9),
+    onSurfaceVariant = Color(0xFF555B61),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF6F6F6),
+    surfaceContainer = Color(0xFFFFFFFF),
+    surfaceContainerHigh = Color(0xFFF9F9F9),
+    surfaceContainerHighest = Color(0xFFE6E8EA),
+    outline = Color(0xFFC6CACD),
+    outlineVariant = Color(0xFFE6E8EA),
+    error = Color(0xFFF93920),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFEDDD2),
+    onErrorContainer = Color(0xFF6A0103),
+)
+
+private val SemiDark = darkColorScheme(
+    primary = Color(0xFF54A9FF),
+    onPrimary = Color(0xFF053170),
+    primaryContainer = Color(0xFF053170),
+    onPrimaryContainer = Color(0xFF54A9FF),
+    secondary = Color(0xFFA7ABB0),
+    onSecondary = Color(0xFF1C1F23),
+    secondaryContainer = Color(0xFF2E3238),
+    onSecondaryContainer = Color(0xFFF9F9F9),
+    tertiary = Color(0xFF54A9FF),
+    onTertiary = Color(0xFF053170),
+    tertiaryContainer = Color(0xFF053170),
+    onTertiaryContainer = Color(0xFF54A9FF),
+    background = Color(0xFF16161A),
+    onBackground = Color(0xFFF9F9F9),
+    surface = Color(0xFF16161A),
+    onSurface = Color(0xFFF9F9F9),
+    surfaceVariant = Color(0xFF2E3238),
+    onSurfaceVariant = Color(0xFFA7ABB0),
+    surfaceContainerLowest = Color(0xFF0F0F12),
+    surfaceContainerLow = Color(0xFF16161A),
+    surfaceContainer = Color(0xFF232429),
+    surfaceContainerHigh = Color(0xFF35363C),
+    surfaceContainerHighest = Color(0xFF43444A),
+    outline = Color(0xFF41464C),
+    outlineVariant = Color(0xFF2E3238),
+    error = Color(0xFFFC725A),
+    onError = Color(0xFF6A0103),
+    errorContainer = Color(0xFF901110),
+    onErrorContainer = Color(0xFFFDBEAC),
+)
 
 /** 徽章/状态用的语义配色对：content + container */
 data class MaaTone(val content: Color, val container: Color)
@@ -184,10 +252,14 @@ private object NoIndication : IndicationNodeFactory {
 
 @Composable
 fun MaaFwTheme(
+    themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) BlueDark else BlueLight
+    val colorScheme = when (themeStyle) {
+        ThemeStyle.DEFAULT -> if (darkTheme) BlueDark else BlueLight
+        ThemeStyle.SEMI_DESIGN -> if (darkTheme) SemiDark else SemiLight
+    }
 
     CompositionLocalProvider(
         // foundation 层 clickable 的指示效果

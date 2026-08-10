@@ -28,6 +28,8 @@ import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.session.SessionIntent
@@ -35,6 +37,7 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
@@ -102,6 +105,16 @@ private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> U
             options = modes,
             selected = state.themeMode,
             onSelect = { onIntent(SessionIntent.SetThemeMode(it)) },
+        )
+        Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
+        val styles = listOf(
+            ThemeStyle.DEFAULT to stringResource(R.string.settings_theme_style_default),
+            ThemeStyle.SEMI_DESIGN to stringResource(R.string.settings_theme_style_semi),
+        )
+        MaaSingleChoiceFlow(
+            options = styles,
+            selected = state.themeStyle,
+            onSelect = { onIntent(SessionIntent.SetThemeStyle(it)) },
         )
     }
 }

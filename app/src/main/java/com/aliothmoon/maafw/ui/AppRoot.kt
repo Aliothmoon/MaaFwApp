@@ -85,6 +85,7 @@ import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.service.RunForegroundService
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
@@ -175,7 +176,7 @@ fun AppRoot(
         if (previewContent == null) previewFullscreen = false
     }
 
-    MaaFwTheme(darkTheme = darkTheme) {
+    MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
         // NavHost 只承载二级页面；主 tab 仍由下面的 HorizontalPager 渲染
         val navController = rememberNavController()
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })

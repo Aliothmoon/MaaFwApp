@@ -35,6 +35,7 @@ import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +61,7 @@ private data class SettingsSnapshot(
     val screenSaverEnabled: Boolean,
     val resolutionPreference: ResolutionPreference,
     val debugMode: Boolean,
+    val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -99,6 +101,8 @@ class SessionViewModel(
         appSettings.debugMode,
     ) { runMode, overlayMode, screenSaver, resolution, debug ->
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
+    }.combine(appSettings.themeStyle) { snapshot, style ->
+        snapshot.copy(themeStyle = style)
     }
 
     val uiState: StateFlow<SessionUiState> = combine(
@@ -202,6 +206,7 @@ class SessionViewModel(
             runner = runner,
             themeMode = config.themeMode,
             debugMode = settings.debugMode,
+            themeStyle = settings.themeStyle,
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
             screenSaverEnabled = settings.screenSaverEnabled,
@@ -335,6 +340,9 @@ class SessionViewModel(
 
             is SessionIntent.SetDebugMode ->
                 appSettings.setDebugMode(intent.enabled)
+
+            is SessionIntent.SetThemeStyle ->
+                appSettings.setThemeStyle(intent.style)
 
             // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上
             is SessionIntent.SetRunMode -> guarded {

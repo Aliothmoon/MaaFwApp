@@ -112,6 +112,8 @@
     <string name="settings_follow_system">System default</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_style_default">Default</string>
+    <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_hint">Switching language reloads the project; unavailable while running</string>
     <string name="settings_run_mode">Run mode</string>

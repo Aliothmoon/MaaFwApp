@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.settings
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.theme.ThemeStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeAppSettingsGateway : AppSettingsGateway {
@@ -35,5 +36,11 @@ class FakeAppSettingsGateway : AppSettingsGateway {
 
     override suspend fun setDebugMode(enabled: Boolean) {
         debugMode.value = enabled
+    }
+
+    override val themeStyle = MutableStateFlow(ThemeStyle.DEFAULT)
+
+    override suspend fun setThemeStyle(style: ThemeStyle) {
+        themeStyle.value = style
     }
 }

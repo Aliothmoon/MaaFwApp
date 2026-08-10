@@ -50,4 +50,8 @@ data class AppSettings(
     /** 调试模式：开启后给特权进程传 isDebug，记录 MaaFramework 详细日志 */
     @PrefKey(default = "false")
     val debugMode: String = "false",
+
+    /** [com.aliothmoon.maafw.theme.ThemeStyle] 的 name；DEFAULT 暖石蓝，SEMI_DESIGN 取 Semi Design 配色 */
+    @PrefKey(default = "DEFAULT")
+    val themeStyle: String = "DEFAULT",
 )
