@@ -31,6 +31,7 @@
 
     <!-- 运行开关 -->
     <string name="runner_start">开始任务</string>
+    <string name="runner_foreground_blocked">当前是前台模式，请先切换到后台模式</string>
     <string name="runner_stop">停止</string>
     <string name="runner_stopping">停止中…</string>
 

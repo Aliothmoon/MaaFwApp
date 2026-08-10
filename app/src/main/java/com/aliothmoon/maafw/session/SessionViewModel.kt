@@ -456,6 +456,11 @@ class SessionViewModel(
     }
 
     private suspend fun start() {
+        // 前台模式不从任务页启动（对齐 MaaMeow）：按钮灰显但仍可点，点了给这条提示
+        if (appSettings.runMode.value == RunMode.FOREGROUND) {
+            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
+            return
+        }
         val project = projectRepository.state.value
         if (project !is ProjectState.Ready) {
             effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))

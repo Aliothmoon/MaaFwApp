@@ -32,6 +32,7 @@
 
     <!-- Runner toggle -->
     <string name="runner_start">Start tasks</string>
+    <string name="runner_foreground_blocked">Foreground mode is active; switch to background mode first</string>
     <string name="runner_stop">Stop</string>
     <string name="runner_stopping">Stopping…</string>
 

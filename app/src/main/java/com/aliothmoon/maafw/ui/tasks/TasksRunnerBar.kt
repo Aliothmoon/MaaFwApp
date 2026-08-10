@@ -82,10 +82,20 @@ internal fun RunnerToggleButton(
                 )
             }
         } else {
+            // 前台模式灰显但仍可点：点了走 Start，由 SessionViewModel 拦下并给提示
+            val foregroundBlocked = state.runMode == RunMode.FOREGROUND
             Button(
                 onClick = { onIntent(SessionIntent.Start) },
                 enabled = state.canStart,
                 shape = shape,
+                colors = if (foregroundBlocked) {
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    )
+                } else {
+                    ButtonDefaults.buttonColors()
+                },
                 modifier = toggleModifier,
             ) {
                 Text(stringResource(R.string.runner_start))
