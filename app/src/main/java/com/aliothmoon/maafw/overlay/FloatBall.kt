@@ -82,7 +82,8 @@ fun FloatBall(
             .semantics { contentDescription = description },
         shape = CircleShape,
         color = color,
-        shadowElevation = MaaDesignTokens.Card.elevation,
+        // 球盖在目标应用上需要体量感；不跟 Semi 卡片的 0 elevation
+        shadowElevation = 1.dp,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(

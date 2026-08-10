@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
  * 单选胶囊 chip：宽度随文字自适应，配合 FlowRow 平铺换行；
@@ -48,7 +49,7 @@ fun MaaChoiceChip(
         )
     }
     Surface(
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.button),
+        shape = RoundedCornerShape(MaaTheme.style.radii.button),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
@@ -77,7 +78,7 @@ fun MaaChoiceChip(
             leading?.invoke()
             Text(
                 text = label,
-                // chip label：bodySmall(13sp) 提到 Medium 字重，与按钮/页签的 labelLarge 区分
+                // chip label：bodySmall(12) 提到 Medium，比 labelLarge(14) 收一档
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontWeight = FontWeight.Medium,
                 ),

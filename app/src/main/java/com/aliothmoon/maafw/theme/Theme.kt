@@ -13,12 +13,13 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
-import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 
 // 暖石色（stone）中性系，对齐早期原型 UI 观感
 private val LightBackground = Color(0xFFFAF9F6)
@@ -120,6 +121,7 @@ private val BlueDark = createDarkColorScheme(
     primaryContainer = Color(0xFF1E3A8A),
     onPrimaryContainer = Color(0xFFDBEAFE)
 )
+
 /** 可选主题风格；DEFAULT 是暖石色 + 蓝，SEMI_DESIGN 取 Semi Design 的冷灰 + 品牌蓝 */
 enum class ThemeStyle { DEFAULT, SEMI_DESIGN }
 
@@ -192,7 +194,7 @@ private val SemiDark = darkColorScheme(
 /** 徽章/状态用的语义配色对：content + container */
 data class MaaTone(val content: Color, val container: Color)
 
-/** M3 colorScheme 之外的语义扩展色（成功/警示/信息/强调），随主题明暗切换 */
+/** M3 colorScheme 之外的语义扩展色（成功/警示/信息/强调），随风格 × 明暗切换 */
 data class MaaPalette(
     val success: MaaTone,
     val warning: MaaTone,
@@ -220,20 +222,57 @@ private val DarkMaaPalette = MaaPalette(
     neutral = MaaTone(Color(0xFF98989D), Color(0xFF2C2C2E)),
 )
 
+// Semi 功能色：success=green-5、warning=orange-5、info=blue-5、violet=violet-5（global.scss）
+private val SemiLightMaaPalette = MaaPalette(
+    success = MaaTone(Color(0xFF3BB346), Color(0xFFECF7EC)),
+    warning = MaaTone(Color(0xFFFC8800), Color(0xFFFFF8EA)),
+    info = MaaTone(Color(0xFF0064FA), Color(0xFFEAF5FF)),
+    violet = MaaTone(Color(0xFF6A3AC7), Color(0xFFF3EDF9)),
+    neutral = MaaTone(Color(0xFF6B7075), Color(0xFFF9F9F9)),
+)
+
+private val SemiDarkMaaPalette = MaaPalette(
+    success = MaaTone(Color(0xFF6BCF7A), Color(0xFF1A3D1F)),
+    warning = MaaTone(Color(0xFFFFB84D), Color(0xFF4A2800)),
+    info = MaaTone(Color(0xFF54A9FF), Color(0xFF053170)),
+    violet = MaaTone(Color(0xFF9B7CF0), Color(0xFF2A1A5C)),
+    neutral = MaaTone(Color(0xFFA7ABB0), Color(0xFF2E3238)),
+)
+
 val LocalMaaPalette = staticCompositionLocalOf { LightMaaPalette }
 
+val LocalMaaStyleTokens = staticCompositionLocalOf { DefaultStyleTokens }
+
+/** 主题扩展读取入口；Screen 不直接碰 DataStore / ThemeStyle 分支 */
 object MaaTheme {
     val palette: MaaPalette
-        @Composable get() = LocalMaaPalette.current
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalMaaPalette.current
+
+    val style: MaaStyleTokens
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalMaaStyleTokens.current
 }
 
-val MaaShapes = Shapes(
-    extraSmall = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
-    small = RoundedCornerShape(MaaDesignTokens.CornerRadius.button),
-    medium = RoundedCornerShape(MaaDesignTokens.CornerRadius.card),
-    large = RoundedCornerShape(MaaDesignTokens.CornerRadius.card),
-    extraLarge = RoundedCornerShape(MaaDesignTokens.CornerRadius.pill)
+private fun shapesOf(tokens: MaaStyleTokens): Shapes = Shapes(
+    extraSmall = RoundedCornerShape(tokens.radii.inner),
+    small = RoundedCornerShape(tokens.radii.button),
+    medium = RoundedCornerShape(tokens.radii.card),
+    large = RoundedCornerShape(tokens.radii.card),
+    extraLarge = RoundedCornerShape(tokens.radii.pill),
 )
+
+private fun colorSchemeOf(style: ThemeStyle, dark: Boolean): ColorScheme = when (style) {
+    ThemeStyle.DEFAULT -> if (dark) BlueDark else BlueLight
+    ThemeStyle.SEMI_DESIGN -> if (dark) SemiDark else SemiLight
+}
+
+private fun paletteOf(style: ThemeStyle, dark: Boolean): MaaPalette = when (style) {
+    ThemeStyle.DEFAULT -> if (dark) DarkMaaPalette else LightMaaPalette
+    ThemeStyle.SEMI_DESIGN -> if (dark) SemiDarkMaaPalette else SemiLightMaaPalette
+}
 
 private object NoIndication : IndicationNodeFactory {
     private class NoIndicationNode : Modifier.Node(), DrawModifierNode {
@@ -256,22 +295,22 @@ fun MaaFwTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when (themeStyle) {
-        ThemeStyle.DEFAULT -> if (darkTheme) BlueDark else BlueLight
-        ThemeStyle.SEMI_DESIGN -> if (darkTheme) SemiDark else SemiLight
-    }
+    val styleTokens = styleTokensOf(themeStyle)
+    val colorScheme = colorSchemeOf(themeStyle, darkTheme)
+    val palette = paletteOf(themeStyle, darkTheme)
 
     CompositionLocalProvider(
         // foundation 层 clickable 的指示效果
         LocalIndication provides NoIndication,
         // M3 组件内部 ripple（NavigationBarItem/Button 等不走 LocalIndication）
         LocalRippleConfiguration provides null,
-        LocalMaaPalette provides if (darkTheme) DarkMaaPalette else LightMaaPalette,
+        LocalMaaPalette provides palette,
+        LocalMaaStyleTokens provides styleTokens,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
-            shapes = MaaShapes,
+            shapes = shapesOf(styleTokens),
             content = content
         )
     }

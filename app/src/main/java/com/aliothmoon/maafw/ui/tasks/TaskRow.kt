@@ -31,6 +31,7 @@ import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
@@ -56,7 +57,7 @@ internal fun TaskRow(
         label = "taskContentAlpha",
     )
     val dragElevation by animateDpAsState(
-        targetValue = if (isDragging) MaaDesignTokens.Card.dragElevation else 0.dp,
+        targetValue = if (isDragging) MaaTheme.style.dragElevation else 0.dp,
         animationSpec = MaaMotion.enter(),
         label = "dragElevation",
     )

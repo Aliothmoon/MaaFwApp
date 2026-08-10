@@ -6,6 +6,8 @@ import android.graphics.Rect
 import android.os.Build
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -154,8 +156,9 @@ class ScreenSaverOverlayManager(
         setViewTreeViewModelStoreOwner(viewModelOwner)
         setViewTreeSavedStateRegistryOwner(viewModelOwner)
         setContent {
-            // 屏保恒为暗色，不跟随主题：整块屏幕本来就该压到最黑
-            MaaFwTheme(darkTheme = true) {
+            // 屏保恒为暗色：整块屏幕本来就该压到最黑；风格仍跟设置里的 ThemeStyle
+            val themeStyle by appSettings.themeStyle.collectAsState()
+            MaaFwTheme(themeStyle = themeStyle, darkTheme = true) {
                 ScreenSaverView(
                     latestLog = latestLog,
                     onUnlock = { scope.launch { hide() } },
