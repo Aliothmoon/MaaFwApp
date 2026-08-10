@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +36,7 @@ import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     state: SessionUiState,
@@ -42,18 +45,22 @@ fun SettingsScreen(
     onSettingsIntent: (SettingsIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaaDesignTokens.Spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
-    ) {
-        AppearanceCard(state, onIntent)
-        LanguageCard(state, onIntent)
-        BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
-        DeveloperCard(state, onIntent)
-        AboutCard()
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(title = { Text(stringResource(R.string.nav_settings)) })
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(MaaDesignTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+        ) {
+            AppearanceCard(state, onIntent)
+            LanguageCard(state, onIntent)
+            BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
+            DeveloperCard(state, onIntent)
+            AboutCard()
+        }
     }
 }
 

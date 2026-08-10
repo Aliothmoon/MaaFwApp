@@ -16,7 +16,9 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -41,6 +43,7 @@ import com.aliothmoon.maafw.ui.components.maaClickable
  *
  * 编辑与日志都走 sheet，不再开一层全屏——这两块内容都不满一屏，全屏只会多一次进出动画
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduleScreen(
     state: ScheduleUiState,
@@ -51,9 +54,22 @@ fun ScheduleScreen(
 ) {
     // 编辑与日志都进二级页面（NavHost 推入），草稿与日志快照归各自的页面管
     Column(modifier = modifier.fillMaxSize()) {
-        ScheduleHeader(
-            onAdd = { onEdit(null) },
-            onOpenLog = onOpenLog,
+        TopAppBar(
+            title = { Text(stringResource(R.string.schedule_title)) },
+            actions = {
+                IconButton(onClick = onOpenLog) {
+                    Icon(
+                        imageVector = Icons.Outlined.History,
+                        contentDescription = stringResource(R.string.schedule_log_title),
+                    )
+                }
+                IconButton(onClick = { onEdit(null) }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = stringResource(R.string.schedule_add),
+                    )
+                }
+            },
         )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -85,39 +101,6 @@ fun ScheduleScreen(
         }
     }
 
-}
-
-@Composable
-private fun ScheduleHeader(onAdd: () -> Unit, onOpenLog: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                start = MaaDesignTokens.Spacing.lg,
-                end = MaaDesignTokens.Spacing.sm,
-                top = MaaDesignTokens.Spacing.lg,
-                bottom = MaaDesignTokens.Spacing.md,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.schedule_title),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = onOpenLog) {
-            Icon(
-                imageVector = Icons.Outlined.History,
-                contentDescription = stringResource(R.string.schedule_log_title),
-            )
-        }
-        IconButton(onClick = onAdd) {
-            Icon(
-                imageVector = Icons.Outlined.Add,
-                contentDescription = stringResource(R.string.schedule_add),
-            )
-        }
-    }
 }
 
 @Composable
