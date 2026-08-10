@@ -114,8 +114,8 @@
     <string name="settings_language">Language</string>
     <string name="settings_language_hint">Switching language reloads the project; unavailable while running</string>
     <string name="settings_run_mode">Run mode</string>
-    <string name="settings_run_mode_background">Background display</string>
-    <string name="settings_run_mode_foreground">Primary display</string>
+    <string name="settings_run_mode_background">Background mode</string>
+    <string name="settings_run_mode_foreground">Foreground mode</string>
     <string name="settings_run_mode_hint_background">Runs on a separate virtual display so the phone stays usable; resolution derived from the project declaration</string>
     <string name="settings_run_mode_hint_foreground">Drives the current screen directly, occupying the phone while running; the target app is not restarted and preview touch is disabled</string>
     <string name="settings_resource">Server selection</string>

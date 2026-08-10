@@ -371,34 +371,45 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
 }
 
 /**
- * 运行模式：开关式（对齐 MaaMeow）——开关 ON=后台虚拟屏（默认），OFF=前台主屏
+ * 运行模式：单行展示（对齐 MaaMeow）——左 "运行模式"，右 当前模式名 + 开关；ON=后台模式（默认）
  */
 @Composable
 private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_run_mode)) {
+    // 单行：左 "运行模式"，右 当前模式名 + 开关（对齐 MaaMeow）
+    MaaCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = stringResource(
-                    if (state.runMode == RunMode.BACKGROUND) R.string.settings_run_mode_background
-                    else R.string.settings_run_mode_foreground
-                ),
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.settings_run_mode),
+                style = MaterialTheme.typography.bodyLarge,
             )
-            MaaSwitch(
-                checked = state.runMode == RunMode.BACKGROUND,
-                enabled = !state.configurationLocked,
-                onCheckedChange = { background ->
-                    onIntent(
-                        SessionIntent.SetRunMode(
-                            if (background) RunMode.BACKGROUND else RunMode.FOREGROUND
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                Text(
+                    text = stringResource(
+                        if (state.runMode == RunMode.BACKGROUND) R.string.settings_run_mode_background
+                        else R.string.settings_run_mode_foreground
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                MaaSwitch(
+                    checked = state.runMode == RunMode.BACKGROUND,
+                    enabled = !state.configurationLocked,
+                    onCheckedChange = { background ->
+                        onIntent(
+                            SessionIntent.SetRunMode(
+                                if (background) RunMode.BACKGROUND else RunMode.FOREGROUND
+                            )
                         )
-                    )
-                },
-            )
+                    },
+                )
+            }
         }
     }
     // 控制层只有前台用得上；后台模式不再加单独的卡
