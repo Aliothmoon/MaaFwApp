@@ -28,6 +28,10 @@ import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.RemotePreviewPort
 import com.aliothmoon.maafw.runner.RunnerPort
+import com.aliothmoon.maafw.schedule.ScheduleAlarmManager
+import com.aliothmoon.maafw.schedule.ScheduleStrategyStore
+import com.aliothmoon.maafw.schedule.ScheduleTriggerLog
+import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.session.SessionViewModel
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -135,6 +139,23 @@ val appModule = module {
     // app 设置与运行配置分开存：前者不该被 UserConfiguration 的 schema 重置波及
     single { AppSettingsManager(androidContext()) }
     single<AppSettingsGateway> { get<AppSettingsManager>() }
+
+    // 定时：两个 receiver 与 FGS 都从 GlobalContext 取，必须是 single
+    single { ScheduleStrategyStore(androidContext()) }
+    single { ScheduleAlarmManager(androidContext()) }
+    single {
+        val context = androidContext()
+        ScheduleTriggerLog(
+            logDir = {
+                File(
+                    checkNotNull(context.getExternalFilesDir(null)) {
+                        "外部私有目录不可用（外部存储未挂载）"
+                    },
+                    MAA_LOG_DIR_NAME,
+                )
+            },
+        )
+    }
     single { PermissionManager(androidContext(), get()) }
     single<PermissionGateway> { get<PermissionManager>() }
 
@@ -147,6 +168,14 @@ val appModule = module {
             permissionGateway = get(),
             appSettings = get(),
             localeController = AppLocales,
+        )
+    }
+
+    viewModel {
+        ScheduleViewModel(
+            store = get(),
+            alarms = get(),
+            triggerLog = get(),
         )
     }
 }

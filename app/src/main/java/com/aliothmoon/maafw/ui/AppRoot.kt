@@ -23,9 +23,11 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +63,10 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
+import com.aliothmoon.maafw.schedule.ExactAlarmSettings
+import com.aliothmoon.maafw.schedule.ScheduleEffect
+import com.aliothmoon.maafw.schedule.ScheduleIntent
+import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
@@ -70,6 +76,7 @@ import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
+import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.i18n.localized
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
@@ -92,6 +99,7 @@ private enum class TopDestination(
 ) {
     Home(R.string.nav_home, Icons.Outlined.Home, Icons.Filled.Home),
     Tasks(R.string.nav_tasks, Icons.Outlined.Checklist, Icons.Filled.Checklist),
+    Schedule(R.string.nav_schedule, Icons.Outlined.Schedule, Icons.Filled.Schedule),
     Settings(R.string.nav_settings, Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
@@ -100,8 +108,10 @@ private enum class TopDestination(
 fun AppRoot(
     onDarkThemeChanged: (Boolean) -> Unit,
     viewModel: SessionViewModel = koinViewModel(),
+    scheduleViewModel: ScheduleViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
     // 触点与运行日志各自单独一条流，不并进 SessionUiState（见 SessionViewModel）
     val previewMarkers by viewModel.previewMarkers.collectAsStateWithLifecycle()
     val runLog by viewModel.runLog.collectAsStateWithLifecycle()
@@ -174,6 +184,18 @@ fun AppRoot(
                             SystemPermissionRequester.request(activity, effect.permission)
                             viewModel.onIntent(SessionIntent.RefreshPermissions)
                         }
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            scheduleViewModel.effects.collect { effect ->
+                when (effect) {
+                    ScheduleEffect.RequestExactAlarmPermission -> {
+                        ExactAlarmSettings.open(context)
+                        // 那个页面没有结果回调，只能等用户回来时自己重读
+                        scheduleViewModel.onIntent(ScheduleIntent.RefreshExactAlarmPermission)
                     }
                 }
             }
@@ -268,6 +290,12 @@ fun AppRoot(
                         onIntent = viewModel::onIntent,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    TopDestination.Schedule -> ScheduleScreen(
+                        state = scheduleState,
+                        onIntent = scheduleViewModel::onIntent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+
                     TopDestination.Settings -> SettingsScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
                 }
             }

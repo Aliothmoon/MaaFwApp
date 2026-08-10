@@ -92,6 +92,33 @@ fun MaaChoiceChip(
     }
 }
 
+/** 多选版；语义角色是 Checkbox，选中集合由调用方持有 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun <T> MaaMultiChoiceFlow(
+    options: List<Pair<T, String>>,
+    selected: Set<T>,
+    onToggle: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+    ) {
+        options.forEach { (value, label) ->
+            MaaChoiceChip(
+                label = label,
+                selected = value in selected,
+                enabled = enabled,
+                role = Role.Checkbox,
+                onClick = { onToggle(value) },
+            )
+        }
+    }
+}
+
 /** 内容宽度单选组；空间不足时整颗 chip 换行，不在等分单元内挤压标签 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

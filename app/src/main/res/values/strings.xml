@@ -9,6 +9,8 @@
     <string name="common_rename">重命名</string>
     <string name="common_delete">删除</string>
     <string name="common_loading">加载中…</string>
+    <string name="dialog_confirm">确定</string>
+    <string name="dialog_cancel">取消</string>
 
     <!-- 任务页 -->
     <string name="tasks_project_load_failed">项目加载失败，请查看首页诊断</string>
@@ -141,9 +143,60 @@
     <string name="notification_run_running">正在执行</string>
     <string name="notification_run_stopping">正在停止</string>
 
+    <!-- 定时任务 -->
+    <string name="notification_channel_schedule">定时触发</string>
+    <string name="notification_channel_schedule_desc">定时到点时短暂出现</string>
+    <string name="notification_schedule_title">定时任务</string>
+    <string name="notification_schedule_triggered">已触发</string>
+    <string name="schedule_log_strategy_missing">规则已被删除</string>
+    <string name="schedule_log_execution_not_wired">已叫醒，暂未接入任务执行</string>
+
+    <string name="schedule_title">定时任务</string>
+    <string name="schedule_add">新建规则</string>
+    <string name="schedule_empty">还没有定时规则</string>
+    <string name="schedule_empty_hint">到点只会把应用叫醒并记一笔，暂不触发任务执行</string>
+    <string name="schedule_next_trigger">下次 %1$s</string>
+    <string name="schedule_next_none">规则不完整，不会触发</string>
+    <string name="schedule_disabled">已停用</string>
+    <string name="schedule_last_trigger">上次 %1$s</string>
+    <string name="schedule_exact_alarm_blocked">系统未允许精确闹钟</string>
+    <string name="schedule_exact_alarm_hint">仍会按时触发，但状态栏会多一个闹钟图标</string>
+    <string name="schedule_exact_alarm_grant">去允许</string>
+
+    <string name="schedule_edit_new">新建规则</string>
+    <string name="schedule_edit_existing">编辑规则</string>
+    <string name="schedule_edit_name">名称</string>
+    <string name="schedule_edit_name_placeholder">未命名规则</string>
+    <string name="schedule_edit_type">触发方式</string>
+    <string name="schedule_edit_type_fixed">固定时刻</string>
+    <string name="schedule_edit_type_interval">固定间隔</string>
+    <string name="schedule_edit_days">星期</string>
+    <string name="schedule_edit_times">时刻</string>
+    <string name="schedule_edit_add_time">添加时刻</string>
+    <string name="schedule_edit_no_times">还没有添加时刻</string>
+    <string name="schedule_edit_start_time">首次触发</string>
+    <string name="schedule_edit_interval">间隔（分钟）</string>
+    <string name="schedule_edit_enabled">启用</string>
+    <string name="schedule_edit_save">保存</string>
+    <string name="schedule_edit_cancel">取消</string>
+    <string name="schedule_edit_delete">删除</string>
+    <string name="schedule_edit_incomplete">规则不完整，保存后不会触发</string>
+
+    <string name="schedule_interval_minutes">每 %1$d 分钟</string>
+    <string name="schedule_interval_hours">每 %1$d 小时</string>
+
+    <string name="schedule_log_title">触发日志</string>
+    <string name="schedule_log_empty">还没有触发记录</string>
+    <string name="schedule_log_clear">清空</string>
+    <string name="schedule_log_delay">延迟 %1$s</string>
+    <string name="schedule_result_triggered">已触发</string>
+    <string name="schedule_result_failed_validation">规则缺失</string>
+    <string name="schedule_result_failed_service">服务未起</string>
+
     <!-- 导航与对话框 -->
     <string name="nav_home">首页</string>
     <string name="nav_tasks">任务</string>
+    <string name="nav_schedule">定时</string>
     <string name="nav_settings">设置</string>
     <string name="dialog_cannot_start">无法开始</string>
     <string name="dialog_ok">知道了</string>

@@ -9,6 +9,8 @@
     <string name="common_rename">Rename</string>
     <string name="common_delete">Delete</string>
     <string name="common_loading">Loading…</string>
+    <string name="dialog_confirm">OK</string>
+    <string name="dialog_cancel">Cancel</string>
 
     <!-- Tasks screen -->
     <string name="tasks_project_load_failed">Project failed to load. Check diagnostics on Home.</string>
@@ -150,9 +152,60 @@
     <string name="notification_run_running">Running</string>
     <string name="notification_run_stopping">Stopping</string>
 
+    <!-- Schedules -->
+    <string name="notification_channel_schedule">Schedule triggers</string>
+    <string name="notification_channel_schedule_desc">Appears briefly when a schedule fires</string>
+    <string name="notification_schedule_title">Schedule</string>
+    <string name="notification_schedule_triggered">Triggered</string>
+    <string name="schedule_log_strategy_missing">Rule no longer exists</string>
+    <string name="schedule_log_execution_not_wired">Woken up; task execution is not wired yet</string>
+
+    <string name="schedule_title">Schedules</string>
+    <string name="schedule_add">New rule</string>
+    <string name="schedule_empty">No schedules yet</string>
+    <string name="schedule_empty_hint">Firing only wakes the app and records an entry; task execution is not wired yet</string>
+    <string name="schedule_next_trigger">Next %1$s</string>
+    <string name="schedule_next_none">Incomplete rule, will not fire</string>
+    <string name="schedule_disabled">Disabled</string>
+    <string name="schedule_last_trigger">Last %1$s</string>
+    <string name="schedule_exact_alarm_blocked">Exact alarms are not allowed</string>
+    <string name="schedule_exact_alarm_hint">Schedules still fire on time, but the status bar shows an alarm icon</string>
+    <string name="schedule_exact_alarm_grant">Allow</string>
+
+    <string name="schedule_edit_new">New rule</string>
+    <string name="schedule_edit_existing">Edit rule</string>
+    <string name="schedule_edit_name">Name</string>
+    <string name="schedule_edit_name_placeholder">Untitled rule</string>
+    <string name="schedule_edit_type">Trigger</string>
+    <string name="schedule_edit_type_fixed">Fixed times</string>
+    <string name="schedule_edit_type_interval">Fixed interval</string>
+    <string name="schedule_edit_days">Days</string>
+    <string name="schedule_edit_times">Times</string>
+    <string name="schedule_edit_add_time">Add time</string>
+    <string name="schedule_edit_no_times">No times added</string>
+    <string name="schedule_edit_start_time">First run</string>
+    <string name="schedule_edit_interval">Interval (minutes)</string>
+    <string name="schedule_edit_enabled">Enabled</string>
+    <string name="schedule_edit_save">Save</string>
+    <string name="schedule_edit_cancel">Cancel</string>
+    <string name="schedule_edit_delete">Delete</string>
+    <string name="schedule_edit_incomplete">Incomplete rule; it will not fire once saved</string>
+
+    <string name="schedule_interval_minutes">Every %1$d min</string>
+    <string name="schedule_interval_hours">Every %1$d h</string>
+
+    <string name="schedule_log_title">Trigger log</string>
+    <string name="schedule_log_empty">No triggers recorded</string>
+    <string name="schedule_log_clear">Clear</string>
+    <string name="schedule_log_delay">%1$s late</string>
+    <string name="schedule_result_triggered">Triggered</string>
+    <string name="schedule_result_failed_validation">Rule missing</string>
+    <string name="schedule_result_failed_service">Service failed</string>
+
     <!-- Navigation & dialogs -->
     <string name="nav_home">Home</string>
     <string name="nav_tasks">Tasks</string>
+    <string name="nav_schedule">Schedule</string>
     <string name="nav_settings">Settings</string>
     <string name="dialog_cannot_start">Cannot start</string>
     <string name="dialog_ok">OK</string>

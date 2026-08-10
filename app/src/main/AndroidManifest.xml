@@ -17,6 +17,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!--
+      定时任务
+      USE_EXACT_ALARM 不申请：那是给闹钟类应用的，本应用不符合 Play 的准入描述
+      没有 SCHEDULE_EXACT_ALARM 时退到 setAlarmClock，见 ScheduleAlarmManager
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:name=".MaaFwApp"
         android:allowBackup="true"
@@ -64,6 +72,33 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the app process alive while the privileged service drives a MaaFramework run" />
+        </service>
+
+        <!-- 闹钟落点：exported 才收得到 AlarmManager 发的广播 -->
+        <receiver
+            android:name=".schedule.ScheduleReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.aliothmoon.maafw.SCHEDULE_TRIGGER" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".schedule.ScheduleBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".schedule.ScheduleExecutionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Handles a scheduled trigger woken by an exact alarm" />
         </service>
 
         <provider
