@@ -65,7 +65,12 @@ fun SettingsScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(MaaDesignTokens.Spacing.lg),
+                .padding(
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    top = MaaDesignTokens.Spacing.sm,
+                    bottom = MaaDesignTokens.Spacing.lg,
+                ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
         ) {
             AppearanceCard(state, onIntent)
