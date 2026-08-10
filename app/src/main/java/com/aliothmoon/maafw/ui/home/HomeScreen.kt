@@ -23,7 +23,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,32 +65,38 @@ import com.aliothmoon.maafw.ui.components.maaClickable
  * 首页版面对齐 MaaMeow：概览 -> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
  * 资源选择与运行模式从设置页迁来，避免与任务页重复
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaaDesignTokens.Spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
-    ) {
-        // 项目名作首页左上角标题（项目未就绪时回落 app 名），像其它 App 的顶栏名字
-        Text(
-            text = (state.projectState as? ProjectState.Ready)?.definition?.name
-                ?: stringResource(R.string.app_name),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.fillMaxWidth(),
+    // 项目名作顶栏标题（项目未就绪时回落 app 名），钉在顶部不随内容滚动
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = (state.projectState as? ProjectState.Ready)?.definition?.name
+                        ?: stringResource(R.string.app_name),
+                )
+            },
         )
-        OverviewCard(state)
-        ResourceCard(state, onIntent)
-        RunModeCard(state, onIntent)
-        PermissionCard(state, onIntent)
-        ServiceActionButtons(state, onIntent)
-        ProjectDiagnosticsCard(state)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(MaaDesignTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+        ) {
+            OverviewCard(state)
+            ResourceCard(state, onIntent)
+            RunModeCard(state, onIntent)
+            PermissionCard(state, onIntent)
+            ServiceActionButtons(state, onIntent)
+            ProjectDiagnosticsCard(state)
+        }
     }
 }
 
