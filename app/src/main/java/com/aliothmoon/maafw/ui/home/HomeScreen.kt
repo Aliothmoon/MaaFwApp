@@ -401,11 +401,8 @@ private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
             )
         }
     }
-    // 两张卡按模式二选一：控制层只有前台用得上，屏保只有后台用得上
-    when (state.runMode) {
-        RunMode.FOREGROUND -> OverlayModeCard(state, onIntent)
-        RunMode.BACKGROUND -> ScreenSaverCard(state, onIntent)
-    }
+    // 控制层只有前台用得上；后台模式不再加单独的卡
+    if (state.runMode == RunMode.FOREGROUND) OverlayModeCard(state, onIntent)
 }
 
 @Composable
@@ -434,32 +431,6 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.settings_overlay_show))
-        }
-    }
-}
-
-@Composable
-private fun ScreenSaverCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_screen_saver)) {
-        MaaLabeledControlRow(
-            label = stringResource(R.string.settings_screen_saver_auto),
-            trailing = {
-                MaaSwitch(
-                    checked = state.screenSaverEnabled,
-                    onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
-                )
-            },
-        )
-        Text(
-            text = stringResource(R.string.settings_screen_saver_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        OutlinedButton(
-            onClick = { onIntent(SessionIntent.ShowScreenSaver) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.settings_screen_saver_show))
         }
     }
 }
