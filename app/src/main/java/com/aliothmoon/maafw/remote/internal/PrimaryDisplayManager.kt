@@ -95,6 +95,19 @@ object PrimaryDisplayManager {
         return DISPLAY_ID
     }
 
+    /**
+     * 采集中的主屏尺寸；未开始采集时为 null
+     *
+     * screen_resolution 必须与帧缓冲逐像素一致，而帧缓冲是按这里的 [DisplayInfo] 建的：
+     * app 侧自己读 `Resources` 算不出同一个数（挖孔、旋转与 overscan 各有偏差），
+     * 所以主屏模式下由本对象供数，不接受 payload 里的值
+     */
+    fun getCaptureSize(): Pair<Int, Int>? {
+        if (state.get() != STATE_CAPTURING) return null
+        val size = displayInfo.get()?.size() ?: return null
+        return size.width() to size.height()
+    }
+
     private fun releaseResources() {
         virtualDisplay.getAndSet(null)?.release()
         display.getAndSet(null)?.let { SurfaceControl.destroyDisplay(it) }

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.domain.RunMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +25,7 @@ import kotlinx.coroutines.runBlocking
  * 需要它是因为 [com.aliothmoon.maafw.privileged.RemoteServiceManager] 要的是同步的
  * `() -> RemoteBackend`，拿不到挂起点
  */
-class AppSettingsManager(private val context: Context) {
+class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -53,6 +54,10 @@ class AppSettingsManager(private val context: Context) {
         .map { it.shizukuShortcutEnabled.toBoolean() }
         .stateIn(scope, SharingStarted.Eagerly, initialSettings.shizukuShortcutEnabled.toBoolean())
 
+    override val runMode: StateFlow<RunMode> = settings
+        .map { parseRunMode(it.runMode) }
+        .stateIn(scope, SharingStarted.Eagerly, parseRunMode(initialSettings.runMode))
+
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
         context.dataStore.edit { it[startupBackend] = backend.name }
     }
@@ -69,7 +74,14 @@ class AppSettingsManager(private val context: Context) {
         context.dataStore.edit { it[shizukuShortcutEnabled] = enabled.toString() }
     }
 
+    override suspend fun setRunMode(mode: RunMode): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[runMode] = mode.name }
+    }
+
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
     private fun parseBackend(raw: String): RemoteBackend =
         runCatching { RemoteBackend.valueOf(raw) }.getOrDefault(RemoteBackend.SHIZUKU)
+
+    private fun parseRunMode(raw: String): RunMode =
+        runCatching { RunMode.valueOf(raw) }.getOrDefault(RunMode.BACKGROUND)
 }

@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.remote
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.bridge.NativeBridgeLib
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
+import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaAgentClientLibrary
 import com.aliothmoon.maafw.maa.MaaAgentClientLoader
 import com.aliothmoon.maafw.maa.MaaFrameworkLibrary
@@ -10,6 +11,7 @@ import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.maa.MaaGlobalOption
 import com.aliothmoon.maafw.maa.MaaLoggingLevel
 import com.aliothmoon.maafw.maa.MaaStatus
+import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.runner.AgentPayload
 import com.aliothmoon.maafw.runner.RunOutcome
@@ -208,9 +210,17 @@ class MaaRunner(private val agentHost: AgentHost) {
             return "libbridge.so 未加载，无法建立 native controller"
         }
 
-        val displayId = VirtualDisplayManager.getDisplayId()
-        if (displayId == DefaultDisplayConfig.DISPLAY_NONE) {
-            return "虚拟显示器未启动"
+        val displayId = when (payload.displayMode) {
+            DisplayMode.PRIMARY ->
+                if (PrimaryDisplayManager.getCaptureSize() == null) {
+                    return "主屏采集未启动"
+                } else {
+                    PrimaryDisplayManager.DISPLAY_ID
+                }
+
+            else -> VirtualDisplayManager.getDisplayId().takeIf {
+                it != DefaultDisplayConfig.DISPLAY_NONE
+            } ?: return "虚拟显示器未启动"
         }
 
         if (resource == null || loadedResourcePaths != payload.resourcePaths) {
@@ -373,13 +383,22 @@ class MaaRunner(private val agentHost: AgentHost) {
      * screen_resolution 必须与帧缓冲、触摸坐标空间三者一致，不一致时 screencap 立即失败
      * library_path 用裸名：bridge 已在本进程加载，控制单元 dlopen 同名即命中同一份
      *
-     * force_stop 必须为 true：目标应用若已在主屏上跑着，startActivity 会复用它在主屏的既有
-     * task，虚拟屏上拿不到画面。先杀掉再拉起，进程才会落到虚拟屏上
+     * 虚拟屏模式下 force_stop 必须为 true：目标应用若已在主屏上跑着，startActivity 会复用它在主屏的
+     * 既有 task，虚拟屏上拿不到画面。先杀掉再拉起，进程才会落到虚拟屏上
+     * 主屏模式反过来——目标就在主屏，杀掉只会把用户已经摆好的现场清空
      */
     private fun buildControllerConfig(payload: RunPlanPayload, displayId: Int): String {
-        val vd = VirtualDisplayManager.getConfig()
-        val width = payload.screenWidth.takeIf { it > 0 } ?: vd.width
-        val height = payload.screenHeight.takeIf { it > 0 } ?: vd.height
+        val (width, height) = when (payload.displayMode) {
+            // 主屏尺寸跟着旋转变，app 侧发 payload 时算的值可能已经过期，只认采集器当下这一份
+            DisplayMode.PRIMARY -> PrimaryDisplayManager.getCaptureSize()
+                ?: (DefaultDisplayConfig.WIDTH to DefaultDisplayConfig.HEIGHT)
+
+            else -> {
+                val vd = VirtualDisplayManager.getConfig()
+                (payload.screenWidth.takeIf { it > 0 } ?: vd.width) to
+                    (payload.screenHeight.takeIf { it > 0 } ?: vd.height)
+            }
+        }
         return buildJsonObject {
             put("library_path", BRIDGE_LIBRARY_NAME)
             put("screen_resolution", buildJsonObject {
@@ -387,7 +406,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 put("height", height)
             })
             put("display_id", displayId)
-            put("force_stop", true)
+            put("force_stop", payload.displayMode != DisplayMode.PRIMARY)
         }.toString()
     }
 

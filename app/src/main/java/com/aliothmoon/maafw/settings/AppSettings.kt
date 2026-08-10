@@ -30,4 +30,8 @@ data class AppSettings(
     /** 首页是否显示「打开 Shizuku」快捷入口 */
     @PrefKey(default = "true")
     val shizukuShortcutEnabled: String = "true",
+
+    /** [com.aliothmoon.maafw.domain.RunMode] 的 name */
+    @PrefKey(default = "BACKGROUND")
+    val runMode: String = "BACKGROUND",
 )

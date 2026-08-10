@@ -116,6 +116,11 @@
     <string name="settings_theme_dark">深色</string>
     <string name="settings_language">语言</string>
     <string name="settings_language_hint">切换语言会重新加载项目，运行期间不可切换</string>
+    <string name="settings_run_mode">运行模式</string>
+    <string name="settings_run_mode_background">后台虚拟屏</string>
+    <string name="settings_run_mode_foreground">前台主屏</string>
+    <string name="settings_run_mode_hint_background">另建一块虚拟屏跑任务，手机可以照常用；分辨率由项目声明推导</string>
+    <string name="settings_run_mode_hint_foreground">直接操作当前屏幕，运行期间手机被占用；不会重启目标应用，预览里也不接管触摸</string>
     <string name="settings_resource">资源</string>
     <string name="settings_no_resources">项目未提供可选资源</string>
     <string name="settings_current_resource">当前资源</string>

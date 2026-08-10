@@ -34,6 +34,17 @@ fun resolveDisplayResolution(controller: ControllerDefinition): DisplayResolutio
     return DisplayResolution((short * aspect).roundToInt().alignEven(), short.alignEven())
 }
 
+/**
+ * 主屏模式下的画面尺寸：设备当下的物理屏，按当前旋转取
+ *
+ * 只供 UI 摆预览用。执行侧的 screen_resolution 不走这里——特权进程的采集器自己读 DisplayInfo，
+ * 两边算法不同（这里拿不到挖孔与 overscan 的修正），必须以采集器那份为准
+ */
+fun physicalDisplayResolution(): DisplayResolution {
+    val metrics = Resources.getSystem().displayMetrics
+    return DisplayResolution(metrics.widthPixels.alignEven(), metrics.heightPixels.alignEven())
+}
+
 /** PI V2 的 display_short_side 默认值 */
 private const val DEFAULT_SHORT_SIDE = 720
 

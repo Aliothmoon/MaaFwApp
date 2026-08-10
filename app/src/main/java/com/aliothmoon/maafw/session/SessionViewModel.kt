@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
 import com.aliothmoon.maafw.i18n.LocaleController
@@ -29,7 +30,9 @@ import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
+import com.aliothmoon.maafw.runner.physicalDisplayResolution
 import com.aliothmoon.maafw.runner.resolveDisplayResolution
+import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -61,6 +64,7 @@ class SessionViewModel(
     private val runnerPort: RunnerPort,
     private val previewPort: PreviewPort,
     private val permissionGateway: PermissionGateway,
+    private val appSettings: AppSettingsGateway,
     private val localeController: LocaleController,
 ) : ViewModel() {
 
@@ -79,8 +83,9 @@ class SessionViewModel(
         configurationStore.data,
         runnerPort.state,
         privilegedState,
-    ) { project, config, runner, privileged ->
-        buildUiState(project, config, runner, privileged)
+        appSettings.runMode,
+    ) { project, config, runner, privileged, runMode ->
+        buildUiState(project, config, runner, privileged, runMode)
     }.flowOn(Dispatchers.Default) // resolve 属重计算，不占用主线程
         .stateIn(
             scope = viewModelScope,
@@ -166,12 +171,14 @@ class SessionViewModel(
         config: UserConfiguration,
         runner: RunnerState,
         privileged: PrivilegedSnapshot,
+        runMode: RunMode,
     ): SessionUiState {
         val base = SessionUiState(
             projectState = project,
             runner = runner,
             themeMode = config.themeMode,
             developerMode = config.developerMode,
+            runMode = runMode,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
@@ -186,7 +193,10 @@ class SessionViewModel(
             taskCatalog = session.taskCatalog,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
-            previewResolution = resolveDisplayResolution(project.definition.controller),
+            previewResolution = when (runMode) {
+                RunMode.FOREGROUND -> physicalDisplayResolution()
+                RunMode.BACKGROUND -> resolveDisplayResolution(project.definition.controller)
+            },
         )
     }
 
@@ -301,6 +311,11 @@ class SessionViewModel(
 
             is SessionIntent.SetDeveloperMode ->
                 configurationStore.update { it.copy(developerMode = intent.enabled) }
+
+            // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上
+            is SessionIntent.SetRunMode -> guarded {
+                appSettings.setRunMode(intent.mode)
+            }
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {

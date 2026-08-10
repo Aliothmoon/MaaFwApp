@@ -4,7 +4,7 @@ import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
-import com.aliothmoon.maafw.constant.DisplayMode
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.project.PiInstaller
 import kotlinx.coroutines.CoroutineDispatcher
@@ -35,6 +35,8 @@ class MaaFrameworkRunnerPort(
     private val apkPath: String,
     /** 已解压的 native 库目录；agent child 靠它 dlopen libMaaAgentServer.so 及其依赖 */
     private val nativeLibraryDir: String,
+    /** 每轮开始时现读，不缓存：用户可能在两轮之间改了运行模式 */
+    private val runMode: () -> RunMode,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val serviceManager: RemoteServiceManager = RemoteServiceManager,
@@ -166,13 +168,20 @@ class MaaFrameworkRunnerPort(
         if (!service.setup(piRoot.absolutePath, logDir().absolutePath, BuildConfig.DEBUG)) {
             return "特权进程 setup 失败"
         }
-        if (!service.setVirtualDisplayMode(DisplayMode.BACKGROUND)) {
-            return "切换后台虚拟屏失败"
+        val mode = runMode()
+        if (!service.setVirtualDisplayMode(mode.displayMode)) {
+            return "切换显示模式失败: $mode"
         }
-        val (width, height) = resolveDisplayResolution(plan.controller)
-        service.setVirtualDisplayResolution(width, height, DefaultDisplayConfig.DPI)
+        // 主屏模式不建屏也不设分辨率：尺寸是设备当下的物理尺寸，由特权进程侧的采集器供数
+        val (width, height) = if (mode == RunMode.BACKGROUND) {
+            resolveDisplayResolution(plan.controller).also { (w, h) ->
+                service.setVirtualDisplayResolution(w, h, DefaultDisplayConfig.DPI)
+            }
+        } else {
+            DisplayResolution(0, 0)
+        }
         if (service.startVirtualDisplay() == DefaultDisplayConfig.DISPLAY_NONE) {
-            return "虚拟显示器启动失败"
+            return if (mode == RunMode.FOREGROUND) "主屏采集启动失败" else "虚拟显示器启动失败"
         }
 
         service.setRunnerCallback(callback)
@@ -182,6 +191,7 @@ class MaaFrameworkRunnerPort(
             resourcePaths = plan.resource.paths.map { File(piRoot, it).absolutePath },
             screenWidth = width,
             screenHeight = height,
+            displayMode = mode.displayMode,
             tasks = plan.tasks.map {
                 RuntimeTaskPayload(
                     taskName = it.taskName,

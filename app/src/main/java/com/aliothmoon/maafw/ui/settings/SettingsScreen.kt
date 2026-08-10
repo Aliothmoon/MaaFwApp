@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.session.SessionIntent
@@ -48,6 +49,7 @@ fun SettingsScreen(
     ) {
         AppearanceCard(state, onIntent)
         LanguageCard(state, onIntent)
+        RunModeCard(state, onIntent)
         ResourceCard(state, onIntent)
         DeveloperCard(state, onIntent)
         AboutCard()
@@ -105,6 +107,30 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
         )
         Text(
             text = stringResource(R.string.settings_language_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_run_mode)) {
+        val modes = listOf(
+            RunMode.BACKGROUND to stringResource(R.string.settings_run_mode_background),
+            RunMode.FOREGROUND to stringResource(R.string.settings_run_mode_foreground),
+        )
+        MaaSingleChoiceFlow(
+            options = modes,
+            selected = state.runMode,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SetRunMode(it)) },
+        )
+        Text(
+            text = when (state.runMode) {
+                RunMode.BACKGROUND -> stringResource(R.string.settings_run_mode_hint_background)
+                RunMode.FOREGROUND -> stringResource(R.string.settings_run_mode_hint_foreground)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.privileged.RemoteAccessState
@@ -30,7 +31,11 @@ data class SessionUiState(
     val runner: RunnerState = RunnerState(),
     val themeMode: ThemeMode = ThemeMode.System,
     val developerMode: Boolean = false,
-    /** 虚拟屏尺寸，由 PI controller 的 display_* 推导；项目未就绪时为 null */
+    val runMode: RunMode = RunMode.BACKGROUND,
+    /**
+     * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
+     * 前台模式是设备物理屏尺寸。项目未就绪时为 null
+     */
     val previewResolution: DisplayResolution? = null,
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     /** 授权请求进行中；只压按钮，不进 configurationLocked */
@@ -113,6 +118,9 @@ sealed interface SessionIntent {
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
     data class SetDeveloperMode(val enabled: Boolean) : SessionIntent
+
+    /** 主屏 / 后台虚拟屏；运行中不允许改，下一轮才生效 */
+    data class SetRunMode(val mode: RunMode) : SessionIntent
     data object ReloadProject : SessionIntent
 
     data object Start : SessionIntent

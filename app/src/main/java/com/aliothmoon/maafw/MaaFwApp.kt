@@ -21,6 +21,7 @@ import com.aliothmoon.maafw.project.ProjectSource
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
@@ -118,6 +119,7 @@ val appModule = module {
             // 两条路径都取自 app 的 applicationInfo：特权进程只有 FakeContext，自己解析不如这里直给
             apkPath = context.applicationInfo.sourceDir,
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
+            runMode = get<AppSettingsManager>().runMode::value,
             scope = get(named<AppCoroutineScope>()),
             ioDispatcher = Dispatchers.IO,
         )
@@ -132,6 +134,7 @@ val appModule = module {
 
     // app 设置与运行配置分开存：前者不该被 UserConfiguration 的 schema 重置波及
     single { AppSettingsManager(androidContext()) }
+    single<AppSettingsGateway> { get<AppSettingsManager>() }
     single { PermissionManager(androidContext(), get()) }
     single<PermissionGateway> { get<PermissionManager>() }
 
@@ -142,6 +145,7 @@ val appModule = module {
             runnerPort = get(),
             previewPort = get(),
             permissionGateway = get(),
+            appSettings = get(),
             localeController = AppLocales,
         )
     }

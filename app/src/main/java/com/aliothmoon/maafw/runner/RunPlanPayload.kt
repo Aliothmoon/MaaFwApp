@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.constant.DisplayMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -12,9 +13,14 @@ import kotlinx.serialization.json.JsonObject
 data class RunPlanPayload(
     /** PI resource 的绝对路径，按声明顺序逐个 MaaResourcePostBundle */
     val resourcePaths: List<String>,
-    /** 必须与虚拟显示器的帧缓冲、触摸坐标空间一致，否则 screencap 立即失败 */
+    /**
+     * 必须与显示器的帧缓冲、触摸坐标空间一致，否则 screencap 立即失败
+     * 主屏模式下这两个值被忽略：尺寸由特权进程侧的采集器供数，见 [com.aliothmoon.maafw.constant.DisplayMode]
+     */
     val screenWidth: Int,
     val screenHeight: Int,
+    /** [com.aliothmoon.maafw.constant.DisplayMode] 取值；决定 Runner 找谁要屏幕尺寸 */
+    val displayMode: Int = DisplayMode.BACKGROUND,
     val tasks: List<RuntimeTaskPayload>,
     /** PI 声明的 agent，按声明顺序；空表示本次不起 agent */
     val agents: List<AgentPayload> = emptyList(),

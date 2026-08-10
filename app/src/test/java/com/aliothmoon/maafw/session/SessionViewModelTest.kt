@@ -12,6 +12,7 @@ import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
+import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
@@ -101,6 +102,7 @@ class SessionViewModelTest {
         ),
         locale: (String?) -> Unit = {},
         permissions: FakePermissionGateway = FakePermissionGateway(),
+        settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val vm = SessionViewModel(
             project,
@@ -108,6 +110,7 @@ class SessionViewModelTest {
             runner,
             RecordingPreviewPort(),
             permissions,
+            settings,
             locale,
         )
         return Triple(vm, store, runner)
@@ -120,6 +123,7 @@ class SessionViewModelTest {
         runner,
         RecordingPreviewPort(),
         FakePermissionGateway(),
+        FakeAppSettingsGateway(),
         {},
     )
 
