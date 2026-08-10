@@ -6,7 +6,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -262,10 +261,8 @@ fun MaaFwTheme(
     }
 
     CompositionLocalProvider(
-        // foundation 层 clickable 的指示效果
+        // maaClickable 自带按压缩放反馈；foundation 层 plain clickable 不再叠加涟漪
         LocalIndication provides NoIndication,
-        // M3 组件内部 ripple（NavigationBarItem/Button 等不走 LocalIndication）
-        LocalRippleConfiguration provides null,
         LocalMaaPalette provides if (darkTheme) DarkMaaPalette else LightMaaPalette,
     ) {
         MaterialTheme(

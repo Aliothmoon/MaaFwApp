@@ -1,52 +1,104 @@
 package com.aliothmoon.maafw.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
+private const val SheetEnterMs = 100
+private const val SheetScrimAlpha = 0.4f
+
 /**
- * 统一的 modal sheet 脚手架：固定 3/5 高度、跳过半展开、禁用手势拖拽
- * （内容区滚动不牵动 sheet，关闭走标题栏按钮/遮罩/返回键）、无拖拽把手
- * content 收到的 Modifier 已带高度/水平边距/顶部间距/导航栏 inset，
- * 调用方按需追加 imePadding、底部间距等
+ * 统一的 modal sheet 脚手架：固定 3/5 高度、跳过半展开、禁手势拖拽（无把手），
+ * 关闭走遮罩点击 / 返回键 / 标题栏按钮
+ *
+ * 不用 M3 ModalBottomSheet：它另开窗口 + 不可调的 leisurely 入场弹簧，观感偏慢。
+ * 这里自己挂 Dialog（Compose 已把窗口背景设透明，不双遮罩），入场用 tween(100ms)，
+ * 进度只驱动 drawBehind / graphicsLayer（延迟读），整段动画不触发重组；
+ * 关闭整棵被调用方的 if() 摘掉，瞬时消失
+ *
+ * content 收到的 Modifier 已带高度/水平边距/顶部间距/导航栏 inset，调用方按需追加 imePadding 等
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaaModalSheet(
     onDismiss: () -> Unit,
     content: @Composable (Modifier) -> Unit,
 ) {
-    ModalBottomSheet(
+    val screenHeightPx = with(LocalDensity.current) {
+        LocalConfiguration.current.screenHeightDp.dp.toPx()
+    }
+    val sheetHeightPx = screenHeightPx * MaaDesignTokens.Sheet.heightFraction
+
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, tween(SheetEnterMs, easing = FastOutSlowInEasing)) }
+
+    Dialog(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        sheetGesturesEnabled = false,
-        dragHandle = null,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        content(
-            Modifier
-                .fillMaxHeight(MaaDesignTokens.Sheet.heightFraction)
-                .padding(horizontal = MaaDesignTokens.Spacing.lg)
-                .padding(top = MaaDesignTokens.Spacing.sm)
-                .navigationBarsPadding(),
-        )
+        Box(Modifier.fillMaxSize()) {
+            // 遮罩：alpha 读在 drawBehind，只重绘不重组；点空白处关
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawBehind { drawRect(Color.Black, alpha = SheetScrimAlpha * progress.value) }
+                    .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
+            )
+            // 抽屉：translationY 读在 graphicsLayer，只重铺层不重组
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(MaaDesignTokens.Sheet.heightFraction)
+                    .graphicsLayer { translationY = (1f - progress.value) * sheetHeightPx },
+                shape = RoundedCornerShape(
+                    topStart = MaaDesignTokens.CornerRadius.pill,
+                    topEnd = MaaDesignTokens.CornerRadius.pill,
+                ),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+            ) {
+                content(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = MaaDesignTokens.Spacing.lg)
+                        .padding(top = MaaDesignTokens.Spacing.sm)
+                        .navigationBarsPadding(),
+                )
+            }
+        }
     }
 }
 
