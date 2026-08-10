@@ -12,7 +12,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -70,7 +72,7 @@ fun SettingsScreen(
             LanguageCard(state, onIntent)
             BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
             ResolutionCard(state, onIntent)
-            DeveloperCard(state, onIntent)
+            DebugCard(state, onIntent)
             AboutCard()
         }
     }
@@ -133,17 +135,30 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
     }
 }
 
+/**
+ * 调试模式（对齐 MaaMeow）：开启后给特权进程传 isDebug，下一轮运行起记录 MaaFramework 详细日志；
+ * 启用时弹确认，关闭直接关。诊断不在这一页展示（首页/启动失败时会露面）
+ */
 @Composable
-private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_developer)) {
+private fun DebugCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    var showEnableConfirm by remember { mutableStateOf(false) }
+    MaaCard(title = stringResource(R.string.settings_debug_mode)) {
         MaaLabeledControlRow(
-            label = stringResource(R.string.settings_developer_mode),
+            label = stringResource(R.string.settings_debug_mode),
             trailing = {
                 MaaSwitch(
-                    checked = state.developerMode,
-                    onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
+                    checked = state.debugMode,
+                    onCheckedChange = { enabled ->
+                        if (enabled) showEnableConfirm = true
+                        else onIntent(SessionIntent.SetDebugMode(false))
+                    },
                 )
             },
+        )
+        Text(
+            text = stringResource(R.string.settings_debug_mode_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         OutlinedButton(
             onClick = { onIntent(SessionIntent.ReloadProject) },
@@ -152,18 +167,24 @@ private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Un
         ) {
             Text(stringResource(R.string.settings_reload_project))
         }
-        if (state.developerMode) {
-            val diagnostics = state.visibleDiagnostics
-            if (diagnostics.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.settings_no_diagnostics),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                MaaDiagnosticList(diagnostics, showSeverity = true)
-            }
-        }
+    }
+    if (showEnableConfirm) {
+        AlertDialog(
+            onDismissRequest = { showEnableConfirm = false },
+            title = { Text(stringResource(R.string.dialog_enable_debug_title)) },
+            text = { Text(stringResource(R.string.dialog_enable_debug_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showEnableConfirm = false
+                    onIntent(SessionIntent.SetDebugMode(true))
+                }) { Text(stringResource(R.string.dialog_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEnableConfirm = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
     }
 }
 

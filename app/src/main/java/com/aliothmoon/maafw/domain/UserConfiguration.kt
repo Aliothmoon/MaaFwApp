@@ -14,7 +14,6 @@ enum class ThemeMode { System, Light, Dark }
 data class UserConfiguration(
     val initialized: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.System,
-    val developerMode: Boolean = false,
     val activeResourceName: String? = null,
     val globalOptionValues: Map<String, OptionValue> = emptyMap(),
     val controllerOptionValues: Map<String, Map<String, OptionValue>> = emptyMap(),

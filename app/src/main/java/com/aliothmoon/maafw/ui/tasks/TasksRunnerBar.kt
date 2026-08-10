@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
@@ -228,12 +227,6 @@ internal fun TasksQuickOptionsPanel(
                         onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
                     )
                 }
-                SettingSwitchRow(
-                    icon = Icons.Outlined.Code,
-                    label = stringResource(R.string.settings_developer_mode),
-                    checked = state.developerMode,
-                    onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
-                )
             }
         }
     }

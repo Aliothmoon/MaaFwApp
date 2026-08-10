@@ -138,6 +138,7 @@ val appModule = module {
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
             runMode = get<AppSettingsManager>().runMode::value,
             resolutionPreference = get<AppSettingsManager>().resolutionPreference::value,
+            debugMode = get<AppSettingsManager>().debugMode::value,
             scope = get(named<AppCoroutineScope>()),
             ioDispatcher = Dispatchers.IO,
         )

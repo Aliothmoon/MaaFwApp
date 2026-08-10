@@ -59,6 +59,7 @@ private data class SettingsSnapshot(
     val overlayControlMode: OverlayControlMode,
     val screenSaverEnabled: Boolean,
     val resolutionPreference: ResolutionPreference,
+    val debugMode: Boolean,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -95,8 +96,9 @@ class SessionViewModel(
         appSettings.overlayControlMode,
         appSettings.screenSaverEnabled,
         appSettings.resolutionPreference,
-    ) { runMode, overlayMode, screenSaver, resolution ->
-        SettingsSnapshot(runMode, overlayMode, screenSaver, resolution)
+        appSettings.debugMode,
+    ) { runMode, overlayMode, screenSaver, resolution, debug ->
+        SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
     }
 
     val uiState: StateFlow<SessionUiState> = combine(
@@ -199,7 +201,7 @@ class SessionViewModel(
             projectState = project,
             runner = runner,
             themeMode = config.themeMode,
-            developerMode = config.developerMode,
+            debugMode = settings.debugMode,
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
             screenSaverEnabled = settings.screenSaverEnabled,
@@ -331,8 +333,8 @@ class SessionViewModel(
             is SessionIntent.SetThemeMode ->
                 configurationStore.update { it.copy(themeMode = intent.mode) }
 
-            is SessionIntent.SetDeveloperMode ->
-                configurationStore.update { it.copy(developerMode = intent.enabled) }
+            is SessionIntent.SetDebugMode ->
+                appSettings.setDebugMode(intent.enabled)
 
             // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上
             is SessionIntent.SetRunMode -> guarded {

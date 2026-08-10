@@ -36,7 +36,7 @@ data class SessionUiState(
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),
     val themeMode: ThemeMode = ThemeMode.System,
-    val developerMode: Boolean = false,
+    val debugMode: Boolean = false,
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     val screenSaverEnabled: Boolean = false,
@@ -185,7 +185,7 @@ sealed interface SessionIntent {
      * 落地：Activity 重建 → AppRoot 检测 locale → ReloadProject
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
-    data class SetDeveloperMode(val enabled: Boolean) : SessionIntent
+    data class SetDebugMode(val enabled: Boolean) : SessionIntent
 
     /** 主屏 / 后台虚拟屏；运行中不允许改，下一轮才生效 */
     data class SetRunMode(val mode: RunMode) : SessionIntent

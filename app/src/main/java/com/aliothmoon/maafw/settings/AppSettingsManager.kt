@@ -72,6 +72,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         .map { parseResolutionPreference(it.resolutionPreference) }
         .stateIn(scope, SharingStarted.Eagerly, parseResolutionPreference(initialSettings.resolutionPreference))
 
+    override val debugMode: StateFlow<Boolean> = settings
+        .map { it.debugMode.toBoolean() }
+        .stateIn(scope, SharingStarted.Eagerly, initialSettings.debugMode.toBoolean())
+
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
         context.dataStore.edit { it[startupBackend] = backend.name }
     }
@@ -102,6 +106,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setResolutionPreference(preference: ResolutionPreference): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[resolutionPreference] = preference.name }
+    }
+
+    override suspend fun setDebugMode(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[debugMode] = enabled.toString() }
     }
 
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */

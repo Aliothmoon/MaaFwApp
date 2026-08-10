@@ -22,4 +22,7 @@ interface AppSettingsGateway {
 
     val resolutionPreference: StateFlow<ResolutionPreference>
     suspend fun setResolutionPreference(preference: ResolutionPreference)
+
+    val debugMode: StateFlow<Boolean>
+    suspend fun setDebugMode(enabled: Boolean)
 }

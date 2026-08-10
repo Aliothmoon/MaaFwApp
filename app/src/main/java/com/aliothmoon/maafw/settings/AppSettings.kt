@@ -46,4 +46,8 @@ data class AppSettings(
     /** [com.aliothmoon.maafw.runner.ResolutionPreference] 的 name */
     @PrefKey(default = "P720")
     val resolutionPreference: String = "P720",
+
+    /** 调试模式：开启后给特权进程传 isDebug，记录 MaaFramework 详细日志 */
+    @PrefKey(default = "false")
+    val debugMode: String = "false",
 )

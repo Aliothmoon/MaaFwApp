@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeAppSettingsGateway : AppSettingsGateway {
@@ -22,5 +23,17 @@ class FakeAppSettingsGateway : AppSettingsGateway {
 
     override suspend fun setScreenSaverEnabled(enabled: Boolean) {
         screenSaverEnabled.value = enabled
+    }
+
+    override val resolutionPreference = MutableStateFlow(ResolutionPreference.P720)
+
+    override suspend fun setResolutionPreference(preference: ResolutionPreference) {
+        resolutionPreference.value = preference
+    }
+
+    override val debugMode = MutableStateFlow(false)
+
+    override suspend fun setDebugMode(enabled: Boolean) {
+        debugMode.value = enabled
     }
 }

@@ -124,10 +124,7 @@
     <string name="settings_current_resource">Current resource</string>
     <string name="settings_not_selected">Not selected</string>
     <string name="settings_resource_hint">Switching resources affects task applicability; unavailable while running</string>
-    <string name="settings_developer">Developer</string>
-    <string name="settings_developer_mode">Developer mode</string>
     <string name="settings_reload_project">Reload project</string>
-    <string name="settings_no_diagnostics">No diagnostics</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_build">Build</string>
@@ -345,4 +342,8 @@
     <string name="settings_resolution">Virtual display resolution</string>
     <string name="settings_resolution_720p">720P</string>
     <string name="settings_resolution_1080p">1080P</string>
+    <string name="settings_debug_mode">Debug mode</string>
+    <string name="settings_debug_mode_desc">Records detailed MaaFramework logs on the next run once enabled</string>
+    <string name="dialog_enable_debug_title">Enable debug mode</string>
+    <string name="dialog_enable_debug_message">Once enabled, the next task run records detailed MaaFramework logs. Re-run to reproduce the issue; the logs are written to the log directory.</string>
 </resources>

@@ -39,6 +39,8 @@ class MaaFrameworkRunnerPort(
     private val runMode: () -> RunMode,
     /** 同上：分辨率偏好可能两轮之间被改 */
     private val resolutionPreference: () -> ResolutionPreference,
+    /** 调试模式：传给特权进程 setup 的 isDebug，开启 MaaFramework 详细日志 */
+    private val debugMode: () -> Boolean,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val serviceManager: RemoteServiceManager = RemoteServiceManager,
@@ -167,7 +169,7 @@ class MaaFrameworkRunnerPort(
     }
 
     private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): String? {
-        if (!service.setup(piRoot.absolutePath, logDir().absolutePath, BuildConfig.DEBUG)) {
+        if (!service.setup(piRoot.absolutePath, logDir().absolutePath, debugMode())) {
             return "特权进程 setup 失败"
         }
         val mode = runMode()

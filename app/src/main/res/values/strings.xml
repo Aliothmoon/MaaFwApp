@@ -115,10 +115,7 @@
     <string name="settings_current_resource">当前资源</string>
     <string name="settings_not_selected">未选择</string>
     <string name="settings_resource_hint">切换资源会影响任务适用性，运行期间不可切换</string>
-    <string name="settings_developer">开发者</string>
-    <string name="settings_developer_mode">开发者模式</string>
     <string name="settings_reload_project">重新加载项目</string>
-    <string name="settings_no_diagnostics">没有诊断信息</string>
     <string name="settings_about">关于</string>
     <string name="settings_version">版本</string>
     <string name="settings_build">构建</string>
@@ -336,4 +333,8 @@
     <string name="settings_resolution">虚拟屏分辨率</string>
     <string name="settings_resolution_720p">720P</string>
     <string name="settings_resolution_1080p">1080P</string>
+    <string name="settings_debug_mode">调试模式</string>
+    <string name="settings_debug_mode_desc">启用后下一轮运行起记录 MaaFramework 详细日志</string>
+    <string name="dialog_enable_debug_title">启用调试模式</string>
+    <string name="dialog_enable_debug_message">启用后，下一轮任务运行时会记录 MaaFramework 详细日志。请重新运行以复现问题，日志将完整记录到 log 目录。</string>
 </resources>
