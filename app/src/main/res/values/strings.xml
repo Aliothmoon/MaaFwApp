@@ -234,6 +234,9 @@
     <string name="task_unavailable_resource">不支持当前资源（需要 %1$s）</string>
     <string name="msg_locked_while_running">运行期间不能修改配置</string>
     <string name="msg_project_not_loaded">项目尚未加载完成</string>
+    <string name="msg_backend_unavailable">%1$s 不可用</string>
+    <string name="msg_backend_auth_rejected">%1$s 未授权</string>
+    <string name="msg_bind_service_failed">连接特权进程失败：%1$s</string>
     <string name="msg_no_executable_tasks">没有可用的任务</string>
     <string name="msg_template_not_found">模板“%1$s”不存在</string>
     <string name="msg_cannot_start">无法开始：%1$s</string>
@@ -265,8 +268,21 @@
     <string name="home_overview">概览</string>
     <string name="home_display_resolution">虚拟屏分辨率</string>
     <string name="home_service_status">服务状态</string>
-    <string name="home_service_status_connected">已连接</string>
-    <string name="home_service_status_disconnected">未连接</string>
+
+    <!-- 服务状态行：连接态 / 项目加载 / 运行态归约成一句 -->
+    <string name="home_status_connecting">连接中</string>
+    <string name="home_status_died">连接已断开</string>
+    <string name="home_status_error">连接失败</string>
+    <string name="home_status_disconnected">未连接</string>
+    <string name="home_status_project_loading">项目加载中</string>
+    <string name="home_status_project_failed">项目加载失败</string>
+    <string name="home_status_runner_unavailable">执行器不可用</string>
+    <string name="home_status_preparing">准备中</string>
+    <string name="home_status_running">运行中</string>
+    <string name="home_status_stopping">停止中</string>
+    <string name="home_status_ready">就绪</string>
+    <string name="home_service_connect">连接特权进程</string>
+    <string name="home_service_disconnect">断开特权进程</string>
     <string name="dialog_shizuku_not_installed_title">未检测到 Shizuku</string>
     <string name="dialog_shizuku_not_installed_message">本应用依赖 Shizuku 服务运行，检测到设备未安装 Shizuku，请先安装。</string>
     <string name="dialog_shizuku_install_confirm">快捷安装 Shizuku</string>

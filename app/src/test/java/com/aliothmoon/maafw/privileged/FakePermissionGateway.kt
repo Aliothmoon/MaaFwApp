@@ -9,7 +9,7 @@ class FakePermissionGateway : PermissionGateway {
     override val state = MutableStateFlow(RemoteAccessState())
     override val isGranting = MutableStateFlow(false)
     override val readiness = MutableStateFlow(ShizukuReadiness())
-    override val serviceConnected = MutableStateFlow(false)
+    override val serviceState = MutableStateFlow(PrivilegedServiceState.Disconnected)
     override val systemPermissions = MutableStateFlow(SystemPermissionState())
 
     var requestCount: Int = 0
@@ -40,5 +40,22 @@ class FakePermissionGateway : PermissionGateway {
 
     override fun refresh() {
         refreshCount++
+    }
+
+    var bindCount: Int = 0
+        private set
+    var unbindCount: Int = 0
+        private set
+
+    /** 下一次 [bindService] 的返回值 */
+    var bindResult: ServiceBindResult = ServiceBindResult.Started
+
+    override suspend fun bindService(): ServiceBindResult {
+        bindCount++
+        return bindResult
+    }
+
+    override fun unbindService() {
+        unbindCount++
     }
 }

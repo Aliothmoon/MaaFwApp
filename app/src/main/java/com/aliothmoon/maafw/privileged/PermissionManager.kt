@@ -51,8 +51,12 @@ class PermissionManager(
 
     override val state: StateFlow<RemoteAccessState> = RemoteAccessCoordinator.state
 
-    override val serviceConnected: StateFlow<Boolean> = RemoteServiceManager.state
-        .map { it is RemoteServiceManager.ServiceState.Connected }
+    override val serviceState: StateFlow<PrivilegedServiceState> = RemoteServiceManager.state
+        .map { it.toPrivilegedServiceState() }
+        .stateIn(scope, SharingStarted.Eagerly, PrivilegedServiceState.Disconnected)
+
+    private val serviceConnected: StateFlow<Boolean> = serviceState
+        .map { it == PrivilegedServiceState.Connected }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _systemPermissions = MutableStateFlow(readSystemPermissions())
@@ -170,6 +174,32 @@ class PermissionManager(
         }
     }
 
+    /**
+     * 手动拉起特权进程
+     *
+     * 自动路径（授权到手即 bind）覆盖不了两种情况：特权进程崩过一次，或用户在系统里
+     * 撤掉又重新给了授权。那时状态卡在 Died/Disconnected，没有这个入口就只能重启 app
+     */
+    override suspend fun bindService(): ServiceBindResult {
+        if (serviceState.value == PrivilegedServiceState.Connected) return ServiceBindResult.AlreadyConnected
+        val current = RemoteAccessCoordinator.refresh()
+        val backend = current.configuredBackend
+        if (!current.isAvailable(backend)) return ServiceBindResult.BackendUnavailable(backend)
+        if (!current.isGranted(backend) && !requestRemoteAccess()) {
+            return ServiceBindResult.AuthRejected(backend)
+        }
+        return runCatching { RemoteServiceManager.bind() }
+            .fold(
+                onSuccess = { ServiceBindResult.Started },
+                onFailure = {
+                    Timber.e(it, "手动绑定特权进程失败")
+                    ServiceBindResult.Failed(it.message.orEmpty())
+                },
+            )
+    }
+
+    override fun unbindService() = RemoteServiceManager.unbind()
+
     override suspend fun setBackend(backend: RemoteBackend) {
         if (appSettings.startupBackend.value == backend) return
         appSettings.setStartupBackend(backend)
@@ -215,4 +245,12 @@ class PermissionManager(
         /** 系统绑定无障碍服务是异步的，3 秒等不到就当没连上，不卡住授权流程 */
         const val ACCESSIBILITY_BIND_TIMEOUT_MS = 3_000L
     }
+}
+
+private fun RemoteServiceManager.ServiceState.toPrivilegedServiceState() = when (this) {
+    is RemoteServiceManager.ServiceState.Connected -> PrivilegedServiceState.Connected
+    RemoteServiceManager.ServiceState.Connecting -> PrivilegedServiceState.Connecting
+    RemoteServiceManager.ServiceState.Died -> PrivilegedServiceState.Died
+    RemoteServiceManager.ServiceState.Disconnected -> PrivilegedServiceState.Disconnected
+    is RemoteServiceManager.ServiceState.Error -> PrivilegedServiceState.Error
 }

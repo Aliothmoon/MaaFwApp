@@ -16,8 +16,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -42,7 +45,10 @@ import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.RunnerPhase
+import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.session.ServiceStatus
 import com.aliothmoon.maafw.session.SessionIntent
+import com.aliothmoon.maafw.session.StatusTone
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.ui.i18n.asUiText
@@ -58,7 +64,7 @@ import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
  * 首页版面对齐 MaaMeow：概览 -> 权限 -> 服务入口 -> 业务卡
- * MaaMeow 的运行模式卡与更新卡本项目没有对应功能，不占位
+ * 运行模式与悬浮窗归设置页管，不像 MaaMeow 那样在首页再放一份
  */
 @Composable
 fun HomeScreen(
@@ -105,15 +111,25 @@ private fun OverviewCard(state: SessionUiState) {
             label = stringResource(R.string.home_service_status),
             labelStyle = MaterialTheme.typography.bodyMedium,
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            trailing = { ServiceStatusIndicator(connected = state.privilegedServiceConnected) },
+            trailing = { ServiceStatusIndicator(status = state.serviceStatus) },
         )
     }
 }
 
-/** 状态点 + 文案；颜色是唯一区分，文案只做补充 */
+/**
+ * 状态点 + 文案 + 忙时转圈
+ *
+ * 语气到颜色的映射只此一处；`StatusTone.Warning` 在 M3 里没有对应槽位，
+ * 用 tertiary 而不是自造颜色——深色主题下自造色多半会撞背景
+ */
 @Composable
-private fun ServiceStatusIndicator(connected: Boolean) {
-    val color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+private fun ServiceStatusIndicator(status: ServiceStatus) {
+    val color = when (status.tone) {
+        StatusTone.Primary -> MaterialTheme.colorScheme.primary
+        StatusTone.Warning -> MaterialTheme.colorScheme.tertiary
+        StatusTone.Error -> MaterialTheme.colorScheme.error
+        StatusTone.Neutral -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
@@ -125,29 +141,25 @@ private fun ServiceStatusIndicator(connected: Boolean) {
                 .background(color),
         )
         Text(
-            text = stringResource(
-                if (connected) {
-                    R.string.home_service_status_connected
-                } else {
-                    R.string.home_service_status_disconnected
-                },
-            ),
+            text = status.text.asString(),
             style = MaterialTheme.typography.bodyMedium,
             color = color,
         )
+        if (status.busy) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(MaaDesignTokens.IconSize.xs),
+                strokeWidth = MaaDesignTokens.Border.marker,
+                color = color,
+            )
+        }
     }
 }
 
 /**
- * 提权后端是主行常驻，保活那两项收在展开区里（同 MaaMeow）
+ * 折叠态只剩主授权行：后端选择、保活两项、说明文字都收进展开区
  *
- * 只列 manifest 里真正声明的：MaaMeow 的悬浮窗/无障碍/存储对应它的前台模式，本项目没有
- */
-/**
- * 折叠态只剩主授权行，与 MaaMeow 一致：后端选择、保活两项、说明文字都收进展开区
- *
- * 保活两项平时由特权进程代授（见 PermissionManager.grantViaPrivileged），
- * 这里的手点入口只是特权进程没起来时的兜底，不该占折叠态的版面
+ * 只列这两项系统权限，是因为悬浮窗与无障碍平时由特权进程代授
+ * （见 PermissionManager.grantViaPrivileged），没有手点的必要
  */
 @Composable
 private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
@@ -272,18 +284,47 @@ private fun ExpandToggle(expanded: Boolean, onToggle: () -> Unit) {
 /** 服务入口；启动/停止特权服务的开关还没做（见 TODO） */
 @Composable
 private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    if (state.remoteAccess.configuredBackend != RemoteBackend.SHIZUKU) return
-    OutlinedButton(
-        onClick = { onIntent(SessionIntent.OpenShizuku) },
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Build,
-            contentDescription = null,
-            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
-        )
-        Box(Modifier.size(MaaDesignTokens.Spacing.sm))
-        Text(stringResource(R.string.permission_open_shizuku))
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
+        val connected = state.privilegedServiceConnected
+        OutlinedButton(
+            onClick = { onIntent(SessionIntent.TogglePrivilegedService) },
+            // 连接中不给点：这时候再发一次 bind 只会把状态搅乱
+            enabled = state.privilegedService != PrivilegedServiceState.Connecting,
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = if (connected) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                imageVector = if (connected) Icons.Outlined.LinkOff else Icons.Outlined.Link,
+                contentDescription = null,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+            )
+            Box(Modifier.size(MaaDesignTokens.Spacing.sm))
+            Text(
+                stringResource(
+                    if (connected) R.string.home_service_disconnect else R.string.home_service_connect,
+                ),
+            )
+        }
+        if (state.remoteAccess.configuredBackend == RemoteBackend.SHIZUKU) {
+            OutlinedButton(
+                onClick = { onIntent(SessionIntent.OpenShizuku) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Build,
+                    contentDescription = null,
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+                )
+                Box(Modifier.size(MaaDesignTokens.Spacing.sm))
+                Text(stringResource(R.string.permission_open_shizuku))
+            }
+        }
     }
 }
 

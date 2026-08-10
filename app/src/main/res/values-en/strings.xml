@@ -243,6 +243,9 @@
     <string name="task_unavailable_resource">Unsupported resource (requires %1$s)</string>
     <string name="msg_locked_while_running">Cannot change configuration while running</string>
     <string name="msg_project_not_loaded">Project is not loaded yet</string>
+    <string name="msg_backend_unavailable">%1$s is not available</string>
+    <string name="msg_backend_auth_rejected">%1$s was not granted</string>
+    <string name="msg_bind_service_failed">Could not connect to the privileged process: %1$s</string>
     <string name="msg_no_executable_tasks">No tasks available to run</string>
     <string name="msg_template_not_found">Template \"%1$s\" does not exist</string>
     <string name="msg_cannot_start">Cannot start: %1$s</string>
@@ -274,8 +277,21 @@
     <string name="home_overview">Overview</string>
     <string name="home_display_resolution">Virtual display</string>
     <string name="home_service_status">Service status</string>
-    <string name="home_service_status_connected">Connected</string>
-    <string name="home_service_status_disconnected">Not connected</string>
+
+    <!-- Service status line -->
+    <string name="home_status_connecting">Connecting</string>
+    <string name="home_status_died">Connection lost</string>
+    <string name="home_status_error">Connection failed</string>
+    <string name="home_status_disconnected">Not connected</string>
+    <string name="home_status_project_loading">Loading project</string>
+    <string name="home_status_project_failed">Project failed to load</string>
+    <string name="home_status_runner_unavailable">Runner unavailable</string>
+    <string name="home_status_preparing">Preparing</string>
+    <string name="home_status_running">Running</string>
+    <string name="home_status_stopping">Stopping</string>
+    <string name="home_status_ready">Ready</string>
+    <string name="home_service_connect">Connect privileged process</string>
+    <string name="home_service_disconnect">Disconnect privileged process</string>
     <string name="dialog_shizuku_not_installed_title">Shizuku Not Installed</string>
     <string name="dialog_shizuku_not_installed_message">This app depends on the Shizuku service. Shizuku was not detected on your device; please install it first.</string>
     <string name="dialog_shizuku_install_confirm">Install Shizuku</string>

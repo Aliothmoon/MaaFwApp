@@ -14,7 +14,9 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
 import com.aliothmoon.maafw.i18n.LocaleController
 import com.aliothmoon.maafw.privileged.PermissionGateway
+import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.privileged.ServiceBindResult
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.ProjectRepository
@@ -64,7 +66,7 @@ private data class PrivilegedSnapshot(
     val access: RemoteAccessState,
     val granting: Boolean,
     val readiness: ShizukuReadiness,
-    val serviceConnected: Boolean,
+    val serviceState: PrivilegedServiceState,
     val systemPermissions: SystemPermissionState,
 )
 
@@ -82,10 +84,10 @@ class SessionViewModel(
         permissionGateway.state,
         permissionGateway.isGranting,
         permissionGateway.readiness,
-        permissionGateway.serviceConnected,
+        permissionGateway.serviceState,
         permissionGateway.systemPermissions,
-    ) { access, granting, readiness, connected, system ->
-        PrivilegedSnapshot(access, granting, readiness, connected, system)
+    ) { access, granting, readiness, service, system ->
+        PrivilegedSnapshot(access, granting, readiness, service, system)
     }
 
     private val settingsState: Flow<SettingsSnapshot> = combine(
@@ -201,7 +203,7 @@ class SessionViewModel(
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
-            privilegedServiceConnected = privileged.serviceConnected,
+            privilegedService = privileged.serviceState,
             systemPermissions = privileged.systemPermissions,
         )
         if (project !is ProjectState.Ready) return base
@@ -372,6 +374,7 @@ class SessionViewModel(
             // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授
             SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
             is SessionIntent.SetRemoteBackend -> permissionGateway.setBackend(intent.backend)
+            SessionIntent.TogglePrivilegedService -> togglePrivilegedService()
             SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
             SessionIntent.InstallShizuku -> effectChannel.send(SessionEffect.InstallShizuku)
             SessionIntent.OpenShizuku -> effectChannel.send(SessionEffect.OpenShizuku)
@@ -429,6 +432,28 @@ class SessionViewModel(
                 },
             )
         }
+    }
+
+    /**
+     * 断开只是解绑，特权进程本体还在（它有自己的看门狗）
+     * 运行中不拦：跑飞了的时候用户就该能一脚踹开这条连接
+     */
+    private suspend fun togglePrivilegedService() {
+        if (permissionGateway.serviceState.value == PrivilegedServiceState.Connected) {
+            permissionGateway.unbindService()
+            return
+        }
+        val message = when (val result = permissionGateway.bindService()) {
+            ServiceBindResult.Started, ServiceBindResult.AlreadyConnected -> return
+            is ServiceBindResult.BackendUnavailable ->
+                uiTextOf(R.string.msg_backend_unavailable, result.backend.display)
+
+            is ServiceBindResult.AuthRejected ->
+                uiTextOf(R.string.msg_backend_auth_rejected, result.backend.display)
+
+            is ServiceBindResult.Failed -> uiTextOf(R.string.msg_bind_service_failed, result.reason)
+        }
+        effectChannel.send(SessionEffect.ShowMessage(message))
     }
 
     private suspend fun start() {

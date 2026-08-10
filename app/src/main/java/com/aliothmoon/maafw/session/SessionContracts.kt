@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.session
 
 import android.view.Surface
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
@@ -12,6 +13,8 @@ import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
@@ -45,11 +48,55 @@ data class SessionUiState(
     /** 授权请求进行中；只压按钮，不进 configurationLocked */
     val remoteAccessGranting: Boolean = false,
     val shizukuReadiness: ShizukuReadiness = ShizukuReadiness(),
-    val privilegedServiceConnected: Boolean = false,
+    val privilegedService: PrivilegedServiceState = PrivilegedServiceState.Disconnected,
     val systemPermissions: SystemPermissionState = SystemPermissionState(),
 ) {
     val remoteAccessGranted: Boolean
         get() = remoteAccess.isGranted(remoteAccess.configuredBackend)
+
+    val privilegedServiceConnected: Boolean
+        get() = privilegedService == PrivilegedServiceState.Connected
+
+    /**
+     * 首页那一行服务状态：连接态、项目加载、运行态三路归约成一句
+     *
+     * 判定顺序即优先级，不可换：连不上特权进程时，项目加载与运行态的信息都没有意义
+     */
+    val serviceStatus: ServiceStatus
+        get() = when {
+            privilegedService == PrivilegedServiceState.Connecting ->
+                ServiceStatus(uiTextOf(R.string.home_status_connecting), StatusTone.Warning, busy = true)
+
+            // 崩过一次和从没连过要分开报：前者用户得知道「刚才断了」，后者只是还没开始
+            privilegedService == PrivilegedServiceState.Died ->
+                ServiceStatus(uiTextOf(R.string.home_status_died), StatusTone.Error)
+
+            privilegedService == PrivilegedServiceState.Error ->
+                ServiceStatus(uiTextOf(R.string.home_status_error), StatusTone.Error)
+
+            privilegedService == PrivilegedServiceState.Disconnected ->
+                ServiceStatus(uiTextOf(R.string.home_status_disconnected), StatusTone.Neutral)
+
+            projectState is ProjectState.Loading ->
+                ServiceStatus(uiTextOf(R.string.home_status_project_loading), StatusTone.Warning, busy = true)
+
+            projectState is ProjectState.Error ->
+                ServiceStatus(uiTextOf(R.string.home_status_project_failed), StatusTone.Error)
+
+            runner.phase is RunnerPhase.Unavailable ->
+                ServiceStatus(uiTextOf(R.string.home_status_runner_unavailable), StatusTone.Error)
+
+            runner.phase == RunnerPhase.Preparing ->
+                ServiceStatus(uiTextOf(R.string.home_status_preparing), StatusTone.Warning, busy = true)
+
+            runner.phase == RunnerPhase.Running ->
+                ServiceStatus(uiTextOf(R.string.home_status_running), StatusTone.Primary, busy = true)
+
+            runner.phase == RunnerPhase.Stopping ->
+                ServiceStatus(uiTextOf(R.string.home_status_stopping), StatusTone.Warning, busy = true)
+
+            else -> ServiceStatus(uiTextOf(R.string.home_status_ready), StatusTone.Primary)
+        }
 
     /** 唯一锁定规则：RunnerPhase.isBusy */
     val configurationLocked: Boolean
@@ -62,6 +109,21 @@ data class SessionUiState(
     val canStart: Boolean
         get() = runner.phase == RunnerPhase.Idle && activeConfiguration != null
 }
+
+/**
+ * 状态的语气，不是颜色
+ *
+ * UiState 里放具体 Color 会把 colorScheme 绑死在 ViewModel 上，深色主题下就换不掉了；
+ * 映射到实际颜色是 UI 层的事
+ */
+enum class StatusTone { Neutral, Primary, Warning, Error }
+
+/** [SessionUiState.serviceStatus] 的三件套：说什么、什么语气、要不要转圈 */
+data class ServiceStatus(
+    val text: UiText,
+    val tone: StatusTone,
+    val busy: Boolean = false,
+)
 
 enum class PreviewTouchAction { Down, Move, Up }
 
@@ -157,6 +219,12 @@ sealed interface SessionIntent {
     /** 向当前后端发起授权；不走 guarded，运行中也允许（授权不改配置） */
     data object RequestRemoteAccess : SessionIntent
     data class SetRemoteBackend(val backend: RemoteBackend) : SessionIntent
+
+    /**
+     * 手动开关特权进程；连着就断，没连就连（缺授权时顺带发起授权）
+     * 同样不走 guarded——特权进程崩在运行途中时，这恰恰是唯一的自救入口
+     */
+    data object TogglePrivilegedService : SessionIntent
 
     /** 引导弹窗上的「跳过检查」；只压引导，不影响授权判定 */
     data object SkipShizukuCheck : SessionIntent
