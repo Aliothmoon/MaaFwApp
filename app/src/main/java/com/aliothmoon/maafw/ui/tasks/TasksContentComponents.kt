@@ -41,6 +41,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaIconBadge
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import com.aliothmoon.maafw.ui.components.maaClickable
@@ -162,7 +163,7 @@ private fun TaskListHeader(locked: Boolean, onAdd: () -> Unit) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(RoundedCornerShape(MaaDesignTokens.CornerRadius.button))
+                .clip(RoundedCornerShape(MaaTheme.style.radii.button))
                 .maaClickable(enabled = !locked, onClick = onAdd)
                 .padding(
                     horizontal = MaaDesignTokens.Spacing.xs,

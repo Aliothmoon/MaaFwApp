@@ -9,6 +9,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
  * 描述面板：secondaryContainer 浅底色 + 内圆角的静态容器，
@@ -22,7 +23,7 @@ fun MaaDescriptionPanel(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
+        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
         modifier = modifier.fillMaxWidth(),
     ) {
         Box(

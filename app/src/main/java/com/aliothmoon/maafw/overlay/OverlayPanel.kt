@@ -31,6 +31,7 @@ import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.i18n.asUiText
 
 /**
@@ -53,13 +54,13 @@ fun OverlayPanel(
         modifier = modifier.fillMaxSize(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = MaaDesignTokens.Card.elevation,
-        shadowElevation = MaaDesignTokens.Card.elevation,
+        tonalElevation = MaaTheme.style.cardElevation,
+        shadowElevation = MaaTheme.style.cardElevation,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(MaaDesignTokens.Card.innerPadding),
+                .padding(MaaTheme.style.cardInnerPadding),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             PanelHeader(isLocked, onLockToggle, onClose)

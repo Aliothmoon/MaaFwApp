@@ -40,6 +40,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.i18n.asUiText
 
@@ -48,13 +49,14 @@ fun MaaCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     trailing: (@Composable () -> Unit)? = null,
+    // 默认参数不能读 CompositionLocal；innerPadding 两风格同值，静态回落安全
     contentPadding: PaddingValues = PaddingValues(MaaDesignTokens.Card.innerPadding),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = MaaDesignTokens.Card.elevation),
+        elevation = CardDefaults.cardElevation(defaultElevation = MaaTheme.style.cardElevation),
         border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
     ) {
         Column(
@@ -119,7 +121,7 @@ fun MaaCardSurface(
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
         color = color,
-        shadowElevation = MaaDesignTokens.Card.elevation,
+        shadowElevation = MaaTheme.style.cardElevation,
         border = border,
         content = content,
     )
@@ -243,13 +245,14 @@ fun MaaIconBadge(
     contentColor: Color,
     modifier: Modifier = Modifier,
     containerSize: Dp = MaaDesignTokens.IconContainer.md,
-    shape: Shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.button),
+    shape: Shape? = null,
 ) {
+    val badgeShape = shape ?: RoundedCornerShape(MaaTheme.style.radii.button)
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(containerSize)
-            .clip(shape)
+            .clip(badgeShape)
             .background(containerColor),
     ) {
         Icon(
@@ -292,7 +295,7 @@ fun MaaToneBadge(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(MaaDesignTokens.CornerRadius.inner))
+            .clip(RoundedCornerShape(MaaTheme.style.radii.inner))
             .background(tone.container)
             .padding(
                 horizontal = MaaDesignTokens.Spacing.sm,

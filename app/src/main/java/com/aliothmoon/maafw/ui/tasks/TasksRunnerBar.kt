@@ -44,6 +44,7 @@ import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 
 /**
@@ -61,7 +62,7 @@ internal fun RunnerToggleButton(
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
-    val shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner)
+    val shape = RoundedCornerShape(MaaTheme.style.radii.inner)
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
@@ -161,10 +162,10 @@ internal fun TasksQuickOptionsPanel(
                 )
                 // 吞掉卡片上的点击，否则会穿到下面的 scrim 上把自己关掉
                 .clickable(interactionSource = cardInteraction, indication = null, onClick = {}),
-            shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.card),
+            shape = RoundedCornerShape(MaaTheme.style.radii.card),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outlineVariant),
-            shadowElevation = MaaDesignTokens.Card.elevation,
+            shadowElevation = MaaTheme.style.cardElevation,
         ) {
             Column(
                 modifier = Modifier.padding(MaaDesignTokens.Spacing.md),
@@ -268,7 +269,7 @@ private fun ActionTile(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.height(ActionTileHeight),
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
+        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
         color = tint.copy(alpha = 0.08f),
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(MaaDesignTokens.Separator.thickness, tint.copy(alpha = 0.2f)),
