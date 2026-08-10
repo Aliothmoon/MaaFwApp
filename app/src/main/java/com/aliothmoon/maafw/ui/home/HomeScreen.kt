@@ -56,7 +56,6 @@ import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
-import com.aliothmoon.maafw.ui.components.SelectableChipGroup
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.maaClickable
 
@@ -447,7 +446,7 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
 }
 
 /**
- * 资源选择：SelectableChipGroup（直接引入自 MaaMeow，后面再对齐设计 token）
+ * 资源选择：MaaSingleChoiceFlow（描边胶囊，与悬浮窗/主题等单选项一致）
  */
 @Composable
 private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
@@ -461,13 +460,11 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            SelectableChipGroup(
-                label = "",
-                selectedValue = environment?.resource?.name ?: "",
+            MaaSingleChoiceFlow(
                 options = candidates.map { it.name to it.label },
-                onSelected = { onIntent(SessionIntent.SelectResource(it)) },
-                modifier = Modifier.fillMaxWidth(),
+                selected = environment?.resource?.name ?: "",
                 enabled = !state.configurationLocked,
+                onSelect = { onIntent(SessionIntent.SelectResource(it)) },
             )
         }
     }
