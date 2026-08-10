@@ -43,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +55,8 @@ import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
+import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.i18n.uiTextPlural
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaIconBadge
@@ -440,12 +441,12 @@ private fun ConfigurationSelectorCard(
                 )
                 Text(
                     text = if (active != null) {
-                        pluralStringResource(
+                        uiTextPlural(
                             R.plurals.config_current_summary,
                             active.tasks.size,
                             active.tasks.size,
                             active.effectiveTaskCount,
-                        )
+                        ).asString()
                     } else {
                         stringResource(R.string.config_select_hint)
                     },

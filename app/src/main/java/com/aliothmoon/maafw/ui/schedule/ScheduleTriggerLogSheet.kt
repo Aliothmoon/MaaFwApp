@@ -17,13 +17,13 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.TriggerLogEntry
 import com.aliothmoon.maafw.schedule.TriggerResult
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
-import kotlin.math.max
 
 /** 触发日志：只读，按时间倒序 */
 @Composable
@@ -85,7 +85,7 @@ private fun TriggerLogRow(entry: TriggerLogEntry) {
                     modifier = Modifier.weight(1f),
                 )
                 MaaToneBadge(
-                    text = entry.result.label(),
+                    text = entry.result.asUiText().asString(),
                     tone = when (entry.result) {
                         TriggerResult.TRIGGERED -> MaaTheme.palette.success
                         else -> MaaTheme.palette.warning
@@ -93,26 +93,10 @@ private fun TriggerLogRow(entry: TriggerLogEntry) {
                 )
             }
             Text(
-                text = buildTimeLine(entry),
+                text = triggerLogTimeUiText(entry.actualAt, entry.scheduledAt).asString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
-
-/** 计划时刻与实际时刻的差值就是 Doze 与厂商省电策略的延迟，超过阈值才显示 */
-@Composable
-private fun buildTimeLine(entry: TriggerLogEntry): String {
-    val actual = formatTriggerTime(entry.actualAt)
-    val delaySeconds = max(0L, (entry.actualAt - entry.scheduledAt) / 1000L)
-    if (entry.scheduledAt <= 0L || delaySeconds < DELAY_THRESHOLD_SECONDS) return actual
-    val delay = if (delaySeconds >= 60L) {
-        stringResource(R.string.schedule_interval_minutes, (delaySeconds / 60L).toInt())
-    } else {
-        "${delaySeconds}s"
-    }
-    return "$actual · ${stringResource(R.string.schedule_log_delay, delay)}"
-}
-
-private const val DELAY_THRESHOLD_SECONDS = 30L

@@ -127,7 +127,8 @@ object DiagnosticMessages {
         uiTextOf(
             R.string.diagnostic_resource_selection_missing,
             selected,
-            fallback?.let { UiText.Dynamic(it) } ?: uiTextOf(R.string.diagnostic_none),
+            // args 是 Any?，裸 String 与 UiText 混着传都行，解析时各走各的分支
+            fallback ?: uiTextOf(R.string.diagnostic_none),
         )
 
     fun activeConfigurationMissing(): UiText =

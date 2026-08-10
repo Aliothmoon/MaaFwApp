@@ -165,7 +165,6 @@
     <string name="schedule_next_trigger">Next %1$s</string>
     <string name="schedule_next_none">Incomplete rule, will not fire</string>
     <string name="schedule_disabled">Disabled</string>
-    <string name="schedule_last_trigger">Last %1$s</string>
     <string name="schedule_exact_alarm_blocked">Exact alarms are not allowed</string>
     <string name="schedule_exact_alarm_hint">Schedules still fire on time, but the status bar shows an alarm icon</string>
     <string name="schedule_exact_alarm_grant">Allow</string>
@@ -185,7 +184,6 @@
     <string name="schedule_edit_interval">Interval (minutes)</string>
     <string name="schedule_edit_enabled">Enabled</string>
     <string name="schedule_edit_save">Save</string>
-    <string name="schedule_edit_cancel">Cancel</string>
     <string name="schedule_edit_delete">Delete</string>
     <string name="schedule_edit_incomplete">Incomplete rule; it will not fire once saved</string>
 

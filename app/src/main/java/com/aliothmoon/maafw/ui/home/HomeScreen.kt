@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
@@ -45,6 +44,9 @@ import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
+import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.ui.i18n.asUiText
+import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaCard
@@ -314,7 +316,7 @@ private fun RunnerCard(state: SessionUiState) {
     MaaCard(title = stringResource(R.string.home_runner_status)) {
         val runner = state.runner
         val execution = runner.activeExecution
-        MaaInfoRow(stringResource(R.string.home_state), phaseText(runner.phase))
+        MaaInfoRow(stringResource(R.string.home_state), runner.phase.asUiText().asString())
         if (execution != null) {
             if (execution.totalTaskCount > 0) {
                 val animatedProgress by animateFloatAsState(
@@ -334,7 +336,7 @@ private fun RunnerCard(state: SessionUiState) {
             execution.currentTaskName?.let { MaaInfoRow(stringResource(R.string.home_current_task), it) }
         }
         runner.latestResult?.let { result ->
-            MaaInfoRow(stringResource(R.string.home_latest_result), resultText(result))
+            MaaInfoRow(stringResource(R.string.home_latest_result), result.asUiText().asString())
             result.taskResults.filterNot { it.success }.forEach { failure ->
                 Text(
                     text = failure.message
@@ -376,16 +378,7 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
             is ProjectState.Ready -> {
                 val errors = diagnostics.count { it.severity == DiagnosticSeverity.Error }
                 Text(
-                    text = if (errors > 0) {
-                        pluralStringResource(
-                            R.plurals.home_diagnostics_summary_with_errors,
-                            errors,
-                            diagnostics.size,
-                            errors,
-                        )
-                    } else {
-                        stringResource(R.string.home_diagnostics_summary, diagnostics.size)
-                    },
+                    text = diagnosticsSummaryUiText(diagnostics.size, errors).asString(),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (errors > 0) {
                         MaterialTheme.colorScheme.error
@@ -398,28 +391,3 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
     }
 }
 
-@Composable
-private fun phaseText(phase: RunnerPhase): String = when (phase) {
-    is RunnerPhase.Unavailable -> stringResource(R.string.phase_unavailable, phase.reason)
-    RunnerPhase.Idle -> stringResource(R.string.phase_idle)
-    RunnerPhase.Preparing -> stringResource(R.string.phase_preparing)
-    RunnerPhase.Running -> stringResource(R.string.phase_running)
-    RunnerPhase.Stopping -> stringResource(R.string.phase_stopping)
-}
-
-@Composable
-private fun resultText(result: ExecutionResult): String = when (result) {
-    is ExecutionResult.Completed -> pluralStringResource(
-        R.plurals.result_completed,
-        result.taskResults.size,
-        result.taskResults.size,
-    )
-
-    is ExecutionResult.CompletedWithFailures ->
-        result.taskResults.count { !it.success }.let { failures ->
-            pluralStringResource(R.plurals.result_completed_with_failures, failures, failures)
-        }
-
-    is ExecutionResult.Cancelled -> stringResource(R.string.result_cancelled)
-    is ExecutionResult.Failed -> stringResource(R.string.result_failed, result.reason)
-}

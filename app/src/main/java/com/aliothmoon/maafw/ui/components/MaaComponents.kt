@@ -41,7 +41,7 @@ import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTone
-import com.aliothmoon.maafw.ui.i18n.localized
+import com.aliothmoon.maafw.ui.i18n.asUiText
 
 @Composable
 fun MaaCard(
@@ -152,7 +152,7 @@ fun MaaDiagnosticList(
 ) {
     Column {
         diagnostics.forEach {
-            val prefix = if (showSeverity) "[${it.severity.localized()}] " else ""
+            val prefix = if (showSeverity) "[${it.severity.asUiText().asString()}] " else ""
             Text(
                 text = "$prefix${it.source}: ${it.message.asString()}",
                 style = MaterialTheme.typography.bodySmall,

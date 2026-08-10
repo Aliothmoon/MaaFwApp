@@ -51,7 +51,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
@@ -63,6 +62,8 @@ import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TemplateTask
 import com.aliothmoon.maafw.session.SessionUiState
+import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.i18n.uiTextPlural
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
@@ -348,11 +349,8 @@ private fun TemplatePreviewPage(
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
         ) {
             Text(
-                pluralStringResource(
-                    R.plurals.config_create_use_count,
-                    included.size,
-                    included.size,
-                ),
+                uiTextPlural(R.plurals.config_create_use_count, included.size, included.size)
+                    .asString(),
             )
         }
     }
@@ -549,11 +547,11 @@ private fun ConfigRowCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = pluralStringResource(
+                    text = uiTextPlural(
                         R.plurals.config_task_count,
                         configuration.tasks.size,
                         configuration.tasks.size,
-                    ),
+                    ).asString(),
                     style = MaterialTheme.typography.bodySmall,
                     color = contentColor.copy(alpha = MaaDesignTokens.Alpha.secondary),
                 )
@@ -611,12 +609,12 @@ private fun TemplateCard(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = pluralStringResource(
+                text = uiTextPlural(
                     R.plurals.template_task_count,
                     template.tasks.size,
                     template.tasks.count { it.enabled },
                     template.tasks.size,
-                ),
+                ).asString(),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -35,7 +35,6 @@ import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
-import com.aliothmoon.maafw.ui.i18n.localized
 
 /** 未勾选任务的文案区淡化程度；Checkbox 与删除钮不跟着淡，否则点不准 */
 private const val DisabledTaskAlpha = 0.55f

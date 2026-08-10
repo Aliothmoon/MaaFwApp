@@ -18,7 +18,16 @@ fun UiText?.isResource(@StringRes resId: Int, vararg args: Any?): Boolean {
 fun UiText?.describe(): String = when (this) {
     null -> "null"
     UiText.Empty -> "Empty"
-    is UiText.Dynamic -> "Dynamic(${value})"
+    is UiText.Verbatim -> "Verbatim($value)"
     is UiText.Resource -> "Resource(id=$resId, args=$args)"
+    is UiText.Plural -> "Plural(id=$resId, count=$count, args=$args)"
     is UiText.Joined -> "Joined(${parts.joinToString { it.describe() }})"
+}
+
+/** [isResource] 的复数版；[args] 省略即只比 id 与选形数 */
+fun UiText?.isPlural(resId: Int, count: Int, vararg args: Any?): Boolean {
+    val plural = this as? UiText.Plural ?: return false
+    if (plural.resId != resId || plural.count != count) return false
+    if (args.isEmpty()) return true
+    return plural.args == args.toList()
 }

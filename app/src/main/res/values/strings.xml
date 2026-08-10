@@ -156,7 +156,6 @@
     <string name="schedule_next_trigger">下次 %1$s</string>
     <string name="schedule_next_none">规则不完整，不会触发</string>
     <string name="schedule_disabled">已停用</string>
-    <string name="schedule_last_trigger">上次 %1$s</string>
     <string name="schedule_exact_alarm_blocked">系统未允许精确闹钟</string>
     <string name="schedule_exact_alarm_hint">仍会按时触发，但状态栏会多一个闹钟图标</string>
     <string name="schedule_exact_alarm_grant">去允许</string>
@@ -176,7 +175,6 @@
     <string name="schedule_edit_interval">间隔（分钟）</string>
     <string name="schedule_edit_enabled">启用</string>
     <string name="schedule_edit_save">保存</string>
-    <string name="schedule_edit_cancel">取消</string>
     <string name="schedule_edit_delete">删除</string>
     <string name="schedule_edit_incomplete">规则不完整，保存后不会触发</string>
 

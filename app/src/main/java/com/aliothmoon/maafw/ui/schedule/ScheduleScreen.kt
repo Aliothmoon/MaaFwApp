@@ -32,6 +32,7 @@ import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleRow
 import com.aliothmoon.maafw.schedule.ScheduleStrategy
 import com.aliothmoon.maafw.schedule.ScheduleUiState
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaCard
@@ -198,7 +199,7 @@ private fun ScheduleRowCard(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    text = strategy.ruleSummary(),
+                    text = strategy.asUiText().asString(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

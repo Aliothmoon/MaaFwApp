@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.i18n
 
 import android.content.Context
+import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -14,6 +15,9 @@ import androidx.compose.ui.platform.LocalContext
  * 资源 id 与参数，等 UI 解析。切语言后 Activity 重建，同一个 [UiText] 自然出新语言的文案；
  * 若在产出处就 `getString`，那一刻的语言会被永久冻进值里
  *
+ * **凡是被当作值传递的文案（函数返回值、data class 字段、Intent/Effect 载荷）都必须是
+ * UiText**；就地渲染无参字面量仍直接用 `stringResource`，那是读法不是载体
+ *
  * **不可持久化**：`resId` 是构建期生成的 int，跨版本会变。要落盘的东西存稳定枚举或原文，
  * 读回来再包成 UiText
  */
@@ -21,12 +25,30 @@ import androidx.compose.ui.platform.LocalContext
 sealed interface UiText {
     data object Empty : UiText
 
-    /** 已经是成品文本：PI 里的 label、MaaFramework 抛回的技术原文等，不翻译 */
-    data class Dynamic(val value: String) : UiText
+    /**
+     * 已经是成品文本，**不参与本地化**
+     *
+     * 别直接构造，走 [uiTextFromProject] / [uiTextFromFramework] / [uiTextFormatted]——
+     * 这三个名字说清了「为什么不翻译」，而裸的 `Verbatim("…")` 看不出是有意还是漏了。
+     * 单模块下 `internal` 挡不住任何人，靠 `UiTextBoundaryTest` 扫源码兜底
+     */
+    data class Verbatim(val value: String) : UiText
 
     /** [args] 里可以再放 UiText，解析时递归展开 */
     data class Resource(
         @param:StringRes val resId: Int,
+        val args: List<Any?> = emptyList(),
+    ) : UiText
+
+    /**
+     * [count] 只用来选单复数形式，**不会自动进 [args]**——文案里要露出这个数就得再传一次
+     *
+     * 不能自动前置：`home_diagnostics_summary_with_errors` 与 `template_task_count`
+     * 这两条的选形数都不是第一个占位符，自动塞会当场对不上
+     */
+    data class Plural(
+        @param:PluralsRes val resId: Int,
+        val count: Int,
         val args: List<Any?> = emptyList(),
     ) : UiText
 
@@ -39,37 +61,58 @@ sealed interface UiText {
 fun uiTextOf(@StringRes resId: Int, vararg args: Any?): UiText =
     UiText.Resource(resId = resId, args = args.toList())
 
-/** 空白归一成 [UiText.Empty]，免得调用方到处判 null 与 isBlank */
-fun uiTextDynamic(value: String?): UiText =
-    if (value.isNullOrBlank()) UiText.Empty else UiText.Dynamic(value)
+fun uiTextPlural(@PluralsRes resId: Int, count: Int, vararg args: Any?): UiText =
+    UiText.Plural(resId = resId, count = count, args = args.toList())
 
-fun uiTextDynamicOr(value: String?, @StringRes fallback: Int): UiText =
-    if (value.isNullOrBlank()) uiTextOf(fallback) else UiText.Dynamic(value)
+/** PI 作者写的文案：task / option 的 label 与 description，外壳无权翻译 */
+fun uiTextFromProject(label: String?): UiText = verbatimOrEmpty(label)
 
-/** 拼接时先滤掉 [UiText.Empty]，否则分隔符会在两端多出来 */
-fun uiTextJoin(vararg parts: UiText, separator: UiText = UiText.Empty): UiText =
-    UiText.Joined(parts = parts.filterNot { it is UiText.Empty }, separator = separator)
+/** MaaFramework 抛回的原文：错误信息、节点名；翻译了就对不上官方文档与源码 */
+fun uiTextFromFramework(raw: String?): UiText = verbatimOrEmpty(raw)
 
-fun uiTextLines(vararg lines: UiText): UiText =
-    uiTextJoin(*lines, separator = UiText.Dynamic("\n"))
+/** java.time 或数值格式化的产物，本身已随 locale 变化，不需要再查资源 */
+fun uiTextFormatted(value: String?): UiText = verbatimOrEmpty(value)
+
+/**
+ * 拼接时先滤掉 [UiText.Empty]，否则分隔符会在两端多出来
+ *
+ * [separator] 收 String 而非 UiText：分隔符基本是标点或空白，这样调用点不必为它造一个
+ * Verbatim。真需要随 locale 变的分隔符（中文顿号 vs 英文逗号）就直接构造 [UiText.Joined]
+ */
+fun uiTextJoin(vararg parts: UiText, separator: String = ""): UiText =
+    UiText.Joined(
+        parts = parts.filterNot { it is UiText.Empty },
+        // 不能走 verbatimOrEmpty：分隔符常是纯空白，那个会把它判成 Empty
+        separator = if (separator.isEmpty()) UiText.Empty else UiText.Verbatim(separator),
+    )
+
+fun uiTextLines(vararg lines: UiText): UiText = uiTextJoin(*lines, separator = "\n")
 
 fun UiText?.resolve(context: Context): String = when (this) {
     null, UiText.Empty -> ""
-    is UiText.Dynamic -> value
-    is UiText.Resource -> {
-        val resolved = args.map { if (it is UiText) it.resolve(context) else it }.toTypedArray()
-        context.getString(resId, *resolved)
-    }
-
+    is UiText.Verbatim -> value
+    is UiText.Resource -> context.getString(resId, *resolveArgs(context))
+    is UiText.Plural -> context.resources.getQuantityString(resId, count, *resolveArgs(context))
     is UiText.Joined -> parts.joinToString(separator.resolve(context)) { it.resolve(context) }
 }
 
 /**
- * 读一次 [LocalConfiguration] 建立依赖：locale 变化经配置更新到达时本组合要重跑，
- * 否则同一个 UiText 会留着旧语言的解析结果
+ * 读一次 [LocalConfiguration] 建立依赖
+ *
+ * 当前 MainActivity 的 configChanges 不含 locale，切语言必然重建 Activity，这一步其实
+ * 用不上；留着是防将来往 configChanges 里加东西时静默失效
  */
 @Composable
 fun UiText?.asString(): String {
     LocalConfiguration.current
     return resolve(LocalContext.current)
 }
+
+private fun verbatimOrEmpty(value: String?): UiText =
+    if (value.isNullOrBlank()) UiText.Empty else UiText.Verbatim(value)
+
+private fun UiText.resolveArgs(context: Context): Array<Any?> = when (this) {
+    is UiText.Resource -> args
+    is UiText.Plural -> args
+    else -> emptyList()
+}.map { if (it is UiText) it.resolve(context) else it }.toTypedArray()

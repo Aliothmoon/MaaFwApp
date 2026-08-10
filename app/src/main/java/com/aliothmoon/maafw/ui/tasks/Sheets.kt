@@ -56,8 +56,8 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.maaClickable
-import com.aliothmoon.maafw.ui.i18n.displayLabel
-import com.aliothmoon.maafw.ui.i18n.localized
+import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 
 /**
@@ -167,7 +167,7 @@ fun AddTasksSheet(
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
                         items(catalog, key = { it.groupName }) { group ->
                             GroupTabChip(
-                                label = group.displayLabel(),
+                                label = group.asUiText().asString(),
                                 tone = toneByGroup[group.groupName] ?: MaaTheme.palette.neutral,
                                 selected = group.groupName == selectedGroupName,
                                 onClick = { selectedGroupName = group.groupName },
@@ -258,7 +258,7 @@ private fun GroupHeader(group: TaskCatalogGroup, tone: MaaTone) {
                 .background(tone.content),
         )
         Text(
-            text = group.displayLabel(),
+            text = group.asUiText().asString(),
             style = MaterialTheme.typography.titleSmall,
             color = tone.content,
             modifier = Modifier.weight(1f),
