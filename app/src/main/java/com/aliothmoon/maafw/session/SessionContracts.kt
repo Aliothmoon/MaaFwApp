@@ -21,6 +21,7 @@ import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.DisplayResolution
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
@@ -39,6 +40,7 @@ data class SessionUiState(
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     val screenSaverEnabled: Boolean = false,
+    val resolutionPreference: ResolutionPreference = ResolutionPreference.P720,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
      * 前台模式是设备物理屏尺寸。项目未就绪时为 null
@@ -192,6 +194,9 @@ sealed interface SessionIntent {
 
     /** 仅后台模式：运行期是否自动盖屏保 */
     data class SetScreenSaverEnabled(val enabled: Boolean) : SessionIntent
+
+    /** 虚拟屏分辨率偏好：720P / 1080P */
+    data class SetResolutionPreference(val preference: ResolutionPreference) : SessionIntent
 
     /** 开启前台模式的控制层；要 Application 上下文挂窗口，转成 Effect */
     data object ShowOverlay : SessionIntent

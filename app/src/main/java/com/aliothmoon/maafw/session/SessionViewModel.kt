@@ -34,8 +34,7 @@ import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
-import com.aliothmoon.maafw.runner.physicalDisplayResolution
-import com.aliothmoon.maafw.runner.resolveDisplayResolution
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +58,7 @@ private data class SettingsSnapshot(
     val runMode: RunMode,
     val overlayControlMode: OverlayControlMode,
     val screenSaverEnabled: Boolean,
+    val resolutionPreference: ResolutionPreference,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -94,7 +94,10 @@ class SessionViewModel(
         appSettings.runMode,
         appSettings.overlayControlMode,
         appSettings.screenSaverEnabled,
-    ) { runMode, overlayMode, screenSaver -> SettingsSnapshot(runMode, overlayMode, screenSaver) }
+        appSettings.resolutionPreference,
+    ) { runMode, overlayMode, screenSaver, resolution ->
+        SettingsSnapshot(runMode, overlayMode, screenSaver, resolution)
+    }
 
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
@@ -200,6 +203,7 @@ class SessionViewModel(
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
             screenSaverEnabled = settings.screenSaverEnabled,
+            resolutionPreference = settings.resolutionPreference,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
@@ -214,10 +218,7 @@ class SessionViewModel(
             taskCatalog = session.taskCatalog,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
-            previewResolution = when (runMode) {
-                RunMode.FOREGROUND -> physicalDisplayResolution()
-                RunMode.BACKGROUND -> resolveDisplayResolution(project.definition.controller)
-            },
+            previewResolution = settings.resolutionPreference.resolution,
         )
     }
 
@@ -340,6 +341,10 @@ class SessionViewModel(
 
             is SessionIntent.SetOverlayControlMode -> guarded {
                 appSettings.setOverlayControlMode(intent.mode)
+            }
+
+            is SessionIntent.SetResolutionPreference -> guarded {
+                appSettings.setResolutionPreference(intent.preference)
             }
 
             // 不走 guarded：屏保只盖窗口，与运行配置无关，运行中恰恰是它最该开的时候

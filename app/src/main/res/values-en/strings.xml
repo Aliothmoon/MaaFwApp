@@ -344,4 +344,7 @@
     <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
     <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
     <string name="schedule_default_name">Schedule %1$d</string>
+    <string name="settings_resolution">Virtual display resolution</string>
+    <string name="settings_resolution_720p">720P</string>
+    <string name="settings_resolution_1080p">1080P</string>
 </resources>

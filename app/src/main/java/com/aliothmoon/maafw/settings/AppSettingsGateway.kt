@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -18,4 +19,7 @@ interface AppSettingsGateway {
 
     val screenSaverEnabled: StateFlow<Boolean>
     suspend fun setScreenSaverEnabled(enabled: Boolean)
+
+    val resolutionPreference: StateFlow<ResolutionPreference>
+    suspend fun setResolutionPreference(preference: ResolutionPreference)
 }

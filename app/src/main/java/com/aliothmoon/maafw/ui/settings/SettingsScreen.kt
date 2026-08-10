@@ -24,6 +24,7 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.session.SessionIntent
@@ -68,6 +69,7 @@ fun SettingsScreen(
             AppearanceCard(state, onIntent)
             LanguageCard(state, onIntent)
             BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
+            ResolutionCard(state, onIntent)
             DeveloperCard(state, onIntent)
             AboutCard()
         }
@@ -196,6 +198,24 @@ private fun BackendCard(
             text = stringResource(R.string.permission_backend_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * 虚拟屏分辨率：720P / 1080P（对齐 MaaMeow 的可配置偏好）
+ */
+@Composable
+private fun ResolutionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_resolution)) {
+        MaaSingleChoiceFlow(
+            options = listOf(
+                ResolutionPreference.P720 to stringResource(R.string.settings_resolution_720p),
+                ResolutionPreference.P1080 to stringResource(R.string.settings_resolution_1080p),
+            ),
+            selected = state.resolutionPreference,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SetResolutionPreference(it)) },
         )
     }
 }

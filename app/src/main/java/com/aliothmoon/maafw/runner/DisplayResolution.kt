@@ -1,56 +1,18 @@
 package com.aliothmoon.maafw.runner
 
-import android.content.res.Resources
-import com.aliothmoon.maafw.domain.ControllerDefinition
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
-
-/** 虚拟屏尺寸；同时定 native controller 的 screen_resolution 与预览 SurfaceView 的 fixed size */
+/** 虚拟屏尺寸；预览 SurfaceView 的 fixed size 也用它 */
 data class DisplayResolution(val width: Int, val height: Int) {
     val aspectRatio: Float
         get() = if (height > 0) width.toFloat() / height else 1f
 }
 
 /**
- * 由 PI controller 的 display_* 声明推导虚拟屏分辨率（docs/privileged-runtime.md §5）
- * 官方语义是「截图缩放到该边长」；这里是自己建屏，直接按目标边长建，省掉再缩放一次
+ * 虚拟屏分辨率偏好（对齐 MaaMeow 的 ResolutionPreference）
  *
- * 方向固定横屏：虚拟屏与设备旋转无关，PI 的模板一般按横屏截取——这是本项目的假设，不是协议规定
- * 边长取偶数：奇数宽在部分编码器上会导致 stride 与预期不符
+ * 用户显式选 720P / 1080P，不再由 PI controller 的 display_* 推导；
+ * PI 的 display_* 只在执行侧由特权进程自己读
  */
-fun resolveDisplayResolution(controller: ControllerDefinition): DisplayResolution {
-    val metrics = Resources.getSystem().displayMetrics
-    val rawLong = max(metrics.widthPixels, metrics.heightPixels)
-    val rawShort = min(metrics.widthPixels, metrics.heightPixels)
-    if (controller.displayRaw || rawShort <= 0) {
-        return DisplayResolution(rawLong.alignEven(), rawShort.alignEven())
-    }
-    // 固定 16:9（对齐 MaaMeow 的虚拟屏比例）：不随设备物理比例变，否则竖屏长条设备会算出非标准分辨率
-    val aspect = 16.0 / 9.0
-    controller.displayLongSide?.takeIf { it > 0 }?.let { long ->
-        return DisplayResolution(long.alignEven(), (long / aspect).roundToInt().alignEven())
-    }
-    val short = controller.displayShortSide?.takeIf { it > 0 } ?: DEFAULT_SHORT_SIDE
-    return DisplayResolution((short * aspect).roundToInt().alignEven(), short.alignEven())
+enum class ResolutionPreference(val resolution: DisplayResolution) {
+    P720(DisplayResolution(1280, 720)),
+    P1080(DisplayResolution(1920, 1080)),
 }
-
-/**
- * 主屏模式下的预览尺寸：设备物理屏的横屏长短边
- *
- * 只供 UI 摆预览用。执行侧的 screen_resolution 不走这里——特权进程的采集器自己读 DisplayInfo，
- * 两边算法不同（这里拿不到挖孔与 overscan 的修正），必须以采集器那份为准。
- * 强制横屏（与虚拟屏一致）：按当前旋转取会在竖屏设备上让预览卡过高、把任务列表挤没，
- * 这里取长短边让前台预览卡与后台布局对齐
- */
-fun physicalDisplayResolution(): DisplayResolution {
-    val metrics = Resources.getSystem().displayMetrics
-    val long = max(metrics.widthPixels, metrics.heightPixels)
-    val short = min(metrics.widthPixels, metrics.heightPixels)
-    return DisplayResolution(long.alignEven(), short.alignEven())
-}
-
-/** PI V2 的 display_short_side 默认值 */
-private const val DEFAULT_SHORT_SIDE = 720
-
-private fun Int.alignEven(): Int = this and 1.inv()

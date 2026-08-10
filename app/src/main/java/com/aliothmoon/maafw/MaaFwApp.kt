@@ -137,6 +137,7 @@ val appModule = module {
             apkPath = context.applicationInfo.sourceDir,
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
             runMode = get<AppSettingsManager>().runMode::value,
+            resolutionPreference = get<AppSettingsManager>().resolutionPreference::value,
             scope = get(named<AppCoroutineScope>()),
             ioDispatcher = Dispatchers.IO,
         )

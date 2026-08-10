@@ -335,4 +335,7 @@
     <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
     <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
     <string name="schedule_default_name">定时任务 %1$d</string>
+    <string name="settings_resolution">虚拟屏分辨率</string>
+    <string name="settings_resolution_720p">720P</string>
+    <string name="settings_resolution_1080p">1080P</string>
 </resources>

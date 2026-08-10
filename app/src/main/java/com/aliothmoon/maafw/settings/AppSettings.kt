@@ -42,4 +42,8 @@ data class AppSettings(
     /** 后台模式运行期是否自动盖上屏保；默认关，盖住整块屏幕这种事要用户先点头 */
     @PrefKey(default = "false")
     val screenSaverEnabled: String = "false",
+
+    /** [com.aliothmoon.maafw.runner.ResolutionPreference] 的 name */
+    @PrefKey(default = "P720")
+    val resolutionPreference: String = "P720",
 )

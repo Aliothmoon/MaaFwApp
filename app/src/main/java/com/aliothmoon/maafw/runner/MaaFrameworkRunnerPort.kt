@@ -37,6 +37,8 @@ class MaaFrameworkRunnerPort(
     private val nativeLibraryDir: String,
     /** 每轮开始时现读，不缓存：用户可能在两轮之间改了运行模式 */
     private val runMode: () -> RunMode,
+    /** 同上：分辨率偏好可能两轮之间被改 */
+    private val resolutionPreference: () -> ResolutionPreference,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val serviceManager: RemoteServiceManager = RemoteServiceManager,
@@ -174,7 +176,7 @@ class MaaFrameworkRunnerPort(
         }
         // 主屏模式不建屏也不设分辨率：尺寸是设备当下的物理尺寸，由特权进程侧的采集器供数
         val (width, height) = if (mode == RunMode.BACKGROUND) {
-            resolveDisplayResolution(plan.controller).also { (w, h) ->
+            resolutionPreference().resolution.also { (w, h) ->
                 service.setVirtualDisplayResolution(w, h, DefaultDisplayConfig.DPI)
             }
         } else {
