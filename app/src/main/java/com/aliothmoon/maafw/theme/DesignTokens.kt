@@ -78,7 +78,7 @@ object MaaDesignTokens {
 
     object Card {
         /** 卡片类容器统一轻投影；chip/面板/按钮保持平面（docs/design-system.md §4） */
-        val elevation: Dp = 2.dp
+        val elevation: Dp = 1.dp
 
         /** 拖拽中抬起的高度，让被拖的行压过邻居 */
         val dragElevation: Dp = 6.dp
