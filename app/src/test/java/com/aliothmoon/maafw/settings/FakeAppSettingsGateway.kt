@@ -17,4 +17,10 @@ class FakeAppSettingsGateway : AppSettingsGateway {
     override suspend fun setOverlayControlMode(mode: OverlayControlMode) {
         overlayControlMode.value = mode
     }
+
+    override val screenSaverEnabled = MutableStateFlow(false)
+
+    override suspend fun setScreenSaverEnabled(enabled: Boolean) {
+        screenSaverEnabled.value = enabled
+    }
 }

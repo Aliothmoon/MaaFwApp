@@ -35,6 +35,7 @@ data class SessionUiState(
     val developerMode: Boolean = false,
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
+    val screenSaverEnabled: Boolean = false,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
      * 前台模式是设备物理屏尺寸。项目未就绪时为 null
@@ -127,8 +128,14 @@ sealed interface SessionIntent {
 
     data class SetOverlayControlMode(val mode: OverlayControlMode) : SessionIntent
 
+    /** 仅后台模式：运行期是否自动盖屏保 */
+    data class SetScreenSaverEnabled(val enabled: Boolean) : SessionIntent
+
     /** 开启前台模式的控制层；要 Application 上下文挂窗口，转成 Effect */
     data object ShowOverlay : SessionIntent
+
+    /** 不等运行开始，立刻盖上屏保；同样要 Application 上下文 */
+    data object ShowScreenSaver : SessionIntent
     data object ReloadProject : SessionIntent
 
     data object Start : SessionIntent
@@ -181,4 +188,5 @@ sealed interface SessionEffect {
     data object StartRunForegroundService : SessionEffect
 
     data object ShowOverlay : SessionEffect
+    data object ShowScreenSaver : SessionEffect
 }

@@ -162,6 +162,14 @@
     <string name="settings_overlay_show">开启控制层</string>
     <string name="settings_overlay_mode_only_foreground">仅前台主屏模式下生效</string>
 
+    <!-- 运行期屏保 -->
+    <string name="settings_screen_saver">运行期屏保</string>
+    <string name="settings_screen_saver_auto">运行时自动盖上</string>
+    <string name="settings_screen_saver_hint">后台模式跑任务时把整屏压黑，只留时钟、电量与最新一条日志；滑动解锁撤掉，任务结束会自动撤掉</string>
+    <string name="settings_screen_saver_show">立即盖上</string>
+    <string name="screensaver_idle">待机中</string>
+    <string name="screensaver_swipe_to_unlock">滑动解锁</string>
+
     <!-- 定时任务 -->
     <string name="notification_channel_schedule">定时触发</string>
     <string name="notification_channel_schedule_desc">定时到点时短暂出现</string>

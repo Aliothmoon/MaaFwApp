@@ -52,10 +52,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 
-/** app 设置的一次快照；combine 的元数上限是 5，两项设置得先并成一个 */
+/** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
 private data class SettingsSnapshot(
     val runMode: RunMode,
     val overlayControlMode: OverlayControlMode,
+    val screenSaverEnabled: Boolean,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -90,7 +91,8 @@ class SessionViewModel(
     private val settingsState: Flow<SettingsSnapshot> = combine(
         appSettings.runMode,
         appSettings.overlayControlMode,
-    ) { runMode, overlayMode -> SettingsSnapshot(runMode, overlayMode) }
+        appSettings.screenSaverEnabled,
+    ) { runMode, overlayMode, screenSaver -> SettingsSnapshot(runMode, overlayMode, screenSaver) }
 
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
@@ -195,6 +197,7 @@ class SessionViewModel(
             developerMode = config.developerMode,
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
+            screenSaverEnabled = settings.screenSaverEnabled,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
@@ -337,7 +340,12 @@ class SessionViewModel(
                 appSettings.setOverlayControlMode(intent.mode)
             }
 
+            // 不走 guarded：屏保只盖窗口，与运行配置无关，运行中恰恰是它最该开的时候
+            is SessionIntent.SetScreenSaverEnabled ->
+                appSettings.setScreenSaverEnabled(intent.enabled)
+
             SessionIntent.ShowOverlay -> effectChannel.send(SessionEffect.ShowOverlay)
+            SessionIntent.ShowScreenSaver -> effectChannel.send(SessionEffect.ShowScreenSaver)
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {

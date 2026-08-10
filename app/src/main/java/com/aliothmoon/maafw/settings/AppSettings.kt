@@ -38,4 +38,8 @@ data class AppSettings(
     /** [com.aliothmoon.maafw.domain.OverlayControlMode] 的 name；仅前台模式生效 */
     @PrefKey(default = "FLOAT_BALL")
     val overlayControlMode: String = "FLOAT_BALL",
+
+    /** 后台模式运行期是否自动盖上屏保；默认关，盖住整块屏幕这种事要用户先点头 */
+    @PrefKey(default = "false")
+    val screenSaverEnabled: String = "false",
 )

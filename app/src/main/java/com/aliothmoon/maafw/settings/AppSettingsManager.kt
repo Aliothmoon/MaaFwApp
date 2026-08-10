@@ -63,6 +63,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         .map { parseOverlayMode(it.overlayControlMode) }
         .stateIn(scope, SharingStarted.Eagerly, parseOverlayMode(initialSettings.overlayControlMode))
 
+    override val screenSaverEnabled: StateFlow<Boolean> = settings
+        .map { it.screenSaverEnabled.toBoolean() }
+        .stateIn(scope, SharingStarted.Eagerly, initialSettings.screenSaverEnabled.toBoolean())
+
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
         context.dataStore.edit { it[startupBackend] = backend.name }
     }
@@ -85,6 +89,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setOverlayControlMode(mode: OverlayControlMode): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[overlayControlMode] = mode.name }
+    }
+
+    override suspend fun setScreenSaverEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[screenSaverEnabled] = enabled.toString() }
     }
 
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */

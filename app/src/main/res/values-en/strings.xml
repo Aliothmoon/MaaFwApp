@@ -171,6 +171,14 @@
     <string name="settings_overlay_show">Enable control layer</string>
     <string name="settings_overlay_mode_only_foreground">Applies to primary-display mode only</string>
 
+    <!-- Screen saver -->
+    <string name="settings_screen_saver">Screen saver</string>
+    <string name="settings_screen_saver_auto">Cover the screen while running</string>
+    <string name="settings_screen_saver_hint">Blacks out the screen while a background run is in progress, leaving only the clock, battery and the latest log line; swipe to unlock, and it is removed automatically when the run ends</string>
+    <string name="settings_screen_saver_show">Cover now</string>
+    <string name="screensaver_idle">Standing by</string>
+    <string name="screensaver_swipe_to_unlock">Slide to unlock</string>
+
     <!-- Schedules -->
     <string name="notification_channel_schedule">Schedule triggers</string>
     <string name="notification_channel_schedule_desc">Appears briefly when a schedule fires</string>

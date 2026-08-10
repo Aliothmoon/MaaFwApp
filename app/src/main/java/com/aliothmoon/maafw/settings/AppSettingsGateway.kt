@@ -15,4 +15,7 @@ interface AppSettingsGateway {
 
     val overlayControlMode: StateFlow<OverlayControlMode>
     suspend fun setOverlayControlMode(mode: OverlayControlMode)
+
+    val screenSaverEnabled: StateFlow<Boolean>
+    suspend fun setScreenSaverEnabled(enabled: Boolean)
 }

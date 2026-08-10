@@ -64,6 +64,7 @@ import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.overlay.OverlayController
+import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
@@ -112,6 +113,7 @@ fun AppRoot(
     viewModel: SessionViewModel = koinViewModel(),
     scheduleViewModel: ScheduleViewModel = koinViewModel(),
     overlayController: OverlayController = koinInject(),
+    screenSaverManager: ScreenSaverOverlayManager = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
@@ -182,6 +184,7 @@ fun AppRoot(
 
                     // 控制层挂在 WindowManager 上、跨 Activity 存活，由 Application 级单例持有
                     SessionEffect.ShowOverlay -> overlayController.show()
+                    SessionEffect.ShowScreenSaver -> screenSaverManager.show()
 
                     is SessionEffect.RequestSystemPermission -> {
                         // 系统权限页以调用方 Activity 为宿主；拿不到就只能放弃这次请求
