@@ -182,14 +182,8 @@ private fun BackendCard(
     val access = settingsState.remoteAccess
     MaaCard(title = stringResource(R.string.permission_backend)) {
         MaaSingleChoiceFlow(
-            options = RemoteBackend.entries.map { entry ->
-                val suffix = if (access.isAvailable(entry)) {
-                    ""
-                } else {
-                    "（${stringResource(R.string.permission_backend_unavailable)}）"
-                }
-                entry to "${entry.display}$suffix"
-            },
+            // 对齐 MaaMeow：只列后端名，不展示「可用/不可用」——选哪个都行，可用性交给连接流程判
+            options = RemoteBackend.entries.map { it to it.display },
             selected = access.configuredBackend,
             enabled = !locked,
             onSelect = { onSettingsIntent(SettingsIntent.SetBackend(it)) },
