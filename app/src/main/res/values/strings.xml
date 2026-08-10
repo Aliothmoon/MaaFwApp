@@ -143,6 +143,24 @@
     <string name="notification_run_running">正在执行</string>
     <string name="notification_run_stopping">正在停止</string>
 
+    <!-- 前台模式控制层 -->
+    <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板。只拦按键，不读取屏幕内容</string>
+    <string name="overlay_panel_title">运行控制</string>
+    <string name="overlay_back_to_app">回到应用</string>
+    <string name="overlay_lock">锁定位置</string>
+    <string name="overlay_unlock">解除锁定</string>
+    <string name="overlay_ball_idle">空闲</string>
+    <string name="overlay_ball_preparing">准备中</string>
+    <string name="overlay_ball_running">运行中</string>
+    <string name="overlay_ball_stopping">停止中</string>
+    <string name="overlay_ball_unavailable">不可用</string>
+    <string name="settings_overlay_mode">控制层唤起方式</string>
+    <string name="settings_overlay_mode_ball">悬浮球</string>
+    <string name="settings_overlay_mode_accessibility">音量键</string>
+    <string name="settings_overlay_mode_hint_ball">屏边常驻一个小球，点开就是控制面板</string>
+    <string name="settings_overlay_mode_hint_accessibility">同时按音量 + 与音量 − 唤起面板，屏幕上零占用；需要无障碍服务</string>
+    <string name="settings_overlay_mode_only_foreground">仅前台主屏模式下生效</string>
+
     <!-- 定时任务 -->
     <string name="notification_channel_schedule">定时触发</string>
     <string name="notification_channel_schedule_desc">定时到点时短暂出现</string>

@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
+import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.constant.PrivilegedGrant
@@ -231,6 +232,17 @@ class RemoteServiceImpl : RemoteService.Stub() {
             PermissionGrantHelper.grantBackgroundUnrestricted(packageName, uid)
         ) {
             granted = granted or PrivilegedGrant.BACKGROUND
+        }
+        if (permissions and PrivilegedGrant.OVERLAY != 0 &&
+            PermissionGrantHelper.grantFloatingWindowPermission(packageName, uid)
+        ) {
+            granted = granted or PrivilegedGrant.OVERLAY
+        }
+        // 服务 id 不用过 binder 传：特权进程跑的就是这个 APK，直接引用常量即可
+        if (permissions and PrivilegedGrant.ACCESSIBILITY != 0 &&
+            PermissionGrantHelper.grantAccessibilityService(AccessibilityHelperService.SERVICE_ID)
+        ) {
+            granted = granted or PrivilegedGrant.ACCESSIBILITY
         }
         Ln.i("$TAG: grantPermissions($packageName) requested=$permissions granted=$granted")
         return granted

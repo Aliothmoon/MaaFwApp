@@ -25,6 +25,15 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!--
+      前台模式的控制层：屏幕让给了目标应用，没有悬浮球或音量键就没法停任务
+      两项都由特权进程代授（AppOps / Settings.Secure），用户不必逐个去系统页点
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission
+        android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:name=".MaaFwApp"
         android:allowBackup="true"
@@ -72,6 +81,19 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the app process alive while the privileged service drives a MaaFramework run" />
+        </service>
+
+        <!-- 只过滤按键，不读窗口内容；用途见 AccessibilityHelperService -->
+        <service
+            android:name=".service.AccessibilityHelperService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_helper_service_config" />
         </service>
 
         <!-- 闹钟落点：exported 才收得到 AlarmManager 发的广播 -->

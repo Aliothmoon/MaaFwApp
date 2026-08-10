@@ -13,7 +13,7 @@ import java.io.File
 class UiTextBoundaryTest {
 
     /**
-     * `ui/` 之外不许就地把资源解析成 String
+     * 渲染层之外不许就地把资源解析成 String
      *
      * 禁的是解析动作，不是引用资源——`uiTextOf(R.string.x)` 正是要的写法，
      * 而 `getString(R.string.x)` 会把那一刻的语言冻进值里，之后切语言不再更新
@@ -21,7 +21,7 @@ class UiTextBoundaryTest {
     @Test
     fun `产出层不就地解析字符串资源`() {
         val offenders = sourceFiles()
-            .filter { it.toRelative().substringBefore('/') != "ui" }
+            .filter { it.toRelative().substringBefore('/') !in RENDER_LAYERS }
             .filterNot { it.toRelative() in EAGER_RESOLVE_ALLOWED }
             .flatMap { file ->
                 stripComments(file.readText()).lines().withIndex()
@@ -72,6 +72,14 @@ class UiTextBoundaryTest {
 
     private companion object {
         const val SOURCE_ROOT = "src/main/java/com/aliothmoon/maafw"
+
+        /**
+         * 渲染层：就地把资源画出来，不把文案当值传，规则不约束它们
+         *
+         * overlay 与 ui 平级而不是它的子目录——它是独立于 Activity 的第二个 UI 面，
+         * 跨 Activity 存活，挂在 WindowManager 上
+         */
+        val RENDER_LAYERS = setOf("ui", "overlay")
         const val UI_TEXT_FILE = "i18n/UiText.kt"
 
         /**

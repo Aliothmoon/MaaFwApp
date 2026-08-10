@@ -3,9 +3,6 @@ package com.aliothmoon.maafw.constant
 /**
  * 特权进程代授的权限位；app 侧与特权进程侧共用
  *
- * 只列 manifest 里真正声明的：MaaMeow 还会授悬浮窗/无障碍/存储，那对应它的前台模式，
- * 本项目没有对应功能，也没声明那些权限，代授等于替用户要没申请过的权限
- *
  * 位值只增不改，与 AIDL 的 transaction id 同理：app 升级后旧特权进程可能仍存活
  */
 object PrivilegedGrant {
@@ -15,5 +12,17 @@ object PrivilegedGrant {
     /** 后台不受限：standby bucket、bg-restriction、AppOps 与 Phantom Process Killer 一并处理 */
     const val BACKGROUND = 1 shl 2
 
+    /** 悬浮窗（OP_SYSTEM_ALERT_WINDOW）；前台模式的控制层要它 */
+    const val OVERLAY = 1 shl 3
+
+    /**
+     * 无障碍：直接写 `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES`
+     *
+     * 只有前台模式的音量键唤起用得上，且必须随 `accessibilityServiceId` 一起传——
+     * 服务 id 是 app 侧的组件名，特权进程拼不出来
+     */
+    const val ACCESSIBILITY = 1 shl 4
+
+    /** 保活三件套；悬浮窗与无障碍按运行模式单独要，不进这里 */
     const val ALL = NOTIFICATION or BATTERY or BACKGROUND
 }

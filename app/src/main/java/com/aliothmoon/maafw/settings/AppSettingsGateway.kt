@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.settings
 
+import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import kotlinx.coroutines.flow.StateFlow
 
@@ -11,4 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 interface AppSettingsGateway {
     val runMode: StateFlow<RunMode>
     suspend fun setRunMode(mode: RunMode)
+
+    val overlayControlMode: StateFlow<OverlayControlMode>
+    suspend fun setOverlayControlMode(mode: OverlayControlMode)
 }

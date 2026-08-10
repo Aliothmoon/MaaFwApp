@@ -414,6 +414,8 @@ dependencies {
     implementation(libs.markwon.linkify)
     implementation(libs.markwon.strikethrough)
     implementation(libs.okhttp)
+    // 前台模式控制层：拖拽/吸边/多屏/返回键拦截都在库里，自己写这几样是纯坑区
+    implementation(libs.floatingx)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

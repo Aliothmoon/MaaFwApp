@@ -10,6 +10,9 @@ import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.AppLocales
+import com.aliothmoon.maafw.overlay.OverlayController
+import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
+import com.aliothmoon.maafw.overlay.border.BorderOverlayManager
 import com.aliothmoon.maafw.project.AssetPiPackage
 import com.aliothmoon.maafw.project.DefaultProjectRepository
 import com.aliothmoon.maafw.project.InstalledProjectSource
@@ -68,6 +71,8 @@ class MaaFwApp : Application() {
         // PermissionManager 的构造里带 RemoteServiceManager.initialize，
         // 它要先读到盘上的后端选择，所以在这里显式建出来而不是等首次注入
         koin.get<PermissionManager>()
+        // 控制层跟着 runMode 装卸，得在进程起来时就开始观察
+        koin.get<OverlayController>().setup()
     }
 }
 
@@ -139,6 +144,19 @@ val appModule = module {
     // app 设置与运行配置分开存：前者不该被 UserConfiguration 的 schema 重置波及
     single { AppSettingsManager(androidContext()) }
     single<AppSettingsGateway> { get<AppSettingsManager>() }
+
+    // 前台模式的控制层；后台虚拟屏模式下 setup 里会把它整层卸掉
+    single { BorderOverlayManager(androidContext()) }
+    single { OverlayViewModelOwner() }
+    single {
+        OverlayController(
+            context = androidContext() as android.app.Application,
+            runnerPort = get(),
+            appSettings = get(),
+            borderOverlayManager = get(),
+            viewModelOwner = get(),
+        )
+    }
 
     // 定时：两个 receiver 与 FGS 都从 GlobalContext 取，必须是 single
     single { ScheduleStrategyStore(androidContext()) }

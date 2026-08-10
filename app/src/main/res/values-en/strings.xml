@@ -152,6 +152,24 @@
     <string name="notification_run_running">Running</string>
     <string name="notification_run_stopping">Stopping</string>
 
+    <!-- Foreground control layer -->
+    <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
+    <string name="overlay_panel_title">Run control</string>
+    <string name="overlay_back_to_app">Back to app</string>
+    <string name="overlay_lock">Lock position</string>
+    <string name="overlay_unlock">Unlock position</string>
+    <string name="overlay_ball_idle">Idle</string>
+    <string name="overlay_ball_preparing">Preparing</string>
+    <string name="overlay_ball_running">Running</string>
+    <string name="overlay_ball_stopping">Stopping</string>
+    <string name="overlay_ball_unavailable">Unavailable</string>
+    <string name="settings_overlay_mode">Control layer</string>
+    <string name="settings_overlay_mode_ball">Floating ball</string>
+    <string name="settings_overlay_mode_accessibility">Volume keys</string>
+    <string name="settings_overlay_mode_hint_ball">A small ball stays at the screen edge; tap it for the control panel</string>
+    <string name="settings_overlay_mode_hint_accessibility">Press volume up and down together to open the panel; nothing occupies the screen, but an accessibility service is required</string>
+    <string name="settings_overlay_mode_only_foreground">Applies to primary-display mode only</string>
+
     <!-- Schedules -->
     <string name="notification_channel_schedule">Schedule triggers</string>
     <string name="notification_channel_schedule_desc">Appears briefly when a schedule fires</string>

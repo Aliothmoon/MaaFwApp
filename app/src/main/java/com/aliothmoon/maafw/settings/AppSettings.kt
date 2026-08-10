@@ -34,4 +34,8 @@ data class AppSettings(
     /** [com.aliothmoon.maafw.domain.RunMode] 的 name */
     @PrefKey(default = "BACKGROUND")
     val runMode: String = "BACKGROUND",
+
+    /** [com.aliothmoon.maafw.domain.OverlayControlMode] 的 name；仅前台模式生效 */
+    @PrefKey(default = "FLOAT_BALL")
+    val overlayControlMode: String = "FLOAT_BALL",
 )
