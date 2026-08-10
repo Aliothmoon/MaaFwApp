@@ -15,7 +15,22 @@ interface PermissionGateway {
     val readiness: StateFlow<ShizukuReadiness>
     val serviceConnected: StateFlow<Boolean>
 
+    /** 保活相关的两项系统权限，非提权后端 */
+    val systemPermissions: StateFlow<SystemPermissionState>
+
     suspend fun requestRemoteAccess(): Boolean
     suspend fun setBackend(backend: RemoteBackend)
     suspend fun skipShizukuCheck()
+    fun refresh()
 }
+
+/**
+ * 后台跑任务的保活前提
+ *
+ * app 进程一死，特权进程的看门狗就自杀并释放虚拟屏——实测 MIUI 的 SwipeUpClean
+ * 会按 Adj=905 直接 force-stop。前台服务本体还没做，这两项先让用户能自己开
+ */
+data class SystemPermissionState(
+    val notification: Boolean = false,
+    val batteryWhitelist: Boolean = false,
+)

@@ -50,6 +50,9 @@ class PermissionManager(
         .map { it is RemoteServiceManager.ServiceState.Connected }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
+    private val _systemPermissions = MutableStateFlow(readSystemPermissions())
+    override val systemPermissions: StateFlow<SystemPermissionState> = _systemPermissions.asStateFlow()
+
     private val refreshTrigger = MutableStateFlow(0)
 
     override val readiness: StateFlow<ShizukuReadiness> = combine(
@@ -91,10 +94,20 @@ class PermissionManager(
         refresh()
     }
 
-    fun refresh() {
+    override fun refresh() {
         RemoteAccessCoordinator.refresh()
+        _systemPermissions.value = readSystemPermissions()
         refreshTrigger.update { it + 1 }
     }
+
+    /** 这两项没有变更回调，只能在 onResume 与手动 refresh 时重读 */
+    private fun readSystemPermissions() = SystemPermissionState(
+        notification = SystemPermissionRequester.isGranted(appContext, SystemPermission.Notification),
+        batteryWhitelist = SystemPermissionRequester.isGranted(
+            appContext,
+            SystemPermission.BatteryWhitelist,
+        ),
+    )
 
     override suspend fun requestRemoteAccess(): Boolean {
         val current = RemoteAccessCoordinator.refresh()

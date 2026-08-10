@@ -30,6 +30,7 @@ markwon = "4.6.2"
 # 提权与 native 接入
 shizuku = "13.1.5"
 libsu = "6.0.0"
+xxPermissions = "28.0"
 jna = "5.18.1"
 okhttp = "5.1.0"
 
@@ -91,6 +92,7 @@ symbol-processing-api = { module = "com.google.devtools.ksp:symbol-processing-ap
 shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
 shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
 libsu = { group = "com.github.topjohnwu.libsu", name = "core", version.ref = "libsu" }
+xx-permissions = { group = "com.github.getActivity", name = "XXPermissions", version.ref = "xxPermissions" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 
 [plugins]

@@ -1,5 +1,8 @@
 package com.aliothmoon.maafw.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -57,6 +60,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
@@ -70,6 +74,13 @@ import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+
+/** Compose 的 LocalContext 在对话框等场景下会是 ContextWrapper，逐层剥到 Activity */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 private enum class TopDestination(
     @param:StringRes val labelRes: Int,
@@ -126,6 +137,15 @@ fun AppRoot(
                     // 拉起外部 Activity 要 Context，只能落在 Route 层
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
                     SessionEffect.OpenShizuku -> ShizukuInstallHelper.openShizuku(context)
+
+                    is SessionEffect.RequestSystemPermission -> {
+                        // 系统权限页以调用方 Activity 为宿主；拿不到就只能放弃这次请求
+                        val activity = context.findActivity()
+                        if (activity != null) {
+                            SystemPermissionRequester.request(activity, effect.permission)
+                            viewModel.onIntent(SessionIntent.RefreshPermissions)
+                        }
+                    }
                 }
             }
         }

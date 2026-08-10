@@ -252,6 +252,9 @@ dependencies {
     implementation(project(":annotation-api"))
     ksp(project(":ksp-processor"))
 
+    // OEM 权限适配（MIUI 上系统权限页跳转差异大，自己拼 Intent 覆盖不全）
+    implementation(libs.xx.permissions)
+
     // 提权与 native 接入
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)

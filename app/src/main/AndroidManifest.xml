@@ -7,6 +7,14 @@
     <!-- Shizuku 后端：由 Shizuku 服务校验，未装时无副作用 -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
+    <!--
+      后台跑任务期间 app 进程必须活着：进程一死，特权进程的看门狗就自杀并释放虚拟屏
+      实测 MIUI 的 ProcessManager SwipeUpClean 会按 Adj=905 直接 force-stop
+      这两项是前提，前台服务本体见 TODO
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:name=".MaaFwApp"
         android:allowBackup="true"

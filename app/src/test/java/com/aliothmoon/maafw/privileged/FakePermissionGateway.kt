@@ -10,8 +10,11 @@ class FakePermissionGateway : PermissionGateway {
     override val isGranting = MutableStateFlow(false)
     override val readiness = MutableStateFlow(ShizukuReadiness())
     override val serviceConnected = MutableStateFlow(false)
+    override val systemPermissions = MutableStateFlow(SystemPermissionState())
 
     var requestCount: Int = 0
+        private set
+    var refreshCount: Int = 0
         private set
     var lastBackend: RemoteBackend? = null
         private set
@@ -33,5 +36,9 @@ class FakePermissionGateway : PermissionGateway {
 
     override suspend fun skipShizukuCheck() {
         skipCount++
+    }
+
+    override fun refresh() {
+        refreshCount++
     }
 }

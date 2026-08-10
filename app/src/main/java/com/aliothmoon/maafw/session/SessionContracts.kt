@@ -11,6 +11,8 @@ import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
+import com.aliothmoon.maafw.privileged.SystemPermission
+import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.RunnerPhase
@@ -35,6 +37,7 @@ data class SessionUiState(
     val remoteAccessGranting: Boolean = false,
     val shizukuReadiness: ShizukuReadiness = ShizukuReadiness(),
     val privilegedServiceConnected: Boolean = false,
+    val systemPermissions: SystemPermissionState = SystemPermissionState(),
 ) {
     val remoteAccessGranted: Boolean
         get() = remoteAccess.isGranted(remoteAccess.configuredBackend)
@@ -130,6 +133,12 @@ sealed interface SessionIntent {
     /** 两者都要 Context 拉起外部 Activity，VM 转成 Effect 交给 UI */
     data object InstallShizuku : SessionIntent
     data object OpenShizuku : SessionIntent
+
+    /** 系统权限页要 Activity 做宿主，同样转成 Effect */
+    data class RequestSystemPermission(val permission: SystemPermission) : SessionIntent
+
+    /** 从系统权限页回来后重读；这两项没有变更回调 */
+    data object RefreshPermissions : SessionIntent
 }
 
 /** 一次性 Effect，不进 UiState */
@@ -140,6 +149,7 @@ sealed interface SessionEffect {
     /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
     data object InstallShizuku : SessionEffect
     data object OpenShizuku : SessionEffect
+    data class RequestSystemPermission(val permission: SystemPermission) : SessionEffect
 }
 
 /** VM 无 Context；reason 为 Runner 技术文本，UI 拼进提示尾部 */

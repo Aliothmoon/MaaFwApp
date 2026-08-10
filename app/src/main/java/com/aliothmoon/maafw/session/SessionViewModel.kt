@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.i18n.LocaleController
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
+import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
@@ -37,12 +38,13 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** 提权四条流的一次快照；只为把 combine 的元数压回 4 以内 */
+/** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
 private data class PrivilegedSnapshot(
     val access: RemoteAccessState,
     val granting: Boolean,
     val readiness: ShizukuReadiness,
     val serviceConnected: Boolean,
+    val systemPermissions: SystemPermissionState,
 )
 
 class SessionViewModel(
@@ -54,14 +56,14 @@ class SessionViewModel(
     private val localeController: LocaleController,
 ) : ViewModel() {
 
-    /** 提权相关的四条流先合成一束，避免 combine 超过 5 元 */
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
         permissionGateway.state,
         permissionGateway.isGranting,
         permissionGateway.readiness,
         permissionGateway.serviceConnected,
-    ) { access, granting, readiness, connected ->
-        PrivilegedSnapshot(access, granting, readiness, connected)
+        permissionGateway.systemPermissions,
+    ) { access, granting, readiness, connected, system ->
+        PrivilegedSnapshot(access, granting, readiness, connected, system)
     }
 
     val uiState: StateFlow<SessionUiState> = combine(
@@ -141,6 +143,7 @@ class SessionViewModel(
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
             privilegedServiceConnected = privileged.serviceConnected,
+            systemPermissions = privileged.systemPermissions,
         )
         if (project !is ProjectState.Ready) return base
         val session = resolveCached(project, config)
@@ -288,6 +291,10 @@ class SessionViewModel(
             SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
             SessionIntent.InstallShizuku -> effectChannel.send(SessionEffect.InstallShizuku)
             SessionIntent.OpenShizuku -> effectChannel.send(SessionEffect.OpenShizuku)
+            is SessionIntent.RequestSystemPermission ->
+                effectChannel.send(SessionEffect.RequestSystemPermission(intent.permission))
+
+            SessionIntent.RefreshPermissions -> permissionGateway.refresh()
         }
     }
 

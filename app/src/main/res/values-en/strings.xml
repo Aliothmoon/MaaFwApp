@@ -176,6 +176,17 @@
     <string name="permission_service_connected">Privileged process connected</string>
     <string name="permission_service_disconnected">Privileged process not connected</string>
     <string name="permission_open_shizuku">Open Shizuku</string>
+    <string name="permission_expand">Show more permissions</string>
+    <string name="permission_collapse">Hide more permissions</string>
+    <string name="permission_notification">Notifications</string>
+    <string name="permission_battery">Battery optimization allowlist</string>
+    <string name="permission_battery_added">Added</string>
+    <string name="permission_keepalive_hint">If the system reclaims the app process while tasks run in the background, the virtual display goes with it. These two reduce that risk.</string>
+    <string name="home_overview">Overview</string>
+    <string name="home_display_resolution">Virtual display</string>
+    <string name="home_service_status">Service status</string>
+    <string name="home_service_status_connected">Connected</string>
+    <string name="home_service_status_disconnected">Not connected</string>
     <string name="dialog_shizuku_not_installed_title">Shizuku Not Installed</string>
     <string name="dialog_shizuku_not_installed_message">This app depends on the Shizuku service. Shizuku was not detected on your device; please install it first.</string>
     <string name="dialog_shizuku_install_confirm">Install Shizuku</string>

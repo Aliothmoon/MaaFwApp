@@ -167,6 +167,17 @@
     <string name="permission_service_connected">特权进程已连接</string>
     <string name="permission_service_disconnected">特权进程未连接</string>
     <string name="permission_open_shizuku">打开 Shizuku</string>
+    <string name="permission_expand">展开其他权限</string>
+    <string name="permission_collapse">收起其他权限</string>
+    <string name="permission_notification">通知</string>
+    <string name="permission_battery">电池优化白名单</string>
+    <string name="permission_battery_added">已加入</string>
+    <string name="permission_keepalive_hint">后台跑任务期间 app 进程被系统清理会连带释放虚拟屏，这两项能降低被清理的概率</string>
+    <string name="home_overview">概览</string>
+    <string name="home_display_resolution">虚拟屏分辨率</string>
+    <string name="home_service_status">服务状态</string>
+    <string name="home_service_status_connected">已连接</string>
+    <string name="home_service_status_disconnected">未连接</string>
     <string name="dialog_shizuku_not_installed_title">未检测到 Shizuku</string>
     <string name="dialog_shizuku_not_installed_message">本应用依赖 Shizuku 服务运行，检测到设备未安装 Shizuku，请先安装。</string>
     <string name="dialog_shizuku_install_confirm">快捷安装 Shizuku</string>
