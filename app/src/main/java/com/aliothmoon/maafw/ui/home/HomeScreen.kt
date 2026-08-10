@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -83,6 +84,8 @@ fun HomeScreen(
                 Text(
                     text = (state.projectState as? ProjectState.Ready)?.definition?.name
                         ?: stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
             },
             // AppRoot 的 Scaffold 已吃掉状态栏顶部 inset，这里不能再加一次
