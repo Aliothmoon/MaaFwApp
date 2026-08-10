@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.compose.screenshot)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 val localProperties = Properties().apply {
@@ -247,6 +248,10 @@ dependencies {
     // 只在编译期解析隐藏系统 API，运行时由系统提供
     compileOnly(project(":hidden-api"))
 
+    // AppSettings 的 Preferences key 与读写代码由 KSP 从 @PrefSchema 生成
+    implementation(project(":annotation-api"))
+    ksp(project(":ksp-processor"))
+
     // 提权与 native 接入
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
@@ -271,6 +276,7 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.window)
 
     implementation(libs.koin.android)

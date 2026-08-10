@@ -18,8 +18,10 @@ import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.ProjectLoader
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectSource
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.privileged.PermissionGateway
+import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.PreviewPort
@@ -53,13 +55,14 @@ class MaaFwApp : Application() {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
-        startKoin {
+        val koin = startKoin {
             androidLogger(if (BuildConfig.DEBUG) Level.DEBUG else Level.NONE)
             androidContext(this@MaaFwApp)
             modules(appModule)
-        }
-        // 后端选择尚无持久化落点，暂时固定 Shizuku（见 TODO）
-        RemoteServiceManager.initialize(this) { RemoteBackend.SHIZUKU }
+        }.koin
+        // PermissionManager 的构造里带 RemoteServiceManager.initialize，
+        // 它要先读到盘上的后端选择，所以在这里显式建出来而不是等首次注入
+        koin.get<PermissionManager>()
     }
 }
 
@@ -124,12 +127,18 @@ val appModule = module {
         )
     }
 
+    // app 设置与运行配置分开存：前者不该被 UserConfiguration 的 schema 重置波及
+    single { AppSettingsManager(androidContext()) }
+    single { PermissionManager(androidContext(), get()) }
+    single<PermissionGateway> { get<PermissionManager>() }
+
     viewModel {
         SessionViewModel(
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
             previewPort = get(),
+            permissionGateway = get(),
             localeController = AppLocales,
         )
     }

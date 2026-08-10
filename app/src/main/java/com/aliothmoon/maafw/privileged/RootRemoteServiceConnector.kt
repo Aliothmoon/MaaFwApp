@@ -7,7 +7,7 @@ import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.AppFiles
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.remote.RemoteServiceImpl
 import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
 import com.aliothmoon.maafw.root.RootServiceStarter

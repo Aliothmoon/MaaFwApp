@@ -165,6 +165,31 @@
     <string name="extra_mute_game">Mute game audio</string>
     <string name="extra_screensaver_autoplay">Screensaver auto-play</string>
 
+    <!-- Privileged access (home permission card + Shizuku guidance) -->
+    <string name="permission_section">Permissions</string>
+    <string name="permission_backend">Privilege backend</string>
+    <string name="permission_backend_hint">Starts the privileged process; without it the virtual display cannot run</string>
+    <string name="permission_granted">Granted</string>
+    <string name="permission_request">Request</string>
+    <string name="permission_requesting">Requesting…</string>
+    <string name="permission_backend_unavailable">Unavailable</string>
+    <string name="permission_service_connected">Privileged process connected</string>
+    <string name="permission_service_disconnected">Privileged process not connected</string>
+    <string name="permission_open_shizuku">Open Shizuku</string>
+    <string name="dialog_shizuku_not_installed_title">Shizuku Not Installed</string>
+    <string name="dialog_shizuku_not_installed_message">This app depends on the Shizuku service. Shizuku was not detected on your device; please install it first.</string>
+    <string name="dialog_shizuku_install_confirm">Install Shizuku</string>
+    <string name="dialog_shizuku_switch_to_root">Switch to Root</string>
+    <string name="dialog_shizuku_skip_check">Skip check (not recommended)</string>
+    <string name="dialog_shizuku_not_running_title">Shizuku Not Running</string>
+    <string name="dialog_shizuku_not_running_message">Shizuku is installed but the service is not running. Please open Shizuku and start the service.</string>
+    <string name="dialog_shizuku_open_app">Open Shizuku</string>
+    <string name="dialog_sui_detected_title">Sui Detected</string>
+    <string name="dialog_sui_detected_message">Sui is providing the Shizuku service with root privileges. This app may not work correctly; please verify by actual testing.</string>
+    <string name="dialog_shizuku_need_auth_title">Shizuku Not Authorized</string>
+    <string name="dialog_shizuku_need_auth_message">Shizuku is running but has not authorized this app yet. Please grant access. This prompt keeps showing until access is granted.</string>
+    <string name="common_got_it">Got it</string>
+
     <!-- Structured diagnostics (domain DiagnosticMessage -> ui/i18n/DiagnosticStrings) -->
     <string name="diagnostic_severity_warning">Warning</string>
     <string name="diagnostic_severity_error">Error</string>

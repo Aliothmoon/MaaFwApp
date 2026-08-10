@@ -4,7 +4,7 @@ import android.content.ComponentName
 import android.content.ServiceConnection
 import android.os.IBinder
 import com.aliothmoon.maafw.BuildConfig
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.remote.RemoteServiceImpl
 import rikka.shizuku.Shizuku
 import timber.log.Timber

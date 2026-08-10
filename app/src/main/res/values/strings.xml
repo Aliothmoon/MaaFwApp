@@ -156,6 +156,31 @@
     <string name="extra_mute_game">关闭游戏声音</string>
     <string name="extra_screensaver_autoplay">屏保自动播放</string>
 
+    <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
+    <string name="permission_section">权限</string>
+    <string name="permission_backend">提权后端</string>
+    <string name="permission_backend_hint">特权进程靠它启动；没有它就跑不了虚拟屏</string>
+    <string name="permission_granted">已授权</string>
+    <string name="permission_request">请求授权</string>
+    <string name="permission_requesting">授权中…</string>
+    <string name="permission_backend_unavailable">不可用</string>
+    <string name="permission_service_connected">特权进程已连接</string>
+    <string name="permission_service_disconnected">特权进程未连接</string>
+    <string name="permission_open_shizuku">打开 Shizuku</string>
+    <string name="dialog_shizuku_not_installed_title">未检测到 Shizuku</string>
+    <string name="dialog_shizuku_not_installed_message">本应用依赖 Shizuku 服务运行，检测到设备未安装 Shizuku，请先安装。</string>
+    <string name="dialog_shizuku_install_confirm">快捷安装 Shizuku</string>
+    <string name="dialog_shizuku_switch_to_root">切换至 Root 模式</string>
+    <string name="dialog_shizuku_skip_check">跳过检查（不推荐）</string>
+    <string name="dialog_shizuku_not_running_title">Shizuku 未启动</string>
+    <string name="dialog_shizuku_not_running_message">检测到 Shizuku 已安装但服务未启动，请打开 Shizuku 应用并启动服务。</string>
+    <string name="dialog_shizuku_open_app">打开 Shizuku</string>
+    <string name="dialog_sui_detected_title">检测到 Sui</string>
+    <string name="dialog_sui_detected_message">当前由 Sui 提供 Shizuku 服务。Sui 以 Root 身份运行，本应用可能无法正常工作，请以实际测试为准。</string>
+    <string name="dialog_shizuku_need_auth_title">Shizuku 未授权</string>
+    <string name="dialog_shizuku_need_auth_message">Shizuku 服务正在运行但尚未授权本应用，请完成授权。授权成功前会持续提示。</string>
+    <string name="common_got_it">知道了</string>
+
     <!-- 结构化诊断（domain DiagnosticMessage -> ui/i18n/DiagnosticStrings） -->
     <string name="diagnostic_severity_warning">警告</string>
     <string name="diagnostic_severity_error">错误</string>

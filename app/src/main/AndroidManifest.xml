@@ -58,6 +58,17 @@
             android:exported="true"
             android:multiprocess="false" />
 
+        <!-- 把随包的 shizuku.apk 交给系统安装器：API 24 起 file:// 直接抛 FileUriExposedException -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
+
     </application>
 
     <queries>

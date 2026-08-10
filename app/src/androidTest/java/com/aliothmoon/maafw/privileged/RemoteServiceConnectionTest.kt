@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.privileged
 
+import com.aliothmoon.maafw.domain.RemoteBackend
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking

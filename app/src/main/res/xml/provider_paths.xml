@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 随包分发的 shizuku.apk 先落 cacheDir，再经 FileProvider 交给安装器 -->
+    <cache-path
+        name="apk_cache"
+        path="." />
+    <!-- MaaFramework 的 log 与 Screencap 产物；导出日志时用 -->
+    <external-files-path
+        name="maa_files"
+        path="." />
+</paths>

@@ -27,3 +27,6 @@ dependencyResolutionManagement {
 rootProject.name = "MaaFwApp"
 include(":app")
 include(":hidden-api")
+// Preferences DataStore 的 schema 代码生成（@PrefSchema / @PrefKey）
+include(":annotation-api")
+include(":ksp-processor")

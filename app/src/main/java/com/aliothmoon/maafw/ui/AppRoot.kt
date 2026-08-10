@@ -54,13 +54,16 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
+import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
+import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
 import com.aliothmoon.maafw.ui.i18n.localized
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
@@ -119,9 +122,24 @@ fun AppRoot(
                         snackbarHostState.showSnackbar(effect.message.localized(context))
 
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
+
+                    // 拉起外部 Activity 要 Context，只能落在 Route 层
+                    SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
+                    SessionEffect.OpenShizuku -> ShizukuInstallHelper.openShizuku(context)
                 }
             }
         }
+
+        // 未装/未启动/未授权时的引导；needsGuidance 为 false 时自身不渲染
+        ShizukuReadinessDialog(
+            readiness = state.shizukuReadiness,
+            onInstall = { viewModel.onIntent(SessionIntent.InstallShizuku) },
+            onOpenApp = { viewModel.onIntent(SessionIntent.OpenShizuku) },
+            onRequestAuth = { viewModel.onIntent(SessionIntent.RequestRemoteAccess) },
+            onDismiss = { viewModel.onIntent(SessionIntent.SkipShizukuCheck) },
+            onSwitchToRoot = { viewModel.onIntent(SessionIntent.SetRemoteBackend(RemoteBackend.ROOT)) },
+            isRequesting = state.remoteAccessGranting,
+        )
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),

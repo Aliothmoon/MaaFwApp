@@ -10,6 +10,9 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
 import com.aliothmoon.maafw.i18n.LocaleController
+import com.aliothmoon.maafw.privileged.PermissionGateway
+import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
@@ -34,20 +37,40 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** 提权四条流的一次快照；只为把 combine 的元数压回 4 以内 */
+private data class PrivilegedSnapshot(
+    val access: RemoteAccessState,
+    val granting: Boolean,
+    val readiness: ShizukuReadiness,
+    val serviceConnected: Boolean,
+)
+
 class SessionViewModel(
     private val projectRepository: ProjectRepository,
     private val configurationStore: UserConfigurationStore,
     private val runnerPort: RunnerPort,
     private val previewPort: PreviewPort,
+    private val permissionGateway: PermissionGateway,
     private val localeController: LocaleController,
 ) : ViewModel() {
+
+    /** 提权相关的四条流先合成一束，避免 combine 超过 5 元 */
+    private val privilegedState: Flow<PrivilegedSnapshot> = combine(
+        permissionGateway.state,
+        permissionGateway.isGranting,
+        permissionGateway.readiness,
+        permissionGateway.serviceConnected,
+    ) { access, granting, readiness, connected ->
+        PrivilegedSnapshot(access, granting, readiness, connected)
+    }
 
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
         configurationStore.data,
         runnerPort.state,
-    ) { project, config, runner ->
-        buildUiState(project, config, runner)
+        privilegedState,
+    ) { project, config, runner, privileged ->
+        buildUiState(project, config, runner, privileged)
     }.flowOn(Dispatchers.Default) // resolve 属重计算，不占用主线程
         .stateIn(
             scope = viewModelScope,
@@ -107,12 +130,17 @@ class SessionViewModel(
         project: ProjectState,
         config: UserConfiguration,
         runner: RunnerState,
+        privileged: PrivilegedSnapshot,
     ): SessionUiState {
         val base = SessionUiState(
             projectState = project,
             runner = runner,
             themeMode = config.themeMode,
             developerMode = config.developerMode,
+            remoteAccess = privileged.access,
+            remoteAccessGranting = privileged.granting,
+            shizukuReadiness = privileged.readiness,
+            privilegedServiceConnected = privileged.serviceConnected,
         )
         if (project !is ProjectState.Ready) return base
         val session = resolveCached(project, config)
@@ -253,6 +281,13 @@ class SessionViewModel(
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
             is SessionIntent.AttachPreviewSurface -> previewPort.attachSurface(intent.surface)
             SessionIntent.DetachPreviewSurface -> previewPort.detachSurface()
+
+            // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授
+            SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
+            is SessionIntent.SetRemoteBackend -> permissionGateway.setBackend(intent.backend)
+            SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
+            SessionIntent.InstallShizuku -> effectChannel.send(SessionEffect.InstallShizuku)
+            SessionIntent.OpenShizuku -> effectChannel.send(SessionEffect.OpenShizuku)
         }
     }
 

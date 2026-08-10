@@ -1,6 +1,6 @@
 package com.aliothmoon.maafw.privileged
 
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.domain.RemoteBackend
 
 data class RemoteAccessState(
     val shizukuAvailable: Boolean = false,

@@ -1,7 +1,7 @@
 package com.aliothmoon.maafw.privileged
 
 import android.content.pm.PackageManager
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.domain.RemoteBackend
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch

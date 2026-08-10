@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -21,6 +24,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.RunnerPhase
@@ -31,6 +35,8 @@ import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
+import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
+import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 
 @Composable
 fun HomeScreen(
@@ -45,9 +51,90 @@ fun HomeScreen(
             .padding(MaaDesignTokens.Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
     ) {
+        PermissionCard(state, onIntent)
         ProjectCard(state)
         ConfigurationCard(state)
         RunnerCard(state)
+    }
+}
+
+/**
+ * 提权授权卡
+ *
+ * 只有提权后端这一项：manifest 里除 INTERNET 之外没有别的运行时权限，
+ * 本项目只跑后台虚拟屏，不需要悬浮窗/无障碍/存储那一套
+ */
+@Composable
+private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    val access = state.remoteAccess
+    val backend = access.configuredBackend
+    MaaCard(title = stringResource(R.string.permission_section)) {
+        // 后端切换：不可用的那个禁掉，免得选了个连 su 都没有的
+        MaaSingleChoiceFlow(
+            options = RemoteBackend.entries.map { entry ->
+                val suffix = if (access.isAvailable(entry)) {
+                    ""
+                } else {
+                    "（${stringResource(R.string.permission_backend_unavailable)}）"
+                }
+                entry to "${entry.display}$suffix"
+            },
+            selected = backend,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SetRemoteBackend(it)) },
+        )
+
+        MaaLabeledControlRow(
+            label = stringResource(R.string.permission_backend),
+            trailing = {
+                when {
+                    state.remoteAccessGranting -> CircularProgressIndicator(
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                        strokeWidth = MaaDesignTokens.Border.marker,
+                    )
+
+                    state.remoteAccessGranted -> Text(
+                        text = stringResource(R.string.permission_granted),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+
+                    else -> TextButton(onClick = { onIntent(SessionIntent.RequestRemoteAccess) }) {
+                        Text(stringResource(R.string.permission_request))
+                    }
+                }
+            },
+        )
+
+        Text(
+            text = stringResource(
+                if (state.privilegedServiceConnected) {
+                    R.string.permission_service_connected
+                } else {
+                    R.string.permission_service_disconnected
+                },
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state.privilegedServiceConnected) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+        )
+        Text(
+            text = stringResource(R.string.permission_backend_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (backend == RemoteBackend.SHIZUKU) {
+            OutlinedButton(
+                onClick = { onIntent(SessionIntent.OpenShizuku) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.permission_open_shizuku))
+            }
+        }
     }
 }
 

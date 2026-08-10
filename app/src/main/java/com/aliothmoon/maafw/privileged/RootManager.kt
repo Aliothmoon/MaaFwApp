@@ -1,7 +1,7 @@
 package com.aliothmoon.maafw.privileged
 
 import com.aliothmoon.maafw.BuildConfig
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

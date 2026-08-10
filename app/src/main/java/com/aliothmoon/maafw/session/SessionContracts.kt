@@ -5,9 +5,12 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
+import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.RunnerPhase
@@ -27,7 +30,15 @@ data class SessionUiState(
     val developerMode: Boolean = false,
     /** 虚拟屏尺寸，由 PI controller 的 display_* 推导；项目未就绪时为 null */
     val previewResolution: DisplayResolution? = null,
+    val remoteAccess: RemoteAccessState = RemoteAccessState(),
+    /** 授权请求进行中；只压按钮，不进 configurationLocked */
+    val remoteAccessGranting: Boolean = false,
+    val shizukuReadiness: ShizukuReadiness = ShizukuReadiness(),
+    val privilegedServiceConnected: Boolean = false,
 ) {
+    val remoteAccessGranted: Boolean
+        get() = remoteAccess.isGranted(remoteAccess.configuredBackend)
+
     /** 唯一锁定规则：RunnerPhase.isBusy */
     val configurationLocked: Boolean
         get() = runner.phase.isBusy
@@ -108,12 +119,27 @@ sealed interface SessionIntent {
      */
     data class AttachPreviewSurface(val surface: Surface) : SessionIntent
     data object DetachPreviewSurface : SessionIntent
+
+    /** 向当前后端发起授权；不走 guarded，运行中也允许（授权不改配置） */
+    data object RequestRemoteAccess : SessionIntent
+    data class SetRemoteBackend(val backend: RemoteBackend) : SessionIntent
+
+    /** 引导弹窗上的「跳过检查」；只压引导，不影响授权判定 */
+    data object SkipShizukuCheck : SessionIntent
+
+    /** 两者都要 Context 拉起外部 Activity，VM 转成 Effect 交给 UI */
+    data object InstallShizuku : SessionIntent
+    data object OpenShizuku : SessionIntent
 }
 
 /** 一次性 Effect，不进 UiState */
 sealed interface SessionEffect {
     data class ShowMessage(val message: SessionMessage) : SessionEffect
     data class ShowDiagnostics(val diagnostics: List<Diagnostic>) : SessionEffect
+
+    /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
+    data object InstallShizuku : SessionEffect
+    data object OpenShizuku : SessionEffect
 }
 
 /** VM 无 Context；reason 为 Runner 技术文本，UI 拼进提示尾部 */

@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.IBinder
 import android.os.Process
 import com.aliothmoon.maafw.RemoteService
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.domain.RemoteBackend
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

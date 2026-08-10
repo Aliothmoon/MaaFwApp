@@ -11,6 +11,7 @@ import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.domain.UserConfiguration
+import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
@@ -94,8 +95,16 @@ class SessionViewModelTest {
             scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 0),
         ),
         locale: (String?) -> Unit = {},
+        permissions: FakePermissionGateway = FakePermissionGateway(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
-        val vm = SessionViewModel(project, store, runner, RecordingPreviewPort(), locale)
+        val vm = SessionViewModel(
+            project,
+            store,
+            runner,
+            RecordingPreviewPort(),
+            permissions,
+            locale,
+        )
         return Triple(vm, store, runner)
     }
 

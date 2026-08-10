@@ -1,7 +1,7 @@
 package com.aliothmoon.maafw.privileged
 
 import android.os.IBinder
-import com.aliothmoon.maafw.privileged.RemoteBackend
+import com.aliothmoon.maafw.domain.RemoteBackend
 
 interface RemoteServiceConnectorBackend {
     val backend: RemoteBackend
