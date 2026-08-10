@@ -68,6 +68,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
@@ -310,11 +311,12 @@ private fun TemplatePreviewPage(
             modifier = Modifier.fillMaxWidth(),
         )
         template.description?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                text = it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            MaaDescriptionPanel {
+                MaaMarkdown(
+                    text = it,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -620,7 +622,14 @@ private fun TemplateCard(
             )
         }
         template.description?.takeIf { it.isNotBlank() }?.let {
-            MaaMarkdown(text = it, maxLines = 3, linksClickable = false)
+            MaaDescriptionPanel {
+                MaaMarkdown(
+                    text = it,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 3,
+                    linksClickable = false,
+                )
+            }
         }
     }
 }

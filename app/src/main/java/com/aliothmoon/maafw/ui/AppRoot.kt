@@ -285,7 +285,7 @@ fun AppRoot(
                                         contentDescription = stringResource(destination.labelRes),
                                         tint = tint,
                                     )
-                                    Spacer(Modifier.height(2.dp))
+                                    Spacer(Modifier.height(MaaDesignTokens.Spacing.xxs))
                                     Text(
                                         text = stringResource(destination.labelRes),
                                         style = MaterialTheme.typography.labelSmall,

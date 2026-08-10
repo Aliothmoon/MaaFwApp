@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
@@ -77,10 +77,9 @@ fun MaaChoiceChip(
             leading?.invoke()
             Text(
                 text = label,
-                // label 档位间隔过大（15/12sp），chip 取中间值 13sp
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
+                // chip label：bodySmall(13sp) 提到 Medium 字重，与按钮/页签的 labelLarge 区分
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
                 ),
                 color = if (selected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
