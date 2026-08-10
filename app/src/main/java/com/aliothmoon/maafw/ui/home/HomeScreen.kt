@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -43,18 +41,14 @@ import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.ExecutionResult
-import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.session.ServiceStatus
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.StatusTone
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.i18n.asString
-import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.theme.MaaDesignTokens
-import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
@@ -82,8 +76,6 @@ fun HomeScreen(
         OverviewCard(state)
         PermissionCard(state, onIntent)
         ServiceActionButtons(state, onIntent)
-        ConfigurationCard(state)
-        RunnerCard(state)
         ProjectDiagnosticsCard(state)
     }
 }
@@ -323,69 +315,6 @@ private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent
                 )
                 Box(Modifier.size(MaaDesignTokens.Spacing.sm))
                 Text(stringResource(R.string.permission_open_shizuku))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ConfigurationCard(state: SessionUiState) {
-    MaaCard(title = stringResource(R.string.home_current_config)) {
-        val active = state.activeConfiguration
-        if (active == null) {
-            Text(
-                text = stringResource(R.string.home_no_config_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            MaaInfoRow(stringResource(R.string.home_name), active.name)
-            MaaInfoRow(
-                stringResource(R.string.home_tasks),
-                stringResource(R.string.home_count_items, active.tasks.size),
-            )
-            MaaInfoRow(
-                stringResource(R.string.home_enabled),
-                stringResource(R.string.home_enabled_count, active.enabledTaskCount, active.effectiveTaskCount),
-            )
-        }
-    }
-}
-
-@Composable
-private fun RunnerCard(state: SessionUiState) {
-    MaaCard(title = stringResource(R.string.home_runner_status)) {
-        val runner = state.runner
-        val execution = runner.activeExecution
-        MaaInfoRow(stringResource(R.string.home_state), runner.phase.asUiText().asString())
-        if (execution != null) {
-            if (execution.totalTaskCount > 0) {
-                val animatedProgress by animateFloatAsState(
-                    targetValue = execution.completedTaskCount.toFloat() / execution.totalTaskCount,
-                    animationSpec = MaaMotion.enter(),
-                    label = "runnerProgress",
-                )
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            MaaInfoRow(
-                stringResource(R.string.home_progress),
-                "${execution.completedTaskCount} / ${execution.totalTaskCount}",
-            )
-            execution.currentTaskName?.let { MaaInfoRow(stringResource(R.string.home_current_task), it) }
-        }
-        runner.latestResult?.let { result ->
-            MaaInfoRow(stringResource(R.string.home_latest_result), result.asUiText().asString())
-            result.taskResults.filterNot { it.success }.forEach { failure ->
-                Text(
-                    text = failure.message
-                        ?.let { stringResource(R.string.home_task_failed_with_message, failure.taskName, it) }
-                        ?: stringResource(R.string.home_task_failed, failure.taskName),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
             }
         }
     }

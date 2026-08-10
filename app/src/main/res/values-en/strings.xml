@@ -80,9 +80,6 @@
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
     <string name="home_name">Name</string>
-    <string name="home_tasks">Tasks</string>
-    <string name="home_count_items">%1$d</string>
-    <string name="home_templates">Preset templates</string>
     <string name="home_resource">Resource</string>
     <string name="home_none">None</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
@@ -90,18 +87,7 @@
         <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
         <item quantity="other">Diagnostics: %1$d (%2$d errors)</item>
     </plurals>
-    <string name="home_current_config">Current configuration</string>
-    <string name="home_no_config_hint">No configuration selected. Create or pick one on the Tasks tab.</string>
-    <string name="home_enabled">Enabled</string>
     <!-- "active" is an adjective and does not inflect with quantity. -->
-    <string name="home_enabled_count" tools:ignore="PluralsCandidate">%1$d (%2$d active)</string>
-    <string name="home_runner_status">Runner status</string>
-    <string name="home_state">State</string>
-    <string name="home_progress">Progress</string>
-    <string name="home_current_task">Current task</string>
-    <string name="home_latest_result">Latest result</string>
-    <string name="home_task_failed">Failed: %1$s</string>
-    <string name="home_task_failed_with_message">Failed: %1$s (%2$s)</string>
 
     <!-- Runner phase / result -->
     <string name="phase_unavailable">Unavailable: %1$s</string>

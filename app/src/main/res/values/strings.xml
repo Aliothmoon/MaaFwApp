@@ -75,26 +75,12 @@
     <string name="home_project_loading">正在加载 ProjectInterface…</string>
     <string name="home_project_load_failed">项目加载失败</string>
     <string name="home_name">名称</string>
-    <string name="home_tasks">任务</string>
-    <string name="home_count_items">%1$d 个</string>
-    <string name="home_templates">预设模板</string>
     <string name="home_resource">资源</string>
     <string name="home_none">无</string>
     <string name="home_diagnostics_summary">诊断：%1$d 条</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="other">诊断：%1$d 条（%2$d 条错误）</item>
     </plurals>
-    <string name="home_current_config">当前配置</string>
-    <string name="home_no_config_hint">尚未选择配置，请前往任务页创建或选择</string>
-    <string name="home_enabled">已启用</string>
-    <string name="home_enabled_count">%1$d 个（有效 %2$d 个）</string>
-    <string name="home_runner_status">运行状态</string>
-    <string name="home_state">状态</string>
-    <string name="home_progress">进度</string>
-    <string name="home_current_task">当前任务</string>
-    <string name="home_latest_result">最近结果</string>
-    <string name="home_task_failed">失败：%1$s</string>
-    <string name="home_task_failed_with_message">失败：%1$s（%2$s）</string>
 
     <!-- 运行阶段 / 结果 -->
     <string name="phase_unavailable">不可用：%1$s</string>
