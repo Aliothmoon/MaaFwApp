@@ -16,6 +16,20 @@ data class RunPlanPayload(
     val screenWidth: Int,
     val screenHeight: Int,
     val tasks: List<RuntimeTaskPayload>,
+    /** PI 声明的 agent，按声明顺序；空表示本次不起 agent */
+    val agents: List<AgentPayload> = emptyList(),
+    /** 特权进程从这个 APK 里读 agent 运行时的 assets；它自己解析包路径不如 app 侧直接给可靠 */
+    val apkPath: String = "",
+    /** agent child 的 LD_LIBRARY_PATH 与 MAAFW_BINARY_PATH 落点 */
+    val nativeLibraryDir: String = "",
+)
+
+@Serializable
+data class AgentPayload(
+    /** 只留作诊断：Android 上不解释也不执行，见 docs/pi-compatibility.md */
+    val childExec: String,
+    /** identifier 由 Runner 追加到末位，此处不含 */
+    val childArgs: List<String>,
 )
 
 @Serializable

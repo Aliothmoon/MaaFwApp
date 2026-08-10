@@ -12,6 +12,8 @@ data class ProjectDefinition(
     val groups: List<TaskGroupDefinition>,
     val options: Map<String, OptionDefinition>,
     val templates: List<ConfigurationTemplate>,
+    /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
+    val agents: List<AgentDefinition> = emptyList(),
 ) {
     fun task(taskName: String): TaskDefinition? = taskIndex[taskName]
 
@@ -36,6 +38,19 @@ data class ResourceDefinition(
     val paths: List<String>,
     /** $i18n 已物化；匹配/持久化仍用 [name] */
     val label: String = name,
+)
+
+/**
+ * PI 顶层 agent 声明；单对象与数组两种形态在解析期都归一成列表
+ *
+ * [childExec] 在 Android 上不解释也不执行：设备上 PATH 里没有解释器，PI 解包目录又是 noexec
+ * 实际拉起哪个可执行体由构建期的 agent 运行时描述决定，这里只留作诊断与计数
+ * PI 的 `identifier` 不投影——上游 MaaPiCli 解析进 RuntimeParam 之后同样没有消费者
+ * （`Runner.cpp` 恒以 nullptr 建 client），见 docs/pi-compatibility.md
+ */
+data class AgentDefinition(
+    val childExec: String,
+    val childArgs: List<String>,
 )
 
 data class TaskDefinition(

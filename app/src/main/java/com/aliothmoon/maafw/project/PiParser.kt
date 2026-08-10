@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
@@ -59,6 +60,8 @@ data class PiInterfaceContent(
     val interfaceVersion: Long?,
     val resources: List<PiResourceContent>,
     val controllers: List<PiControllerContent>,
+    /** 顶层 agent 声明，按 PI 里的顺序；单对象与数组都归一成列表 */
+    val agents: List<AgentDefinition> = emptyList(),
     /** v2 languages 声明：语言 tag -> 翻译文件相对路径 */
     val languages: Map<String, String>,
     /** v2.2.0 import 分片声明，按数组顺序加载；路径相对 interface.json 目录 */
@@ -183,11 +186,42 @@ object PiParser {
             interfaceVersion = (root["interface_version"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull(),
             resources = resources,
             controllers = controllers,
+            agents = parseAgents(source, root, diagnostics),
             languages = languages,
             imports = root.stringList("import").map(::normalizeProjectPath),
             diagnostics = diagnostics,
             root = root,
         )
+    }
+
+    /**
+     * 顶层 `agent`：PI 允许单对象与数组两种写法（上游 `Configurator.cpp` 用 std::visit 收两种）
+     * `child_exec` 为空的条目直接跳过，与上游一致——它是唯一必填项
+     */
+    private fun parseAgents(
+        source: String,
+        root: JsonObject,
+        diagnostics: MutableList<Diagnostic>,
+    ): List<AgentDefinition> {
+        val entries = when (val value = root["agent"]) {
+            is JsonArray -> value
+            is JsonObject -> listOf(value)
+            else -> return emptyList()
+        }
+        return entries.mapNotNull { element ->
+            val obj = element as? JsonObject
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessage.EntryNotObject("agent"))
+                }
+            val childExec = obj.string("child_exec")?.takeIf(String::isNotBlank)
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessage.RequiredFieldMissing("agent", "child_exec"),
+                    )
+                }
+            AgentDefinition(childExec = childExec, childArgs = obj.stringList("child_args"))
+        }
     }
 
     fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {

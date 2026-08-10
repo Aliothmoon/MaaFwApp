@@ -1,14 +1,18 @@
 package com.aliothmoon.maafw.remote
 
+import android.system.Os
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.bridge.NativeBridgeLib
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
+import com.aliothmoon.maafw.maa.MaaAgentClientLibrary
+import com.aliothmoon.maafw.maa.MaaAgentClientLoader
 import com.aliothmoon.maafw.maa.MaaFrameworkLibrary
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.maa.MaaGlobalOption
 import com.aliothmoon.maafw.maa.MaaLoggingLevel
 import com.aliothmoon.maafw.maa.MaaStatus
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
+import com.aliothmoon.maafw.runner.AgentPayload
 import com.aliothmoon.maafw.runner.RunOutcome
 import com.aliothmoon.maafw.runner.RunPlanPayload
 import com.aliothmoon.maafw.runner.runPlanWireJson
@@ -28,7 +32,7 @@ import java.util.concurrent.atomic.AtomicReference
  * native handle 全部只存在于这里；app 侧只经 binder 拿事件与结果
  * 单工作线程串行：MaaFramework 的一个 Tasker 同时只跑一轮
  */
-class MaaRunner {
+class MaaRunner(private val agentHost: AgentHost) {
 
     private val worker = Executors.newSingleThreadExecutor { r ->
         Thread(r, "maa-runner").apply { isDaemon = true }
@@ -44,6 +48,19 @@ class MaaRunner {
 
     /** 已构建的 resource 对应的路径；变了就重建 */
     private var loadedResourcePaths: List<String> = emptyList()
+
+    /** agent child 的 cwd，对齐上游 MaaPiCli 的 `agent.cwd = resource_dir_` */
+    private var projectRoot: String? = null
+
+    /** 与 resource 同生命周期：client 绑在 resource 上，resource 重建则整批重来 */
+    private var agents: List<ActiveAgent> = emptyList()
+    private var loadedAgents: List<AgentPayload> = emptyList()
+
+    private class ActiveAgent(val client: Pointer, val session: AgentSession)
+
+    fun setProjectRoot(path: String) {
+        projectRoot = path
+    }
 
     /** JNA 回调必须被强引用住，否则会被 GC，native 回调时踩空 */
     private val eventSink = MaaFrameworkLibrary.MaaEventCallback { _, message, detailsJson, _ ->
@@ -214,6 +231,8 @@ class MaaRunner {
             releaseTasker(lib)
         }
 
+        prepareAgents(lib, payload)?.let { return it }
+
         if (controller == null || lib.MaaControllerConnected(controller).toInt() == 0) {
             releaseController(lib)
             val config = buildControllerConfig(payload, displayId)
@@ -249,6 +268,120 @@ class MaaRunner {
     }
 
     /**
+     * PI 声明的 agent：建 client → 绑 resource → 读回 identifier → 拉起 child → connect
+     * 返回 null 表示就绪（含「本次无 agent」），否则返回失败原因
+     *
+     * client 绑在 resource 上，所以整批与 resource 同生命周期；child 死了也要连 client 一起重来，
+     * 光重起 child 连不回已经 bind 在旧 socket 上的 client
+     */
+    private fun prepareAgents(lib: MaaFrameworkLibrary, payload: RunPlanPayload): String? {
+        if (payload.agents.isEmpty()) {
+            releaseAgents()
+            return null
+        }
+        val agentLib = MaaAgentClientLoader.library
+            ?: return "libMaaAgentClient.so 加载失败，无法拉起 agent"
+
+        val reusable = loadedAgents == payload.agents &&
+            agents.size == payload.agents.size &&
+            agents.all { it.session.isAlive() && agentLib.MaaAgentClientAlive(it.client).toInt() != 0 }
+        if (reusable) return null
+
+        releaseAgents()
+        ensureTempDir()
+
+        val workingDir = projectRoot ?: return "PI 根未就绪，agent 无法确定工作目录"
+        val started = mutableListOf<ActiveAgent>()
+        payload.agents.forEachIndexed { index, agent ->
+            val client = agentLib.MaaAgentClientCreateV2(null)
+                ?: return failAgents(started, "MaaAgentClientCreateV2 失败")
+            if (agentLib.MaaAgentClientBindResource(client, resource).toInt() == 0) {
+                agentLib.MaaAgentClientDestroy(client)
+                return failAgents(started, "agent 绑定 resource 失败")
+            }
+            val identifier = readIdentifier(lib, agentLib, client)
+                ?: run {
+                    agentLib.MaaAgentClientDestroy(client)
+                    return failAgents(started, "读取 agent identifier 失败")
+                }
+            agentLib.MaaAgentClientSetTimeout(client, AGENT_CONNECT_TIMEOUT_MILLIS)
+
+            val session = try {
+                agentHost.launch(
+                    AgentLaunchRequest(
+                        index = index,
+                        agent = agent,
+                        identifier = identifier,
+                        apkPath = payload.apkPath,
+                        nativeLibraryDir = payload.nativeLibraryDir,
+                        workingDir = workingDir,
+                    ),
+                )
+            } catch (e: AgentLaunchException) {
+                agentLib.MaaAgentClientDestroy(client)
+                return failAgents(started, e.message.orEmpty())
+            }
+
+            if (agentLib.MaaAgentClientConnect(client).toInt() == 0) {
+                session.close()
+                agentLib.MaaAgentClientDestroy(client)
+                return failAgents(started, "agent 连接超时：${agent.childExec}")
+            }
+            Ln.i("MaaRunner: agent[$index] connected, identifier=$identifier")
+            started += ActiveAgent(client, session)
+        }
+
+        agents = started
+        loadedAgents = payload.agents
+        // agent 注册的 custom 节点挂在 resource 上，绑定关系要重来
+        releaseTasker(lib)
+        return null
+    }
+
+    /** identifier 走 MaaStringBuffer 出参；buffer 由调用方负责销毁 */
+    private fun readIdentifier(
+        lib: MaaFrameworkLibrary,
+        agentLib: MaaAgentClientLibrary,
+        client: Pointer,
+    ): String? {
+        val buffer = lib.MaaStringBufferCreate() ?: return null
+        return try {
+            if (agentLib.MaaAgentClientIdentifier(client, buffer).toInt() == 0) null
+            else lib.MaaStringBufferGet(buffer)?.takeIf(String::isNotEmpty)
+        } finally {
+            lib.MaaStringBufferDestroy(buffer)
+        }
+    }
+
+    private fun failAgents(started: List<ActiveAgent>, reason: String): String {
+        started.forEach { releaseAgent(it) }
+        return reason
+    }
+
+    /**
+     * Android 没有 `/tmp`，`std::filesystem::temp_directory_path()` 查不到 TMPDIR 就返回不存在的路径，
+     * AgentClient 的 socket 直接 bind 失败
+     * 而 `Transceiver.cpp` 的 kTempDir 是函数内 static，首次调用即锁死——必须赶在建 client 之前设
+     */
+    private fun ensureTempDir() {
+        runCatching { Os.setenv("TMPDIR", AGENT_TEMP_DIR, true) }
+            .onFailure { Ln.w("MaaRunner: setenv TMPDIR failed: ${it.message}") }
+    }
+
+    private fun releaseAgents() {
+        agents.forEach { releaseAgent(it) }
+        agents = emptyList()
+        loadedAgents = emptyList()
+    }
+
+    private fun releaseAgent(agent: ActiveAgent) {
+        val agentLib = MaaAgentClientLoader.library
+        runCatching { agentLib?.MaaAgentClientDisconnect(agent.client) }
+        runCatching { agent.session.close() }
+        runCatching { agentLib?.MaaAgentClientDestroy(agent.client) }
+    }
+
+    /**
      * screen_resolution 必须与帧缓冲、触摸坐标空间三者一致，不一致时 screencap 立即失败
      * library_path 用裸名：bridge 已在本进程加载，控制单元 dlopen 同名即命中同一份
      *
@@ -277,6 +410,7 @@ class MaaRunner {
         releaseResource(lib)
     }
 
+
     private fun releaseTasker(lib: MaaFrameworkLibrary) {
         tasker?.let(lib::MaaTaskerDestroy)
         tasker = null
@@ -287,7 +421,9 @@ class MaaRunner {
         controller = null
     }
 
+    /** agent client 绑在 resource 上，销毁 resource 前必须先把 client 与 child 收掉 */
     private fun releaseResource(lib: MaaFrameworkLibrary) {
+        releaseAgents()
         resource?.let(lib::MaaResourceDestroy)
         resource = null
         loadedResourcePaths = emptyList()
@@ -311,5 +447,11 @@ class MaaRunner {
         /** MaaInvalidId */
         const val INVALID_ID = 0L
         const val BRIDGE_LIBRARY_NAME = "libbridge.so"
+
+        /** 解释器这类 child 冷启动要几秒，超时给宽一点；连不上会整批任务失败，宁可多等 */
+        const val AGENT_CONNECT_TIMEOUT_MILLIS = 30_000L
+
+        /** AgentClient 与 child 的 unix socket 落点；shell 与 root 都可写 */
+        const val AGENT_TEMP_DIR = "/data/local/tmp"
     }
 }

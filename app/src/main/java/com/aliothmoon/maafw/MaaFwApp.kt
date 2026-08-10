@@ -115,6 +115,9 @@ val appModule = module {
                     MAA_LOG_DIR_NAME,
                 )
             },
+            // 两条路径都取自 app 的 applicationInfo：特权进程只有 FakeContext，自己解析不如这里直给
+            apkPath = context.applicationInfo.sourceDir,
+            nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
             scope = get(named<AppCoroutineScope>()),
             ioDispatcher = Dispatchers.IO,
         )

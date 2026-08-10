@@ -656,3 +656,60 @@ class ProjectLoaderControllerTest {
         assertEquals(ControllerDefinition(), ready.definition.controller)
     }
 }
+
+class ProjectLoaderAgentTest {
+
+    private fun load(files: Map<String, String>): ProjectLoadResult.Ready {
+        val result = ProjectLoader(MapProjectSource(files)).load()
+        assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
+        return result as ProjectLoadResult.Ready
+    }
+
+    private fun loadWithAgent(agentJson: String): ProjectLoadResult.Ready = load(
+        mapOf(
+            "interface.json" to piRoot("tasks/a.json", body = """"agent":$agentJson"""),
+            "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+        ),
+    )
+
+    @Test
+    fun `agent 缺省时为空列表`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+            ),
+        )
+        assertTrue(ready.definition.agents.isEmpty())
+    }
+
+    @Test
+    fun `agent 写成单对象也收`() {
+        val ready = loadWithAgent("""{"child_exec":"python","child_args":["-u","main.py"]}""")
+        assertEquals(1, ready.definition.agents.size)
+        assertEquals("python", ready.definition.agents.single().childExec)
+        assertEquals(listOf("-u", "main.py"), ready.definition.agents.single().childArgs)
+    }
+
+    @Test
+    fun `agent 写成数组时按声明顺序保留`() {
+        val ready = loadWithAgent(
+            """[{"child_exec":"go-service"},{"child_exec":"cpp-algo","child_args":["--fast"]}]""",
+        )
+        assertEquals(listOf("go-service", "cpp-algo"), ready.definition.agents.map { it.childExec })
+        assertEquals(emptyList<String>(), ready.definition.agents.first().childArgs)
+        assertEquals(listOf("--fast"), ready.definition.agents.last().childArgs)
+    }
+
+    @Test
+    fun `缺 child_exec 的条目跳过并记 Error`() {
+        val ready = loadWithAgent("""[{"child_args":["-u"]},{"child_exec":"ok"}]""")
+        assertEquals(listOf("ok"), ready.definition.agents.map { it.childExec })
+        assertTrue(
+            ready.diagnostics.any {
+                it.severity == DiagnosticSeverity.Error &&
+                    it.message == DiagnosticMessage.RequiredFieldMissing("agent", "child_exec")
+            },
+        )
+    }
+}

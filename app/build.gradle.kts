@@ -45,6 +45,29 @@ val piSourceDir: String? = (localProperties.getProperty("pi.sourceDir")
 
 val piAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/piAssets")
 
+// agent 运行时同样不进仓库：解释器或 ELF 由 agent.sourceDir 指向的外部目录在构建期同步进来
+// 布局 <dir>/agent-runtime.json + <dir>/<abi>/{jniLibs,bundle}/
+//   jniLibs/ 随 APK 装进 nativeLibraryDir（文件名须是 lib*.so，否则装机时不解压），零解包
+//   bundle/  随 assets 走，首启由特权进程解包到可执行目录（解释器这类目录树只能走这条）
+// 不配置就是不带 agent，与 pi.sourceDir 缺失同样软失败
+val agentSourceDir: String? = (localProperties.getProperty("agent.sourceDir")
+    ?: System.getenv("AGENT_SOURCE_DIR"))?.takeIf { it.isNotBlank() }
+
+// 生成目录跨 variant 共享，没法按 buildType 分 ABI；本地只带一份运行时靠这个键
+// local.properties: agent.abi=arm64-v8a
+val agentAbiPatterns: List<String> = (localProperties.getProperty("agent.abi") ?: "")
+    .split(',')
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+    .ifEmpty { listOf("*") }
+
+val agentAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/agentAssets")
+val agentJniLibsDir: Provider<Directory> = layout.buildDirectory.dir("generated/agentJniLibs")
+
+/** 未配置 agent.sourceDir 时给 Sync 用的空源；只为让它照常执行并清空目标目录 */
+val emptyAgentSource: File =
+    layout.buildDirectory.dir("generated/agentEmptySource").get().asFile.apply { mkdirs() }
+
 // 发布要覆盖的 ABI；jniLibs 里就这两份
 val shippedAbis: List<String> = listOf("arm64-v8a", "x86_64")
 
@@ -127,6 +150,84 @@ val writePiIndex = tasks.register("writePiIndex") {
         }
         fingerprintFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
         // 一行一条相对路径，运行时按行读，app 侧不必解析 JSON
+        manifestFile.get().asFile.writeText(entries.joinToString("\n"))
+    }
+}
+
+val syncAgentAssets = tasks.register<Sync>("syncAgentAssets") {
+    group = "build"
+    description = "把 agent.sourceDir 的运行时描述与 bundle 同步为 assets/agent"
+    // 索引文件要落在这层之外：Sync 会清掉目标目录里不属于源的东西
+    into(agentAssetsDir.map { it.dir("agent") })
+    if (agentSourceDir != null) {
+        from(agentSourceDir) { include("agent-runtime.json") }
+        from(agentSourceDir) {
+            // <abi>/bundle/** 拍平成 <abi>/**：bundle 只是源目录里的分类，落到设备上没有意义
+            agentAbiPatterns.forEach { include("$it/bundle/**") }
+            eachFile { path = path.replaceFirst("/bundle/", "/") }
+            includeEmptyDirs = false
+        }
+    } else {
+        // 给一个空源目录而不是什么都不给：Sync 无源时判 NO-SOURCE 整个跳过，
+        // 上一次配置过 agent.sourceDir 留下的运行时会一直留在生成目录里，混进后来的包
+        from(emptyAgentSource)
+        doFirst { logger.info("未配置 agent.sourceDir，构建产物将不含 agent 运行时") }
+    }
+}
+
+val syncAgentJniLibs = tasks.register<Sync>("syncAgentJniLibs") {
+    group = "build"
+    description = "把 agent.sourceDir 的单文件可执行体同步进 jniLibs"
+    into(agentJniLibsDir)
+    if (agentSourceDir != null) {
+        from(agentSourceDir) {
+            agentAbiPatterns.forEach { include("$it/jniLibs/**") }
+            eachFile { path = path.replaceFirst("/jniLibs/", "/") }
+            includeEmptyDirs = false
+        }
+    } else {
+        from(emptyAgentSource)
+    }
+}
+
+// 与 PI 同款：指纹判断已解包的运行时是否过期，清单让解包按行直取
+// 描述文件不进两者——它不影响解包出来的字节，改描述不该触发重解一棵上百 MB 的树
+val writeAgentIndex = tasks.register("writeAgentIndex") {
+    group = "build"
+    description = "算出 agent 运行时的内容指纹与解包清单，落成 assets/agent.fingerprint 与 assets/agent.manifest"
+    dependsOn(syncAgentAssets)
+    val agentDir = agentAssetsDir.map { it.dir("agent") }
+    val fingerprintFile = agentAssetsDir.map { it.file("agent.fingerprint") }
+    val manifestFile = agentAssetsDir.map { it.file("agent.manifest") }
+    // 用 fileTree 而不是 inputs.dir：没配 agent.sourceDir 时 syncAgentAssets 是 NO-SOURCE，
+    // 目标目录压根不会建出来，inputs.dir 会直接判校验失败
+    inputs.files(agentDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.file(fingerprintFile)
+    outputs.file(manifestFile)
+    doLast {
+        val root = agentDir.get().asFile
+        fingerprintFile.get().asFile.parentFile.mkdirs()
+        val digest = MessageDigest.getInstance("SHA-256")
+        val entries = root.takeIf { it.isDirectory }?.walkTopDown()
+            ?.filter { it.isFile }
+            ?.map { it.toRelativeString(root).replace('\\', '/') }
+            // 只收 <abi>/ 下的条目，描述文件与将来可能加的同级元数据都排除在外
+            ?.filter { it.contains('/') }
+            ?.sorted()
+            ?.toList()
+            .orEmpty()
+        entries.forEach { entry ->
+            digest.update(entry.toByteArray())
+            File(root, entry).inputStream().use { stream ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = stream.read(buffer)
+                    if (read <= 0) break
+                    digest.update(buffer, 0, read)
+                }
+            }
+        }
+        fingerprintFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
         manifestFile.get().asFile.writeText(entries.joinToString("\n"))
     }
 }
@@ -226,7 +327,7 @@ android {
 }
 
 tasks.named("preBuild") {
-    dependsOn(writePiIndex)
+    dependsOn(writePiIndex, writeAgentIndex, syncAgentJniLibs)
 }
 
 // AGP 9 不再接受 Provider 形式的 sourceSet srcDir，只能走 Variant API
@@ -235,7 +336,20 @@ tasks.named("preBuild") {
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addStaticSourceDirectory(piAssetsDir.get().asFile.absolutePath)
+        variant.sources.assets?.addStaticSourceDirectory(agentAssetsDir.get().asFile.absolutePath)
+        variant.sources.jniLibs?.addStaticSourceDirectory(agentJniLibsDir.get().asFile.absolutePath)
     }
+}
+
+// addStaticSourceDirectory 只让合并任务在执行时读到目录，不把它登记成输入：
+// 实测改了 PI 或 agent 运行时之后 mergeXxxAssets 仍判 UP-TO-DATE，APK 里留着上一次的内容
+// 这里补一条内容级输入把 up-to-date 判定接上；用 fileTree 而非 inputs.dir，目录缺失时才不会校验失败
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    inputs.files(piAssetsDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(agentAssetsDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
+}
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
+    inputs.files(agentJniLibsDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 kotlin {

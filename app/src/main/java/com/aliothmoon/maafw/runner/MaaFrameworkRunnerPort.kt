@@ -31,6 +31,10 @@ class MaaFrameworkRunnerPort(
     private val installer: PiInstaller,
     /** MaaFramework 的 maa.log 与 Screencap 动作的落点；须是特权进程（shell/root 身份）可写的目录 */
     private val logDir: () -> File,
+    /** 本包 APK 的绝对路径；特权进程从中读 agent 运行时的 assets */
+    private val apkPath: String,
+    /** 已解压的 native 库目录；agent child 靠它 dlopen libMaaAgentServer.so 及其依赖 */
+    private val nativeLibraryDir: String,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val serviceManager: RemoteServiceManager = RemoteServiceManager,
@@ -185,6 +189,9 @@ class MaaFrameworkRunnerPort(
                     pipelineOverrides = it.pipelineOverrides,
                 )
             },
+            agents = plan.agents.map { AgentPayload(it.childExec, it.childArgs) },
+            apkPath = apkPath,
+            nativeLibraryDir = nativeLibraryDir,
         )
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return "特权进程拒绝了本次执行"

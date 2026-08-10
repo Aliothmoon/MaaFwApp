@@ -88,6 +88,7 @@ object RunPlanBuilder {
                 resource = resource,
                 runConfigurationId = runConfiguration.id,
                 tasks = runtimeTasks,
+                agents = definition.agents,
             ),
         )
     }

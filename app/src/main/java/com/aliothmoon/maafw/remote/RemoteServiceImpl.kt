@@ -34,7 +34,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     private val appPid = AtomicInteger(0)
     private val destroyed = AtomicBoolean(false)
     private var piRoot: String? = null
-    private val runner = MaaRunner()
+    private val runner = MaaRunner(ExecAgentHost())
 
     init {
         RemoteBootTrace.mark("CTOR_START")
@@ -76,7 +76,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
             return false
         }
         this.piRoot = piRoot
+        // agent child 的 cwd 与上游 MaaPiCli 对齐，取 PI 根
+        runner.setProjectRoot(piRoot)
         // Android 12 起子进程会被 phantom process killer 收割，接 native 前先关掉
+        // agent child 同样吃这条：它是特权进程 fork 出来的，不关就会被一起收走
         PermissionGrantHelper.disablePhantomProcessKiller()
         // 特权进程是 shell/root 身份，app 建的目录未必可写，这里自己建一遍
         if (!logDir.isNullOrBlank() && ensureWritableDir(logDir)) {

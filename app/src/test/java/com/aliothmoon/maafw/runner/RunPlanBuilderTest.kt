@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.config.ConfigurationResolver
+import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.DiagnosticMessage
 import com.aliothmoon.maafw.domain.OptionDefinition
@@ -53,6 +54,42 @@ class RunPlanBuilderTest {
     fun `无活动配置映射为 NoExecutableTasks`() {
         val result = RunPlanBuilder.build(definition, UserConfiguration(initialized = true))
         assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
+    fun `夹具 PI 的 agent 声明原样冻结进 RunPlan`() {
+        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")))
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val agent = (result as RunPlanResult.Success).plan.agents.single()
+        // child_exec 与 child_args 都原样透传，Android 上不解释也不改写
+        assertEquals("uv", agent.childExec)
+        assertEquals(listOf("run", "python", "agent/bootstrap.py"), agent.childArgs)
+    }
+
+    @Test
+    fun `多个 agent 按声明顺序进 RunPlan`() {
+        // 顺序即与运行时描述 runtimes[] 的配对依据，不能重排
+        val withAgents = definition.copy(
+            agents = listOf(
+                AgentDefinition("go-service", emptyList()),
+                AgentDefinition("cpp-algo", listOf("--fast")),
+            ),
+        )
+        val result = RunPlanBuilder.build(withAgents, configWith(ConfiguredTask("启动游戏")))
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(listOf("go-service", "cpp-algo"), plan.agents.map { it.childExec })
+        assertEquals(listOf("--fast"), plan.agents.last().childArgs)
+    }
+
+    @Test
+    fun `无 agent 的 PI 编出空 agent 列表`() {
+        val result = RunPlanBuilder.build(
+            definition.copy(agents = emptyList()),
+            configWith(ConfiguredTask("启动游戏")),
+        )
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        assertTrue((result as RunPlanResult.Success).plan.agents.isEmpty())
     }
 
     @Test

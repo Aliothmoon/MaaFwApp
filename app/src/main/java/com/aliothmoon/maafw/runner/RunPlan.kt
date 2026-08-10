@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -13,6 +14,8 @@ data class RunPlan(
     val resource: ResourceDefinition,
     val runConfigurationId: RunConfigurationId,
     val tasks: List<RuntimeTask>,
+    /** PI 声明的 agent，按声明顺序；Runner 逐个建 client 并拉起 child */
+    val agents: List<AgentDefinition> = emptyList(),
 )
 
 data class RuntimeTask(

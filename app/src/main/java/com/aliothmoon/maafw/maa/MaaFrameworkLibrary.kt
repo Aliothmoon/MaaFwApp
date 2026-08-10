@@ -74,6 +74,15 @@ interface MaaFrameworkLibrary : Library {
 
     fun MaaTaskerStopping(tasker: Pointer?): Byte
 
+    // ── StringBuffer ──
+    // MaaAgentClient 的 identifier 走的是 buffer 而不是 char*，用完必须 Destroy
+
+    fun MaaStringBufferCreate(): Pointer?
+
+    fun MaaStringBufferDestroy(handle: Pointer?)
+
+    fun MaaStringBufferGet(handle: Pointer?): String?
+
     /**
      * 对应 `MaaEventCallback`：`void(void* handle, const char* message, const char* details_json, void* trans_arg)`
      * 由 native 线程回调，实现里不得阻塞，也不得抛异常穿回 native
