@@ -28,8 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,8 +53,11 @@ import com.aliothmoon.maafw.ui.components.MaaTouchOverlay
 import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
- * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一个 SurfaceView
- * 重建会销毁 Surface，得跟特权进程重新握手一次，画面要黑一下
+ * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一份组合状态
+ *
+ * 「已上报哪个 Surface」的判重状态放在 movableContent **外层**：
+ * SurfaceView 搬家时必然走一轮 detach/attach，surfaceDestroyed 与 surfaceCreated 成对触发，
+ * 判重状态若放在里面会跟着一起搬，拿不准新旧 Surface 的对应关系
  *
  * 闭包里读到的值必须走 rememberUpdatedState：movableContentOf 只创建一次，直接捕获会永远停在首帧
  */
@@ -67,12 +72,22 @@ internal fun rememberMovablePreview(
     val currentMarkers by rememberUpdatedState(markers)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
+    var lastSentSurface by remember { mutableStateOf<PlatformSurface?>(null) }
     return remember {
         movableContentOf {
             MaaPreviewSurface(
                 resolution = currentResolution,
-                onSurfaceAvailable = { currentAvailable(it) },
-                onSurfaceDestroyed = { currentDestroyed() },
+                onSurfaceAvailable = { surface ->
+                    // surfaceChanged 会重复触发，同一个 Surface 不重复跨进程上报
+                    if (lastSentSurface != surface) {
+                        lastSentSurface = surface
+                        currentAvailable(surface)
+                    }
+                },
+                onSurfaceDestroyed = {
+                    lastSentSurface = null
+                    currentDestroyed()
+                },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 MaaTouchOverlay(
