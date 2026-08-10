@@ -154,19 +154,37 @@ val writePiIndex = tasks.register("writePiIndex") {
     }
 }
 
+// bundle 打成单个 zip 再进 assets，不散装铺开
+// AAPT 会按默认规则改写 assets：`<dir>_*` 整目录丢掉（Python 的 `_pyrepl/` 首当其冲）、
+// `.*` 丢掉、`.gz` 解压后改名。实测 1554 个条目进包只剩 1272 个。归档之后它碰不到里面的名字，
+// 顺带省掉运行时在上百 MB 的 APK 里做上千次条目查找
+val packAgentBundles = tasks.register<Zip>("packAgentBundles") {
+    group = "build"
+    description = "把 agent.sourceDir 的 bundle 按 ABI 打包进 assets/agent"
+    destinationDirectory.set(agentAssetsDir.map { it.dir("agent") })
+    archiveFileName.set("bundle.zip")
+    if (agentSourceDir != null) {
+        agentAbiPatterns.forEach { abi ->
+            from(agentSourceDir) {
+                include("$abi/bundle/**")
+                // <abi>/bundle/** 拍平成 <abi>/**：bundle 只是源目录里的分类，落到设备上没有意义
+                eachFile { path = path.replaceFirst("/bundle/", "/") }
+                includeEmptyDirs = false
+            }
+        }
+    }
+}
+
 val syncAgentAssets = tasks.register<Sync>("syncAgentAssets") {
     group = "build"
-    description = "把 agent.sourceDir 的运行时描述与 bundle 同步为 assets/agent"
+    description = "把 agent.sourceDir 的运行时描述同步为 assets/agent"
+    dependsOn(packAgentBundles)
     // 索引文件要落在这层之外：Sync 会清掉目标目录里不属于源的东西
     into(agentAssetsDir.map { it.dir("agent") })
+    // bundle.zip 由 packAgentBundles 写进同一个目录，别被 Sync 当成多余内容删掉
+    preserve { include("bundle.zip") }
     if (agentSourceDir != null) {
         from(agentSourceDir) { include("agent-runtime.json") }
-        from(agentSourceDir) {
-            // <abi>/bundle/** 拍平成 <abi>/**：bundle 只是源目录里的分类，落到设备上没有意义
-            agentAbiPatterns.forEach { include("$it/bundle/**") }
-            eachFile { path = path.replaceFirst("/bundle/", "/") }
-            includeEmptyDirs = false
-        }
     } else {
         // 给一个空源目录而不是什么都不给：Sync 无源时判 NO-SOURCE 整个跳过，
         // 上一次配置过 agent.sourceDir 留下的运行时会一直留在生成目录里，混进后来的包
@@ -190,45 +208,29 @@ val syncAgentJniLibs = tasks.register<Sync>("syncAgentJniLibs") {
     }
 }
 
-// 与 PI 同款：指纹判断已解包的运行时是否过期，清单让解包按行直取
-// 描述文件不进两者——它不影响解包出来的字节，改描述不该触发重解一棵上百 MB 的树
+// 指纹判断已解包的运行时是否过期；归档自带目录，不再需要单独的解包清单
+// 描述文件不进指纹——它不影响解包出来的字节，改描述不该触发重解一棵上百 MB 的树
 val writeAgentIndex = tasks.register("writeAgentIndex") {
     group = "build"
-    description = "算出 agent 运行时的内容指纹与解包清单，落成 assets/agent.fingerprint 与 assets/agent.manifest"
+    description = "算出 agent 运行时归档的内容指纹，落成 assets/agent.fingerprint"
     dependsOn(syncAgentAssets)
-    val agentDir = agentAssetsDir.map { it.dir("agent") }
+    val bundleZip = agentAssetsDir.map { it.file("agent/bundle.zip") }
     val fingerprintFile = agentAssetsDir.map { it.file("agent.fingerprint") }
-    val manifestFile = agentAssetsDir.map { it.file("agent.manifest") }
-    // 用 fileTree 而不是 inputs.dir：没配 agent.sourceDir 时 syncAgentAssets 是 NO-SOURCE，
-    // 目标目录压根不会建出来，inputs.dir 会直接判校验失败
-    inputs.files(agentDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
+    // 用 files 而不是 inputs.file：没配 agent.sourceDir 时归档可能不存在，inputs.file 会直接判校验失败
+    inputs.files(bundleZip).withPathSensitivity(PathSensitivity.RELATIVE)
     outputs.file(fingerprintFile)
-    outputs.file(manifestFile)
     doLast {
-        val root = agentDir.get().asFile
         fingerprintFile.get().asFile.parentFile.mkdirs()
         val digest = MessageDigest.getInstance("SHA-256")
-        val entries = root.takeIf { it.isDirectory }?.walkTopDown()
-            ?.filter { it.isFile }
-            ?.map { it.toRelativeString(root).replace('\\', '/') }
-            // 只收 <abi>/ 下的条目，描述文件与将来可能加的同级元数据都排除在外
-            ?.filter { it.contains('/') }
-            ?.sorted()
-            ?.toList()
-            .orEmpty()
-        entries.forEach { entry ->
-            digest.update(entry.toByteArray())
-            File(root, entry).inputStream().use { stream ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val read = stream.read(buffer)
-                    if (read <= 0) break
-                    digest.update(buffer, 0, read)
-                }
+        bundleZip.get().asFile.takeIf { it.isFile }?.inputStream()?.use { stream ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = stream.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
             }
         }
         fingerprintFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
-        manifestFile.get().asFile.writeText(entries.joinToString("\n"))
     }
 }
 
@@ -324,6 +326,12 @@ android {
     }
 
     experimentalProperties["android.experimental.enableScreenshotTest"] = true
+
+    androidResources {
+        // agent 运行时归档内部已经 deflate 过，APK 里再压一遍只是白烧构建时间；
+        // 存成 STORED 之后运行时读它是直读，不必先把整条目 inflate 出来
+        noCompress += "zip"
+    }
 }
 
 tasks.named("preBuild") {
