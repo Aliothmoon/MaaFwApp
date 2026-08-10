@@ -76,6 +76,13 @@ fun HomeScreen(
             .padding(MaaDesignTokens.Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
     ) {
+        // 项目名作首页左上角标题（项目未就绪时回落 app 名），像其它 App 的顶栏名字
+        Text(
+            text = (state.projectState as? ProjectState.Ready)?.definition?.name
+                ?: stringResource(R.string.app_name),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.fillMaxWidth(),
+        )
         OverviewCard(state)
         ResourceCard(state, onIntent)
         RunModeCard(state, onIntent)
@@ -88,12 +95,6 @@ fun HomeScreen(
 @Composable
 private fun OverviewCard(state: SessionUiState) {
     MaaCard(title = stringResource(R.string.home_overview)) {
-        val project = state.projectState
-        MaaInfoRow(
-            stringResource(R.string.home_name),
-            (project as? ProjectState.Ready)?.definition?.name
-                ?: stringResource(R.string.home_none),
-        )
         MaaInfoRow(
             stringResource(R.string.home_display_resolution),
             state.previewResolution?.let { "${it.width} × ${it.height}" }
