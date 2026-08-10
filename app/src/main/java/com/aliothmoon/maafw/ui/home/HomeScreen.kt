@@ -376,27 +376,36 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
     }
 }
 
+/**
+ * 运行模式：开关式（对齐 MaaMeow）——开关 ON=后台虚拟屏（默认），OFF=前台主屏
+ */
 @Composable
 private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     MaaCard(title = stringResource(R.string.settings_run_mode)) {
-        val modes = listOf(
-            RunMode.BACKGROUND to stringResource(R.string.settings_run_mode_background),
-            RunMode.FOREGROUND to stringResource(R.string.settings_run_mode_foreground),
-        )
-        MaaSingleChoiceFlow(
-            options = modes,
-            selected = state.runMode,
-            enabled = !state.configurationLocked,
-            onSelect = { onIntent(SessionIntent.SetRunMode(it)) },
-        )
-        Text(
-            text = when (state.runMode) {
-                RunMode.BACKGROUND -> stringResource(R.string.settings_run_mode_hint_background)
-                RunMode.FOREGROUND -> stringResource(R.string.settings_run_mode_hint_foreground)
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(
+                    if (state.runMode == RunMode.BACKGROUND) R.string.settings_run_mode_background
+                    else R.string.settings_run_mode_foreground
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            MaaSwitch(
+                checked = state.runMode == RunMode.BACKGROUND,
+                enabled = !state.configurationLocked,
+                onCheckedChange = { background ->
+                    onIntent(
+                        SessionIntent.SetRunMode(
+                            if (background) RunMode.BACKGROUND else RunMode.FOREGROUND
+                        )
+                    )
+                },
+            )
+        }
     }
     // 两张卡按模式二选一：控制层只有前台用得上，屏保只有后台用得上
     when (state.runMode) {
