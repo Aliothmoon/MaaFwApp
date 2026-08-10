@@ -159,7 +159,7 @@ class RunForegroundService : Service() {
     /** 通知权限被拒时 notify/cancel 会抛 SecurityException，不能让它掀翻 FGS 主线程 */
     private fun notify(notification: Notification) {
         runCatching { notificationManager.notify(NOTIFICATION_ID, notification) }
-            .onFailure { Timber.w(it, "更新执行通知失败") }
+            .onFailure { Timber.w(it, "Failed to update run notification") }
     }
 
     private val notificationManager: NotificationManager
@@ -185,7 +185,7 @@ class RunForegroundService : Service() {
         fun start(context: Context) {
             runCatching {
                 context.startForegroundService(Intent(context, RunForegroundService::class.java))
-            }.onFailure { Timber.w(it, "前台服务启动失败") }
+            }.onFailure { Timber.w(it, "Failed to start foreground service") }
         }
     }
 }

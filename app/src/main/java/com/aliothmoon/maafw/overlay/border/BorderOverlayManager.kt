@@ -30,9 +30,9 @@ class BorderOverlayManager(private val context: Context) {
             val view = BorderOverlayView(context, style)
             withContext(Dispatchers.Main) { windowManager.addView(view, createLayoutParams()) }
             overlayView = view
-            Timber.d("运行边框已显示")
+            Timber.d("Run border shown")
         }.onFailure {
-            Timber.e(it, "运行边框显示失败")
+            Timber.e(it, "Failed to show run border")
             overlayView = null
         }
     }
@@ -41,7 +41,7 @@ class BorderOverlayManager(private val context: Context) {
         val view = overlayView ?: return
         overlayView = null
         runCatching { withContext(Dispatchers.Main) { windowManager.removeView(view) } }
-            .onFailure { Timber.e(it, "运行边框移除失败") }
+            .onFailure { Timber.e(it, "Failed to remove run border") }
     }
 
     fun isShowing(): Boolean = overlayView != null

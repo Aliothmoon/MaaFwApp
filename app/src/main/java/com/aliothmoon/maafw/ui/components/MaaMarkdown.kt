@@ -207,7 +207,7 @@ private class StyledSpanTagHandler(
         return try {
             android.graphics.Color.parseColor(value)
         } catch (_: IllegalArgumentException) {
-            Timber.w("无法解析 CSS 颜色: %s", raw)
+            Timber.w("Cannot parse CSS color: %s", raw)
             null
         }
     }
@@ -252,7 +252,7 @@ class DescriptionFetcher private constructor(context: Context) {
                 response.body.string()
             }
         } catch (e: Exception) {
-            Timber.w(e, "description 拉取失败: %s", url)
+            Timber.w(e, "Failed to fetch description: %s", url)
             url
         }
     }

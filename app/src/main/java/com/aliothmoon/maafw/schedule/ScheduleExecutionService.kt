@@ -55,7 +55,7 @@ class ScheduleExecutionService : Service() {
 
         val strategyId = intent?.getStringExtra(EXTRA_STRATEGY_ID)
         if (intent?.action != ACTION_SCHEDULE_TRIGGER || strategyId.isNullOrEmpty()) {
-            Timber.w("定时服务收到无效 intent: action=%s", intent?.action)
+            Timber.w("Schedule service received invalid intent: action=%s", intent?.action)
             stopIfIdle()
             return START_NOT_STICKY
         }
@@ -86,7 +86,7 @@ class ScheduleExecutionService : Service() {
         }
         val now = System.currentTimeMillis()
         if (strategy == null) {
-            Timber.w("定时策略已不存在: %s", strategyId)
+            Timber.w("Schedule strategy no longer exists: %s", strategyId)
             triggerLog.append(
                 TriggerLogEntry(
                     strategyId = strategyId,

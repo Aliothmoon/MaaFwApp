@@ -77,7 +77,7 @@ class AppLogWriter(private val logDir: () -> File) {
             writtenBytes += bytes.size
         }.onFailure {
             // 这里不能再走 Timber，否则写日志失败会触发写日志，直接递归
-            Log.w(TAG, "写 app 日志失败", it)
+            Log.w(TAG, "Failed to write app log", it)
             closeStream()
         }
     }

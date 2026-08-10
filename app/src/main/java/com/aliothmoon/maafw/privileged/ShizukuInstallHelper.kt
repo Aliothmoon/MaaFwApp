@@ -52,7 +52,7 @@ object ShizukuInstallHelper {
         }
         context.startActivity(intent)
         true
-    }.onFailure { Timber.e(it, "安装 Shizuku 失败") }.getOrDefault(false)
+    }.onFailure { Timber.e(it, "Failed to install Shizuku") }.getOrDefault(false)
 
     fun openShizuku(context: Context, launchPackage: String = SHIZUKU_PACKAGE): Boolean {
         if (launchPackage.isBlank()) return false
@@ -60,7 +60,7 @@ object ShizukuInstallHelper {
         return runCatching {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             true
-        }.onFailure { Timber.w(it, "打开 Shizuku 失败") }.getOrDefault(false)
+        }.onFailure { Timber.w(it, "Failed to open Shizuku") }.getOrDefault(false)
     }
 
     private fun isInstalled(context: Context, packageName: String): Boolean {
@@ -79,5 +79,5 @@ object ShizukuInstallHelper {
             dest.outputStream().use { input.copyTo(it) }
         }
         dest
-    }.onFailure { Timber.e(it, "从 assets 取 shizuku.apk 失败") }.getOrNull()
+    }.onFailure { Timber.e(it, "Failed to read shizuku.apk from assets") }.getOrNull()
 }

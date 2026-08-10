@@ -86,7 +86,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         if (!logDir.isNullOrBlank() && ensureWritableDir(logDir)) {
             runner.applyGlobalOptions(logDir, isDebug)
         } else {
-            Ln.w("$TAG: log dir unusable, MaaFramework 将按进程 CWD 落盘: $logDir")
+            Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")
         }
         Ln.i("$TAG: setup ok, piRoot=$piRoot")
         return true

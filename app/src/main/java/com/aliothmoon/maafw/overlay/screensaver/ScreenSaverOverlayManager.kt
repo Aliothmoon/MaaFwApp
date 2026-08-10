@@ -113,7 +113,7 @@ class ScreenSaverOverlayManager(
     suspend fun show(): Boolean = withContext(Dispatchers.Main.immediate) {
         if (_isShowing.value) return@withContext true
         if (appSettings.runMode.value != RunMode.BACKGROUND) {
-            Timber.w("非后台模式，忽略屏保显示请求")
+            Timber.w("Not in background mode; ignoring screen-saver show request")
             return@withContext false
         }
 
@@ -124,9 +124,9 @@ class ScreenSaverOverlayManager(
                 viewModelOwner.start()
                 startLogRelay()
                 _isShowing.value = true
-                Timber.d("屏保已盖上")
+                Timber.d("Screen saver shown")
             }
-            .onFailure { Timber.e(it, "屏保显示失败") }
+            .onFailure { Timber.e(it, "Failed to show screen saver") }
         _isShowing.value
     }
 
@@ -140,8 +140,8 @@ class ScreenSaverOverlayManager(
         latestLog.value = null
         viewModelOwner.stop()
         runCatching { windowManager.removeView(view) }
-            .onSuccess { Timber.d("屏保已撤") }
-            .onFailure { Timber.e(it, "屏保移除失败") }
+            .onSuccess { Timber.d("Screen saver dismissed") }
+            .onFailure { Timber.e(it, "Failed to remove screen saver") }
     }
 
     private fun startLogRelay() {

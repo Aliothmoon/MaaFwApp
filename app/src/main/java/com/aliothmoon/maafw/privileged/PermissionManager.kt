@@ -128,14 +128,14 @@ class PermissionManager(
                     appContext.applicationInfo.uid,
                     requested,
                 )
-            }.onFailure { Timber.w(it, "特权代授失败") }.getOrNull()
+            }.onFailure { Timber.w(it, "Privileged permission grant failed") }.getOrNull()
         }
-        Timber.i("特权代授结果 requested=%s granted=%s", requested, granted)
+        Timber.i("Privileged grant result requested=%s granted=%s", requested, granted)
         // 无障碍是异步绑定的，代授返回成功不代表服务已经连上
         if (granted != null && granted and PrivilegedGrant.ACCESSIBILITY != 0) {
             withTimeoutOrNull(ACCESSIBILITY_BIND_TIMEOUT_MS) {
                 AccessibilityHelperService.isConnected.first { it }
-            } ?: Timber.w("无障碍服务代授后未在超时内连上")
+            } ?: Timber.w("Accessibility service did not connect within timeout after grant")
         }
         refresh()
     }
@@ -182,7 +182,7 @@ class PermissionManager(
             .fold(
                 onSuccess = { ServiceBindResult.Started },
                 onFailure = {
-                    Timber.e(it, "手动绑定特权进程失败")
+                    Timber.e(it, "Failed to bind privileged process manually")
                     ServiceBindResult.Failed(it.message.orEmpty())
                 },
             )

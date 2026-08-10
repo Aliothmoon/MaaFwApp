@@ -115,7 +115,7 @@ class RemotePreviewPort(
     /** 手动触摸是 oneway，发不出去就算了；预览本来就是尽力而为 */
     private inline fun withService(action: (RemoteService) -> Unit) {
         val service = serviceManager.getInstanceOrNull() ?: return
-        runCatching { action(service) }.onFailure { Timber.w(it, "预览手动触摸失败") }
+        runCatching { action(service) }.onFailure { Timber.w(it, "Preview touch failed") }
     }
 
     /** 未绑定时静默跳过：连上时 init 里的 collect 会补发 */

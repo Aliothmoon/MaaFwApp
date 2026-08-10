@@ -23,7 +23,7 @@ class ScheduleReceiver : BroadcastReceiver() {
         if (intent.action != ACTION_SCHEDULE_TRIGGER) return
         val strategyId = intent.getStringExtra(EXTRA_STRATEGY_ID) ?: return
         val scheduledTime = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0L)
-        Timber.i("定时闹钟触发: %s", strategyId)
+        Timber.i("Schedule alarm fired: %s", strategyId)
 
         val serviceIntent = Intent(context, ScheduleExecutionService::class.java).apply {
             action = ACTION_SCHEDULE_TRIGGER
@@ -36,7 +36,7 @@ class ScheduleReceiver : BroadcastReceiver() {
             // 正常路径不该到这：闹钟走 setExactAndAllowWhileIdle / setAlarmClock，两者都豁免
             // 前台服务的后台启动限制。真到了这里，服务不会跑、scheduleNext 也不会被调用，
             // 闹钟链就此断掉——所以在这里补注册下一环，让下次还有机会恢复
-            Timber.e(e, "前台服务启动失败，补注册下一次闹钟: %s", strategyId)
+            Timber.e(e, "Failed to start foreground service; rescheduling next alarm: %s", strategyId)
             rescheduleAfterFailure(strategyId, scheduledTime, e.message)
         }
     }

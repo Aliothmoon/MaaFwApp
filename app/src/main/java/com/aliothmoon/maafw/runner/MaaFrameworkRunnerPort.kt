@@ -135,7 +135,7 @@ class MaaFrameworkRunnerPort(
                         }
                     },
                     onFailure = { throwable ->
-                        Timber.e(throwable, "启动执行失败")
+                        Timber.e(throwable, "Failed to start run")
                         failPreparation(throwable.message ?: throwable.javaClass.simpleName)
                     },
                 )
@@ -154,7 +154,7 @@ class MaaFrameworkRunnerPort(
                 .fold(
                     onSuccess = { RunnerCommandResult.Accepted },
                     onFailure = {
-                        Timber.w(it, "停止执行失败")
+                        Timber.w(it, "Failed to stop run")
                         RunnerCommandResult.Rejected(it.message ?: "停止失败")
                     },
                 )

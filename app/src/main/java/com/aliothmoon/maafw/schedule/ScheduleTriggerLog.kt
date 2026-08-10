@@ -43,7 +43,7 @@ class ScheduleTriggerLog(private val logDir: () -> File) {
             val file = logFile()
             file.appendText(json.encodeToString(entry) + "\n")
             if (file.length() > MAX_BYTES) trim(file)
-        }.onFailure { Timber.w(it, "写触发日志失败") }
+        }.onFailure { Timber.w(it, "Failed to write trigger log") }
         Unit
     }
 
@@ -56,7 +56,7 @@ class ScheduleTriggerLog(private val logDir: () -> File) {
                 .mapNotNull { line -> runCatching { json.decodeFromString<TriggerLogEntry>(line) }.getOrNull() }
                 .asReversed()
         }.getOrElse {
-            Timber.w(it, "读触发日志失败")
+            Timber.w(it, "Failed to read trigger log")
             emptyList()
         }
     }
@@ -73,7 +73,7 @@ class ScheduleTriggerLog(private val logDir: () -> File) {
         runCatching {
             val kept = file.readLines().takeLast(KEEP_LINES)
             file.writeText(kept.joinToString("\n", postfix = "\n"))
-        }.onFailure { Timber.w(it, "裁剪触发日志失败") }
+        }.onFailure { Timber.w(it, "Failed to trim trigger log") }
     }
 
     private companion object {

@@ -184,12 +184,12 @@ class OverlayController(
                 setEnableAnimation(true)
             }
         }
-        Timber.d("控制层已装载")
+        Timber.d("Control overlay attached")
     }
 
     private fun uninstall() {
         FloatingX.uninstallAll()
-        Timber.d("控制层已卸载")
+        Timber.d("Control overlay detached")
     }
 
     private fun createPanelView(): ComposeView = newComposeView().apply {
@@ -247,7 +247,7 @@ class OverlayController(
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         }
         runCatching { context.startActivity(intent) }
-            .onFailure { Timber.w(it, "回到 app 失败") }
+            .onFailure { Timber.w(it, "Failed to return to app") }
     }
 
     private fun setPanelLocked(locked: Boolean) {
@@ -262,7 +262,7 @@ class OverlayController(
     /** 由 UI 显式开启；不自动开是因为悬浮窗要盖住别人的画面，得用户点头 */
     fun show() {
         if (appSettings.runMode.value != RunMode.FOREGROUND) {
-            Timber.w("非前台模式，忽略控制层显示请求")
+            Timber.w("Not in foreground mode; ignoring control overlay show request")
             return
         }
         _isActive.value = true
@@ -308,7 +308,7 @@ class OverlayController(
 
     private suspend fun applyMode(mode: OverlayControlMode) {
         if (currentMode == mode) return
-        Timber.d("控制层唤起方式 $currentMode -> $mode")
+        Timber.d("Control overlay mode $currentMode -> $mode")
         when (currentMode) {
             OverlayControlMode.ACCESSIBILITY -> borderOverlayManager.hide()
             OverlayControlMode.FLOAT_BALL -> hideBall()
