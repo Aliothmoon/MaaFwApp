@@ -338,8 +338,10 @@ class SessionViewModel(
             is SessionIntent.SetThemeMode ->
                 configurationStore.update { it.copy(themeMode = intent.mode) }
 
-            is SessionIntent.SetDebugMode ->
+            is SessionIntent.SetDebugMode -> {
                 appSettings.setDebugMode(intent.enabled)
+                if (intent.enabled) effectChannel.send(SessionEffect.RestartApp)
+            }
 
             is SessionIntent.SetThemeStyle ->
                 appSettings.setThemeStyle(intent.style)

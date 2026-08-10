@@ -52,6 +52,9 @@ object RemoteServiceManager {
     private var boundBackend: RemoteBackend? = null
     val state: StateFlow<ServiceState> = _state.asStateFlow()
 
+    /** 当前绑定的后端；LogcatService 要跟主服务走同一后端、同一拉起方式 */
+    val currentBackend: RemoteBackend? get() = boundBackend
+
     // 携带绑定时的 binder，迟到的死亡通知靠身份比对丢弃
     private class BindingDeathRecipient(val binder: IBinder) : IBinder.DeathRecipient {
         override fun binderDied() = onBinderDied(this)
@@ -132,6 +135,7 @@ object RemoteServiceManager {
         ShizukuManager.initSui(context.packageName)
         RemoteAccessCoordinator.initialize(backendProvider)
         RootRemoteServiceConnector.initialize(context)
+        LogcatServiceManager.initialize(context)
     }
 
     private fun onBinderDied(recipient: BindingDeathRecipient) {

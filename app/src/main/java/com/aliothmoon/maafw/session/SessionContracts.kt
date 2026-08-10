@@ -264,4 +264,7 @@ sealed interface SessionEffect {
 
     data object ShowOverlay : SessionEffect
     data object ShowScreenSaver : SessionEffect
+
+    /** 调试模式已启用并落盘，重启 App 让日志管线以新状态起来（对齐 MaaMeow） */
+    data object RestartApp : SessionEffect
 }

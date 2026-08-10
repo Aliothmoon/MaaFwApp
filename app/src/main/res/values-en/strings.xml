@@ -10,6 +10,7 @@
     <string name="common_delete">Delete</string>
     <string name="common_loading">Loading…</string>
     <string name="dialog_confirm">OK</string>
+    <string name="common_restart">Restart</string>
     <string name="dialog_cancel">Cancel</string>
 
     <!-- Tasks screen -->
@@ -347,5 +348,5 @@
     <string name="settings_debug_mode">Debug mode</string>
     <string name="settings_debug_mode_desc">Records detailed MaaFramework logs on the next run once enabled</string>
     <string name="dialog_enable_debug_title">Enable debug mode</string>
-    <string name="dialog_enable_debug_message">Once enabled, the next task run records detailed MaaFramework logs. Re-run to reproduce the issue; the logs are written to the log directory.</string>
+    <string name="dialog_enable_debug_message">Requires an app restart to take effect. Detailed MaaFramework logs plus app and privileged-process logcat will be recorded.</string>
 </resources>

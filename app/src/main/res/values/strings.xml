@@ -10,6 +10,7 @@
     <string name="common_delete">删除</string>
     <string name="common_loading">加载中…</string>
     <string name="dialog_confirm">确定</string>
+    <string name="common_restart">重启</string>
     <string name="dialog_cancel">取消</string>
 
     <!-- 任务页 -->
@@ -338,5 +339,5 @@
     <string name="settings_debug_mode">调试模式</string>
     <string name="settings_debug_mode_desc">启用后下一轮运行起记录 MaaFramework 详细日志</string>
     <string name="dialog_enable_debug_title">启用调试模式</string>
-    <string name="dialog_enable_debug_message">启用后，下一轮任务运行时会记录 MaaFramework 详细日志。请重新运行以复现问题，日志将完整记录到 log 目录。</string>
+    <string name="dialog_enable_debug_message">启用后需要重启 App 生效，将记录 MaaFramework 详细日志与 app、特权进程的 logcat。</string>
 </resources>

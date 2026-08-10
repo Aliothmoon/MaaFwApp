@@ -80,6 +80,7 @@ import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
+import com.aliothmoon.maafw.util.Misc
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.service.RunForegroundService
@@ -202,6 +203,8 @@ fun AppRoot(
                     // 控制层挂在 WindowManager 上、跨 Activity 存活，由 Application 级单例持有
                     SessionEffect.ShowOverlay -> overlayController.show()
                     SessionEffect.ShowScreenSaver -> screenSaverManager.show()
+
+                    SessionEffect.RestartApp -> Misc.restartApp(context)
 
                     is SessionEffect.RequestSystemPermission -> {
                         // 系统权限页以调用方 Activity 为宿主；拿不到就只能放弃这次请求

@@ -167,7 +167,8 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
 @Composable
 private fun DebugCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     var showEnableConfirm by remember { mutableStateOf(false) }
-    MaaCard(title = stringResource(R.string.settings_debug_mode)) {
+    // 单行：只留开关行；启用走确认弹窗，确认即落盘 + 重启 App（对齐 MaaMeow）
+    MaaCard {
         MaaLabeledControlRow(
             label = stringResource(R.string.settings_debug_mode),
             trailing = {
@@ -180,18 +181,6 @@ private fun DebugCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) 
                 )
             },
         )
-        Text(
-            text = stringResource(R.string.settings_debug_mode_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        OutlinedButton(
-            onClick = { onIntent(SessionIntent.ReloadProject) },
-            enabled = !state.configurationLocked,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.settings_reload_project))
-        }
     }
     if (showEnableConfirm) {
         AlertDialog(
@@ -202,7 +191,7 @@ private fun DebugCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) 
                 TextButton(onClick = {
                     showEnableConfirm = false
                     onIntent(SessionIntent.SetDebugMode(true))
-                }) { Text(stringResource(R.string.dialog_confirm)) }
+                }) { Text(stringResource(R.string.common_restart)) }
             },
             dismissButton = {
                 TextButton(onClick = { showEnableConfirm = false }) {
