@@ -1,7 +1,12 @@
 package com.aliothmoon.maafw.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +29,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
@@ -57,8 +64,6 @@ import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
-import com.aliothmoon.maafw.ui.components.ResourceSelectorRow
-import com.aliothmoon.maafw.ui.components.ResourceSwitchSheet
 import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
@@ -456,36 +461,55 @@ private fun ScreenSaverCard(state: SessionUiState, onIntent: (SessionIntent) -> 
     }
 }
 
+/**
+ * 资源选择：RadioButton 列表（对齐 MaaMeow），替掉"行 → 弹 sheet"
+ */
 @Composable
 private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     MaaCard(title = stringResource(R.string.settings_resource)) {
         val environment = state.environment
-        if (environment == null || environment.resourceCandidates.isEmpty()) {
+        val candidates = environment?.resourceCandidates.orEmpty()
+        val currentName = environment?.resource?.name
+        if (candidates.isEmpty()) {
             Text(
                 text = stringResource(R.string.settings_no_resources),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            var showSheet by remember { mutableStateOf(false) }
-            Text(stringResource(R.string.settings_current_resource), style = MaterialTheme.typography.bodyLarge)
-            ResourceSelectorRow(
-                label = environment.resource?.label ?: stringResource(R.string.settings_not_selected),
-                enabled = !state.configurationLocked,
-                onClick = { showSheet = true },
-            )
-            Text(
-                text = stringResource(R.string.settings_resource_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (showSheet) {
-                ResourceSwitchSheet(
-                    candidates = environment.resourceCandidates,
-                    currentName = environment.resource?.name,
-                    onSelect = { onIntent(SessionIntent.SelectResource(it)) },
-                    onDismiss = { showSheet = false },
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
+                candidates.forEach { resource ->
+                    val selected = resource.name == currentName
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selected,
+                                enabled = !state.configurationLocked,
+                                role = Role.RadioButton,
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = LocalIndication.current,
+                                onClick = { onIntent(SessionIntent.SelectResource(resource.name)) },
+                            ),
+                    ) {
+                        RadioButton(
+                            selected = selected,
+                            onClick = { onIntent(SessionIntent.SelectResource(resource.name)) },
+                            enabled = !state.configurationLocked,
+                        )
+                        Spacer(Modifier.width(MaaDesignTokens.Spacing.sm))
+                        Text(
+                            text = resource.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    }
+                }
             }
         }
     }
