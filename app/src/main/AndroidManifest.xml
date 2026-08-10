@@ -10,10 +10,12 @@
     <!--
       后台跑任务期间 app 进程必须活着：进程一死，特权进程的看门狗就自杀并释放虚拟屏
       实测 MIUI 的 ProcessManager SwipeUpClean 会按 Adj=905 直接 force-stop
-      这两项是前提，前台服务本体见 TODO
+      前台服务本体是 .service.RunForegroundService，通知与电池白名单是它的前提
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name=".MaaFwApp"
@@ -48,6 +50,20 @@
             <meta-data
                 android:name="autoStoreLocales"
                 android:value="true" />
+        </service>
+
+        <!--
+          执行期间的保活前台服务
+          specialUse：现有 FGS 类型没有一个对得上「经提权服务驱动另一块屏跑自动化」，
+          dataSync / mediaProjection 都不是这回事，硬套会在 34+ 被判类型不符
+        -->
+        <service
+            android:name=".service.RunForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the app process alive while the privileged service drives a MaaFramework run" />
         </service>
 
         <provider

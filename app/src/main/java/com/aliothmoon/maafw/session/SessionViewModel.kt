@@ -417,7 +417,11 @@ class SessionViewModel(
 
             is RunPlanResult.Success -> {
                 when (val command = runnerPort.start(result.plan)) {
-                    is RunnerCommandResult.Accepted -> Unit
+                    // 受理之后才拉前台服务：它 onCreate 时读 RunnerState 判去留，
+                    // 提前发会撞上「还没进 Preparing」而当场自停
+                    is RunnerCommandResult.Accepted ->
+                        effectChannel.send(SessionEffect.StartRunForegroundService)
+
                     is RunnerCommandResult.Rejected ->
                         effectChannel.send(SessionEffect.ShowMessage(SessionMessage.CannotStart(command.reason)))
                 }

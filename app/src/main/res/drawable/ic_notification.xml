@@ -1,0 +1,14 @@
+<!--
+  通知栏小图标：API 21 起系统只取 alpha 通道做剪影，彩色图会被压成一团白块
+  所以这里是单色路径，不带背景也不带渐变
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,5.5L4.5,7L7.5,4L6.44,2.94L4.5,4.88L4.06,4.44L3,5.5ZM10,4H21V6H10V4ZM3,12.5L4.5,14L7.5,11L6.44,9.94L4.5,11.88L4.06,11.44L3,12.5ZM10,11H21V13H10V11ZM3,19.5L4.5,21L7.5,18L6.44,16.94L4.5,18.88L4.06,18.44L3,19.5ZM10,18H21V20H10V18Z" />
+</vector>

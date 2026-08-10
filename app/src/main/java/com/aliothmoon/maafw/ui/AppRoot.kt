@@ -64,6 +64,7 @@ import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
+import com.aliothmoon.maafw.service.RunForegroundService
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
@@ -163,6 +164,8 @@ fun AppRoot(
                     // 拉起外部 Activity 要 Context，只能落在 Route 层
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
                     SessionEffect.OpenShizuku -> ShizukuInstallHelper.openShizuku(context)
+
+                    SessionEffect.StartRunForegroundService -> RunForegroundService.start(context)
 
                     is SessionEffect.RequestSystemPermission -> {
                         // 系统权限页以调用方 Activity 为宿主；拿不到就只能放弃这次请求

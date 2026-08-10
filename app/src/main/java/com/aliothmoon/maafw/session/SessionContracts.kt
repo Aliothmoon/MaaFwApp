@@ -168,6 +168,9 @@ sealed interface SessionEffect {
     data object InstallShizuku : SessionEffect
     data object OpenShizuku : SessionEffect
     data class RequestSystemPermission(val permission: SystemPermission) : SessionEffect
+
+    /** 执行已受理，拉起保活前台服务；启 Service 同样要 Context */
+    data object StartRunForegroundService : SessionEffect
 }
 
 /** VM 无 Context；reason 为 Runner 技术文本，UI 拼进提示尾部 */

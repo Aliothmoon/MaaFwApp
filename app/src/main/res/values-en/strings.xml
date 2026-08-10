@@ -143,6 +143,13 @@
     <string name="settings_version">Version</string>
     <string name="settings_build">Build</string>
 
+    <!-- Notifications -->
+    <string name="notification_channel_run">Task execution</string>
+    <string name="notification_channel_run_desc">Stays up while a run is in progress so the system does not reclaim the process</string>
+    <string name="notification_run_preparing">Preparing</string>
+    <string name="notification_run_running">Running</string>
+    <string name="notification_run_stopping">Stopping</string>
+
     <!-- Navigation & dialogs -->
     <string name="nav_home">Home</string>
     <string name="nav_tasks">Tasks</string>
