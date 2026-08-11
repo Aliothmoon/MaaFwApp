@@ -1,33 +1,33 @@
 package com.aliothmoon.maafw.settings
-import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
-import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.domain.OverlayControlMode
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.theme.ThemeStyle
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /**
  * app 设置的唯一读写入口
  *
- * 各项以 StateFlow 暴露，`.value` 在构造后即为盘上真实值——`initialSettings` 阻塞读了一次首值。
- * 需要它是因为 [com.aliothmoon.maafw.privileged.RemoteServiceManager] 要的是同步的
- * `() -> RemoteBackend`，拿不到挂起点
+ * 各项以 StateFlow 暴露。读盘是异步的，[loaded] 置位之前 `.value` 还是 schema 默认值——
+ * 同步 `.value` 是 [com.aliothmoon.maafw.privileged.RemoteServiceManager] 那条链要的
+ * （它收的是 `() -> RemoteBackend`，没有挂起点），所以读盘不能省，只能挪到构造之外
+ *
+ * **凡是在启动早期同步读 `.value` 的调用方都必须先等 [loaded]**：早读一步拿到的是
+ * 默认值，Root 用户会被当成 Shizuku。启动首屏与 `MaaFwApp.postCreate` 都挂在这上面
  */
 class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
@@ -39,56 +39,76 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     val settings: Flow<AppSettings> = with(AppSettingsSchema) { context.dataStore.flow }
 
-    // 阻塞读首值，保证下面各 StateFlow 的 .value 不是默认值
-    private val initialSettings: AppSettings = runBlocking { settings.first() }
+    private val defaults = AppSettings()
 
-    val startupBackend: StateFlow<RemoteBackend> = settings
-        .map { parseBackend(it.startupBackend) }
-        .stateIn(scope, SharingStarted.Eagerly, parseBackend(initialSettings.startupBackend))
+    private val _loaded = MutableStateFlow(false)
 
-    val skipShizukuCheck: StateFlow<Boolean> = settings
-        .map { it.skipShizukuCheck.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.skipShizukuCheck.toBoolean())
+    /**
+     * 首次读盘是否已落到下面各 StateFlow 上；置位后 `.value` 才是盘上的值
+     *
+     * 现有三个等待点：启动首屏（`MainActivity`）、`MaaFwApp.postCreate`（`RemoteAccessCoordinator`
+     * 一初始化就同步读 startupBackend）、`ScheduleExecutionService.handleTrigger`（投递前要 runMode）
+     */
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
-    val shizukuLaunchPackage: StateFlow<String> = settings
-        .map { it.shizukuLaunchPackage }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.shizukuLaunchPackage)
+    private val _startupBackend = MutableStateFlow(parseBackend(defaults.startupBackend))
+    val startupBackend: StateFlow<RemoteBackend> = _startupBackend.asStateFlow()
 
-    val shizukuShortcutEnabled: StateFlow<Boolean> = settings
-        .map { it.shizukuShortcutEnabled.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.shizukuShortcutEnabled.toBoolean())
+    private val _skipShizukuCheck = MutableStateFlow(defaults.skipShizukuCheck.toBoolean())
+    val skipShizukuCheck: StateFlow<Boolean> = _skipShizukuCheck.asStateFlow()
 
-    override val runMode: StateFlow<RunMode> = settings
-        .map { parseRunMode(it.runMode) }
-        .stateIn(scope, SharingStarted.Eagerly, parseRunMode(initialSettings.runMode))
+    private val _shizukuLaunchPackage = MutableStateFlow(defaults.shizukuLaunchPackage)
+    val shizukuLaunchPackage: StateFlow<String> = _shizukuLaunchPackage.asStateFlow()
 
-    override val overlayControlMode: StateFlow<OverlayControlMode> = settings
-        .map { parseOverlayMode(it.overlayControlMode) }
-        .stateIn(scope, SharingStarted.Eagerly, parseOverlayMode(initialSettings.overlayControlMode))
+    private val _shizukuShortcutEnabled = MutableStateFlow(defaults.shizukuShortcutEnabled.toBoolean())
+    val shizukuShortcutEnabled: StateFlow<Boolean> = _shizukuShortcutEnabled.asStateFlow()
 
-    override val screenSaverEnabled: StateFlow<Boolean> = settings
-        .map { it.screenSaverEnabled.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.screenSaverEnabled.toBoolean())
+    private val _runMode = MutableStateFlow(parseRunMode(defaults.runMode))
+    override val runMode: StateFlow<RunMode> = _runMode.asStateFlow()
 
-    override val resolutionPreference: StateFlow<ResolutionPreference> = settings
-        .map { parseResolutionPreference(it.resolutionPreference) }
-        .stateIn(scope, SharingStarted.Eagerly, parseResolutionPreference(initialSettings.resolutionPreference))
+    private val _overlayControlMode = MutableStateFlow(parseOverlayMode(defaults.overlayControlMode))
+    override val overlayControlMode: StateFlow<OverlayControlMode> = _overlayControlMode.asStateFlow()
 
-    override val debugMode: StateFlow<Boolean> = settings
-        .map { it.debugMode.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.debugMode.toBoolean())
+    private val _screenSaverEnabled = MutableStateFlow(defaults.screenSaverEnabled.toBoolean())
+    override val screenSaverEnabled: StateFlow<Boolean> = _screenSaverEnabled.asStateFlow()
 
-    override val themeStyle: StateFlow<ThemeStyle> = settings
-        .map { parseThemeStyle(it.themeStyle) }
-        .stateIn(scope, SharingStarted.Eagerly, parseThemeStyle(initialSettings.themeStyle))
+    private val _resolutionPreference = MutableStateFlow(parseResolutionPreference(defaults.resolutionPreference))
+    override val resolutionPreference: StateFlow<ResolutionPreference> = _resolutionPreference.asStateFlow()
 
-    override val wakeUnlockEnabled: StateFlow<Boolean> = settings
-        .map { it.wakeUnlockEnabled.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.wakeUnlockEnabled.toBoolean())
+    private val _debugMode = MutableStateFlow(defaults.debugMode.toBoolean())
+    override val debugMode: StateFlow<Boolean> = _debugMode.asStateFlow()
 
-    override val wakeCredential: StateFlow<String> = settings
-        .map { it.wakeCredential }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.wakeCredential)
+    private val _themeStyle = MutableStateFlow(parseThemeStyle(defaults.themeStyle))
+    override val themeStyle: StateFlow<ThemeStyle> = _themeStyle.asStateFlow()
+
+    private val _wakeUnlockEnabled = MutableStateFlow(defaults.wakeUnlockEnabled.toBoolean())
+    override val wakeUnlockEnabled: StateFlow<Boolean> = _wakeUnlockEnabled.asStateFlow()
+
+    private val _wakeCredential = MutableStateFlow(defaults.wakeCredential)
+    override val wakeCredential: StateFlow<String> = _wakeCredential.asStateFlow()
+
+    init {
+        // 一处 collect 铺开到各字段，而不是每个字段各起一条 stateIn：
+        // 那样 loaded 置位与各字段拿到首值是两件并发的事，早读的人仍可能读到默认值
+        scope.launch {
+            settings.collect { s ->
+                _startupBackend.value = parseBackend(s.startupBackend)
+                _skipShizukuCheck.value = s.skipShizukuCheck.toBoolean()
+                _shizukuLaunchPackage.value = s.shizukuLaunchPackage
+                _shizukuShortcutEnabled.value = s.shizukuShortcutEnabled.toBoolean()
+                _runMode.value = parseRunMode(s.runMode)
+                _overlayControlMode.value = parseOverlayMode(s.overlayControlMode)
+                _screenSaverEnabled.value = s.screenSaverEnabled.toBoolean()
+                _resolutionPreference.value = parseResolutionPreference(s.resolutionPreference)
+                _debugMode.value = s.debugMode.toBoolean()
+                _themeStyle.value = parseThemeStyle(s.themeStyle)
+                _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
+                _wakeCredential.value = s.wakeCredential
+                // 必须是最后一行：置位即宣告上面全部就位
+                _loaded.value = true
+            }
+        }
+    }
 
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
         context.dataStore.edit { it[startupBackend] = backend.name }

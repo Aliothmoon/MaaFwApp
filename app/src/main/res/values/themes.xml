@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MaaFwApp" parent="Theme.AppCompat.Light.NoActionBar" />
+    <!-- DayNight 而非 Light：windowBackground 是系统首屏的底色，钉死浅色会让深色模式冷启动闪白 -->
+    <style name="Theme.MaaFwApp" parent="Theme.AppCompat.DayNight.NoActionBar" />
+
+    <!--
+      冷启动落地前的窗口主题，manifest 指的是这一个
+      背景取 launcher icon 的底色，与图标连成一块，避免图标浮在另一种底色上
+    -->
+    <style name="Theme.MaaFwApp.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.MaaFwApp</item>
+    </style>
 </resources>

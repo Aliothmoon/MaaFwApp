@@ -55,12 +55,15 @@
         android:localeConfig="@xml/locales_config"
         tools:targetApi="33">
 
+        <!-- 只有启动 Activity 挂启动主题；application 那层保持 Theme.MaaFwApp，
+             否则别的窗口也会顶着首屏底色起来 -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTop"
+            android:theme="@style/Theme.MaaFwApp.Starting"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

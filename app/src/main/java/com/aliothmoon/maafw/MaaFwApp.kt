@@ -15,8 +15,12 @@ import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.Koin
@@ -38,19 +42,21 @@ class MaaFwApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // 路径要先定值：下面种树与崩溃兜底都直接读 AppPaths，早于 Koin
         AppPaths.init(this)
         logWriter = AppLogWriter()
         plantLogTrees(logWriter)
-        // 崩溃兜底也要早于 Koin：各 single 的构造本身就可能抛
         CrashHandler(crashDir = { File(AppPaths.logDir, AppFiles.CRASH_DIR) }).install()
         val app = this
         val koin = startKoin {
             androidLogger(if (BuildConfig.DEBUG) Level.DEBUG else Level.NONE)
             androidContext(app)
             modules(appModule)
+        }.koin
+        val settings = koin.get<AppSettingsManager>()
+        koin.get<CoroutineScope>(named<AppCoroutineScope>()).launch {
+            settings.loaded.first { it }
+            withContext(Dispatchers.Main) { postCreate(koin) }
         }
-        postCreate(koin.koin)
     }
 
     fun postCreate(koin: Koin) {

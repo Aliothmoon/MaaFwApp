@@ -19,6 +19,7 @@ import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHED
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
 import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.runner.RunProgress
 import com.aliothmoon.maafw.runner.ScheduleRunOptions
 import com.aliothmoon.maafw.runner.RunRequestId
@@ -54,6 +55,7 @@ class ScheduleExecutionService : Service() {
     private val alarms: ScheduleAlarmManager by inject()
     private val triggerLog: ScheduleTriggerLog by inject()
     private val runLauncher: RunLauncher by inject()
+    private val appSettings: AppSettingsManager by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO)
 
@@ -109,6 +111,9 @@ class ScheduleExecutionService : Service() {
     private suspend fun handleTrigger(strategyId: String, scheduledTimeMs: Long) {
         val strategy = withTimeoutOrNull(STORE_READY_TIMEOUT_MS) {
             store.isLoaded.first { it }
+            // 设置读盘是异步的，投递前得等到位：runMode、分辨率、提权后端都在里面，
+            // 早一步拿到的是默认值——后台模式的用户会被当成前台模式拦下来
+            appSettings.loaded.first { it }
             store.findById(strategyId)
         }
         val now = System.currentTimeMillis()
