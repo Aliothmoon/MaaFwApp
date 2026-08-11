@@ -41,7 +41,7 @@ class PiInstallerTest {
     )
 
     private fun installer(base: File, pkg: PiPackage, versionCode: Int): PiInstaller {
-        every { AppPaths.externalRoot } returns base
+        every { AppPaths.ROOT } returns base
         return PiInstaller(pkg, versionCode)
     }
 
@@ -119,7 +119,7 @@ class PiInstallerTest {
                 if (path == "interface.json") "{}".byteInputStream() else throw FileNotFoundException(path)
         }
 
-        every { AppPaths.externalRoot } returns base
+        every { AppPaths.ROOT } returns base
         assertThrows(Exception::class.java) {
             PiInstaller(broken, 11).ensureInstalled()
         }
@@ -181,7 +181,7 @@ class PiInstallerTest {
     @Test
     fun `installedDir 在未解包时抛出`() {
         val base = temp.newFolder("external")
-        every { AppPaths.externalRoot } returns base
+        every { AppPaths.ROOT } returns base
         val pi = PiInstaller(MapPiPackage(files), 11)
 
         assertThrows(IllegalStateException::class.java) { pi.installedDir() }

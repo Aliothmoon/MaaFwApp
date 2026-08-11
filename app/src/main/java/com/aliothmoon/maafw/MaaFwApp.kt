@@ -45,7 +45,7 @@ class MaaFwApp : Application() {
         AppPaths.init(this)
         logWriter = AppLogWriter()
         plantLogTrees(logWriter)
-        CrashHandler(crashDir = { File(AppPaths.logDir, AppFiles.CRASH_DIR) }).install()
+        CrashHandler(crashDir = { File(AppPaths.LOG_DIR, AppFiles.CRASH_DIR) }).install()
         val app = this
         val koin = startKoin {
             androidLogger(if (BuildConfig.DEBUG) Level.DEBUG else Level.NONE)

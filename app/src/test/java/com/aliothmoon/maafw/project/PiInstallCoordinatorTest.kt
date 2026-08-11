@@ -53,7 +53,7 @@ class PiInstallCoordinatorTest {
     )
 
     private fun coordinatorFor(pkg: PiPackage, base: File, versionCode: Int = 11): PiInstallCoordinator {
-        every { AppPaths.externalRoot } returns base
+        every { AppPaths.ROOT } returns base
         return PiInstallCoordinator(PiInstaller(pkg, versionCode))
     }
 

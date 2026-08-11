@@ -14,25 +14,25 @@ import java.io.File
  * 与 RemoteBootTrace / ServiceBootLogger 同属进程级全局，不进 Koin：路径解析早于 DI 就绪
  */
 object AppPaths {
-    lateinit var externalRoot: File
+    lateinit var ROOT: File
         private set
 
-    lateinit var logDir: File
+    lateinit var LOG_DIR: File
         private set
 
-    lateinit var focusDir: File
+    lateinit var FOCUS_DIR: File
         private set
 
-    lateinit var debugDir: File
+    lateinit var DEBUG_DIR: File
         private set
 
     fun init(context: Context) {
         val root = checkNotNull(context.getExternalFilesDir(null)) {
-            "外部私有目录不可用（外部存储未挂载）"
+            "The external private directory is unavailable (the external storage is not mounted)"
         }
-        externalRoot = root
-        logDir = File(root, AppFiles.LOG_DIR)
-        focusDir = File(logDir, AppFiles.FOCUS_DIR)
-        debugDir = File(root, AppFiles.DEBUG_DIR)
+        ROOT = root
+        LOG_DIR = File(root, AppFiles.LOG_DIR)
+        FOCUS_DIR = File(LOG_DIR, AppFiles.FOCUS_DIR)
+        DEBUG_DIR = File(root, AppFiles.DEBUG_DIR)
     }
 }

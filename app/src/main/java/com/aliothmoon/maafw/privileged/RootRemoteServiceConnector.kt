@@ -14,7 +14,6 @@ import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
 import com.aliothmoon.maafw.root.RootServiceStarter
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -169,7 +168,7 @@ object RootRemoteServiceConnector : RemoteServiceConnectorBackend {
     }
 
     private fun debugLogFile(): File {
-        val dir = AppPaths.debugDir
+        val dir = AppPaths.DEBUG_DIR
         dir.mkdirs()
         return File(dir, "root_launch_debug.log")
     }

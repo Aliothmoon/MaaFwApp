@@ -6,7 +6,6 @@ import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.isFilePath
 import com.aliothmoon.maafw.project.normalizeProjectPath
 import com.aliothmoon.maafw.MaaDispatchers
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
@@ -64,7 +63,7 @@ class PrivilegedFocusContentResolver(
 
     /** 拿不到就替换成空串，与桌面端 MXU 一致：留着占位符更难看 */
     private suspend fun captureImageUri(): String {
-        val target = File(AppPaths.focusDir, "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
+        val target = File(AppPaths.FOCUS_DIR, "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
         val saved = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
             // 用 serviceOrNull 而不是 useService：一条日志不值得为它发起重连与授权请求
             runCatching { servicePort.serviceOrNull()?.saveCachedImage(target.absolutePath) }

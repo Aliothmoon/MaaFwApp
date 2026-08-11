@@ -60,7 +60,7 @@ class PiInstaller(
      * 尚未解包时抛出——那说明调用顺序错了，不该在这里补一次几十 MB 的搬运
      */
     fun installedDir(): File {
-        val target = File(AppPaths.externalRoot, AppFiles.PI_DIR)
+        val target = File(AppPaths.ROOT, AppFiles.PI_DIR)
         check(target.isDirectory) { "PI 尚未解包：${target.absolutePath}" }
         return target
     }
@@ -71,7 +71,7 @@ class PiInstaller(
      */
     @Synchronized
     fun ensureInstalled(onProgress: PiUnpackProgress = NO_PROGRESS): File {
-        val base = AppPaths.externalRoot
+        val base = AppPaths.ROOT
         val target = File(base, AppFiles.PI_DIR)
         val marker = File(base, PI_MARKER_NAME)
         if (target.isDirectory && marker.isFile && marker.readText().trim() == versionCode.toString()) {
@@ -83,7 +83,7 @@ class PiInstaller(
     /** 不看标记，无条件重解；设置页的手动重来与失败重试都走这条 */
     @Synchronized
     fun reinstall(onProgress: PiUnpackProgress = NO_PROGRESS): File =
-        install(AppPaths.externalRoot, onProgress)
+        install(AppPaths.ROOT, onProgress)
 
     private fun install(base: File, onProgress: PiUnpackProgress): File {
         val target = File(base, AppFiles.PI_DIR)

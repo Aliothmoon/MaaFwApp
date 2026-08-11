@@ -113,7 +113,7 @@ class AppLogWriter {
         if (writtenBytes < MAX_FILE_BYTES) return
 
         closeStream()
-        val dir = AppPaths.logDir
+        val dir = AppPaths.LOG_DIR
         runCatching {
             File(dir, rotatedName(MAX_FILES - 1)).delete()
             for (index in MAX_FILES - 2 downTo 1) {
@@ -127,7 +127,7 @@ class AppLogWriter {
 
     /** 当前那份在最前，其余按新旧；错误日志页与导出都吃这个顺序 */
     fun listFiles(): List<File> = runCatching {
-        AppPaths.logDir.listFiles()
+        AppPaths.LOG_DIR.listFiles()
             ?.filter { it.isFile && FILE_PATTERN.matches(it.name) }
             ?.sortedByDescending { it.lastModified() }
             .orEmpty()
@@ -147,7 +147,7 @@ class AppLogWriter {
             .onFailure { Log.w(TAG, "Failed to clear app logs", it) }
     }
 
-    private fun currentFile(): File = File(AppPaths.logDir.apply { mkdirs() }, CURRENT_FILE_NAME)
+    private fun currentFile(): File = File(AppPaths.LOG_DIR.apply { mkdirs() }, CURRENT_FILE_NAME)
 
     private fun rotatedName(index: Int): String = "app.$index.log"
 

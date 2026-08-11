@@ -2,7 +2,6 @@ package com.aliothmoon.maafw.schedule
 import com.aliothmoon.maafw.MaaDispatchers
 
 import com.aliothmoon.maafw.constant.AppPaths
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -103,7 +102,7 @@ class ScheduleTriggerLog {
         Unit
     }
 
-    private fun logFile(): File = File(AppPaths.logDir.apply { mkdirs() }, FILE_NAME)
+    private fun logFile(): File = File(AppPaths.LOG_DIR.apply { mkdirs() }, FILE_NAME)
 
     /** 保留最近 [KEEP_LINES] 行；整体重写而非原地删，追加写没法从头裁 */
     private fun trim(file: File) {

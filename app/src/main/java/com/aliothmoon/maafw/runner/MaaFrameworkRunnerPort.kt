@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.runner
 
 import android.os.Process
-import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.RemoteService
@@ -16,7 +15,6 @@ import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.MaaDispatchers
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -246,7 +244,7 @@ class MaaFrameworkRunnerPort(
     }
 
     private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): UiText? {
-        if (!service.setup(piRoot.absolutePath, AppPaths.logDir.absolutePath, debugMode())) {
+        if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
             return uiTextOf(R.string.msg_reject_setup_failed)
         }
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
@@ -259,7 +257,7 @@ class MaaFrameworkRunnerPort(
                     LogcatServiceManager.startCapture(
                         appPid = Process.myPid(),
                         servicePid = service.pid(),
-                        userDir = AppPaths.logDir.parentFile!!.absolutePath,
+                        userDir = AppPaths.LOG_DIR.parentFile!!.absolutePath,
                     )
                 }.onFailure { Timber.w(it, "LogcatService startCapture failed") }
             }

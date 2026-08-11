@@ -69,7 +69,6 @@ import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -147,15 +146,15 @@ val appModule = module {
     }
 
     // 运行日志的产地也在进程级：切语言 Activity 重建、定时触发没有 VM，挂在 VM 上都会断
-    single { RunSessionLogStore(logDir = { AppPaths.logDir }, ioDispatcher = MaaDispatchers.IO) }
+    single { RunSessionLogStore(logDir = { AppPaths.LOG_DIR }, ioDispatcher = MaaDispatchers.IO) }
     single { LocalizedTextRenderer(androidContext()) }
     single { (androidContext() as MaaFwApp).logWriter }
     single {
         LogExportService(
             context = androidContext(),
-            baseDir = { AppPaths.externalRoot },
+            baseDir = { AppPaths.ROOT },
             // 两棵一起收：debug/ 那份的路径在特权进程侧是硬解析的，没法并进 log/
-            roots = { listOf(AppPaths.logDir, AppPaths.debugDir) },
+            roots = { listOf(AppPaths.LOG_DIR, AppPaths.DEBUG_DIR) },
             debugMode = get<AppSettingsManager>().debugMode::value,
             ioDispatcher = MaaDispatchers.IO,
         )

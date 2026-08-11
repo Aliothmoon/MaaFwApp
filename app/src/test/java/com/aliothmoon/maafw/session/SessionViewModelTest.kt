@@ -39,7 +39,6 @@ import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
 import com.aliothmoon.maafw.runner.PassthroughFocusContentResolver
-import com.aliothmoon.maafw.runner.RecordingFocusContentResolver
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.runner.RunnerEvent
@@ -116,7 +115,7 @@ class SessionViewModelTest {
         every { MaaDispatchers.IO } returns mainDispatcher
         // VM init 就会去解包，落点必须先指走：AppPaths 在单测里没 init 过，直读 lateinit 会抛
         mockkObject(AppPaths)
-        every { AppPaths.externalRoot } returns createTempDirectory("pi-install").toFile()
+        every { AppPaths.ROOT } returns createTempDirectory("pi-install").toFile()
         Dispatchers.setMain(mainDispatcher)
     }
 

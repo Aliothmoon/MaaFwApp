@@ -15,7 +15,6 @@ import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
 import com.aliothmoon.maafw.root.RootServiceStarter
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -198,7 +197,7 @@ object LogcatServiceManager {
 
     // 与主服务日志分开：launcher 以 O_TRUNC 打开，共用会互相覆盖
     private fun debugLogFile(): File {
-        val dir = AppPaths.debugDir
+        val dir = AppPaths.DEBUG_DIR
         dir.mkdirs()
         return File(dir, "root_logcat_launch_debug.log")
     }

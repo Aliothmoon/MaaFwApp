@@ -36,7 +36,7 @@ object ServiceBootLogger {
 
     fun init() {
         synchronized(lock) {
-            val dir = AppPaths.debugDir
+            val dir = AppPaths.DEBUG_DIR
             // 磁盘只读等极端情况建不了目录；诊断不强求，失败即放弃写盘不影响主流程
             runCatching { dir.mkdirs() }
             debugDir = dir
