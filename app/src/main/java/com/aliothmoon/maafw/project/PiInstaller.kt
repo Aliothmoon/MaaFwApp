@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.project
 
 import android.content.Context
 import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -41,8 +42,6 @@ class AssetPiPackage(context: Context, private val root: String) : PiPackage {
  */
 class PiInstaller(
     private val pkg: PiPackage,
-    /** 延迟到 ensureInstalled 才解析：外部存储不可用时要抛在 load 链路记成诊断，而非组件构造时让 app 崩 */
-    private val baseDir: () -> File,
     private val fingerprint: String,
     private val parallelism: Int = Runtime.getRuntime().availableProcessors(),
 ) {
@@ -53,7 +52,7 @@ class PiInstaller(
      */
     @Synchronized
     fun ensureInstalled(): File {
-        val base = baseDir()
+        val base = AppPaths.externalRoot
         val target = File(base, AppFiles.PI_DIR)
         val marker = File(base, PI_MARKER_NAME)
         if (target.isDirectory && marker.isFile && marker.readText().trim() == fingerprint) {

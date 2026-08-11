@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.constant.AppPaths
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -56,7 +57,7 @@ enum class TriggerStepOutcome { ENGAGED, SKIPPED, FAILED }
  * 不做按次分文件（MaaMeow 那样一次触发一个文件）：这里一次触发只有一条记录，
  * 分文件只会在 `/log` 下堆出上千个几十字节的小文件
  */
-class ScheduleTriggerLog(private val logDir: () -> File) {
+class ScheduleTriggerLog {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -101,7 +102,7 @@ class ScheduleTriggerLog(private val logDir: () -> File) {
         Unit
     }
 
-    private fun logFile(): File = File(logDir().apply { mkdirs() }, FILE_NAME)
+    private fun logFile(): File = File(AppPaths.logDir.apply { mkdirs() }, FILE_NAME)
 
     /** 保留最近 [KEEP_LINES] 行；整体重写而非原地删，追加写没法从头裁 */
     private fun trim(file: File) {

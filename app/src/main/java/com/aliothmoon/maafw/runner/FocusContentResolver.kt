@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.isFilePath
@@ -48,8 +49,6 @@ fun focusContentNeedsIo(content: String): Boolean =
  */
 class PrivilegedFocusContentResolver(
     private val installer: PiInstaller,
-    /** 截图落点；须是特权进程写得进、app 也读得到的目录 */
-    private val imageDir: () -> File,
     private val servicePort: PrivilegedServicePort,
     private val ioDispatcher: CoroutineDispatcher,
 ) : FocusContentResolver {
@@ -65,7 +64,7 @@ class PrivilegedFocusContentResolver(
 
     /** 拿不到就替换成空串，与桌面端 MXU 一致：留着占位符更难看 */
     private suspend fun captureImageUri(): String {
-        val target = File(imageDir(), "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
+        val target = File(AppPaths.focusDir, "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
         val saved = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
             // 用 serviceOrNull 而不是 useService：一条日志不值得为它发起重连与授权请求
             runCatching { servicePort.serviceOrNull()?.saveCachedImage(target.absolutePath) }

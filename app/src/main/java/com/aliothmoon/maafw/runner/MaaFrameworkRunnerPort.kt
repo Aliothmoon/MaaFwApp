@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.RemoteService
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
@@ -41,8 +42,6 @@ import java.util.UUID
  */
 class MaaFrameworkRunnerPort(
     private val installer: PiInstaller,
-    /** MaaFramework 的 maa.log 与 Screencap 动作的落点；须是特权进程（shell/root 身份）可写的目录 */
-    private val logDir: () -> File,
     /** 本包 APK 的绝对路径；特权进程从中读 agent 运行时的 assets */
     private val apkPath: String,
     /** 已解压的 native 库目录；agent child 靠它 dlopen libMaaAgentServer.so 及其依赖 */
@@ -247,7 +246,7 @@ class MaaFrameworkRunnerPort(
     }
 
     private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): UiText? {
-        if (!service.setup(piRoot.absolutePath, logDir().absolutePath, debugMode())) {
+        if (!service.setup(piRoot.absolutePath, AppPaths.logDir.absolutePath, debugMode())) {
             return uiTextOf(R.string.msg_reject_setup_failed)
         }
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
@@ -260,7 +259,7 @@ class MaaFrameworkRunnerPort(
                     LogcatServiceManager.startCapture(
                         appPid = Process.myPid(),
                         servicePid = service.pid(),
-                        userDir = logDir().parentFile!!.absolutePath,
+                        userDir = AppPaths.logDir.parentFile!!.absolutePath,
                     )
                 }.onFailure { Timber.w(it, "LogcatService startCapture failed") }
             }

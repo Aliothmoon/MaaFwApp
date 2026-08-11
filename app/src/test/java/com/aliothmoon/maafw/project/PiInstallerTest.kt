@@ -1,6 +1,12 @@
 package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -34,14 +40,26 @@ class PiInstallerTest {
     @get:Rule
     val temp = TemporaryFolder()
 
+    @Before
+    fun mockAppPaths() {
+        mockkObject(AppPaths)
+    }
+
+    @After
+    fun unmockAppPaths() {
+        unmockkObject(AppPaths)
+    }
+
     private val files = mapOf(
         "interface.json" to """{"interface_version":2}""",
         "tasks/a.json" to "{}",
         "resource/base/pipeline/x.json" to "{}",
     )
 
-    private fun installer(base: File, pkg: PiPackage, fingerprint: String) =
-        PiInstaller(pkg, { base }, fingerprint)
+    private fun installer(base: File, pkg: PiPackage, fingerprint: String): PiInstaller {
+        every { AppPaths.externalRoot } returns base
+        return PiInstaller(pkg, fingerprint)
+    }
 
     @Test
     fun `首次解包产出完整目录树并写下标记`() {
@@ -106,8 +124,9 @@ class PiInstallerTest {
                 if (path == "interface.json") "{}".byteInputStream() else throw FileNotFoundException(path)
         }
 
+        every { AppPaths.externalRoot } returns base
         assertThrows(Exception::class.java) {
-            PiInstaller(broken, { base }, "fp1").ensureInstalled()
+            PiInstaller(broken, "fp1").ensureInstalled()
         }
         assertFalse(File(base, PiInstaller.PI_MARKER_NAME).exists())
     }

@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw
 
 import android.app.Application
-import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.di.appModule
 import com.aliothmoon.maafw.log.AppLogWriter
@@ -15,7 +14,6 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
-import java.io.File
 
 class MaaFwApp : Application() {
 
@@ -23,11 +21,7 @@ class MaaFwApp : Application() {
         super.onCreate()
         AppPaths.init(this)
         // 先种树再启 Koin：Koin 自身与各 single 的构造日志也要落盘
-        plantLogTrees(
-            AppLogWriter(
-                logDir = File(getExternalFilesDir(null) ?: filesDir, AppFiles.LOG_DIR),
-            ),
-        )
+        plantLogTrees(AppLogWriter())
         val koin = startKoin {
             androidLogger(if (BuildConfig.DEBUG) Level.DEBUG else Level.NONE)
             androidContext(this@MaaFwApp)

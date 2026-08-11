@@ -80,8 +80,6 @@ val appModule = module {
         val context = androidContext()
         PiInstaller(
             pkg = AssetPiPackage(context, root = PI_ASSET_ROOT),
-            // 落外部私有目录而非 filesDir：特权进程是 shell 身份，进不去 0700 的 app 私有目录
-            baseDir = { AppPaths.externalRoot },
             fingerprint = readPiFingerprint(context),
         )
     }
@@ -108,8 +106,6 @@ val appModule = module {
         val context = androidContext()
         MaaFrameworkRunnerPort(
             installer = get(),
-            // 与 PI 同在外部私有目录：特权进程写得进，adb pull 也拿得到
-            logDir = { AppPaths.logDir },
             // 两条路径都取自 app 的 applicationInfo：特权进程只有 FakeContext，自己解析不如这里直给
             apkPath = context.applicationInfo.sourceDir,
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
@@ -125,8 +121,6 @@ val appModule = module {
     single<FocusContentResolver> {
         PrivilegedFocusContentResolver(
             installer = get(),
-            // 与 maa.log 同一棵目录：特权进程写得进，app 读得到，adb pull 也拿得到
-            imageDir = { AppPaths.focusDir },
             servicePort = get(),
             ioDispatcher = Dispatchers.IO,
         )
@@ -209,9 +203,7 @@ val appModule = module {
     single { ScheduleStrategyStore(androidContext()) }
     single { ScheduleAlarmManager(androidContext()) }
     single {
-        ScheduleTriggerLog(
-            logDir = { AppPaths.logDir },
-        )
+        ScheduleTriggerLog()
     }
     single { PermissionManager(androidContext(), get(), get(), get()) }
     single<PermissionGateway> { get<PermissionManager>() }
