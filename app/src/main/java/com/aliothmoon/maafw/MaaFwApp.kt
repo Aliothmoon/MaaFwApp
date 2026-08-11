@@ -8,6 +8,8 @@ import androidx.datastore.dataStoreFile
 import com.aliothmoon.maafw.config.DataStoreUserConfigurationStore
 import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.log.AppLogWriter
@@ -74,17 +76,15 @@ import timber.log.Timber
 /** 进程级 scope 限定符，避免与其它 CoroutineScope 绑定冲突 */
 object AppCoroutineScope
 
-/** 外部私有目录下的 MaaFramework 落盘目录：maa.log 与 Screencap 动作的产物都在这 */
-private const val MAA_LOG_DIR_NAME = "log"
-
 class MaaFwApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppPaths.init(this)
         // 先种树再启 Koin：Koin 自身与各 single 的构造日志也要落盘
         plantLogTrees(
             AppLogWriter(
-                logDir = { File(getExternalFilesDir(null) ?: filesDir, MAA_LOG_DIR_NAME) },
+                logDir = File(getExternalFilesDir(null) ?: filesDir, AppFiles.LOG_DIR),
             ),
         )
         val koin = startKoin {
@@ -117,11 +117,7 @@ val appModule = module {
         PiInstaller(
             pkg = AssetPiPackage(context, root = PI_ASSET_ROOT),
             // 落外部私有目录而非 filesDir：特权进程是 shell 身份，进不去 0700 的 app 私有目录
-            baseDir = {
-                checkNotNull(context.getExternalFilesDir(null)) {
-                    "外部私有目录不可用（外部存储未挂载），PI 无法解包"
-                }
-            },
+            baseDir = { AppPaths.externalRoot },
             fingerprint = readPiFingerprint(context),
         )
     }
@@ -149,14 +145,7 @@ val appModule = module {
         MaaFrameworkRunnerPort(
             installer = get(),
             // 与 PI 同在外部私有目录：特权进程写得进，adb pull 也拿得到
-            logDir = {
-                File(
-                    checkNotNull(context.getExternalFilesDir(null)) {
-                        "外部私有目录不可用（外部存储未挂载）"
-                    },
-                    MAA_LOG_DIR_NAME,
-                )
-            },
+            logDir = { AppPaths.logDir },
             // 两条路径都取自 app 的 applicationInfo：特权进程只有 FakeContext，自己解析不如这里直给
             apkPath = context.applicationInfo.sourceDir,
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
@@ -170,18 +159,10 @@ val appModule = module {
     }
 
     single<FocusContentResolver> {
-        val context = androidContext()
         PrivilegedFocusContentResolver(
             installer = get(),
             // 与 maa.log 同一棵目录：特权进程写得进，app 读得到，adb pull 也拿得到
-            imageDir = {
-                File(
-                    checkNotNull(context.getExternalFilesDir(null)) {
-                        "外部私有目录不可用（外部存储未挂载）"
-                    },
-                    "$MAA_LOG_DIR_NAME/focus",
-                )
-            },
+            imageDir = { AppPaths.focusDir },
             servicePort = get(),
             ioDispatcher = Dispatchers.IO,
         )
@@ -264,16 +245,8 @@ val appModule = module {
     single { ScheduleStrategyStore(androidContext()) }
     single { ScheduleAlarmManager(androidContext()) }
     single {
-        val context = androidContext()
         ScheduleTriggerLog(
-            logDir = {
-                File(
-                    checkNotNull(context.getExternalFilesDir(null)) {
-                        "外部私有目录不可用（外部存储未挂载）"
-                    },
-                    MAA_LOG_DIR_NAME,
-                )
-            },
+            logDir = { AppPaths.logDir },
         )
     }
     single { PermissionManager(androidContext(), get(), get(), get()) }

@@ -24,7 +24,7 @@ import java.time.format.DateTimeFormatter
  * 写入串行且异步：调用点可能在任意线程甚至主线程的热路径上，不能让它等 IO。
  * 通道满了就丢——日志不该反压业务
  */
-class AppLogWriter(private val logDir: () -> File) {
+class AppLogWriter(private val logDir: File) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
     private val channel = Channel<String>(capacity = QUEUE_CAPACITY)
@@ -115,7 +115,7 @@ class AppLogWriter(private val logDir: () -> File) {
         writtenBytes = 0L
     }
 
-    private fun currentFile(): File = File(logDir().apply { mkdirs() }, CURRENT_FILE_NAME)
+    private fun currentFile(): File = File(logDir.apply { mkdirs() }, CURRENT_FILE_NAME)
 
     private fun format(priority: Int, tag: String?, message: String, throwable: Throwable?): String {
         val level = when (priority) {

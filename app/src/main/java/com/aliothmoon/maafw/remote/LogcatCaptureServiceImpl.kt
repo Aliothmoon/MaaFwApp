@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.remote
 
 import android.util.Log
 import com.aliothmoon.maafw.ILogcatService
+import com.aliothmoon.maafw.constant.AppFiles
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -42,18 +43,18 @@ class LogcatCaptureServiceImpl : ILogcatService.Stub() {
     override fun destroy() = exitProcess(0)
 
     override fun startCapture(appPid: Int, servicePid: Int, userDir: String) {
-        val debugDir = File(userDir, "debug").apply { mkdirs() }
+        val debugDir = File(userDir, AppFiles.DEBUG_DIR).apply { mkdirs() }
         val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
 
         if (!watchTargets.containsKey(servicePid)) {
-            val coreDir = File(debugDir, "logcat/core").apply { mkdirs() }
+            val coreDir = File(debugDir, AppFiles.LOGCAT_CORE_DIR).apply { mkdirs() }
             val coreLog = File(coreDir, "logcat_$timestamp.log")
             Log.i(TAG, "Capturing core PID $servicePid -> ${coreLog.absolutePath}")
             watchTargets[servicePid] = pipeLogcat(servicePid, coreLog)
         }
 
         if (!watchTargets.containsKey(appPid)) {
-            val appDir = File(debugDir, "logcat/app").apply { mkdirs() }
+            val appDir = File(debugDir, AppFiles.LOGCAT_APP_DIR).apply { mkdirs() }
             val appLog = File(appDir, "logcat_$timestamp.log")
             Log.i(TAG, "Capturing app PID $appPid -> ${appLog.absolutePath}")
             watchTargets[appPid] = pipeLogcat(appPid, appLog)

@@ -1,9 +1,8 @@
 package com.aliothmoon.maafw.privileged
 
-import android.content.Context
 import android.os.Build
 import android.os.Process
-import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import timber.log.Timber
 import java.io.File
 import java.time.Instant
@@ -13,7 +12,7 @@ import java.time.format.DateTimeFormatter
 /**
  * 远程服务绑定链路诊断日志（App 进程侧）。
  *
- * 写入 {externalFilesDir}/Maa/debug/service_bind_debug.log（与 root_launch_debug.log 同目录），
+ * 写入 {externalFilesDir}/debug/service_bind_debug.log（与 root_launch_debug.log 同目录），
  * 按时间线记录 bind → CONNECTING → onServiceConnected → BINDER_CONNECTED 以及 onError / binderDied /
  * getInstance 超时。
  *
@@ -35,9 +34,10 @@ object ServiceBootLogger {
     @Volatile
     private var debugDir: File? = null
 
-    fun init(context: Context) {
+    fun init() {
         synchronized(lock) {
-            val dir = File(context.getExternalFilesDir(null), AppFiles.DEBUG_DIR)
+            val dir = AppPaths.debugDir
+            // 磁盘只读等极端情况建不了目录；诊断不强求，失败即放弃写盘不影响主流程
             runCatching { dir.mkdirs() }
             debugDir = dir
         }

@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.constant.AppFiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -47,7 +48,7 @@ class PiInstallerTest {
         val base = temp.newFolder("external")
         val root = installer(base, MapPiPackage(files), "fp1").ensureInstalled()
 
-        assertEquals(PiInstaller.PI_DIR_NAME, root.name)
+        assertEquals(AppFiles.PI_DIR, root.name)
         assertEquals("""{"interface_version":2}""", File(root, "interface.json").readText())
         assertTrue(File(root, "tasks/a.json").isFile)
         assertTrue(File(root, "resource/base/pipeline/x.json").isFile)

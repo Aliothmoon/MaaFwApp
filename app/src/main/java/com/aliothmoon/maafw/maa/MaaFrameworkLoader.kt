@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.maa
 
+import com.aliothmoon.maafw.constant.ShellDirs
 import com.aliothmoon.maafw.remote.RemoteBootTrace
 import com.aliothmoon.maafw.third.Ln
 import com.sun.jna.Native
@@ -14,16 +15,10 @@ object MaaFrameworkLoader {
 
     private const val LIBRARY_NAME = "MaaFramework"
 
-    /**
-     * JNA 解压临时文件的落点
-     * 默认落 app 私有目录，shell 身份写不进去；这里指到 shell 可写的位置
-     */
-    private const val JNA_TMPDIR = "/data/local/tmp"
-
     val library: MaaFrameworkLibrary? by lazy {
         runCatching {
-            System.setProperty("jna.tmpdir", JNA_TMPDIR)
-            RemoteBootTrace.mark("MAA_LOAD_BEGIN", "jna.tmpdir=$JNA_TMPDIR")
+            System.setProperty("jna.tmpdir", ShellDirs.JNA_TMPDIR)
+            RemoteBootTrace.mark("MAA_LOAD_BEGIN", "jna.tmpdir=${ShellDirs.JNA_TMPDIR}")
             Native.load(LIBRARY_NAME, MaaFrameworkLibrary::class.java).also {
                 RemoteBootTrace.mark("MAA_LOAD_OK", it.MaaVersion().orEmpty())
                 Ln.i("MaaFramework loaded: ${it.MaaVersion()}")

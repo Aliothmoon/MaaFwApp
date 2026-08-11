@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.project
 
 import android.content.Context
+import com.aliothmoon.maafw.constant.AppFiles
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -40,7 +41,7 @@ class AssetPiPackage(context: Context, private val root: String) : PiPackage {
  */
 class PiInstaller(
     private val pkg: PiPackage,
-    /** 外部私有目录不可用时抛出，交由 ProjectLoader 记成可读诊断，不在此处静默回落 */
+    /** 延迟到 ensureInstalled 才解析：外部存储不可用时要抛在 load 链路记成诊断，而非组件构造时让 app 崩 */
     private val baseDir: () -> File,
     private val fingerprint: String,
     private val parallelism: Int = Runtime.getRuntime().availableProcessors(),
@@ -53,7 +54,7 @@ class PiInstaller(
     @Synchronized
     fun ensureInstalled(): File {
         val base = baseDir()
-        val target = File(base, PI_DIR_NAME)
+        val target = File(base, AppFiles.PI_DIR)
         val marker = File(base, PI_MARKER_NAME)
         if (target.isDirectory && marker.isFile && marker.readText().trim() == fingerprint) {
             return target
@@ -113,9 +114,6 @@ class PiInstaller(
     }
 
     companion object {
-        /** 解包内容的固定目录名；路径稳定，版本靠标记文件而非目录名区分 */
-        const val PI_DIR_NAME = "pi"
-
         /** 提交标记：解包全部成功后才写，内容是构建期指纹 */
         const val PI_MARKER_NAME = "pi.fingerprint"
 

@@ -142,7 +142,7 @@ object RemoteServiceManager : PrivilegedServicePort {
         context: Context,
         backendProvider: () -> RemoteBackend,
     ) {
-        ServiceBootLogger.init(context)
+        ServiceBootLogger.init()
         ShizukuManager.initSui(context.packageName)
         RemoteAccessCoordinator.initialize(backendProvider)
         RootRemoteServiceConnector.initialize(context)

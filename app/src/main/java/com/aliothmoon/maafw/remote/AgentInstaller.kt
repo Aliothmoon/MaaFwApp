@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.remote
 import android.os.Build
 import android.os.Process
 import android.os.SystemClock
+import com.aliothmoon.maafw.constant.ShellDirs
 import com.aliothmoon.maafw.third.Ln
 import java.io.File
 import java.io.InputStream
@@ -45,8 +46,8 @@ class AgentInstaller(
                 "agent 运行时不覆盖本机 ABI：归档里有 $abis，设备支持 $supportedAbis",
             )
 
-        val target = File(BASE_DIR, "$DIR_NAME/$abi")
-        val marker = File(BASE_DIR, "$DIR_NAME/$MARKER_NAME")
+        val target = File(ShellDirs.AGENT_DIR, abi)
+        val marker = File(ShellDirs.AGENT_DIR, MARKER_NAME)
         val stamp = "$fingerprint:$uid"
         if (target.isDirectory && marker.isFile && marker.readText().trim() == stamp) {
             return target
@@ -144,9 +145,6 @@ class AgentInstaller(
     }
 
     private companion object {
-        /** shell 与 root 都可写可执行；实测 `/data` 是 ext4，挂载项里没有 noexec */
-        val BASE_DIR = File("/data/local/tmp")
-        const val DIR_NAME = "maafw-agent"
         const val MARKER_NAME = "runtime.fingerprint"
         const val BUNDLE_ASSET = "assets/agent/bundle.zip"
         const val FINGERPRINT_ASSET = "agent.fingerprint"

@@ -6,7 +6,7 @@ import android.os.IBinder
 import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.RemoteService
-import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.remote.RemoteServiceImpl
 import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
@@ -168,7 +168,7 @@ object RootRemoteServiceConnector : RemoteServiceConnectorBackend {
     }
 
     private fun debugLogFile(): File {
-        val dir = File(appContext.getExternalFilesDir(null), AppFiles.DEBUG_DIR)
+        val dir = AppPaths.debugDir
         dir.mkdirs()
         return File(dir, "root_launch_debug.log")
     }
