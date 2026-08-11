@@ -20,7 +20,6 @@ import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,22 +47,34 @@ import com.aliothmoon.maafw.ui.components.maaClickable
 private const val DisabledTaskAlpha = 0.55f
 
 /**
- * 紧凑动作图标：36dp 触控区 + 16dp 图标，比 IconButton 的 48dp 省一档，
- * 任务行里塞 rename/copy/delete 三个时不挤标题
+ * 紧凑动作图标：32dp 触控区 + 16dp 图标，比 IconButton 的 48dp 省两档
+ *
+ * 行尾四个（rename/copy/delete/拖拽）都用它，图标间距才匀；框比图标只富余 8dp，
+ * 再大就把标题挤没了
+ *
+ * [onClick] 为 null 时不接点击——拖拽把手的手势在 [modifier] 上，套一层空 onClick
+ * 会把长按之外的 tap 吞掉
  */
 @Composable
 private fun CompactActionIcon(
     icon: ImageVector,
     contentDescription: String,
     enabled: Boolean,
-    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     val tint = MaterialTheme.colorScheme.onSurfaceVariant
     Box(
-        modifier = Modifier
-            .size(36.dp)
+        modifier = modifier
+            .size(32.dp)
             .clip(CircleShape)
-            .clickable(enabled = enabled, onClick = onClick),
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(enabled = enabled, onClick = onClick)
+                } else {
+                    Modifier
+                }
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -170,14 +181,14 @@ internal fun TaskRow(
                 enabled = !locked,
                 onClick = onRemove,
             )
-            IconButton(onClick = {}, modifier = dragHandleModifier, enabled = !locked) {
-                Icon(
-                    imageVector = Icons.Outlined.DragIndicator,
-                    contentDescription = stringResource(R.string.tasks_drag_reorder),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-                )
-            }
+            // 不用 IconButton：它内部写死 ripple()，不读主题里那句 NoIndication，
+            // 四个图标里只有它会冒涟漪；48dp 的框也比旁边三个宽出一截
+            CompactActionIcon(
+                icon = Icons.Outlined.DragIndicator,
+                contentDescription = stringResource(R.string.tasks_drag_reorder),
+                enabled = !locked,
+                modifier = dragHandleModifier,
+            )
         }
     }
 }
