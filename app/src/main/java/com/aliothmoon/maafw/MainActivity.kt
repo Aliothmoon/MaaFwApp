@@ -10,7 +10,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.ui.AppRoot
-import com.aliothmoon.maafw.ui.ProvideInputFocusManager
 import org.koin.android.ext.android.inject
 
 class MainActivity : AppCompatActivity() {
@@ -23,9 +22,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            ProvideInputFocusManager {
-                AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
-            }
+            AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
         }
     }
 

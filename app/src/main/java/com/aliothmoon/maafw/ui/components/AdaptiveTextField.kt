@@ -21,7 +21,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.LocalFloatingWindowContext
-import com.aliothmoon.maafw.ui.LocalInputFocusManager
+import com.aliothmoon.maafw.ui.rememberInputFocusManager
 
 /**
  * 本地状态缓冲, 避免上游异步回写导致 TextField 光标跳转
@@ -81,7 +81,7 @@ fun ITextField(
 ) {
     val isInFloatingWindow = LocalFloatingWindowContext.current
     val (bufferedValue, bufferedOnChange) = rememberBufferedTextState(value, onValueChange)
-    val inputFocusManager = LocalInputFocusManager.current
+    val inputFocusManager = rememberInputFocusManager()
     val handleImeDone: () -> Unit = {
         onImeAction?.invoke()
         inputFocusManager.clear()
@@ -148,7 +148,7 @@ fun ITextFieldWithFocus(
     inputType: Int? = null,
 ) {
     val isInFloatingWindow = LocalFloatingWindowContext.current
-    val inputFocusManager = LocalInputFocusManager.current
+    val inputFocusManager = rememberInputFocusManager()
     val filteredOnChange: (String) -> Unit = if (inputFilter != null) {
         { text -> if (inputFilter(text)) onValueChange(text) }
     } else {

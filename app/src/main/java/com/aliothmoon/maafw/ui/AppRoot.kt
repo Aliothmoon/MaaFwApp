@@ -92,6 +92,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
+import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.components.PiInstallDialog
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
@@ -134,15 +135,24 @@ private enum class TopDestination(
 /** M3 NavigationBar 固定 80dp 且 padding 不可调，底栏自建成这个高度 */
 private val BottomBarHeight = 56.dp
 
-/** 主 tab 那层还活着只是被盖住，不截断命中测试就能隔着二级页横滑切页、点到底栏 */
-private fun Modifier.blockPointerInput(): Modifier = pointerInput(Unit) {
-    awaitPointerEventScope {
-        // Main pass 排在子节点之后，二级页自己的手势先走，这里只收剩下的
-        while (true) {
-            awaitPointerEvent().changes.forEach { it.consume() }
+/**
+ * 二级页面盖在主 tab 之上时这层的输入处理
+ *
+ * 主 tab 那层还活着只是被盖住，不截断命中测试就能隔着二级页横滑切页、点到底栏；
+ * 截断之后根部那层空白失焦也够不着了，两者必须成对出现
+ */
+@Composable
+private fun Modifier.subPageOverlayInput(): Modifier = this
+    .pointerInput(Unit) {
+        awaitPointerEventScope {
+            // Main pass 排在子节点之后，二级页自己的手势先走，这里只收剩下的
+            while (true) {
+                awaitPointerEvent().changes.forEach { it.consume() }
+            }
         }
     }
-}
+    // 排在截断内侧，先于它拿到 Press
+    .clearFocusOnBlankTap()
 
 /** Route：收集 state、消费 Effect、承载四个主 tab 与二级页面的 NavHost；VM 为 Activity 作用域 */
 @Composable
@@ -275,7 +285,12 @@ fun AppRoot(
             onRetry = { viewModel.onIntent(SessionIntent.ReinstallPi) },
         )
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clearFocusOnBlankTap(),
+        ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
@@ -384,7 +399,7 @@ fun AppRoot(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (onSubPage) Modifier.blockPointerInput() else Modifier),
+                .then(if (onSubPage) Modifier.subPageOverlayInput() else Modifier),
         ) {
             NavHost(
                 navController = navController,

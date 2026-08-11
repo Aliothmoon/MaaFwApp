@@ -58,7 +58,6 @@ import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.ITextField
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
-import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.components.MaaTimePickerDialog
 import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
@@ -162,7 +161,6 @@ fun ScheduleEditScreen(
                 .fillMaxWidth()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .clearFocusOnBlankTap()
                 .padding(
                     start = MaaDesignTokens.Spacing.lg,
                     end = MaaDesignTokens.Spacing.lg,

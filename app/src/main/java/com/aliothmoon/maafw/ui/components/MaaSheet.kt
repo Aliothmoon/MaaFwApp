@@ -93,6 +93,8 @@ fun MaaModalSheet(
                 content(
                     Modifier
                         .fillMaxSize()
+                        // 另开的窗口，主窗口根部那层空白失焦的命中树够不到这里
+                        .clearFocusOnBlankTap()
                         .padding(horizontal = MaaDesignTokens.Spacing.lg)
                         .padding(top = MaaDesignTokens.Spacing.sm)
                         .navigationBarsPadding(),
