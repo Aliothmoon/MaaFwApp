@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Nightlight
@@ -143,7 +142,6 @@ internal fun RunnerToggleButton(
 internal fun TasksQuickOptionsPanel(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
-    onOpenRunLog: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -175,40 +173,29 @@ internal fun TasksQuickOptionsPanel(
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             ) {
                 GroupLabel(stringResource(R.string.quick_actions_title))
-                Row(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
-                    ActionTile(
-                        icon = Icons.Outlined.History,
-                        label = stringResource(R.string.run_log_title),
-                        accent = MaterialTheme.colorScheme.primary,
+                // 运行日志不在这儿：入口已经在配置行右侧，同一个动作不留两处
+                when (state.runMode) {
+                    RunMode.BACKGROUND -> ActionTile(
+                        icon = Icons.Outlined.PowerSettingsNew,
+                        label = stringResource(R.string.quick_action_screen_saver),
+                        accent = MaterialTheme.colorScheme.tertiary,
                         onClick = {
                             onDismiss()
-                            onOpenRunLog()
+                            onIntent(SessionIntent.ShowScreenSaver)
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    when (state.runMode) {
-                        RunMode.BACKGROUND -> ActionTile(
-                            icon = Icons.Outlined.PowerSettingsNew,
-                            label = stringResource(R.string.quick_action_screen_saver),
-                            accent = MaterialTheme.colorScheme.tertiary,
-                            onClick = {
-                                onDismiss()
-                                onIntent(SessionIntent.ShowScreenSaver)
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
 
-                        RunMode.FOREGROUND -> ActionTile(
-                            icon = Icons.Outlined.Layers,
-                            label = stringResource(R.string.settings_overlay_show),
-                            accent = MaterialTheme.colorScheme.tertiary,
-                            onClick = {
-                                onDismiss()
-                                onIntent(SessionIntent.ShowOverlay)
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                    RunMode.FOREGROUND -> ActionTile(
+                        icon = Icons.Outlined.Layers,
+                        label = stringResource(R.string.settings_overlay_show),
+                        accent = MaterialTheme.colorScheme.tertiary,
+                        onClick = {
+                            onDismiss()
+                            onIntent(SessionIntent.ShowOverlay)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
                 ActionTile(
                     icon = Icons.Outlined.Refresh,

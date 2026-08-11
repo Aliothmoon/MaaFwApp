@@ -19,6 +19,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,8 +35,6 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
-import com.aliothmoon.maafw.ui.components.MaaModalSheet
-import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.maaClickable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -47,104 +46,99 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 运行日志
+ * 运行日志，就地占掉任务列表那块，不再是盖住整屏的 sheet
+ *
+ * 内嵌而非弹层：看日志时多半同时要看任务进度与那颗启停按钮，全屏弹层把两者都挡了。
+ * 开关在配置行右侧，本组件不自带关闭钮
  *
  * 正文一律是 MaaFramework 的原始字符串，不翻译也不清洗——这里是排障面，
- * 加工过的文本对不上官方文档与源码就失去了价值
- *
- * 「不清洗」不等于「一股脑摊平」：事件名单独一行按成败上色，details_json 收进折叠区，
- * 展开看到的仍是原文
+ * 加工过的文本对不上官方文档与源码就失去了价值。「不清洗」不等于「一股脑摊平」：
+ * 事件名单独一行按成败上色，details_json 收进折叠区，展开看到的仍是原文
  */
 @Composable
-internal fun RunLogSheet(
+internal fun RunLogPanel(
     entries: List<RunLogEntry>,
     onClear: () -> Unit,
-    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
-        var essentialOnly by remember { mutableStateOf(true) }
-        val visible = remember(entries, essentialOnly) {
-            if (essentialOnly) entries.filter { it.isEssential } else entries
+    var essentialOnly by rememberSaveable { mutableStateOf(true) }
+    val visible = remember(entries, essentialOnly) {
+        if (essentialOnly) entries.filter { it.isEssential } else entries
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            MaaChoiceChip(
+                label = stringResource(R.string.run_log_filter_essential),
+                selected = essentialOnly,
+                onClick = { essentialOnly = true },
+            )
+            MaaChoiceChip(
+                label = stringResource(R.string.run_log_filter_all),
+                selected = !essentialOnly,
+                onClick = { essentialOnly = false },
+            )
+            Text(
+                text = stringResource(R.string.run_log_count, visible.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onClear, enabled = entries.isNotEmpty()) {
+                Text(stringResource(R.string.run_log_clear))
+            }
         }
 
-        Column(
-            modifier = sheetModifier,
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-        ) {
-            MaaSheetHeader(title = stringResource(R.string.run_log_title), onClose = onDismiss)
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-            ) {
-                MaaChoiceChip(
-                    label = stringResource(R.string.run_log_filter_essential),
-                    selected = essentialOnly,
-                    onClick = { essentialOnly = true },
-                )
-                MaaChoiceChip(
-                    label = stringResource(R.string.run_log_filter_all),
-                    selected = !essentialOnly,
-                    onClick = { essentialOnly = false },
-                )
-                Text(
-                    text = stringResource(R.string.run_log_count, visible.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onClear, enabled = entries.isNotEmpty()) {
-                    Text(stringResource(R.string.run_log_clear))
-                }
-            }
-
-            if (visible.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.run_log_empty),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                return@Column
-            }
-
-            // 一次只展开一条：details_json 展开就是十来行，多条同时展开这个列表没法看了
-            var expandedId by remember { mutableStateOf<Long?>(null) }
-            val listState = rememberLazyListState()
-            val pinnedToBottom by remember {
-                derivedStateOf {
-                    val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-                    last == null || last.index >= listState.layoutInfo.totalItemsCount - 2
-                }
-            }
-            // 只在用户本来就贴着底时才跟；否则他往上翻着看，新行一来就被拽回去。
-            // 不用 animateScrollToItem：高频事件下动画会排队打架
-            LaunchedEffect(visible.lastOrNull()?.id) {
-                if (pinnedToBottom) listState.scrollToItem(visible.lastIndex)
-            }
-            val formatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
-            LazyColumn(
-                state = listState,
+        if (visible.isEmpty()) {
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
             ) {
-                items(visible, key = { it.id }) { entry ->
-                    RunLogRow(
-                        entry = entry,
-                        time = formatter.format(Date(entry.atMillis)),
-                        expanded = expandedId == entry.id,
-                        onToggle = { expandedId = if (expandedId == entry.id) null else entry.id },
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.run_log_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            return@Column
+        }
+
+        // 一次只展开一条：details_json 展开就是十来行，多条同时展开这个列表没法看了
+        var expandedId by remember { mutableStateOf<Long?>(null) }
+        val listState = rememberLazyListState()
+        val pinnedToBottom by remember {
+            derivedStateOf {
+                val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+                last == null || last.index >= listState.layoutInfo.totalItemsCount - 2
+            }
+        }
+        // 只在用户本来就贴着底时才跟；否则他往上翻着看，新行一来就被拽回去。
+        // 不用 animateScrollToItem：高频事件下动画会排队打架
+        LaunchedEffect(visible.lastOrNull()?.id) {
+            if (pinnedToBottom) listState.scrollToItem(visible.lastIndex)
+        }
+        val formatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+        ) {
+            items(visible, key = { it.id }) { entry ->
+                RunLogRow(
+                    entry = entry,
+                    time = formatter.format(Date(entry.atMillis)),
+                    expanded = expandedId == entry.id,
+                    onToggle = { expandedId = if (expandedId == entry.id) null else entry.id },
+                )
             }
         }
     }

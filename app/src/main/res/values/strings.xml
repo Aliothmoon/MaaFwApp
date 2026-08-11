@@ -337,6 +337,8 @@
     <string name="run_log_count">%1$d 条</string>
     <string name="run_log_clear">清空</string>
     <string name="run_log_empty">还没有日志；开始任务后这里会出现 MaaFramework 的原始回调</string>
+    <string name="tasks_log_open">打开运行日志</string>
+    <string name="tasks_log_close">关闭运行日志</string>
     <string name="run_log_filter_essential">关键</string>
     <string name="run_log_filter_all">全部</string>
 

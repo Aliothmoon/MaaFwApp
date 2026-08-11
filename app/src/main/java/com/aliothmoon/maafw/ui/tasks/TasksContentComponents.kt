@@ -53,6 +53,7 @@ import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.uniqueCopyLabel
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import sh.calvin.reorderable.ReorderableItem
@@ -195,12 +196,12 @@ internal fun TaskList(
 internal fun ConfigurationSelectorRow(
     active: ResolvedRunConfiguration?,
     locked: Boolean,
+    logOpen: Boolean,
     onSelectConfig: () -> Unit,
     onAddTasks: () -> Unit,
+    onToggleLog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(MaaTheme.style.radii.card)
-    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -216,29 +217,68 @@ internal fun ConfigurationSelectorRow(
                 .weight(1f)
                 .fillMaxHeight(),
         )
-        // primary 字色 + 中性描边（有框，不要 primary 色框）
-        OutlinedButton(
+        RowActionButton(
             onClick = onAddTasks,
             enabled = !locked && active != null,
-            shape = shape,
-            contentPadding = PaddingValues(horizontal = MaaDesignTokens.Spacing.md),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = scheme.primary,
-                disabledContentColor = scheme.onSurface.copy(alpha = 0.38f),
+            icon = MaaIcons.Add,
+            label = stringResource(R.string.tasks_add_task),
+        )
+        // 只给图标：三件东西挤一行，再带上文字配置卡就只剩个名字了
+        RowActionButton(
+            onClick = onToggleLog,
+            enabled = true,
+            icon = if (logOpen) MaaIcons.Close else MaaIcons.History,
+            label = null,
+            contentDescription = stringResource(
+                if (logOpen) R.string.tasks_log_close else R.string.tasks_log_open,
             ),
-            border = BorderStroke(
-                MaaDesignTokens.Separator.thickness,
-                scheme.outline,
-            ),
-            modifier = Modifier.fillMaxHeight(),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Add,
-                contentDescription = null,
-                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
-            )
+            active = logOpen,
+        )
+    }
+}
+
+/**
+ * 配置行右侧的动作钮：primary 字色 + 中性描边（有框，不要 primary 色框）
+ *
+ * [active] 为 true 时描边也转 primary，用来表达「日志正开着」这种开关态；
+ * [label] 为 null 即只给图标
+ */
+@Composable
+private fun RowActionButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    icon: ImageVector,
+    label: String?,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    active: Boolean = false,
+) {
+    val scheme = MaterialTheme.colorScheme
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(MaaTheme.style.radii.card),
+        contentPadding = PaddingValues(
+            horizontal = if (label == null) MaaDesignTokens.Spacing.sm else MaaDesignTokens.Spacing.md,
+        ),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = scheme.primary,
+            disabledContentColor = scheme.onSurface.copy(alpha = MaaDesignTokens.Alpha.disabledContent),
+        ),
+        border = BorderStroke(
+            MaaDesignTokens.Separator.thickness,
+            if (active) scheme.primary else scheme.outline,
+        ),
+        modifier = modifier.fillMaxHeight(),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+        )
+        if (label != null) {
             Box(Modifier.size(MaaDesignTokens.Spacing.xs))
-            Text(text = stringResource(R.string.tasks_add_task), maxLines = 1)
+            Text(text = label, maxLines = 1)
         }
     }
 }

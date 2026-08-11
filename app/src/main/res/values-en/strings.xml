@@ -346,6 +346,8 @@
     <string name="run_log_count">%1$d entries</string>
     <string name="run_log_clear">Clear</string>
     <string name="run_log_empty">No entries yet. MaaFramework callbacks show up here once a run starts.</string>
+    <string name="tasks_log_open">Open run log</string>
+    <string name="tasks_log_close">Close run log</string>
     <string name="run_log_filter_essential">Key</string>
     <string name="run_log_filter_all">All</string>
 

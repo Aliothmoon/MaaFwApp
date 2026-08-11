@@ -141,19 +141,29 @@ private fun TasksContent(
                     ConfigurationSelectorRow(
                         active = active,
                         locked = locked,
+                        logOpen = showRunLog,
                         onSelectConfig = { showConfigSheet = true },
                         onAddTasks = { showAddTasks = true },
+                        onToggleLog = { showRunLog = !showRunLog },
                     )
 
-                    if (active == null) {
-                        EmptyState(
+                    // 日志接管任务列表那块，不另开弹层：这两样不会同时看，
+                    // 而全屏弹层会把下面那颗启停按钮一起挡掉
+                    when {
+                        showRunLog -> RunLogPanel(
+                            entries = runLog,
+                            onClear = { onIntent(SessionIntent.ClearRunLog) },
+                            modifier = Modifier.weight(1f),
+                        )
+
+                        active == null -> EmptyState(
                             icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
                             title = stringResource(R.string.tasks_empty_config_title),
                             hint = stringResource(R.string.tasks_empty_config_hint),
                             modifier = Modifier.weight(1f),
                         )
-                    } else {
-                        TaskList(
+
+                        else -> TaskList(
                             active = active,
                             locked = locked,
                             onIntent = onIntent,
@@ -178,18 +188,14 @@ private fun TasksContent(
             TasksQuickOptionsPanel(
                 state = state,
                 onIntent = onIntent,
-                onOpenRunLog = { showRunLog = true },
                 onDismiss = { showQuickOptions = false },
             )
         }
     }
 
+    // 日志开着时返回键先收日志，不要直接退出这一屏
     if (showRunLog) {
-        RunLogSheet(
-            entries = runLog,
-            onClear = { onIntent(SessionIntent.ClearRunLog) },
-            onDismiss = { showRunLog = false },
-        )
+        BackHandler { showRunLog = false }
     }
 
 
