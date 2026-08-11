@@ -36,8 +36,7 @@ import org.koin.androidx.compose.koinViewModel
  * 一份错误日志的正文（二级页面）
  *
  * 长行换行，不挂横向滚动：`LazyColumn` 外面套 `horizontalScroll` 时列表宽度取的是当前可见的
- * 最长一行——竖向一滑宽度就变、横向偏移跟着被夹一次，真机上卡到滑不动。MaaMeow 的
- * `ErrorLogDetailView` 是那个写法，这边照抄了一遍仍然卡，就不跟了
+ * 最长一行，竖向一滑宽度就变、横向偏移跟着被夹一次，真机上卡到滑不动
  *
  * 不截断：截尾等于让用户看半个现场
  */
@@ -90,8 +89,7 @@ fun AppLogDetailScreen(
             return@Scaffold
         }
 
-        // 样式与配色在列表外算一次：给 Text 传 fontFamily 会在每行每次重组合成一份新
-        // TextStyle，滚动时这份开销按可见行数翻倍（MaaMeow 那边直接用常量 TextStyle）
+        // 在列表外算一次：给 Text 传 fontFamily 会每行每次重组合成一份新 TextStyle
         val lineStyle = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace)
         val errorColor = MaterialTheme.colorScheme.error
         val warningColor = MaaTheme.palette.warning.content

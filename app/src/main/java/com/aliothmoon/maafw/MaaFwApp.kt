@@ -49,7 +49,7 @@ class MaaFwApp : Application() {
             modules(appModule)
         }.koin
         val settings = koin.get<AppSettingsManager>()
-        // 种树排在 Koin 之后：落盘档位现读调试模式。这中间只隔一个 AppSettingsManager 的构造，不打日志
+        // 排在 Koin 之后才拿得到调试模式；这中间只隔一个 AppSettingsManager 的构造，不打日志
         LogTreeHolder(logWriter, settings.debugMode::value).setup()
         koin.get<CoroutineScope>(named<AppCoroutineScope>()).launch {
             settings.loaded.first { it }

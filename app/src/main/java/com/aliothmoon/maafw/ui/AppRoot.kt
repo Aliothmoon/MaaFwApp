@@ -134,11 +134,7 @@ private enum class TopDestination(
 /** M3 NavigationBar 固定 80dp 且 padding 不可调，底栏自建成这个高度 */
 private val BottomBarHeight = 56.dp
 
-/**
- * 二级页面在位时截断整屏的命中测试
- *
- * 主 tab 那层还活着只是被盖住，不截就能隔着二级页横滑切页、点到底栏
- */
+/** 主 tab 那层还活着只是被盖住，不截断命中测试就能隔着二级页横滑切页、点到底栏 */
 private fun Modifier.blockPointerInput(): Modifier = pointerInput(Unit) {
     awaitPointerEventScope {
         // Main pass 排在子节点之后，二级页自己的手势先走，这里只收剩下的
@@ -383,7 +379,8 @@ fun AppRoot(
             }
         }
 
-        // 二级页面自成一层：留在 Scaffold 体内会被底栏从高度里扣掉一截，盖不住它
+        // 二级页面自成一层：留在 Scaffold 体内会被底栏从高度里扣掉一截，盖不住它；
+        // inset 也随之归各页自己吃
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -392,7 +389,6 @@ fun AppRoot(
             NavHost(
                 navController = navController,
                 startDestination = Routes.HOME,
-                // 不吃任何 inset：状态栏与导航栏由各二级页自己的 Scaffold 处理
                 modifier = Modifier.fillMaxSize(),
                 // 共享轴 X 前进转场，对齐 MaaMeow：推进右进左出、返回左进右出
                 enterTransition = { slideInHorizontally { it } + fadeIn() },

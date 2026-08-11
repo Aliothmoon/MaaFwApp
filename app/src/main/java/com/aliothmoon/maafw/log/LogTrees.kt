@@ -76,10 +76,9 @@ class FileLogTree(
 }
 
 /**
- * 种树的唯一入口（对齐 MaaMeow 的 `LogTreeHolder`）
+ * 种树的唯一入口
  *
- * [verbose] 收的是取值函数而不是布尔：MaaMeow 种树时设置已经同步就位，取一次快照就够，
- * 而本项目的设置异步读出来，种树那一刻只拿得到默认值
+ * [verbose] 收取值函数而不是布尔：设置是异步读出来的，种树那一刻只拿得到默认值
  */
 class LogTreeHolder(
     private val writer: AppLogWriter,
