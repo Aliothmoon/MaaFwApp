@@ -121,8 +121,16 @@ class ScreenSaverHook(
     }
 }
 
-/** 跑完强停目标应用；engage 什么都不做，只为占一个收尾位 */
-class CloseTargetAppHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
+/**
+ * 跑完强停目标应用；engage 什么都不做，只为占一个收尾位
+ *
+ * 两层开关并存，全局优先：全局开了就每一轮都关（含手动 Start），关着才回落到
+ * 这条定时规则自己的选项——规则级那条只能管定时触发，手动那轮压根没有 options
+ */
+class CloseTargetAppHook(
+    private val servicePort: PrivilegedServicePort,
+    private val settings: AppSettingsGateway,
+) : RunEnvHook {
 
     override val id: String = "close-target-app"
     override val anchor: Anchor = Anchor.BeforeDispatch
@@ -130,9 +138,10 @@ class CloseTargetAppHook(private val servicePort: PrivilegedServicePort) : RunEn
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): Release? {
+        // 前台模式没有虚拟屏，看门狗从不起来，特权侧也就没有目标包名可关
         if (ctx.runMode != RunMode.BACKGROUND) return null
-        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return null
-        if (!options.closeAppAfterTask) return null
+        val perRule = (ctx.trigger as? RunTrigger.Schedule)?.options?.closeAppAfterTask == true
+        if (!settings.closeAppAfterTask.value && !perRule) return null
 
         return Release { reason ->
             // 只认自然跑完：投递被拒或用户手动停时把人家的应用关掉，太粗暴

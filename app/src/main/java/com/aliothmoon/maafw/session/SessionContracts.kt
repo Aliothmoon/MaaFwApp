@@ -46,6 +46,9 @@ data class SessionUiState(
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     val screenSaverEnabled: Boolean = false,
+    /** 全局的跑完关目标应用；与 ScheduleStrategy 上的同名选项并存，本项优先 */
+    val closeAppAfterTask: Boolean = false,
+    val touchPreviewEnabled: Boolean = true,
     /** 定时任务的亮屏解锁；逐条规则的收尾选项在 ScheduleStrategy 上，不在这 */
     val wakeUnlockEnabled: Boolean = false,
     val wakeCredential: String = "",
@@ -220,6 +223,15 @@ sealed interface SessionIntent {
 
     /** 仅后台模式：运行期是否自动盖屏保 */
     data class SetScreenSaverEnabled(val enabled: Boolean) : SessionIntent
+
+    /** 全局的跑完关目标应用；开着时压过每条定时规则自己的同名选项 */
+    data class SetCloseAppAfterTask(val enabled: Boolean) : SessionIntent
+
+    /** 预览上是否画注入的触点 */
+    data class SetTouchPreviewEnabled(val enabled: Boolean) : SessionIntent
+
+    /** 立刻关掉目标应用：停虚拟屏，屏上的应用跟着一起没 */
+    data object CloseTargetApp : SessionIntent
 
     data class SetWakeUnlockEnabled(val enabled: Boolean) : SessionIntent
 

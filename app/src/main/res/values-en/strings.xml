@@ -238,7 +238,7 @@
     <string name="schedule_edit_auto_sleep">Sleep after the task finishes</string>
     <string name="schedule_edit_skip_sleep_if_awake">Skip if the screen was already on at start</string>
     <string name="schedule_edit_close_app">Close the target app after the task</string>
-    <string name="schedule_edit_close_app_tip">Background mode only; a manual stop never closes it</string>
+    <string name="schedule_edit_close_app_tip">Background mode only. If "Options → Close the target app when task ends" is already enabled, that switch takes precedence; this strategy setting applies only when it is off. Manually stopping a task will not close the app</string>
     <string name="schedule_result_failed_start">Did not start</string>
     <string name="schedule_reason_configuration_missing">The bound run configuration was deleted</string>
     <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be prepared</string>
@@ -299,6 +299,9 @@
     <string name="quick_actions_title">Quick actions</string>
     <string name="quick_settings_title">Automation</string>
     <string name="quick_action_screen_saver">Screen off</string>
+    <string name="quick_action_close_app">Close target app</string>
+    <string name="quick_setting_close_app_after_task">Close the target app when task ends</string>
+    <string name="quick_setting_touch_preview">Show touch preview</string>
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>

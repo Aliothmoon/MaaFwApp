@@ -17,6 +17,7 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
+import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.PiInstallCoordinator
@@ -176,6 +177,7 @@ class SessionViewModelTest {
             runLauncher = launcherFor(project, store, runner, settings),
             previewPort = RecordingPreviewPort(),
             permissionGateway = permissions,
+            servicePort = FakePrivilegedServicePort(),
             appSettings = settings,
             localeController = locale,
             focusDispatcher = focusDispatcher,
@@ -200,6 +202,7 @@ class SessionViewModelTest {
             runLauncher = launcherFor(project, store, runner, settings),
             previewPort = RecordingPreviewPort(),
             permissionGateway = FakePermissionGateway(),
+            servicePort = FakePrivilegedServicePort(),
             appSettings = settings,
             localeController = {},
             focusDispatcher = focusDispatcher,

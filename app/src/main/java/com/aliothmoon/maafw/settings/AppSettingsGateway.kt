@@ -21,6 +21,13 @@ interface AppSettingsGateway {
     val screenSaverEnabled: StateFlow<Boolean>
     suspend fun setScreenSaverEnabled(enabled: Boolean)
 
+    /** 全局的跑完关目标应用；规则级同名开关在 ScheduleStrategy 上，本项优先 */
+    val closeAppAfterTask: StateFlow<Boolean>
+    suspend fun setCloseAppAfterTask(enabled: Boolean)
+
+    val touchPreviewEnabled: StateFlow<Boolean>
+    suspend fun setTouchPreviewEnabled(enabled: Boolean)
+
     val resolutionPreference: StateFlow<ResolutionPreference>
     suspend fun setResolutionPreference(preference: ResolutionPreference)
 

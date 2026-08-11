@@ -256,7 +256,7 @@ class EnvironmentHooksTest {
     @Test
     fun `target app is closed after a completed run`() = runTest {
         val service = FakePrivilegedService()
-        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service))
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
 
         hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true)))!!(
             RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
@@ -269,7 +269,7 @@ class EnvironmentHooksTest {
     @Test
     fun `target app survives a manual stop`() = runTest {
         val service = FakePrivilegedService()
-        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service))
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
 
         hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true)))!!(
             RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())),
@@ -283,8 +283,39 @@ class EnvironmentHooksTest {
     fun `teardown is a no-op when the privileged process is gone`() = runTest {
         val port = FakePrivilegedServicePort(service = null)
 
-        CloseTargetAppHook(port).engage(
+        CloseTargetAppHook(port, FakeAppSettingsGateway()).engage(
             scheduleContext(ScheduleRunOptions(closeAppAfterTask = true)),
         )!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+    }
+
+    /** 全局开关管每一轮，手动 Start 那轮压根没有 ScheduleRunOptions 可看 */
+    @Test
+    fun `the global switch closes the target app on a manual run`() = runTest {
+        val service = FakePrivilegedService()
+        val settings = FakeAppSettingsGateway().apply { closeAppAfterTask.value = true }
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), settings)
+
+        hook.engage(context())!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+
+        assertEquals(1, service.stopTargetAppCount)
+    }
+
+    @Test
+    fun `both switches off leaves the target app alone`() = runTest {
+        val port = FakePrivilegedServicePort(FakePrivilegedService())
+
+        assertNull(
+            CloseTargetAppHook(port, FakeAppSettingsGateway())
+                .engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = false))),
+        )
+    }
+
+    /** 前台模式没有虚拟屏，看门狗从不起来，全局开着也没有目标可关 */
+    @Test
+    fun `foreground mode ignores the global switch`() = runTest {
+        val port = FakePrivilegedServicePort(FakePrivilegedService())
+        val settings = FakeAppSettingsGateway().apply { closeAppAfterTask.value = true }
+
+        assertNull(CloseTargetAppHook(port, settings).engage(context(RunMode.FOREGROUND)))
     }
 }

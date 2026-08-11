@@ -58,11 +58,14 @@ interface PreviewPort {
  * Surface 通常在 Start 之前就绪，那时特权进程还没绑定，因此这里缓存最后一个 Surface，
  * 每次连上（含 binder 死后重连）都补发一次；不补发的话预览会一直是黑的
  *
- * 触点回调与 Surface 同生共死：没有预览面时特权进程不必跨进程发这些事件
+ * 触点回调与 Surface 同生共死：没有预览面时特权进程不必跨进程发这些事件。
+ * [touchPreviewEnabled] 关着时同样不注册——一次滑动能连发几十条 oneway 调用，
+ * 用户不看触点就不该让它们跨进程
  */
 class RemotePreviewPort(
     private val scope: CoroutineScope,
     private val servicePort: PrivilegedServicePort,
+    private val touchPreviewEnabled: StateFlow<Boolean>,
 ) : PreviewPort {
 
     private val current = AtomicReference<Surface?>(null)
@@ -92,6 +95,14 @@ class RemotePreviewPort(
                 }
             }
         }
+        // 开关是运行期改的，改完当场生效；关掉时顺手清空已画上去的触点，
+        // 否则最后几个会在预览上停到 TTL 到期
+        scope.launch {
+            touchPreviewEnabled.collect { enabled ->
+                pushTouchCallback()
+                if (!enabled) clearMarkers()
+            }
+        }
     }
 
     override fun attachSurface(surface: Surface) {
@@ -102,9 +113,7 @@ class RemotePreviewPort(
     override fun detachSurface() {
         current.set(null)
         push(null)
-        cleanupJob?.cancel()
-        cleanupJob = null
-        _markers.value = emptyList()
+        clearMarkers()
     }
 
     override fun touchDown(x: Int, y: Int) = withService { it.touchDown(x, y) }
@@ -124,8 +133,24 @@ class RemotePreviewPort(
         val service = servicePort.serviceOrNull() ?: return
         runCatching {
             service.setMonitorSurface(surface)
-            service.setTouchCallback(if (surface != null) touchCallback else null)
+            service.setTouchCallback(callbackFor(surface))
         }.onFailure { Timber.w(it, "setMonitorSurface failed") }
+    }
+
+    /** 只动触点回调，不碰 Surface：开关切换时画面不该跟着重置 */
+    private fun pushTouchCallback() {
+        val service = servicePort.serviceOrNull() ?: return
+        runCatching { service.setTouchCallback(callbackFor(current.get())) }
+            .onFailure { Timber.w(it, "setTouchCallback failed") }
+    }
+
+    private fun callbackFor(surface: Surface?): ITouchEventCallback? =
+        if (surface != null && touchPreviewEnabled.value) touchCallback else null
+
+    private fun clearMarkers() {
+        cleanupJob?.cancel()
+        cleanupJob = null
+        _markers.value = emptyList()
     }
 
     /** 只留最近 [PreviewTouchMarker.MAX_ACTIVE_MARKERS] 个：滑动会连发几十个触点 */

@@ -176,6 +176,7 @@ val appModule = module {
         RemotePreviewPort(
             scope = get(named<AppCoroutineScope>()),
             servicePort = get(),
+            touchPreviewEnabled = get<AppSettingsManager>().touchPreviewEnabled,
         )
     }
 
@@ -201,7 +202,7 @@ val appModule = module {
                 AutoSleepHook(get()),
                 WakeUnlockHook(get(), get<AppSettingsManager>()),
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
-                CloseTargetAppHook(get()),
+                CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,
                 KeepAliveHook(get()),
             ),
@@ -258,6 +259,7 @@ val appModule = module {
             runLauncher = get(),
             previewPort = get(),
             permissionGateway = get(),
+            servicePort = get(),
             appSettings = get(),
             localeController = AppLocales,
             focusDispatcher = get(),

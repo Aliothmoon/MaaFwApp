@@ -72,6 +72,12 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _screenSaverEnabled = MutableStateFlow(defaults.screenSaverEnabled.toBoolean())
     override val screenSaverEnabled: StateFlow<Boolean> = _screenSaverEnabled.asStateFlow()
 
+    private val _closeAppAfterTask = MutableStateFlow(defaults.closeAppAfterTask.toBoolean())
+    override val closeAppAfterTask: StateFlow<Boolean> = _closeAppAfterTask.asStateFlow()
+
+    private val _touchPreviewEnabled = MutableStateFlow(defaults.touchPreviewEnabled.toBoolean())
+    override val touchPreviewEnabled: StateFlow<Boolean> = _touchPreviewEnabled.asStateFlow()
+
     private val _resolutionPreference = MutableStateFlow(parseResolutionPreference(defaults.resolutionPreference))
     override val resolutionPreference: StateFlow<ResolutionPreference> = _resolutionPreference.asStateFlow()
 
@@ -99,6 +105,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _runMode.value = parseRunMode(s.runMode)
                 _overlayControlMode.value = parseOverlayMode(s.overlayControlMode)
                 _screenSaverEnabled.value = s.screenSaverEnabled.toBoolean()
+                _closeAppAfterTask.value = s.closeAppAfterTask.toBoolean()
+                _touchPreviewEnabled.value = s.touchPreviewEnabled.toBoolean()
                 _resolutionPreference.value = parseResolutionPreference(s.resolutionPreference)
                 _debugMode.value = s.debugMode.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
@@ -136,6 +144,14 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setScreenSaverEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[screenSaverEnabled] = enabled.toString() }
+    }
+
+    override suspend fun setCloseAppAfterTask(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[closeAppAfterTask] = enabled.toString() }
+    }
+
+    override suspend fun setTouchPreviewEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[touchPreviewEnabled] = enabled.toString() }
     }
 
     override suspend fun setResolutionPreference(preference: ResolutionPreference): Unit = with(AppSettingsSchema) {

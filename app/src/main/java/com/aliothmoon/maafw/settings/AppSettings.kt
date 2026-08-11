@@ -43,6 +43,19 @@ data class AppSettings(
     @PrefKey(default = "false")
     val screenSaverEnabled: String = "false",
 
+    /**
+     * 跑完自动强停目标应用的**全局**开关；开了就一律关，含手动 Start 那轮
+     *
+     * 与 `ScheduleStrategy.closeAppAfterTask` 并存，本项优先（见 [com.aliothmoon.maafw.runner.CloseTargetAppHook]）：
+     * 规则级那条只管自己那次触发，全局这条管每一轮
+     */
+    @PrefKey(default = "false")
+    val closeAppAfterTask: String = "false",
+
+    /** 预览上是否画出注入的触点；默认开，关掉即不再向特权进程注册触点回调 */
+    @PrefKey(default = "true")
+    val touchPreviewEnabled: String = "true",
+
     /** [com.aliothmoon.maafw.runner.ResolutionPreference] 的 name */
     @PrefKey(default = "P720")
     val resolutionPreference: String = "P720",

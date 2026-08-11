@@ -16,6 +16,7 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
 import com.aliothmoon.maafw.i18n.LocaleController
 import com.aliothmoon.maafw.privileged.PermissionGateway
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ServiceBindResult
@@ -56,6 +57,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
 private data class SettingsSnapshot(
@@ -66,12 +68,19 @@ private data class SettingsSnapshot(
     val debugMode: Boolean,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     val env: EnvSnapshot = EnvSnapshot(),
+    val quick: QuickSnapshot = QuickSnapshot(),
 )
 
 /** 定时任务解锁那两项；单独一层只为把 combine 的元数压回上限内 */
 private data class EnvSnapshot(
     val wakeUnlockEnabled: Boolean = false,
     val wakeCredential: String = "",
+)
+
+/** 快捷面板「自动设置」那两项；同样只为压元数 */
+private data class QuickSnapshot(
+    val closeAppAfterTask: Boolean = false,
+    val touchPreviewEnabled: Boolean = true,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -90,6 +99,8 @@ class SessionViewModel(
     private val runLauncher: RunLauncher,
     private val previewPort: PreviewPort,
     private val permissionGateway: PermissionGateway,
+    /** 只为「立刻关掉目标应用」这一个动作 */
+    private val servicePort: PrivilegedServicePort,
     private val appSettings: AppSettingsGateway,
     private val localeController: LocaleController,
     /** 已补完的 focus 模板；补完在进程级做，见 [FocusDispatcher] */
@@ -122,6 +133,9 @@ class SessionViewModel(
     }.combine(
         combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
     ) { snapshot, env -> snapshot.copy(env = env) }
+        .combine(
+            combine(appSettings.closeAppAfterTask, appSettings.touchPreviewEnabled, ::QuickSnapshot),
+        ) { snapshot, quick -> snapshot.copy(quick = quick) }
 
 
     val uiState: StateFlow<SessionUiState> = combine(
@@ -232,6 +246,8 @@ class SessionViewModel(
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
             screenSaverEnabled = settings.screenSaverEnabled,
+            closeAppAfterTask = settings.quick.closeAppAfterTask,
+            touchPreviewEnabled = settings.quick.touchPreviewEnabled,
             wakeUnlockEnabled = settings.env.wakeUnlockEnabled,
             wakeCredential = settings.env.wakeCredential,
             resolutionPreference = settings.resolutionPreference,
@@ -405,12 +421,25 @@ class SessionViewModel(
                 appSettings.setResolutionPreference(intent.preference)
             }
 
-            // 不走 guarded：屏保只盖窗口，与运行配置无关，运行中恰恰是它最该开的时候
+            // 以下几项都不走 guarded：改的是环境动作，与运行配置无关，
+            // 运行中恰恰是它们最该动的时候
             is SessionIntent.SetScreenSaverEnabled ->
                 appSettings.setScreenSaverEnabled(intent.enabled)
 
+            is SessionIntent.SetCloseAppAfterTask ->
+                appSettings.setCloseAppAfterTask(intent.enabled)
+
+            is SessionIntent.SetTouchPreviewEnabled ->
+                appSettings.setTouchPreviewEnabled(intent.enabled)
+
             SessionIntent.ShowOverlay -> effectChannel.send(SessionEffect.ShowOverlay)
             SessionIntent.ShowScreenSaver -> effectChannel.send(SessionEffect.ShowScreenSaver)
+            // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
+            // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
+            SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
+                runCatching { service.stopVirtualDisplay() }
+                    .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
+            }
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {

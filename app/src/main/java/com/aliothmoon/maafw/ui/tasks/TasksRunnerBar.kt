@@ -15,11 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Nightlight
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -174,28 +177,46 @@ internal fun TasksQuickOptionsPanel(
             ) {
                 GroupLabel(stringResource(R.string.quick_actions_title))
                 // 运行日志不在这儿：入口已经在配置行右侧，同一个动作不留两处
-                when (state.runMode) {
-                    RunMode.BACKGROUND -> ActionTile(
-                        icon = Icons.Outlined.PowerSettingsNew,
-                        label = stringResource(R.string.quick_action_screen_saver),
-                        accent = MaterialTheme.colorScheme.tertiary,
-                        onClick = {
-                            onDismiss()
-                            onIntent(SessionIntent.ShowScreenSaver)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                ) {
+                    when (state.runMode) {
+                        // 前台模式没有虚拟屏，屏保与「关目标应用」两格都无从谈起
+                        RunMode.BACKGROUND -> {
+                            ActionTile(
+                                icon = Icons.Outlined.PowerSettingsNew,
+                                label = stringResource(R.string.quick_action_screen_saver),
+                                accent = MaterialTheme.colorScheme.tertiary,
+                                onClick = {
+                                    onDismiss()
+                                    onIntent(SessionIntent.ShowScreenSaver)
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            ActionTile(
+                                icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                                label = stringResource(R.string.quick_action_close_app),
+                                accent = MaterialTheme.colorScheme.error,
+                                onClick = {
+                                    onDismiss()
+                                    onIntent(SessionIntent.CloseTargetApp)
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
 
-                    RunMode.FOREGROUND -> ActionTile(
-                        icon = Icons.Outlined.Layers,
-                        label = stringResource(R.string.settings_overlay_show),
-                        accent = MaterialTheme.colorScheme.tertiary,
-                        onClick = {
-                            onDismiss()
-                            onIntent(SessionIntent.ShowOverlay)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                        RunMode.FOREGROUND -> ActionTile(
+                            icon = Icons.Outlined.Layers,
+                            label = stringResource(R.string.settings_overlay_show),
+                            accent = MaterialTheme.colorScheme.tertiary,
+                            onClick = {
+                                onDismiss()
+                                onIntent(SessionIntent.ShowOverlay)
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
                 ActionTile(
                     icon = Icons.Outlined.Refresh,
@@ -217,7 +238,19 @@ internal fun TasksQuickOptionsPanel(
                         checked = state.screenSaverEnabled,
                         onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
                     )
+                    SettingToggleRow(
+                        icon = Icons.Outlined.Cancel,
+                        label = stringResource(R.string.quick_setting_close_app_after_task),
+                        checked = state.closeAppAfterTask,
+                        onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterTask(it)) },
+                    )
                 }
+                SettingToggleRow(
+                    icon = Icons.Outlined.TouchApp,
+                    label = stringResource(R.string.quick_setting_touch_preview),
+                    checked = state.touchPreviewEnabled,
+                    onCheckedChange = { onIntent(SessionIntent.SetTouchPreviewEnabled(it)) },
+                )
             }
         }
     }

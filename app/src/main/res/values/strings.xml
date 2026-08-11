@@ -232,7 +232,7 @@
     <string name="schedule_edit_auto_sleep">任务结束后自动熄屏</string>
     <string name="schedule_edit_skip_sleep_if_awake">启动时已亮屏则不熄屏</string>
     <string name="schedule_edit_close_app">任务结束后关闭目标应用</string>
-    <string name="schedule_edit_close_app_tip">仅后台模式生效；手动停止任务不会关闭</string>
+    <string name="schedule_edit_close_app_tip">仅后台模式生效。若「快捷选项 → 任务自动结束时关闭目标应用」已开启，以该开关为准；未开启时才按本策略执行。手动停止任务不会关闭</string>
     <string name="schedule_result_failed_start">未能开始</string>
     <string name="schedule_reason_configuration_missing">绑定的运行配置已被删除</string>
     <string name="schedule_reason_invalid_plan">配置有错，无法生成本次执行</string>
@@ -293,6 +293,9 @@
     <string name="quick_actions_title">快捷操作</string>
     <string name="quick_settings_title">自动设置</string>
     <string name="quick_action_screen_saver">熄屏挂机</string>
+    <string name="quick_action_close_app">关闭目标应用</string>
+    <string name="quick_setting_close_app_after_task">任务自动结束时关闭目标应用</string>
+    <string name="quick_setting_touch_preview">显示触摸预览</string>
 
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
     <string name="permission_section">权限管理</string>

@@ -26,6 +26,18 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         screenSaverEnabled.value = enabled
     }
 
+    override val closeAppAfterTask = MutableStateFlow(false)
+
+    override suspend fun setCloseAppAfterTask(enabled: Boolean) {
+        closeAppAfterTask.value = enabled
+    }
+
+    override val touchPreviewEnabled = MutableStateFlow(true)
+
+    override suspend fun setTouchPreviewEnabled(enabled: Boolean) {
+        touchPreviewEnabled.value = enabled
+    }
+
     override val resolutionPreference = MutableStateFlow(ResolutionPreference.P720)
 
     override suspend fun setResolutionPreference(preference: ResolutionPreference) {
