@@ -47,8 +47,8 @@ PYTHON_TARBALL = (
 EXTRA_INDEX = "https://chaquo.com/pypi-upstream/"
 
 # 下载产物（解释器 tarball、source-only wheel、pip wheel）的本地缓存：跨构建复用，不每次重下
-# 默认家目录；用环境变量 MAAFW_AGENT_CACHE 或 --cache 覆盖
-DEFAULT_CACHE = Path.home() / ".maafw" / "agent-runtime-cache"
+# 默认在脚本所在项目根下（与 scripts/ 同级）；用环境变量 MAAFW_AGENT_CACHE 或 --cache 覆盖
+DEFAULT_CACHE = Path(__file__).resolve().parents[1] / ".agent-runtime-cache"
 
 # gradle 用的 ABI 名 -> (NDK triple, wheel tag 里的 ABI 名)
 ABIS = {

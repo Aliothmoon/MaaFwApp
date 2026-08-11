@@ -41,3 +41,6 @@ versioncode.txt
 /app/src/main/jniLibs/
 /.maa-cache/
 /.maafwversion
+
+# build_agent_runtime.py 的下载缓存（解释器 tarball / wheel）
+.agent-runtime-cache/
