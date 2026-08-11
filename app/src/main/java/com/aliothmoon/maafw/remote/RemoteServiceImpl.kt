@@ -41,7 +41,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     // 两者互相引用：host 要把 child 的输出交回 runner 的回调。用 lazy 打破初始化顺序——
     // host 的 lambda 到真正有输出时才读 runner，那会儿它早已建好
     private val runner: MaaRunner by lazy { MaaRunner(agentHost) }
-    private val agentHost: ExecAgentHost by lazy { ExecAgentHost { runner.onAgentLine(it) } }
+    private val agentHost: ExecAgentHost by lazy { ExecAgentHost { line, fromStderr -> runner.onAgentLine(line, fromStderr) } }
 
     init {
         RemoteBootTrace.mark("CTOR_START")

@@ -17,9 +17,12 @@ oneway interface IMaaRunnerCallback {
     void onFinished(int outcome, String reason) = 4;
 
     /**
-     * agent child 的一行输出（stdout 与 stderr 已合流）
+     * agent child 的一行输出
      *
      * 不走 onEvent：那是 MaaFramework 的通知通道，agent 的话不是 MaaFramework 说的
+     *
+     * [fromStderr] 必须带：两条流合起来就分不出「agent 自己 print 的」与「加载器、
+     * 解释器写的」了，而后者（如链接器的 unused DT entry 警告）根本不是 agent 在说话
      */
-    void onAgentOutput(String line) = 5;
+    void onAgentOutput(String line, boolean fromStderr) = 5;
 }

@@ -18,6 +18,9 @@ class RunLogComposerTest {
     private fun compose(event: RunnerEvent, atMillis: Long = clock): RunLogEntry? =
         composer.compose(event, ++nextId, atMillis, context)
 
+    private fun agentLine(line: String, fromStderr: Boolean = false) =
+        RunnerEvent.AgentOutput(line, fromStderr)
+
     private fun callback(message: String, details: String = "{}") =
         compose(RunnerEvent.Callback(message, details))
 
@@ -100,16 +103,42 @@ class RunLogComposerTest {
     @Test
     fun `agent output floods are suppressed and then recover`() {
         repeat(AGENT_THRESHOLD - 1) { index ->
-            assertEquals(RunLogKind.Agent, compose(RunnerEvent.AgentOutput("line $index"), 0)?.kind)
+            assertEquals(RunLogKind.Agent, compose(agentLine("line $index"), 0)?.kind)
         }
         // 触顶这一条换成告警，不静悄悄地少显示
-        assertEquals(RunLogKind.Warning, compose(RunnerEvent.AgentOutput("flood"), 0)?.kind)
-        assertNull(compose(RunnerEvent.AgentOutput("still flooding"), 0))
+        assertEquals(RunLogKind.Warning, compose(agentLine("flood"), 0)?.kind)
+        assertNull(compose(agentLine("still flooding"), 0))
 
         // 滑窗走空后恢复，并且明说恢复了
         val afterWindow = AGENT_WINDOW_MS + 1
-        assertEquals(RunLogKind.Warning, compose(RunnerEvent.AgentOutput("back"), afterWindow)?.kind)
-        assertEquals(RunLogKind.Agent, compose(RunnerEvent.AgentOutput("normal"), afterWindow)?.kind)
+        assertEquals(RunLogKind.Warning, compose(agentLine("back"), afterWindow)?.kind)
+        assertEquals(RunLogKind.Agent, compose(agentLine("normal"), afterWindow)?.kind)
+    }
+
+    /** stderr 上的话多半不是 agent 自己说的：链接器警告就走这条 */
+    @Test
+    fun `stderr lines are told apart from what the agent prints`() {
+        assertEquals(RunLogKind.Agent, compose(agentLine("reco hit"))?.kind)
+        assertEquals(
+            RunLogKind.AgentError,
+            compose(agentLine("WARNING: linker: unused DT entry", fromStderr = true))?.kind,
+        )
+    }
+
+    /** 洪泛滑窗按两条流合起来算：刷屏就是刷屏，不分从哪条管道出来 */
+    @Test
+    fun `the flood window counts both streams together`() {
+        repeat(AGENT_THRESHOLD - 1) { index ->
+            compose(agentLine("out $index", fromStderr = index % 2 == 0), 0)
+        }
+        assertEquals(RunLogKind.Warning, compose(agentLine("flood"), 0)?.kind)
+    }
+
+    /** agent 的两条流都不进「关键」档——它和原始转储同级 */
+    @Test
+    fun `agent output is not essential`() {
+        assertEquals(false, compose(agentLine("out"))!!.isEssential)
+        assertEquals(false, compose(agentLine("err", fromStderr = true))!!.isEssential)
     }
 
     private companion object {

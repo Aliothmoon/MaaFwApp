@@ -133,8 +133,8 @@ class MaaFrameworkRunnerPort(
             _events.tryEmit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
 
-        override fun onAgentOutput(line: String?) {
-            _events.tryEmit(RunnerEvent.AgentOutput(line.orEmpty()))
+        override fun onAgentOutput(line: String?, fromStderr: Boolean) {
+            _events.tryEmit(RunnerEvent.AgentOutput(line.orEmpty(), fromStderr))
         }
 
         // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂

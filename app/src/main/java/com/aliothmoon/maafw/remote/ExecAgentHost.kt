@@ -14,8 +14,8 @@ import java.util.zip.ZipFile
  * 真正拉起哪个可执行体由构建期的 `agent-runtime.json` 决定（docs/pi-compatibility.md）
  */
 class ExecAgentHost(
-    /** child 的每一行输出；默认丢弃，只有接了运行日志的调用点才传 */
-    private val onOutput: (String) -> Unit = {},
+    /** child 的每一行输出与它来自哪条流；默认丢弃，只有接了运行日志的调用点才传 */
+    private val onOutput: (line: String, fromStderr: Boolean) -> Unit = { _, _ -> },
 ) : AgentHost {
 
     override fun launch(request: AgentLaunchRequest): AgentSession {
@@ -51,9 +51,9 @@ class ExecAgentHost(
             addAll(request.agent.childArgs)
             add(request.identifier)
         }
+        // 不合流：合了就分不出 agent 自己 print 的与加载器写的，两条各起一个泵
         val builder = ProcessBuilder(command)
             .directory(File(request.workingDir))
-            .redirectErrorStream(true)
         entry.env.forEach { (key, value) ->
             builder.environment()[key] = value.resolveAgentPlaceholders(bundleDir, request.nativeLibraryDir)
         }
@@ -76,28 +76,38 @@ class ExecAgentHost(
 }
 
 /**
- * child 的 stdout/stderr 合流后同时转进 logcat 与 [onOutput]：Android 上进程没有可看的控制台，
- * 不抽干这条管道，child 写满管道缓冲后会直接卡死
+ * child 的两条流各起一个泵，同时转进 logcat 与 [onOutput]
+ *
+ * **两条都必须抽干**：Android 上进程没有可看的控制台，哪条不抽，child 写满那条的管道缓冲
+ * 就会直接卡死。这也是当初合流的原因，但合流的代价是下游再也分不出话是谁说的
  *
  * logcat 那份留着不撤：[onOutput] 要过 binder，app 进程不在时那头没人接，而 child 起不来
  * 的现场恰恰常发生在那种时候
  */
 private class ProcessAgentSession(
     private val process: Process,
-    private val onOutput: (String) -> Unit,
+    private val onOutput: (line: String, fromStderr: Boolean) -> Unit,
 ) : AgentSession {
 
-    private val pump = Thread({
-        runCatching {
-            process.inputStream.bufferedReader().forEachLine { line ->
-                Ln.i("agent| $line")
-                runCatching { onOutput(line) }
-                    .onFailure { Ln.w("ExecAgentHost: agent output dispatch failed: ${it.message}") }
+    private val pumps = listOf(
+        pump(process.inputStream, fromStderr = false),
+        pump(process.errorStream, fromStderr = true),
+    )
+
+    private fun pump(stream: java.io.InputStream, fromStderr: Boolean): Thread {
+        val tag = if (fromStderr) "agent!" else "agent|"
+        return Thread({
+            runCatching {
+                stream.bufferedReader().forEachLine { line ->
+                    Ln.i("$tag $line")
+                    runCatching { onOutput(line, fromStderr) }
+                        .onFailure { Ln.w("ExecAgentHost: agent output dispatch failed: ${it.message}") }
+                }
             }
+        }, if (fromStderr) "agent-err-pump" else "agent-out-pump").apply {
+            isDaemon = true
+            start()
         }
-    }, "agent-log-pump").apply {
-        isDaemon = true
-        start()
     }
 
     override fun isAlive(): Boolean = process.isAlive
@@ -108,7 +118,7 @@ private class ProcessAgentSession(
         if (!process.waitFor(TERMINATE_TIMEOUT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS)) {
             process.destroyForcibly()
         }
-        pump.interrupt()
+        pumps.forEach { it.interrupt() }
     }
 
     private companion object {

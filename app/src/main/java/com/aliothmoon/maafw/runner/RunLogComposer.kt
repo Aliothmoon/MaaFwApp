@@ -50,7 +50,7 @@ class RunLogComposer {
             // 那几步有先后依赖也要 IO，塞进合成器会让它既不纯也不同步
             is RunnerEvent.Focus -> Composed(RunLogKind.Focus, uiTextFromProject(event.focus.content))
 
-            is RunnerEvent.AgentOutput -> agentEntry(event.line, atMillis) ?: return null
+            is RunnerEvent.AgentOutput -> agentEntry(event, atMillis) ?: return null
 
             is RunnerEvent.MalformedCallback -> Composed(
                 RunLogKind.Error,
@@ -70,7 +70,8 @@ class RunLogComposer {
         return RunLogEntry(id, atMillis, composed.kind, composed.text, composed.detail)
     }
 
-    private fun agentEntry(line: String, atMillis: Long): Composed? {
+    /** 洪泛滑窗按两条流合起来算：刷屏就是刷屏，不分它从哪条管道出来 */
+    private fun agentEntry(event: RunnerEvent.AgentOutput, atMillis: Long): Composed? {
         while (agentTimestamps.isNotEmpty() && atMillis - agentTimestamps.first() >= AGENT_FLOOD_WINDOW_MS) {
             agentTimestamps.removeFirst()
         }
@@ -85,7 +86,8 @@ class RunLogComposer {
             agentFlooded = true
             return Composed(RunLogKind.Warning, uiTextOf(R.string.run_log_agent_flood))
         }
-        return Composed(RunLogKind.Agent, uiTextFromProject(line))
+        val kind = if (event.fromStderr) RunLogKind.AgentError else RunLogKind.Agent
+        return Composed(kind, uiTextFromProject(event.line))
     }
 
     /**

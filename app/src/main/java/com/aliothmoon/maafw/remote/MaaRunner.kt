@@ -89,8 +89,8 @@ class MaaRunner(private val agentHost: AgentHost) {
     }
 
     /** agent child 的一行输出；由 [AgentHost] 的泵线程调用，app 侧不在时静默丢弃 */
-    fun onAgentLine(line: String) {
-        notify { onAgentOutput(line) }
+    fun onAgentLine(line: String, fromStderr: Boolean) {
+        notify { onAgentOutput(line, fromStderr) }
     }
 
     /**

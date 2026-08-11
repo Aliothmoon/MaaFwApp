@@ -32,8 +32,11 @@ enum class RunLogKind {
     Warning,
     Error,
 
-    /** agent child 的输出 */
+    /** agent child 自己 print 的（stdout） */
     Agent,
+
+    /** agent child 的 stderr：它自己的 traceback，也可能是加载器、解释器写的 */
+    AgentError,
 
     /** PI 声明的消息模板，正文按 Markdown 渲染（见 [FocusMessage]） */
     Focus,
@@ -45,9 +48,17 @@ enum class RunLogKind {
 /** 超过就丢最老的：一次长跑能积上万条，全留住会吃光内存也拖慢列表 */
 const val RUN_LOG_CAPACITY = 500
 
-/** 「只看关键」= 除原始回调外的全部；那一档才是刷屏的大头 */
+/**
+ * 「只看关键」留下的：这一轮跑到哪了
+ *
+ * agent 的两条流都不在内——它和 `Node.*` 原始转储同级，是排障信息。agent 崩了照样看得见，
+ * 那会以 `Tasker.Task.Failed` 的形式出现在关键档，再切「全部」看 stderr 上的现场
+ */
 val RunLogEntry.isEssential: Boolean
-    get() = kind != RunLogKind.Verbose
+    get() = kind !in NON_ESSENTIAL_KINDS
+
+private val NON_ESSENTIAL_KINDS =
+    setOf(RunLogKind.Verbose, RunLogKind.Agent, RunLogKind.AgentError)
 
 /** 屏保那一行只要一句话，带上 details_json 就糊了 */
 fun RunnerEvent.toLogText(): String = when (this) {
