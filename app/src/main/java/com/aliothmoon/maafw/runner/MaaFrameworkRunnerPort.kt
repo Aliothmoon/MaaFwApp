@@ -15,6 +15,7 @@ import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.project.PiInstaller
+import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -53,7 +54,6 @@ class MaaFrameworkRunnerPort(
     /** 调试模式：传给特权进程 setup 的 isDebug，开启 MaaFramework 详细日志 */
     private val debugMode: () -> Boolean,
     private val scope: CoroutineScope,
-    private val ioDispatcher: CoroutineDispatcher,
     private val servicePort: PrivilegedServicePort,
 ) : RunnerPort {
 
@@ -106,7 +106,7 @@ class MaaFrameworkRunnerPort(
     }
 
     /** null = 问不出来（没连上或调用失败），不能据此判定，只有明确的 false 才算数 */
-    private suspend fun remoteRunning(): Boolean? = withContext(ioDispatcher) {
+    private suspend fun remoteRunning(): Boolean? = withContext(MaaDispatchers.IO) {
         runCatching { servicePort.serviceOrNull()?.isRunning() }.getOrNull()
     }
 
@@ -197,7 +197,7 @@ class MaaFrameworkRunnerPort(
             latestResult = null,
         )
 
-        return withContext(ioDispatcher) {
+        return withContext(MaaDispatchers.IO) {
             runCatching { launchOnService(plan) }
                 .fold(
                     onSuccess = { rejection ->
@@ -223,7 +223,7 @@ class MaaFrameworkRunnerPort(
             return RunnerCommandResult.Accepted
         }
         _state.update { it.copy(phase = RunnerPhase.Stopping) }
-        return withContext(ioDispatcher) {
+        return withContext(MaaDispatchers.IO) {
             runCatching { servicePort.serviceOrNull()?.stopRun() }
                 .fold(
                     onSuccess = { RunnerCommandResult.Accepted },
@@ -252,7 +252,7 @@ class MaaFrameworkRunnerPort(
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
         // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作
         if (debugMode()) {
-            scope.launch(ioDispatcher) {
+            scope.launch(MaaDispatchers.IO) {
                 runCatching {
                     val backend = servicePort.currentBackend ?: return@runCatching
                     LogcatServiceManager.bind(backend)

@@ -46,6 +46,7 @@ import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
+import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -99,14 +100,6 @@ class SessionViewModel(
     private val localeController: LocaleController,
     /** 已补完的 focus 模板；补完在进程级做，见 [FocusDispatcher] */
     private val focusDispatcher: FocusDispatcher,
-    /**
-     * resolve 那步的落点；生产是 Dispatchers.Default
-     *
-     * 必须可换：留在 Dispatchers.Default 上时聚合态的上游活在真实线程池里，
-     * 既不受测试虚拟时间控制，拆除也赶不上 @After 的 resetMain()——
-     * 迟到的续体撞上已重置的 Main，异常会飘到下一个用例头上
-     */
-    private val computeDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
@@ -142,7 +135,7 @@ class SessionViewModel(
         settingsState,
     ) { project, config, runner, privileged, settings ->
         buildUiState(project, config, runner, privileged, settings)
-    }.flowOn(computeDispatcher) // resolve 属重计算，不占用主线程
+    }.flowOn(MaaDispatchers.Default) // resolve 属重计算，不占用主线程
         .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
         .stateIn(
             scope = viewModelScope,

@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,6 @@ interface ProjectRepository {
 
 class DefaultProjectRepository(
     private val loader: ProjectLoader,
-    private val ioDispatcher: CoroutineDispatcher,
 ) : ProjectRepository {
 
     private val _state = MutableStateFlow<ProjectState>(ProjectState.Loading)
@@ -35,7 +35,7 @@ class DefaultProjectRepository(
     override suspend fun reload() {
         val generation = reloadMutex.withLock { ++reloadGeneration }
         _state.value = ProjectState.Loading
-        val next = withContext(ioDispatcher) {
+        val next = withContext(MaaDispatchers.IO) {
             when (val result = loader.load()) {
                 is ProjectLoadResult.Ready -> ProjectState.Ready(result.definition, result.diagnostics)
                 is ProjectLoadResult.Failure -> ProjectState.Error(result.diagnostics)

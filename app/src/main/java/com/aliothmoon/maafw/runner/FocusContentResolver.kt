@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.isFilePath
 import com.aliothmoon.maafw.project.normalizeProjectPath
+import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -50,12 +51,11 @@ fun focusContentNeedsIo(content: String): Boolean =
 class PrivilegedFocusContentResolver(
     private val installer: PiInstaller,
     private val servicePort: PrivilegedServicePort,
-    private val ioDispatcher: CoroutineDispatcher,
 ) : FocusContentResolver {
 
     private val slot = AtomicInteger(0)
 
-    override suspend fun resolve(content: String): String = withContext(ioDispatcher) {
+    override suspend fun resolve(content: String): String = withContext(MaaDispatchers.IO) {
         if (content.contains(FOCUS_IMAGE_PLACEHOLDER)) {
             return@withContext content.replace(FOCUS_IMAGE_PLACEHOLDER, captureImageUri())
         }

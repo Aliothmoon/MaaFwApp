@@ -85,7 +85,7 @@ val appModule = module {
     }
     single<ProjectSource> { InstalledProjectSource(get()) }
     single { ProjectLoader(get(), localeProvider = AppLocales::currentProjectTag) }
-    single<ProjectRepository> { DefaultProjectRepository(get(), Dispatchers.IO) }
+    single<ProjectRepository> { DefaultProjectRepository(get()) }
 
     single<DataStore<UserConfiguration>> {
         DataStoreFactory.create(
@@ -113,7 +113,6 @@ val appModule = module {
             resolutionPreference = get<AppSettingsManager>().resolutionPreference::value,
             debugMode = get<AppSettingsManager>().debugMode::value,
             scope = get(named<AppCoroutineScope>()),
-            ioDispatcher = Dispatchers.IO,
             servicePort = get(),
         )
     }
@@ -122,7 +121,6 @@ val appModule = module {
         PrivilegedFocusContentResolver(
             installer = get(),
             servicePort = get(),
-            ioDispatcher = Dispatchers.IO,
         )
     }
 
@@ -219,7 +217,6 @@ val appModule = module {
             appSettings = get(),
             localeController = AppLocales,
             focusDispatcher = get(),
-            computeDispatcher = Dispatchers.Default,
         )
     }
 

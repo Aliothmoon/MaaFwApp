@@ -47,6 +47,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import com.aliothmoon.maafw.MaaDispatchers
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -91,12 +95,15 @@ class SessionViewModelTest {
 
     @Before
     fun setUp() {
+        mockkObject(MaaDispatchers)
+        every { MaaDispatchers.Default } returns mainDispatcher
         Dispatchers.setMain(mainDispatcher)
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkObject(MaaDispatchers)
     }
 
     private fun readyStore(
@@ -151,7 +158,6 @@ class SessionViewModelTest {
             appSettings = settings,
             localeController = locale,
             focusDispatcher = idleFocusDispatcher(),
-            computeDispatcher = mainDispatcher,
         )
         return Triple(vm, store, runner)
     }
@@ -174,7 +180,6 @@ class SessionViewModelTest {
             appSettings = settings,
             localeController = {},
             focusDispatcher = focusDispatcher,
-            computeDispatcher = mainDispatcher,
         )
     }
 
