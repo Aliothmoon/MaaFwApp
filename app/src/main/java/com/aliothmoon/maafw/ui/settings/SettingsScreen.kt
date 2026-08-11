@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -87,6 +88,9 @@ fun SettingsScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                // 主 tab 里唯一有行内输入框的一页，键盘只压这一列：底栏不动，另外三个 tab 也不必每帧重测
+                // 必须排在 verticalScroll 之前，排后面只是给内容尾部垫一段，视口照旧被键盘盖住
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(
                     start = MaaDesignTokens.Spacing.lg,

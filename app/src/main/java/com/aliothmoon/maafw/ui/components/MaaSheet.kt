@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,7 +52,7 @@ private const val SheetScrimAlpha = 0.4f
  * 进度只驱动 drawBehind / graphicsLayer（延迟读），整段动画不触发重组；
  * 关闭整棵被调用方的 if() 摘掉，瞬时消失
  *
- * content 收到的 Modifier 已带高度/水平边距/顶部间距/导航栏 inset，调用方按需追加 imePadding 等
+ * content 收到的 Modifier 已带高度/水平边距/顶部间距/导航栏与输入法 inset
  */
 @Composable
 fun MaaModalSheet(
@@ -97,7 +98,8 @@ fun MaaModalSheet(
                         .clearFocusOnBlankTap()
                         .padding(horizontal = MaaDesignTokens.Spacing.lg)
                         .padding(top = MaaDesignTokens.Spacing.sm)
-                        .navigationBarsPadding(),
+                        .navigationBarsPadding()
+                        .imePadding(),
                 )
             }
         }

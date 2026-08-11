@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -353,7 +355,11 @@ fun AppRoot(
                 state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    // 页内 imePadding 量的是到窗口底边的距离，而这里的底边已经被底栏顶高了一截；
+                    // 不声明这份已让位的 inset，页内就会多减一个底栏，正文与键盘之间空出一条
+                    // 键盘让位交给具体页去挂：挂在这里等于每帧重测四个 tab
+                    .consumeWindowInsets(padding),
             ) { page ->
                 when (TopDestination.entries[page]) {
                     TopDestination.Home -> HomeScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
@@ -396,10 +402,12 @@ fun AppRoot(
 
         // 二级页面自成一层：留在 Scaffold 体内会被底栏从高度里扣掉一截，盖不住它；
         // inset 也随之归各页自己吃
+        // imePadding 排在指针修饰符之后，命中区仍是整屏，只有内容被压
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (onSubPage) Modifier.subPageOverlayInput() else Modifier),
+                .then(if (onSubPage) Modifier.subPageOverlayInput() else Modifier)
+                .imePadding(),
         ) {
             NavHost(
                 navController = navController,
