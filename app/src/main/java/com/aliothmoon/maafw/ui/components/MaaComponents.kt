@@ -373,6 +373,17 @@ fun MaaIconBadge(
     }
 }
 
+/** 卡片内一组控件的小标题；一张卡装多组时靠它区分，没有它几排 chip 分不清谁是谁 */
+@Composable
+fun MaaFieldLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
 @Composable
 fun MaaInfoRow(label: String, value: String) {
     Row(

@@ -104,8 +104,12 @@
     <string name="result_cancelled">已取消</string>
     <string name="result_failed">失败：%1$s</string>
 
-    <!-- 设置页 -->
-    <string name="settings_appearance">外观</string>
+    <!-- 设置页；分组对齐 MaaMeow 的 settings_section_* -->
+    <string name="settings_section_display">显示设置</string>
+    <string name="settings_section_schedule">定时任务设置</string>
+    <string name="settings_section_other">其他设置</string>
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_style">主题风格</string>
     <string name="settings_follow_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
@@ -219,7 +223,6 @@
     <string name="run_countdown_remaining">%1$d 秒后开始</string>
     <string name="run_countdown_start_now">立即开始</string>
     <string name="run_countdown_cancel">取消本次</string>
-    <string name="settings_schedule_unlock">定时任务解锁</string>
     <string name="settings_wake_unlock">定时触发时亮屏解锁</string>
     <string name="settings_wake_credential">解锁 PIN</string>
     <string name="settings_wake_credential_hint">只支持纯数字 PIN；明文存在本机，导出配置时会清空</string>
