@@ -37,23 +37,18 @@ val gitVersionName: String by lazy {
     }
 }
 
-// PI 内容不进仓库：由 pi.sourceDir 指向的外部 PI 项目在构建期同步进 assets
-// 换一个 PI 只改这处配置并重新出包，代码与仓库都不感知具体项目
+// 换一个 PI = 改这处配置 + 重新出包；代码与仓库都不感知具体项目
 val piSourceDir: String? = (localProperties.getProperty("pi.sourceDir")
     ?: System.getenv("PI_SOURCE_DIR"))?.takeIf { it.isNotBlank() }
 
 val piAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/piAssets")
 
-// agent 运行时同样不进仓库：解释器或 ELF 由 agent.sourceDir 指向的外部目录在构建期同步进来
-// 布局 <dir>/agent-runtime.json + <dir>/<abi>/{jniLibs,bundle}/
-//   jniLibs/ 随 APK 装进 nativeLibraryDir（文件名须是 lib*.so，否则装机时不解压），零解包
-//   bundle/  随 assets 走，首启由特权进程解包到可执行目录（解释器这类目录树只能走这条）
-// 不配置就是不带 agent，与 pi.sourceDir 缺失同样软失败
+// 布局 <dir>/agent-runtime.json + <dir>/<abi>/{jniLibs,bundle}/；不配置就是不带 agent
 val agentSourceDir: String? = (localProperties.getProperty("agent.sourceDir")
     ?: System.getenv("AGENT_SOURCE_DIR"))?.takeIf { it.isNotBlank() }
 
-// 生成目录跨 variant 共享，没法按 buildType 分 ABI；本地只带一份运行时靠这个键
 // local.properties: agent.abi=arm64-v8a
+// 生成目录跨 variant 共享，没法按 buildType 分 ABI，本地只带一份运行时靠这个键
 val agentAbiPatterns: List<String> = (localProperties.getProperty("agent.abi") ?: "")
     .split(',')
     .map(String::trim)
@@ -63,15 +58,12 @@ val agentAbiPatterns: List<String> = (localProperties.getProperty("agent.abi") ?
 val agentAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/agentAssets")
 val agentJniLibsDir: Provider<Directory> = layout.buildDirectory.dir("generated/agentJniLibs")
 
-/** 未配置 agent.sourceDir 时给 Sync 用的空源；只为让它照常执行并清空目标目录 */
 val emptyAgentSource: File =
     layout.buildDirectory.dir("generated/agentEmptySource").get().asFile.apply { mkdirs() }
 
-// 发布要覆盖的 ABI；jniLibs 里就这两份
 val shippedAbis: List<String> = listOf("arm64-v8a", "x86_64")
 
-// 本地迭代只编一个 ABI 能省掉一半 CMake 与打包时间；release 不受影响
-// local.properties: build.debugAbi=arm64-v8a
+// local.properties: build.debugAbi=arm64-v8a；只编一个 ABI 能省掉一半 CMake 与打包时间
 val debugAbiFilters: List<String> = (localProperties.getProperty("build.debugAbi") ?: "")
     .split(',')
     .map(String::trim)
@@ -117,7 +109,6 @@ val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
 
 // 清单让解包按行直取，免去逐层 AssetManager.list()（每层都是 native 调用）
 // 不塞进 BuildConfig：清单要等 syncPiAssets 执行完才列得出，而 BuildConfig 的值在 configuration 阶段就得定
-// 已解包的 PI 是否过期改由 versionCode 判定（PiInstaller），构建期不再算内容指纹
 val writePiManifest = tasks.register("writePiManifest") {
     group = "build"
     description = "列出同步后 PI 的解包清单，落成 assets/pi.manifest"
@@ -133,7 +124,6 @@ val writePiManifest = tasks.register("writePiManifest") {
             .map { it.toRelativeString(root).replace('\\', '/') }
             .sorted()
             .toList()
-        // 一行一条相对路径，运行时按行读，app 侧不必解析 JSON
         manifestFile.get().asFile.writeText(entries.joinToString("\n"))
     }
 }
@@ -192,8 +182,7 @@ val syncAgentJniLibs = tasks.register<Sync>("syncAgentJniLibs") {
     }
 }
 
-// 指纹判断已解包的运行时是否过期；归档自带目录，不再需要单独的解包清单
-// 描述文件不进指纹——它不影响解包出来的字节，改描述不该触发重解一棵上百 MB 的树
+// 描述文件不进指纹：它不影响解包出来的字节，改描述不该触发重解一棵上百 MB 的树
 val writeAgentIndex = tasks.register("writeAgentIndex") {
     group = "build"
     description = "算出 agent 运行时归档的内容指纹，落成 assets/agent.fingerprint"
@@ -234,9 +223,6 @@ android {
 
         externalNativeBuild {
             cmake {
-                // launcher 是 C，bridge 是 C++；两者各自的编译选项写在 CMakeLists 里
-                // 静态链接 libc++：进程里已有 MaaFramework 自带的 libc++_shared.so，
-                // 再让 bridge 依赖一份本地 NDK 编的会变成同进程两套 libc++
                 arguments += "-DANDROID_STL=c++_shared"
             }
         }
@@ -254,6 +240,14 @@ android {
             // 必须解压成真实文件：launcher 要被 execv 执行，
             // MaaFramework 又靠 dladdr 取自身 .so 所在目录再 dlopen 兄弟库（MaaUtils 的 library_dir()）
             useLegacyPackaging = true
+        }
+        resources {
+            // 三个 mail jar 各带一份同名署名文件，不处理直接构建失败；
+            // 用 pickFirsts 而不是 excludes，留一份总比全丢掉强
+            pickFirsts += setOf(
+                "META-INF/LICENSE.md",
+                "META-INF/NOTICE.md",
+            )
         }
     }
 
@@ -281,7 +275,6 @@ android {
         }
         release {
             ndk {
-                // 发布始终两个 ABI 都打，不受 build.debugAbi 影响
                 abiFilters += shippedAbis
             }
             isMinifyEnabled = false
@@ -310,8 +303,7 @@ android {
     }
 
     androidResources {
-        // agent 运行时归档内部已经 deflate 过，APK 里再压一遍只是白烧构建时间；
-        // 存成 STORED 之后运行时读它是直读，不必先把整条目 inflate 出来
+        // 归档内部已经 deflate 过，再压一遍白烧构建时间；STORED 之后运行时是直读
         noCompress += "zip"
     }
 }
@@ -349,20 +341,15 @@ kotlin {
 }
 
 dependencies {
-    // 只在编译期解析隐藏系统 API，运行时由系统提供
     compileOnly(project(":hidden-api"))
 
-    // AppSettings 的 Preferences key 与读写代码由 KSP 从 @PrefSchema 生成
     implementation(project(":annotation-api"))
     ksp(project(":ksp-processor"))
-
-    // Semi Design 图标（vector + SemiIconRes）
     implementation(project(":semi-icons"))
 
-    // OEM 权限适配（MIUI 上系统权限页跳转差异大，自己拼 Intent 覆盖不全）
+    // MIUI 上系统权限页的跳转差异大，自己拼 Intent 覆盖不全
     implementation(libs.xx.permissions)
 
-    // 提权与 native 接入
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     implementation(libs.libsu)
@@ -402,7 +389,7 @@ dependencies {
     implementation(libs.markwon.linkify)
     implementation(libs.markwon.strikethrough)
     implementation(libs.okhttp)
-    // SMTP 推送渠道；Android 平台没有自带的 mail 实现，三个一起才跑得起 Transport.send
+    // Android 没有自带的 mail 实现，三个一起才跑得起 Transport.send
     implementation(libs.angus.mail)
     implementation(libs.angus.activation)
     implementation(libs.jakarta.activation.api)
