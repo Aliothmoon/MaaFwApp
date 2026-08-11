@@ -104,7 +104,8 @@ fun ScheduleScreen(
                 }
             }
             if (state.rows.isEmpty()) {
-                item(key = "empty") { ScheduleEmptyState() }
+                // 撑满视口才有多余高度可分；item 默认包裹内容，MaaEmptyState 的居中就无从谈起
+                item(key = "empty") { ScheduleEmptyState(Modifier.fillParentMaxSize()) }
             } else {
                 items(state.rows, key = { it.strategy.id }) { row ->
                     ScheduleRowCard(
@@ -192,11 +193,11 @@ private fun NextTriggerLine(row: ScheduleRow) {
 }
 
 @Composable
-private fun ScheduleEmptyState() {
+private fun ScheduleEmptyState(modifier: Modifier = Modifier) {
     MaaEmptyState(
         icon = Icons.Outlined.Schedule,
         title = stringResource(R.string.schedule_empty),
         hint = stringResource(R.string.schedule_empty_hint),
-        modifier = Modifier.padding(vertical = MaaDesignTokens.Spacing.xl),
+        modifier = modifier,
     )
 }

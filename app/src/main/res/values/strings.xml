@@ -173,7 +173,7 @@
     <string name="schedule_title">定时任务</string>
     <string name="schedule_add">新建规则</string>
     <string name="schedule_empty">还没有定时规则</string>
-    <string name="schedule_empty_hint">到达设定时间只会唤醒应用并记录一次，暂不触发任务执行</string>
+    <string name="schedule_empty_hint">新建规则后，到达设定时间会自动执行绑定的运行配置</string>
     <string name="schedule_next_trigger">下次 %1$s</string>
     <string name="schedule_next_none">规则不完整，不会触发</string>
     <string name="schedule_disabled">已停用</string>

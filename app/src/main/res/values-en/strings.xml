@@ -179,7 +179,7 @@
     <string name="schedule_title">Schedules</string>
     <string name="schedule_add">New rule</string>
     <string name="schedule_empty">No schedules yet</string>
-    <string name="schedule_empty_hint">Firing only wakes the app and records an entry; task execution is not triggered yet</string>
+    <string name="schedule_empty_hint">Once a rule is added, its bound run configuration runs automatically at the scheduled time</string>
     <string name="schedule_next_trigger">Next %1$s</string>
     <string name="schedule_next_none">Incomplete rule, will not fire</string>
     <string name="schedule_disabled">Disabled</string>
