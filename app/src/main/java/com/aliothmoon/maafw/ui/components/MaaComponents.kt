@@ -3,6 +3,8 @@ package com.aliothmoon.maafw.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -61,6 +63,19 @@ import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.i18n.asUiText
 
+// 不依赖组合，提到文件级免得每次重组重建一整套 transition
+// 只 expand/shrink 会把不透明的文字裁一半，必须配 fade；Alignment.Top 不能省——
+// 默认 Bottom 展开时先冒出正文末行
+private val CardExpand = expandVertically(
+    animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
+    expandFrom = Alignment.Top,
+) + fadeIn(MaaMotion.enter(MaaMotion.DURATION_SHORT))
+
+private val CardCollapse = shrinkVertically(
+    animationSpec = MaaMotion.exit(MaaMotion.DURATION_SHORT),
+    shrinkTowards = Alignment.Top,
+) + fadeOut(MaaMotion.exit(MaaMotion.DURATION_SHORT))
+
 /**
  * [collapsible] 要求有 [title]：折叠靠点标题行，没标题就没有可点的表头
  *
@@ -76,13 +91,9 @@ fun MaaCard(
     contentPadding: PaddingValues = PaddingValues(MaaDesignTokens.Card.innerPadding),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // 不要给 rememberSaveable 传 key：运行时已废弃它，理由正是会绕开位置作用域造成状态串卡
     var expanded by rememberSaveable { mutableStateOf(true) }
     val canCollapse = collapsible && title != null
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
-        label = "chevron",
-    )
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -94,14 +105,21 @@ fun MaaCard(
             modifier = Modifier.padding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
+            // 动画状态放在 chevron 内部：不可折叠的卡片压根不组合它，也就不必付一个
+            // Animatable 与常驻协程（全仓 24 个调用点里只有 8 个可折叠）
             val chevron: @Composable () -> Unit = {
+                val rotation by animateFloatAsState(
+                    targetValue = if (expanded) 180f else 0f,
+                    animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
+                    label = "chevron",
+                )
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(MaaDesignTokens.IconSize.sm)
-                        .rotate(chevronRotation),
+                        .rotate(rotation),
                 )
             }
             when {
@@ -116,7 +134,9 @@ fun MaaCard(
                         ) {
                             trailing()
                             if (canCollapse) {
-                                Box(Modifier.maaClickable { expanded = !expanded }) { chevron() }
+                                Box(Modifier.maaClickable(indication = false) { expanded = !expanded }) {
+                                    chevron()
+                                }
                             }
                         }
                     },
@@ -126,7 +146,7 @@ fun MaaCard(
                     label = title,
                     labelStyle = MaterialTheme.typography.titleMedium,
                     modifier = if (canCollapse) {
-                        Modifier.maaClickable { expanded = !expanded }
+                        Modifier.maaClickable(indication = false) { expanded = !expanded }
                     } else {
                         Modifier
                     },
@@ -134,11 +154,7 @@ fun MaaCard(
                 )
             }
             if (canCollapse) {
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = expandVertically(),
-                    exit = shrinkVertically(),
-                ) {
+                AnimatedVisibility(visible = expanded, enter = CardExpand, exit = CardCollapse) {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                         content = content,
