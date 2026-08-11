@@ -111,6 +111,29 @@ fun MaaLabeledControlRow(
 }
 
 /**
+ * 最常见的那种设置行：标签 + 开关
+ *
+ * [MaaLabeledControlRow] 的尾部什么控件都能放，这个只固定成开关——省掉每处再写一遍
+ * `trailing = { MaaSwitch(...) }`。尾部不是开关（状态点、转圈、下拉）时仍用前者
+ */
+@Composable
+fun MaaSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    MaaLabeledControlRow(
+        label = label,
+        modifier = modifier,
+        trailing = {
+            MaaSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        },
+    )
+}
+
+/**
  * 点进二级页面的一行：标题 + 说明 + 右侧箭头
  *
  * 与 [MaaLabeledControlRow] 分开：那个的尾部是控件、点的是控件本身；这个整行可点，

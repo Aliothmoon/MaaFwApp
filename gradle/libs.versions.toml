@@ -34,6 +34,11 @@ xxPermissions = "28.0"
 jna = "5.18.1"
 okhttp = "5.1.0"
 
+# SMTP 推送渠道；angus 是 jakarta.mail 的参考实现，activation-api 是它的编译期依赖
+angusMail = "2.0.5"
+angusActivation = "2.0.3"
+jakartaActivationApi = "2.1.4"
+
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
@@ -76,6 +81,9 @@ markwon-image = { group = "io.noties.markwon", name = "image", version.ref = "ma
 markwon-linkify = { group = "io.noties.markwon", name = "linkify", version.ref = "markwon" }
 markwon-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+angus-mail = { group = "org.eclipse.angus", name = "jakarta.mail", version.ref = "angusMail" }
+angus-activation = { group = "org.eclipse.angus", name = "angus-activation", version.ref = "angusActivation" }
+jakarta-activation-api = { group = "jakarta.activation", name = "jakarta.activation-api", version.ref = "jakartaActivationApi" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }

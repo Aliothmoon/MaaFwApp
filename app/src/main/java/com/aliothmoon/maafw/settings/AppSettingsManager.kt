@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.domain.EventNotificationLevel
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
@@ -82,6 +83,14 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         .map { parseThemeStyle(it.themeStyle) }
         .stateIn(scope, SharingStarted.Eagerly, parseThemeStyle(initialSettings.themeStyle))
 
+    val eventNotificationLevel: StateFlow<EventNotificationLevel> = settings
+        .map { parseEventNotificationLevel(it.eventNotificationLevel) }
+        .stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            parseEventNotificationLevel(initialSettings.eventNotificationLevel),
+        )
+
     override val wakeUnlockEnabled: StateFlow<Boolean> = settings
         .map { it.wakeUnlockEnabled.toBoolean() }
         .stateIn(scope, SharingStarted.Eagerly, initialSettings.wakeUnlockEnabled.toBoolean())
@@ -130,6 +139,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[themeStyle] = style.name }
     }
 
+    suspend fun setEventNotificationLevel(level: EventNotificationLevel) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[eventNotificationLevel] = level.name }
+    }
+
     override suspend fun setWakeUnlockEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[wakeUnlockEnabled] = enabled.toString() }
     }
@@ -155,4 +168,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseThemeStyle(raw: String): ThemeStyle =
         runCatching { ThemeStyle.valueOf(raw) }.getOrDefault(ThemeStyle.DEFAULT)
+
+    private fun parseEventNotificationLevel(raw: String): EventNotificationLevel =
+        runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)
 }

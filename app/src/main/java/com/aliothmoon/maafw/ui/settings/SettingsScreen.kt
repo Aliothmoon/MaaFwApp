@@ -44,6 +44,7 @@ import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.MaaSwitchRow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
@@ -59,6 +60,7 @@ fun SettingsScreen(
     // 二级页面与 SAF 都需要 Activity 宿主，导航与弹窗归 AppRoot 那一层
     onOpenRunLogArchive: () -> Unit,
     onOpenAppLog: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     onExportLogs: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -96,6 +98,7 @@ fun SettingsScreen(
             BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
             ResolutionCard(state, onIntent)
             ScheduleUnlockCard(state, onIntent)
+            NotificationCard(onOpenNotificationSettings)
             LogCard(onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
             DebugCard(state, onIntent)
@@ -182,14 +185,10 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
 @Composable
 private fun ScheduleUnlockCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     MaaCard(title = stringResource(R.string.settings_schedule_unlock)) {
-        MaaLabeledControlRow(
+        MaaSwitchRow(
             label = stringResource(R.string.settings_wake_unlock),
-            trailing = {
-                MaaSwitch(
-                    checked = state.wakeUnlockEnabled,
-                    onCheckedChange = { onIntent(SessionIntent.SetWakeUnlockEnabled(it)) },
-                )
-            },
+            checked = state.wakeUnlockEnabled,
+            onCheckedChange = { onIntent(SessionIntent.SetWakeUnlockEnabled(it)) },
         )
         if (state.wakeUnlockEnabled) {
             // 只收数字：注入按键只打得出 0-9，图案与密码锁屏的面板模拟不出来
@@ -208,6 +207,18 @@ private fun ScheduleUnlockCard(state: SessionUiState, onIntent: (SessionIntent) 
                 },
             )
         }
+    }
+}
+
+/** 只是入口；档位与渠道都在二级页面里改，不参与运行锁定 */
+@Composable
+private fun NotificationCard(onOpen: () -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_section_notification)) {
+        MaaNavigationRow(
+            label = stringResource(R.string.notification_settings_title),
+            description = stringResource(R.string.settings_notification_desc),
+            onClick = onOpen,
+        )
     }
 }
 
@@ -282,16 +293,12 @@ private fun DebugCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) 
     var showEnableConfirm by remember { mutableStateOf(false) }
     // 单行：只留开关行；启用走确认弹窗，确认即落盘 + 重启 App（对齐 MaaMeow）
     MaaCard {
-        MaaLabeledControlRow(
+        MaaSwitchRow(
             label = stringResource(R.string.settings_debug_mode),
-            trailing = {
-                MaaSwitch(
-                    checked = state.debugMode,
-                    onCheckedChange = { enabled ->
-                        if (enabled) showEnableConfirm = true
-                        else onIntent(SessionIntent.SetDebugMode(false))
-                    },
-                )
+            checked = state.debugMode,
+            onCheckedChange = { enabled ->
+                if (enabled) showEnableConfirm = true
+                else onIntent(SessionIntent.SetDebugMode(false))
             },
         )
     }

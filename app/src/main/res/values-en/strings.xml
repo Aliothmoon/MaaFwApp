@@ -473,4 +473,121 @@
     <string name="pi_reinstall_desc">Clear the unpacked project resources and lay down a fresh copy from the APK</string>
     <string name="dialog_reinstall_pi_title">Unpack project resources again</string>
     <string name="dialog_reinstall_pi_message">The unpacked copy on this device will be deleted and unpacked again. Do not leave the app while it runs. Run configurations and logs are unaffected.</string>
+
+    <!-- Settings "Notifications" group entry -->
+    <string name="settings_section_notification">Notifications</string>
+    <string name="settings_notification_desc">Get told when a run ends, on this phone or elsewhere</string>
+
+    <!-- Notification settings screen -->
+    <string name="notification_settings_title">Notification settings</string>
+    <string name="notification_section_internal">On this device</string>
+    <string name="notification_enable">Notify when a run ends</string>
+    <string name="notification_popup">Show as a banner</string>
+    <string name="notification_send_test">Send a test notification</string>
+    <string name="notification_section_external">When to push</string>
+    <string name="notification_send_on_complete">All tasks completed</string>
+    <string name="notification_send_on_error">A task failed</string>
+    <string name="notification_send_on_service_died">Background service stopped</string>
+    <string name="notification_include_log_details">Attach the run log to the message</string>
+    <string name="notification_section_test">Test push</string>
+    <string name="notification_test_title">Test notification</string>
+    <string name="notification_test_message">This is a test notification from MaaFwApp</string>
+
+    <!-- Push channel names -->
+    <string name="notification_provider_server_chan">ServerChan</string>
+    <string name="notification_provider_telegram">Telegram</string>
+    <string name="notification_provider_discord">Discord</string>
+    <string name="notification_provider_ding_talk">DingTalk bot</string>
+    <string name="notification_provider_kook">KOOK bot</string>
+    <string name="notification_provider_discord_webhook">Discord Webhook</string>
+    <string name="notification_provider_smtp">Email (SMTP)</string>
+    <string name="notification_provider_bark">Bark</string>
+    <string name="notification_provider_qmsg">Qmsg</string>
+    <string name="notification_provider_gotify">Gotify</string>
+    <string name="notification_provider_custom_webhook">Custom webhook</string>
+
+    <!-- Channel fields -->
+    <string name="notification_label_send_key">Send Key</string>
+    <string name="notification_label_server_url">Server URL</string>
+    <string name="notification_label_bark_send_key">Bark Send Key</string>
+    <string name="notification_label_bot_token">Bot Token</string>
+    <string name="notification_label_chat_id">Chat ID</string>
+    <string name="notification_label_topic_id">Topic ID</string>
+    <string name="notification_label_user_id">User ID</string>
+    <string name="notification_label_access_token">Access Token</string>
+    <string name="notification_label_secret">Signing secret</string>
+    <string name="notification_label_kook_target_id">Channel ID / User ID</string>
+    <string name="notification_kook_direct_message">Send as a direct message</string>
+    <string name="notification_label_webhook_url">Webhook URL</string>
+    <string name="notification_label_webhook_headers">Request headers</string>
+    <string name="notification_label_request_body_template">Request body template</string>
+    <string name="notification_label_smtp_server">SMTP server</string>
+    <string name="notification_label_smtp_port">Port</string>
+    <string name="notification_use_ssl">Use SSL</string>
+    <string name="notification_requires_auth">Requires sign-in</string>
+    <string name="notification_label_smtp_user">Username</string>
+    <string name="notification_label_smtp_password">Password</string>
+    <string name="notification_label_from">From</string>
+    <string name="notification_label_to">To</string>
+    <string name="notification_label_qmsg_server">Qmsg server</string>
+    <string name="notification_label_qmsg_key">Qmsg Key</string>
+    <string name="notification_label_user_qq">Recipient QQ</string>
+    <string name="notification_label_bot_qq">Bot QQ</string>
+    <string name="notification_label_application_token">Application Token</string>
+    <string name="notification_placeholder_optional">Optional</string>
+    <string name="notification_placeholder_optional_signing_secret">Optional, for bots set to signed mode</string>
+    <string name="notification_placeholder_optional_required_when_auth">Required once sign-in is on</string>
+    <string name="notification_placeholder_kook_target_id">User ID for direct messages, channel ID for channels</string>
+    <string name="notification_supported_placeholders">Placeholders: {title} {content} {time}</string>
+
+    <!-- Per-channel feedback for a test push -->
+    <string name="notification_feedback_no_channel">Turn on at least one push channel first</string>
+    <string name="notification_feedback_send_success">%1$s sent</string>
+    <string name="notification_feedback_send_failed">%1$s failed</string>
+
+    <!-- Run event notifications; channel names show up in the system notification settings -->
+    <string name="notification_event_channel_silent_name">Run result (silent)</string>
+    <string name="notification_event_channel_silent_desc">Leaves an entry in the shade when a run ends, without a sound</string>
+    <string name="notification_event_channel_popup_name">Run result (banner)</string>
+    <string name="notification_event_channel_popup_desc">Shows a banner with a sound when a run ends</string>
+    <string name="notification_event_run_completed">All tasks completed</string>
+    <plurals name="notification_event_run_completed_body">
+        <item quantity="one">%1$d task in total</item>
+        <item quantity="other">%1$d tasks in total</item>
+    </plurals>
+    <string name="notification_event_run_partial">Run ended with failures</string>
+    <string name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
+    <string name="notification_event_run_failed">Run failed</string>
+    <string name="notification_event_service_died">Background service stopped</string>
+    <string name="notification_event_service_died_body">The background service ended unexpectedly and this run was aborted</string>
+
+    <!-- Push failure reasons, produced by each channel and shown in the test feedback -->
+    <string name="notification_err_network">Network request failed</string>
+    <string name="notification_err_http_status">Server returned status %1$d</string>
+    <string name="notification_err_serverchan_key_empty">ServerChan Send Key is empty</string>
+    <string name="notification_err_serverchan_sctp_fmt">ServerChan sctp Send Key has the wrong format</string>
+    <string name="notification_err_telegram_token_empty">Telegram Bot Token is empty</string>
+    <string name="notification_err_telegram_chat_empty">Telegram Chat ID is empty</string>
+    <string name="notification_err_discord_token_empty">Discord Bot Token is empty</string>
+    <string name="notification_err_discord_user_empty">Discord User ID is empty</string>
+    <string name="notification_err_discord_dm_failed">Could not open a Discord direct message channel</string>
+    <string name="notification_err_discord_webhook_empty">Discord Webhook URL is empty</string>
+    <string name="notification_err_dingtalk_token_empty">DingTalk Access Token is empty</string>
+    <string name="notification_err_kook_token_empty">KOOK Bot Token is empty</string>
+    <string name="notification_err_kook_target_empty">KOOK channel ID or user ID is empty</string>
+    <string name="notification_err_kook_api">KOOK API error %1$d: %2$s</string>
+    <string name="notification_err_smtp_server_empty">SMTP server is empty</string>
+    <string name="notification_err_smtp_port_invalid">SMTP port is not a number</string>
+    <string name="notification_err_smtp_from_empty">Sender address is empty</string>
+    <string name="notification_err_smtp_to_empty">Recipient address is empty</string>
+    <string name="notification_err_smtp_auth_empty">Sign-in is on but the username or password is empty</string>
+    <string name="notification_err_bark_server_empty">Bark server URL is empty</string>
+    <string name="notification_err_bark_key_empty">Bark Send Key is empty</string>
+    <string name="notification_err_qmsg_server_empty">Qmsg server URL is empty</string>
+    <string name="notification_err_qmsg_key_empty">Qmsg Key is empty</string>
+    <string name="notification_err_gotify_server_empty">Gotify server URL is empty</string>
+    <string name="notification_err_gotify_token_empty">Gotify application token is empty</string>
+    <string name="notification_err_gotify_scheme">Gotify server URL must start with http:// or https://</string>
+    <string name="notification_err_webhook_url_empty">Webhook URL is empty</string>
+    <string name="notification_err_webhook_body_empty">Webhook body template is empty</string>
 </resources>

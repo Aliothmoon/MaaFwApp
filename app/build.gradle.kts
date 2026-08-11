@@ -402,6 +402,10 @@ dependencies {
     implementation(libs.markwon.linkify)
     implementation(libs.markwon.strikethrough)
     implementation(libs.okhttp)
+    // SMTP 推送渠道；Android 平台没有自带的 mail 实现，三个一起才跑得起 Transport.send
+    implementation(libs.angus.mail)
+    implementation(libs.angus.activation)
+    implementation(libs.jakarta.activation.api)
     // 前台模式控制层：拖拽/吸边/多屏/返回键拦截都在库里，自己写这几样是纯坑区
     implementation(libs.floatingx)
 

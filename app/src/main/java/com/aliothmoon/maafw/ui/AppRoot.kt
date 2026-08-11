@@ -97,6 +97,7 @@ import com.aliothmoon.maafw.ui.home.HomeScreen
 import com.aliothmoon.maafw.ui.navigation.Routes
 import com.aliothmoon.maafw.ui.logs.AppLogDetailScreen
 import com.aliothmoon.maafw.ui.logs.AppLogScreen
+import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.logs.LogExportController
 import com.aliothmoon.maafw.ui.logs.RunLogArchiveScreen
 import com.aliothmoon.maafw.ui.logs.RunLogDetailScreen
@@ -359,6 +360,7 @@ fun AppRoot(
                         onSettingsIntent = settingsViewModel::onIntent,
                         onOpenRunLogArchive = { navController.navigate(Routes.RUN_LOG_ARCHIVE) },
                         onOpenAppLog = { navController.navigate(Routes.APP_LOG) },
+                        onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
                         onExportLogs = { exportSheetVisible = true },
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -408,6 +410,9 @@ fun AppRoot(
                         onBack = { navController.popBackStack() },
                         onOpen = { navController.navigate(Routes.appLogDetail(it)) },
                     )
+                }
+                composable(Routes.NOTIFICATION_SETTINGS) {
+                    NotificationSettingsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = Routes.APP_LOG_DETAIL,
