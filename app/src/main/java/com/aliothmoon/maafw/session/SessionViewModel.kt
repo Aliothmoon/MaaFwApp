@@ -513,6 +513,12 @@ class SessionViewModel(
             RunLaunchResult.NoExecutableTasks ->
                 effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_no_executable_tasks)))
 
+            // 首页只跑当前激活的配置，不点名，所以这条到不了这里；定时才会撞上
+            RunLaunchResult.ConfigurationMissing ->
+                effectChannel.send(
+                    SessionEffect.ShowMessage(uiTextOf(R.string.schedule_reason_configuration_missing)),
+                )
+
             is RunLaunchResult.Invalid ->
                 effectChannel.send(SessionEffect.ShowDiagnostics(result.diagnostics))
 

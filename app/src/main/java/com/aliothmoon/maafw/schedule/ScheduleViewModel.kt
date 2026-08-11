@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.schedule
 
 import androidx.lifecycle.ViewModel
+import com.aliothmoon.maafw.config.UserConfigurationStore
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -8,6 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -15,23 +18,34 @@ import kotlinx.coroutines.launch
 /**
  * 定时规则的 Activity 作用域会话
  *
- * 与 [com.aliothmoon.maafw.session.SessionViewModel] 分开：定时不依赖 PI、不依赖运行配置，
- * 也不参与运行锁定——混进去只会让那颗聚合态多一堆无关重组
+ * 与 [com.aliothmoon.maafw.session.SessionViewModel] 分开：定时不依赖 PI，也不参与运行锁定——
+ * 混进去只会让那颗聚合态多一堆无关重组
+ *
+ * 读 [UserConfigurationStore] 只为列出「跑哪份配置」的候选（id + 名字），
+ * 不解析 PI、不做 resolve
  */
 class ScheduleViewModel(
     private val store: ScheduleStrategyStore,
     private val alarms: ScheduleAlarmManager,
     private val triggerLog: ScheduleTriggerLog,
+    configurationStore: UserConfigurationStore,
 ) : ViewModel() {
 
     private val exactAlarmAllowed = MutableStateFlow(alarms.canScheduleExact())
     private val loadedLog = MutableStateFlow<List<TriggerLogEntry>>(emptyList())
 
+    private val configurations: Flow<List<ScheduleConfigurationOption>> = configurationStore.data
+        .map { config ->
+            config.configurations.map { ScheduleConfigurationOption(it.id.value, it.name) }
+        }
+        .distinctUntilChanged()
+
     val uiState: StateFlow<ScheduleUiState> = combine(
         store.strategies,
         exactAlarmAllowed,
         loadedLog,
-    ) { strategies, exact, log ->
+        configurations,
+    ) { strategies, exact, log, configs ->
         ScheduleUiState(
             rows = strategies.map { strategy ->
                 ScheduleRow(
@@ -43,6 +57,7 @@ class ScheduleViewModel(
                     },
                 )
             },
+            configurations = configs,
             exactAlarmAllowed = exact,
             triggerLog = log,
         )

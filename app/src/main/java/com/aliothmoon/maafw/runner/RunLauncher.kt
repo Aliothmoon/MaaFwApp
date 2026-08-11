@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.Diagnostic
+import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
@@ -38,6 +39,9 @@ sealed interface RunLaunchResult {
     /** 项目还在加载或加载失败，没有可编译的 Definition */
     data object ProjectNotReady : RunLaunchResult
     data object NoExecutableTasks : RunLaunchResult
+
+    /** 点名要跑的那份运行配置已经被删了 */
+    data object ConfigurationMissing : RunLaunchResult
     data class Invalid(val diagnostics: List<Diagnostic>) : RunLaunchResult
 
     /** RunnerPort 拒绝；原文来自 Runner，不翻译 */
@@ -78,9 +82,11 @@ class RunLauncher(
     /** 只护投递这一段，不护整轮；运行中的第二次 Start 由 RunnerPort 拒 */
     private val gate = Mutex()
 
+    /** [configurationId] 为 null 跑当前激活的那份；定时规则可以指定别的 */
     suspend fun launch(
         trigger: RunTrigger,
         acknowledged: Set<ConfirmToken> = emptySet(),
+        configurationId: RunConfigurationId? = null,
     ): RunLaunchResult {
         if (!gate.tryLock()) {
             return RunLaunchResult.Blocked(uiTextOf(R.string.msg_launch_in_progress))
@@ -91,7 +97,12 @@ class RunLauncher(
             if (project !is ProjectState.Ready) return RunLaunchResult.ProjectNotReady
 
             val config = configurationStore.data.first()
-            val plan = when (val built = RunPlanBuilder.build(project.definition, config)) {
+            // 指定了但已被删：与「配置存在但没有可执行任务」分开报，
+            // 否则用户看到「没有可用的任务」会去翻一个根本不存在的配置
+            if (configurationId != null && config.configuration(configurationId) == null) {
+                return RunLaunchResult.ConfigurationMissing
+            }
+            val plan = when (val built = RunPlanBuilder.build(project.definition, config, configurationId)) {
                 RunPlanResult.NoExecutableTasks -> return RunLaunchResult.NoExecutableTasks
                 is RunPlanResult.Invalid -> return RunLaunchResult.Invalid(built.diagnostics)
                 is RunPlanResult.Success -> built.plan

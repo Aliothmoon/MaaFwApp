@@ -246,6 +246,7 @@ val appModule = module {
             store = get(),
             alarms = get(),
             triggerLog = get(),
+            configurationStore = get(),
         )
     }
 

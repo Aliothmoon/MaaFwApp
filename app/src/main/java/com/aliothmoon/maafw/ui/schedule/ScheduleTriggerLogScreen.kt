@@ -137,7 +137,7 @@ private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit) {
                 MaaToneBadge(
                     text = entry.result.asUiText().asString(),
                     tone = when (entry.result) {
-                        TriggerResult.TRIGGERED -> MaaTheme.palette.success
+                        TriggerResult.STARTED, TriggerResult.TRIGGERED -> MaaTheme.palette.success
                         else -> MaaTheme.palette.warning
                     },
                 )
@@ -154,6 +154,14 @@ private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // 「昨晚为什么没跑」是查这份日志的头号问题，别只留一个「未能开始」
+            entry.failureReason?.let { reason ->
+                Text(
+                    text = reason.asUiText().asString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }

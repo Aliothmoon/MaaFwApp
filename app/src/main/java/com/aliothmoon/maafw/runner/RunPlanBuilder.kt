@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.validateInputCandidate
 import kotlinx.serialization.json.JsonArray
@@ -31,7 +32,12 @@ object RunPlanBuilder {
     // 闭括号必须转义：Android ICU 对孤立 } 抛 PatternSyntaxException（JVM 单测则宽容）
     private val PLACEHOLDER = Regex("""\{([^{}]+)\}""")
 
-    fun build(definition: ProjectDefinition, config: UserConfiguration): RunPlanResult {
+    /** [configurationId] 为 null 时跑当前激活的那份；定时规则可以指定别的 */
+    fun build(
+        definition: ProjectDefinition,
+        config: UserConfiguration,
+        configurationId: RunConfigurationId? = null,
+    ): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
         val resource = definition.resources.firstOrNull { it.name == config.activeResourceName }
@@ -41,7 +47,7 @@ object RunPlanBuilder {
             return RunPlanResult.Invalid(diagnostics)
         }
 
-        val runConfiguration = config.configuration(config.activeConfigurationId)
+        val runConfiguration = config.configuration(configurationId ?: config.activeConfigurationId)
             ?: return RunPlanResult.NoExecutableTasks
         if (runConfiguration.tasks.isEmpty()) return RunPlanResult.NoExecutableTasks
 

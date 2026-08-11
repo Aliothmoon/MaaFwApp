@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.i18n.uiTextJoin
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.schedule.ScheduleStrategy
 import com.aliothmoon.maafw.schedule.ScheduleType
+import com.aliothmoon.maafw.schedule.TriggerFailureReason
 import com.aliothmoon.maafw.schedule.TriggerResult
 import java.time.DayOfWeek
 import java.time.Instant
@@ -65,8 +66,20 @@ fun intervalUiText(days: Int, hours: Int): UiText = when {
 
 fun TriggerResult.asUiText(): UiText = when (this) {
     TriggerResult.TRIGGERED -> uiTextOf(R.string.schedule_result_triggered)
+    TriggerResult.STARTED -> uiTextOf(R.string.schedule_result_started)
+    TriggerResult.FAILED_START -> uiTextOf(R.string.schedule_result_failed_start)
     TriggerResult.FAILED_VALIDATION -> uiTextOf(R.string.schedule_result_failed_validation)
     TriggerResult.FAILED_SERVICE_START -> uiTextOf(R.string.schedule_result_failed_service)
+}
+
+/** 没发起成功时补一句为什么；[TriggerFailureReason] 是稳定枚举，文案在这里现场解析 */
+fun TriggerFailureReason.asUiText(): UiText = when (this) {
+    TriggerFailureReason.PROJECT_NOT_READY -> uiTextOf(R.string.msg_project_not_loaded)
+    TriggerFailureReason.CONFIGURATION_MISSING -> uiTextOf(R.string.schedule_reason_configuration_missing)
+    TriggerFailureReason.NO_EXECUTABLE_TASKS -> uiTextOf(R.string.msg_no_executable_tasks)
+    TriggerFailureReason.INVALID_PLAN -> uiTextOf(R.string.schedule_reason_invalid_plan)
+    TriggerFailureReason.BLOCKED -> uiTextOf(R.string.schedule_reason_blocked)
+    TriggerFailureReason.REJECTED -> uiTextOf(R.string.schedule_reason_rejected)
 }
 
 /**

@@ -7,8 +7,16 @@ data class ScheduleRow(
     val nextTriggerAt: Long?,
 )
 
+/** 编辑页「跑哪份配置」的候选；只要 id 与名字，不碰 PI */
+data class ScheduleConfigurationOption(
+    val id: String,
+    val name: String,
+)
+
 data class ScheduleUiState(
     val rows: List<ScheduleRow> = emptyList(),
+    /** 可绑定的运行配置；空 = 用户还没建过 */
+    val configurations: List<ScheduleConfigurationOption> = emptyList(),
     /** 系统是否允许精确闹钟；否则退到 setAlarmClock，状态栏会多个闹钟图标 */
     val exactAlarmAllowed: Boolean = true,
     val triggerLog: List<TriggerLogEntry> = emptyList(),

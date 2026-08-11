@@ -215,6 +215,15 @@
     <string name="schedule_log_clear">清空</string>
     <string name="schedule_log_delay">延迟 %1$s</string>
     <string name="schedule_result_triggered">已触发</string>
+    <string name="schedule_result_started">已开始执行</string>
+    <string name="schedule_result_failed_start">未能开始</string>
+    <string name="schedule_reason_configuration_missing">绑定的运行配置已被删除</string>
+    <string name="schedule_reason_invalid_plan">配置有错，无法编译本次执行</string>
+    <string name="schedule_reason_blocked">启动前检查未通过</string>
+    <string name="schedule_reason_rejected">已有执行在进行中</string>
+    <string name="schedule_edit_configuration">运行配置</string>
+    <string name="schedule_edit_configuration_active">跟随当前选中</string>
+    <string name="schedule_edit_configuration_none">还没有运行配置，先去任务页建一个</string>
     <string name="schedule_result_failed_validation">规则缺失</string>
     <string name="schedule_result_failed_service">服务未起</string>
 

@@ -11,10 +11,13 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.MainActivity
+import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
+import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.runner.RunTrigger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,12 +30,13 @@ import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 闹钟落地后的执行壳
+ * 闹钟落地后的执行壳：叫醒 app、发起一轮执行、记一条触发日志、接上下一次闹钟
  *
- * **当前不触发任何 MaaFramework 执行**：只把 app 叫醒、记一条触发日志、接上下一次闹钟
- * 接执行时改的是 [handleTrigger] 里那一段，闹钟链与记账都不用动——发起用例已经落在
- * [com.aliothmoon.maafw.runner.RunLauncher]（进程级，与首页 Start 共用同一条），
- * 这里 inject 它即可，不必复制 SessionViewModel 的那段
+ * 发起走 [RunLauncher]，与首页 Start 是同一条：检查、环境挂载、屏障、收尾都在那边，
+ * 这里只负责把结局翻成记账（[toScheduleOutcome]）
+ *
+ * **不等这一轮跑完**：`launch` 受理即返回，收尾由 RunLauncher 自己的协程守着。
+ * 本服务随即摘掉 FGS，执行期的保活换成 `RunForegroundService`（由 `KeepAliveHook` 拉起）
  *
  * 必须是前台服务：广播里 5 秒就被回收，而 12+ 的后台启动限制只对 exact 闹钟发出的
  * 广播开口子（见 [ScheduleAlarmManager.scheduleNext]）
@@ -42,6 +46,7 @@ class ScheduleExecutionService : Service() {
     private val store: ScheduleStrategyStore by inject()
     private val alarms: ScheduleAlarmManager by inject()
     private val triggerLog: ScheduleTriggerLog by inject()
+    private val runLauncher: RunLauncher by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -102,18 +107,28 @@ class ScheduleExecutionService : Service() {
             return
         }
 
-        // 执行未接入：这里将来 inject [com.aliothmoon.maafw.runner.RunLauncher] 并按策略绑定的
-        // 运行配置发起一轮，其余不动。缺的只剩 ScheduleStrategy 上的 runConfigurationId 字段与盘上数据迁移
+        val launchResult = runLauncher.launch(
+            trigger = RunTrigger.Schedule(strategy.id),
+            configurationId = strategy.runConfigurationId?.let(::RunConfigurationId),
+        )
+        val outcome = launchResult.toScheduleOutcome()
+        if (outcome.result != TriggerResult.STARTED) {
+            // 拦截原因是 UiText，落不进日志；细节只能进 Timber
+            Timber.w("Schedule %s did not start: %s", strategy.id, launchResult)
+        }
+
         triggerLog.append(
             TriggerLogEntry(
                 strategyId = strategy.id,
                 strategyName = strategy.name,
                 scheduledAt = scheduledTimeMs,
                 actualAt = now,
-                result = TriggerResult.TRIGGERED,
+                result = outcome.result,
+                failureReason = outcome.failureReason,
             ),
         )
-        store.recordTrigger(strategy.id, TriggerResult.TRIGGERED, triggeredAt = now)
+        store.recordTrigger(strategy.id, outcome.result, triggeredAt = now)
+        // 无论跑没跑起来都要续闹钟：断链之后这条规则就永远不会再响了
         alarms.scheduleNext(strategy, scheduledTimeMs)
     }
 

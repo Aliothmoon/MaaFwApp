@@ -224,6 +224,15 @@
     <string name="schedule_log_clear">Clear</string>
     <string name="schedule_log_delay">%1$s late</string>
     <string name="schedule_result_triggered">Triggered</string>
+    <string name="schedule_result_started">Run started</string>
+    <string name="schedule_result_failed_start">Did not start</string>
+    <string name="schedule_reason_configuration_missing">The bound run configuration was deleted</string>
+    <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be compiled</string>
+    <string name="schedule_reason_blocked">A start check did not pass</string>
+    <string name="schedule_reason_rejected">A run is already in progress</string>
+    <string name="schedule_edit_configuration">Run configuration</string>
+    <string name="schedule_edit_configuration_active">Follow current selection</string>
+    <string name="schedule_edit_configuration_none">No run configurations yet; create one on the Tasks page</string>
     <string name="schedule_result_failed_validation">Rule missing</string>
     <string name="schedule_result_failed_service">Service failed</string>
 

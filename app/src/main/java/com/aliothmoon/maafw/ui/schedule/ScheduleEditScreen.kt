@@ -186,6 +186,27 @@ fun ScheduleEditScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            ScheduleSection(stringResource(R.string.schedule_edit_configuration)) {
+                if (state.configurations.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.schedule_edit_configuration_none),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    // null 是一档真选项而不是缺省兜底：绑死某一份和「跟着我当下用的那份」
+                    // 是两种不同的意图，老规则读出来是 null，落在后者上正合适
+                    MaaSingleChoiceFlow(
+                        options = listOf(
+                            null to stringResource(R.string.schedule_edit_configuration_active),
+                        ) + state.configurations.map { it.id to it.name },
+                        selected = draft.runConfigurationId
+                            ?.takeIf { id -> state.configurations.any { it.id == id } },
+                        onSelect = { draft = draft.copy(runConfigurationId = it) },
+                    )
+                }
+            }
+
             ScheduleSection(stringResource(R.string.schedule_edit_type)) {
                 MaaSingleChoiceFlow(
                     options = listOf(

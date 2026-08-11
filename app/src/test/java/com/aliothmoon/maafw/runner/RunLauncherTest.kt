@@ -397,6 +397,49 @@ class RunLauncherTest {
         assertEquals(listOf("engage:outer", "release:outer"), log)
     }
 
+    // ── 指定运行配置（定时规则用） ────────────────────────────────────
+
+    /** 定时规则可以绑一份不是当前激活的配置 */
+    @Test
+    fun `an explicit configuration id runs that one instead of the active one`() = runTest(testDispatcher) {
+        val other = RunConfigurationId("c2")
+        val store = InMemoryUserConfigurationStore(
+            UserConfiguration(
+                initialized = true,
+                activeResourceName = "官服",
+                configurations = listOf(
+                    RunConfiguration(RunConfigurationId("c1"), "日常", emptyList()),
+                    RunConfiguration(other, "周常", listOf(ConfiguredTask("启动游戏", instanceId = "t1"))),
+                ),
+                activeConfigurationId = RunConfigurationId("c1"),
+            ),
+        )
+        // slowStub：跑得慢一点，activeExecution 才还在，能直接读到编译进 plan 的那份 id
+        val runner = slowStub(backgroundScope)
+        val launcher = launcher(scope = backgroundScope, runner = runner, configurationStore = store)
+
+        // 激活的那份没有任务，点名的那份有——结果能区分开是哪一份被编译了
+        assertEquals(RunLaunchResult.NoExecutableTasks, launcher.launch(RunTrigger.Manual))
+        assertEquals(
+            RunLaunchResult.Started,
+            launcher.launch(RunTrigger.Schedule("s1"), configurationId = other),
+        )
+        assertEquals(other, runner.state.value.activeExecution?.runConfigurationId)
+    }
+
+    /** 绑定的配置被删了要单独报，不能混进「没有可用的任务」 */
+    @Test
+    fun `a deleted target configuration is reported on its own`() = runTest(testDispatcher) {
+        val launcher = launcher(scope = backgroundScope, runner = fastStub(backgroundScope))
+
+        val result = launcher.launch(
+            RunTrigger.Schedule("s1"),
+            configurationId = RunConfigurationId("gone"),
+        )
+
+        assertEquals(RunLaunchResult.ConfigurationMissing, result)
+    }
+
     // ── 屏障 ─────────────────────────────────────────────────────────
 
     /** Fw 的 stop 是耗时操作：跑着的时候把屏保掀掉，用户会看到任务还在跑但屏幕亮了 */

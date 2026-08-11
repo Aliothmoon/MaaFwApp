@@ -26,6 +26,8 @@ data class TriggerLogEntry(
     /** 实际被叫醒的时刻；与上一项的差值就是 Doze 与厂商省电策略的延迟 */
     val actualAt: Long,
     val result: TriggerResult,
+    /** 仅 [TriggerResult.FAILED_START] 有值；老记录为 null */
+    val failureReason: TriggerFailureReason? = null,
 ) {
     /** 派生稳定标识（不入盘）：定位/删除用，避免给序列化类加随机 id 导致旧记录每次解码变值 */
     val stableId: String get() = "$strategyId|$scheduledAt|$actualAt|$result"
