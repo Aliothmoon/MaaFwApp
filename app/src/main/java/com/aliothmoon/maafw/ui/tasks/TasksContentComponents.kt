@@ -229,15 +229,12 @@ internal fun ConfigurationSelectorRow(
                 icon = MaaIcons.Add,
                 label = stringResource(R.string.tasks_add_task),
             )
-            // 只给图标：三件东西挤一行，再带上文字配置卡就只剩个名字了
+            // 不给图标：两个字比任何图标都说得清，且「日志 / 关闭」等宽，切换时按钮不跳
             RowActionButton(
                 onClick = onToggleLog,
                 enabled = true,
-                icon = if (logOpen) MaaIcons.Close else MaaIcons.History,
-                label = null,
-                contentDescription = stringResource(
-                    if (logOpen) R.string.tasks_log_close else R.string.tasks_log_open,
-                ),
+                icon = null,
+                label = stringResource(if (logOpen) R.string.common_close else R.string.tasks_log),
                 active = logOpen,
             )
         }
@@ -250,17 +247,16 @@ private val ConfigRowHeight = 44.dp
 /**
  * 配置行右侧的动作钮：primary 字色 + 中性描边（有框，不要 primary 色框）
  *
- * [active] 为 true 时描边也转 primary，用来表达「日志正开着」这种开关态；
- * [label] 为 null 即只给图标
+ * [active] 为 true 时描边也转 primary，用来表达「日志正开着」这种开关态
+ * [icon] 为 null 即纯文字；有文字时不另给 contentDescription，读屏念的就是按钮上的字
  */
 @Composable
 private fun RowActionButton(
     onClick: () -> Unit,
     enabled: Boolean,
-    icon: ImageVector,
-    label: String?,
+    icon: ImageVector?,
+    label: String,
     modifier: Modifier = Modifier,
-    contentDescription: String? = null,
     active: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -268,9 +264,7 @@ private fun RowActionButton(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(MaaTheme.style.radii.card),
-        contentPadding = PaddingValues(
-            horizontal = if (label == null) MaaDesignTokens.Spacing.sm else MaaDesignTokens.Spacing.md,
-        ),
+        contentPadding = PaddingValues(horizontal = MaaDesignTokens.Spacing.md),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = scheme.primary,
             disabledContentColor = scheme.onSurface.copy(alpha = MaaDesignTokens.Alpha.disabledContent),
@@ -281,15 +275,15 @@ private fun RowActionButton(
         ),
         modifier = modifier.fillMaxHeight(),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
-        )
-        if (label != null) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+            )
             Box(Modifier.size(MaaDesignTokens.Spacing.xs))
-            Text(text = label, maxLines = 1)
         }
+        Text(text = label, maxLines = 1)
     }
 }
 
