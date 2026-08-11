@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: popover.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M9.0,9.0h13.0v13.0h-13.0z"/>
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M2.0,7.0h12.0v12.0h-12.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M8.0,2.0h11.0v11.0h-11.0z"/>
+</vector>

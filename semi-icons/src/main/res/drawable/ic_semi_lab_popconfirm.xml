@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: popconfirm.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M5.0,8.0h17.0v14.0h-17.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M8.46515 2.29217C8.23247 1.90171 7.66701 1.90171 7.43432 2.29217L5.82062 5H4C2.89543 5 2 5.89543 2 7V17C2 18.1046 2.89543 19 4 19H17C18.1046 19 19 18.1046 19 17V7C19 5.89543 18.1046 5 17 5H10.0789L8.46515 2.29217Z"/>
+    <path
+        android:fillColor="#FF4CC3FA"
+        android:pathData="M7.0,13.0h4.0v3.0h-4.0z"/>
+    <path
+        android:fillColor="#FF324350"
+        android:pathData="M13.0,13.0h4.0v3.0h-4.0z"/>
+</vector>

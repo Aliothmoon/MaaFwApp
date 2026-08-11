@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: carousel.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M10.5,7.5h11.0v11.0h-11.0z"/>
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M2.5,7.5h12.0v11.0h-12.0z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M5.0,5.5h14.0v13.0h-14.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M12.1824 10.7059C12.768 9.76471 14.232 9.76471 14.8176 10.7059L16.7939 13.8824C17.3795 14.8235 16.6475 16 15.4763 16H11.5237C10.3525 16 9.62051 14.8235 10.2061 13.8824L12.1824 10.7059Z"/>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7.0,9.5a1.5,1.5 0 1,0 3.0,0a1.5,1.5 0 1,0 -3.0,0"/>
+</vector>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: grid.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path android:fillType="evenOdd"
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M22 2H2V22H22V2ZM20 4H4V20H20V4Z"/>
+    <path android:fillType="evenOdd"
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M22 9H20V15H22V9ZM2 15H4V9H2V15Z"/>
+    <path android:fillType="evenOdd"
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M15 22V20H9V22H15ZM9 2V4H15V2H9Z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M7.0,7.0h3.0v3.0h-3.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M7.0,10.0h3.0v4.0h-3.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M14.0,10.0h3.0v4.0h-3.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M10.0,7.0h4.0v3.0h-4.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M10.0,14.0h4.0v3.0h-4.0z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M14.0,7.0h3.0v3.0h-3.0z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M7.0,14.0h3.0v3.0h-3.0z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M14.0,14.0h3.0v3.0h-3.0z"/>
+</vector>

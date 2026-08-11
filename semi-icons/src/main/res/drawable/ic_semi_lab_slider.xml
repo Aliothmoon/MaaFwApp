@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: slider.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M5.0,4.0h17.0v2.0h-17.0z"/>
+    <path
+        android:fillColor="#FF4CC3FA"
+        android:pathData="M2.0,11.0h18.0v2.0h-18.0z"/>
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M5.0,18.0h17.0v2.0h-17.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M2.0,5.0a3.5,3.5 0 1,0 7.0,0a3.5,3.5 0 1,0 -7.0,0"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M15.0,12.0a3.5,3.5 0 1,0 7.0,0a3.5,3.5 0 1,0 -7.0,0"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M2.0,19.0a3.5,3.5 0 1,0 7.0,0a3.5,3.5 0 1,0 -7.0,0"/>
+</vector>

@@ -242,6 +242,8 @@ val LocalMaaPalette = staticCompositionLocalOf { LightMaaPalette }
 
 val LocalMaaStyleTokens = staticCompositionLocalOf { DefaultStyleTokens }
 
+val LocalThemeStyle = staticCompositionLocalOf { ThemeStyle.DEFAULT }
+
 /** 主题扩展读取入口；Screen 不直接碰 DataStore / ThemeStyle 分支 */
 object MaaTheme {
     val palette: MaaPalette
@@ -253,13 +255,18 @@ object MaaTheme {
         @Composable
         @ReadOnlyComposable
         get() = LocalMaaStyleTokens.current
+
+    val themeStyle: ThemeStyle
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalThemeStyle.current
 }
 
 private fun shapesOf(tokens: MaaStyleTokens): Shapes = Shapes(
     extraSmall = RoundedCornerShape(tokens.radii.inner),
     small = RoundedCornerShape(tokens.radii.button),
     medium = RoundedCornerShape(tokens.radii.card),
-    large = RoundedCornerShape(tokens.radii.card),
+    large = RoundedCornerShape(tokens.radii.large),
     extraLarge = RoundedCornerShape(tokens.radii.pill),
 )
 
@@ -303,6 +310,7 @@ fun MaaFwTheme(
         LocalIndication provides NoIndication,
         LocalMaaPalette provides palette,
         LocalMaaStyleTokens provides styleTokens,
+        LocalThemeStyle provides themeStyle,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

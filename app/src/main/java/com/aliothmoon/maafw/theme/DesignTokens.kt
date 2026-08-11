@@ -110,7 +110,10 @@ object MaaDesignTokens {
     }
 }
 
-/** 随 [ThemeStyle] 变化的圆角档；间距/触控节奏不进此结构 */
+/**
+ * 随 [ThemeStyle] 变化的圆角档；间距/触控节奏不进此结构
+ * Semi 档位对应官方 token：small→button/inner，medium→card，large→large，full→pill
+ */
 @Immutable
 data class MaaRadii(
     val card: Dp,
@@ -119,13 +122,16 @@ data class MaaRadii(
     val inner: Dp,
     /** 分段按钮相邻侧；比 [inner] 更收 */
     val segment: Dp,
+    /** 大容器（sheet / 大面板）；Semi 的 border-radius-large */
+    val large: Dp = card,
 )
 
 /**
  * 随 [ThemeStyle] 变化的表面度量
  *
  * - DEFAULT：略圆 + 卡片 1dp 轻投影
- * - SEMI_DESIGN：控件圆角略收（不照搬 Semi Web 的 3px）、卡片 elevation 0，靠描边分层
+ * - SEMI_DESIGN：圆角对齐 Semi Design token（small 3 / medium 6 / large 12 / full 胶囊），
+ *   卡片 elevation 0，靠描边分层
  * 拖拽抬升与内边距两风格共用，不做成第二套密度
  */
 @Immutable
@@ -143,21 +149,24 @@ val DefaultStyleTokens = MaaStyleTokens(
         pill = 20.dp,
         inner = 8.dp,
         segment = 4.dp,
+        large = 12.dp,
     ),
     cardElevation = 1.dp,
 )
 
 /**
- * Semi：button/inner 各收 2dp（硬朗一点，仍适配触控）；card/pill 与 DEFAULT 同档
- * elevation 0 = 平面优先，层级靠 outline + surface 底色（对齐 Semi 阴影策略）
+ * Semi Design 默认主题圆角（@douyinfe/semi-theme-default global.scss）
+ * small=3 控件/chip；medium=6 菜单与卡片面；large=12 大容器；full 胶囊
+ * elevation 0 = 平面优先，层级靠 outline + surface 底色
  */
 val SemiStyleTokens = MaaStyleTokens(
     radii = MaaRadii(
-        card = 12.dp,
-        button = 8.dp,
-        pill = 20.dp,
-        inner = 6.dp,
-        segment = 4.dp,
+        card = 6.dp,
+        button = 3.dp,
+        pill = 9999.dp,
+        inner = 3.dp,
+        segment = 2.dp,
+        large = 12.dp,
     ),
     cardElevation = 0.dp,
 )

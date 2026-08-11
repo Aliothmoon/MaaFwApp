@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: descriptions.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2.75,2.75h18.5v18.5h-18.5z"/>
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M5.0,6.0h4.0v2.0h-4.0z"/>
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M5.0,11.0h4.0v2.0h-4.0z"/>
+    <path
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M5.0,16.0h2.0v2.0h-2.0z"/>
+    <path
+        android:fillColor="#FF324350"
+        android:pathData="M11.0,11.0h4.0v2.0h-4.0z"/>
+    <path
+        android:fillColor="#FF324350"
+        android:pathData="M11.0,16.0h8.0v2.0h-8.0z"/>
+    <path
+        android:fillColor="#FF324350"
+        android:pathData="M11.0,6.0h8.0v2.0h-8.0z"/>
+</vector>

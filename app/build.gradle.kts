@@ -371,6 +371,9 @@ dependencies {
     implementation(project(":annotation-api"))
     ksp(project(":ksp-processor"))
 
+    // Semi Design 图标（vector + SemiIconRes）
+    implementation(project(":semi-icons"))
+
     // OEM 权限适配（MIUI 上系统权限页跳转差异大，自己拼 Intent 覆盖不全）
     implementation(libs.xx.permissions)
 
