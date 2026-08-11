@@ -401,8 +401,8 @@ class SessionViewModel(
             is SessionIntent.SetThemeMode ->
                 configurationStore.update { it.copy(themeMode = intent.mode) }
 
-            // 只有开启才重启：关闭这一档由组合根的观察者停掉 logcat 抓取，
-            // 而 setup() 每轮现读 debugMode，下一轮自然是 false，没必要把用户的页面掀掉
+            // 只有开启才重启：setup() 每轮现读 debugMode，关掉之后下一轮自然是 false，
+            // 没必要把用户的页面掀掉；已经起来的 logcat 抓取不去停它，多抓几行不影响什么
             is SessionIntent.SetDebugMode -> {
                 appSettings.setDebugMode(intent.enabled)
                 if (intent.enabled) effectChannel.send(SessionEffect.RestartApp)
