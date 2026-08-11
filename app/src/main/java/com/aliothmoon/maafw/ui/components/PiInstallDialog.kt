@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.ui.components
 
-import android.os.SystemClock
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,11 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -47,36 +44,10 @@ fun PiInstallDialog(
         if (state !is PiInstallState.Failed) dismissed = false
     }
 
-    // 解包快到看不清时进度框一闪而过，跟闪屏没区别；显示过就补满 MIN_VISIBLE_MS
-    // 只拖显示，不拖 PiInstallCoordinator——那边一拖，projectRepository.reload() 跟着晚
-    var lingering by remember { mutableStateOf<PiInstallState.Unpacking?>(null) }
-    var shownAt by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(state) {
-        when {
-            state is PiInstallState.Unpacking -> {
-                if (lingering == null) shownAt = SystemClock.uptimeMillis()
-                lingering = state
-            }
+    when (state) {
+        is PiInstallState.Unpacking -> UnpackingDialog(state)
 
-            lingering == null -> Unit
-
-            // 失败要立刻让位：进度停在半路还杵着，比直接报错更让人摸不着头脑
-            state is PiInstallState.Failed -> lingering = null
-
-            else -> {
-                lingering = lingering?.let { it.copy(done = it.total, currentPath = "") }
-                val remaining = MIN_VISIBLE_MS - (SystemClock.uptimeMillis() - shownAt)
-                if (remaining > 0) delay(remaining)
-                lingering = null
-            }
-        }
-    }
-
-    val progress = state as? PiInstallState.Unpacking ?: lingering
-    when {
-        progress != null -> UnpackingDialog(progress)
-
-        state is PiInstallState.Failed -> if (!dismissed) {
+        is PiInstallState.Failed -> if (!dismissed) {
             MaaPromptDialog(
                 title = stringResource(R.string.pi_install_failed_title),
                 message = stringResource(R.string.pi_install_failed_message, state.reason.asString()),
@@ -91,9 +62,6 @@ fun PiInstallDialog(
         else -> Unit
     }
 }
-
-/** 进度框的最短显示时长：低于这个数就只剩一下闪动，看不出发生了什么 */
-private const val MIN_VISIBLE_MS = 2_000L
 
 /** 解包期间不给任何出口：中途退出留下的是半份内容，下次启动照样得重解 */
 @Composable
