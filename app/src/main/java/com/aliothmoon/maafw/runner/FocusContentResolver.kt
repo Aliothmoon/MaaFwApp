@@ -69,7 +69,7 @@ class PrivilegedFocusContentResolver(
         val saved = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
             // 用 serviceOrNull 而不是 useService：一条日志不值得为它发起重连与授权请求
             runCatching { servicePort.serviceOrNull()?.saveCachedImage(target.absolutePath) }
-                .onFailure { Timber.w(it, "focus {image} 取缓存帧失败") }
+                .onFailure { Timber.w(it, "focus {image}: failed to fetch cached frame") }
                 .getOrNull()
         }
         if (saved != true) return ""
@@ -83,7 +83,7 @@ class PrivilegedFocusContentResolver(
         val file = File(root, normalizeProjectPath(content))
         if (file.isFile) file.readText() else content
     }.getOrElse {
-        Timber.w(it, "focus 正文按文件路径读取失败：%s", content)
+        Timber.w(it, "focus body read failed for file path: %s", content)
         content
     }
 

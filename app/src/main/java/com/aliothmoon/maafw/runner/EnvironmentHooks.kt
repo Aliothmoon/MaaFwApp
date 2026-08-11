@@ -23,7 +23,7 @@ private inline fun <R> PrivilegedServicePort.callOrDefault(
 ): R {
     val service = serviceOrNull() ?: return default
     return runCatching { action(service) }
-        .onFailure { Timber.w(it, "%s 失败", name) }
+        .onFailure { Timber.w(it, "%s failed", name) }
         .getOrDefault(default)
 }
 
@@ -112,7 +112,7 @@ class ScreenSaverHook(
 
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
         if (!screenSaver.show()) {
-            Timber.w("屏保没盖上，收尾也就不必撤")
+            Timber.w("screen saver not shown, nothing to undo")
             return null
         }
         return Release { screenSaver.hide() }
@@ -164,10 +164,10 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
         return Release { reason ->
             when {
                 reason !is RunEndReason.Ran ->
-                    Timber.i("没真跑起来，不熄屏")
+                    Timber.i("run did not complete, skipping sleep")
 
                 skipIfAwake && !tookOverIdleDevice ->
-                    Timber.i("本轮开始时手机就醒着，跑完不熄屏")
+                    Timber.i("device was awake at run start, skipping sleep")
 
                 else -> servicePort.callOrDefault("lockAndSleep", WakeUnlockResult.IPC_FAILED) {
                     it.lockAndSleep()

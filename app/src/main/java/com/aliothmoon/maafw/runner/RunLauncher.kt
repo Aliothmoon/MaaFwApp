@@ -116,7 +116,7 @@ class RunLauncher(
         val engaged = ArrayDeque<Release>()
         try {
             if (requestId != null && requestId in handled) {
-                Timber.i("重复的发起请求，跳过：%s", requestId.value)
+                Timber.i("duplicate run request, skipping: %s", requestId.value)
                 return RunLaunchResult.DuplicateRequest
             }
             val project = projectRepository.state.value
@@ -182,11 +182,11 @@ class RunLauncher(
      */
     private suspend fun preemptRunning() {
         if (!runnerPort.state.value.phase.isBusy) return
-        Timber.i("抢占：掐掉在跑的那一轮")
+        Timber.i("preempt: aborting the running round")
         runnerPort.stop()
         val previous = settling.getAndSet(null)
         if (previous != null && withTimeoutOrNull(PREEMPT_JOIN_TIMEOUT_MS) { previous.join() } == null) {
-            Timber.w("抢占：上一轮收尾没在 %dms 内结束，继续", PREEMPT_JOIN_TIMEOUT_MS)
+            Timber.w("preempt: previous round did not settle within %dms, proceeding", PREEMPT_JOIN_TIMEOUT_MS)
         }
     }
 
@@ -260,7 +260,7 @@ class RunLauncher(
     /** gating 的抛出去中止整轮，其余记一笔继续——静音没静上不该拦住整晚的任务 */
     private fun onEngageFailure(hook: RunEnvHook, cause: Throwable, reason: UiText): Release? {
         if (hook.gating) throw GatingHookFailure(reason, cause)
-        Timber.w(cause, "环境挂载物 %s engage 失败，跳过", hook.id)
+        Timber.w(cause, "env hook %s engage failed, skipping", hook.id)
         return null
     }
 
@@ -270,7 +270,7 @@ class RunLauncher(
         val settled = withTimeoutOrNull(SETTLE_TIMEOUT_MS) {
             runnerPort.state.first { !it.phase.isBusy }
         }
-        if (settled == null) Timber.w("等运行结束超时，强行收尾")
+        if (settled == null) Timber.w("timed out waiting for run to settle, forcing teardown")
         val result = (settled ?: runnerPort.state.value).latestResult
             ?: ExecutionResult.Failed("等待运行结束超时")
         finalize(ArrayDeque(pending), RunEndReason.Ran(result))
@@ -285,7 +285,7 @@ class RunLauncher(
                 try {
                     withTimeout(RELEASE_TIMEOUT_MS) { release(reason) }
                 } catch (t: Throwable) {
-                    Timber.w(t, "收尾失败，继续撤后面的")
+                    Timber.w(t, "release failed, continuing with the rest")
                 }
             }
         }

@@ -53,12 +53,12 @@ class AppLogWriter(private val logDir: File) {
         append(
             buildString {
                 append("\n").append("=".repeat(60)).append("\n")
-                append("启动时间 : ").append(ZonedDateTime.now().format(timestampFormat)).append("\n")
-                append("版本     : ").append(BuildConfig.VERSION_NAME)
+                append("Startup time : ").append(ZonedDateTime.now().format(timestampFormat)).append("\n")
+                append("Version     : ").append(BuildConfig.VERSION_NAME)
                 append(" (").append(BuildConfig.VERSION_CODE).append(") ")
                 append(BuildConfig.BUILD_TYPE).append("\n")
-                append("设备     : ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n")
-                append("系统     : Android ").append(Build.VERSION.RELEASE)
+                append("Device     : ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n")
+                append("OS     : Android ").append(Build.VERSION.RELEASE)
                 append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")
                 append("ABI      : ").append(Build.SUPPORTED_ABIS.joinToString()).append("\n")
                 append("=".repeat(60)).append("\n\n")

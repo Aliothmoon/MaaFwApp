@@ -225,7 +225,7 @@ object RemoteServiceManager : PrivilegedServicePort {
                 }
                 ServiceBootLogger.event(
                     "CONNECT_TIMEOUT",
-                    "still CONNECTING after ${CONNECT_TIMEOUT_MS}ms (backend=$backend attempt=$attempt) — 服务进程疑似启动失败/未回投 binder，见 service_boot_debug.log"
+                    "still CONNECTING after ${CONNECT_TIMEOUT_MS}ms (backend=$backend attempt=$attempt) — service process likely failed to start or did not return binder, see service_boot_debug.log"
                 )
                 runCatching {
                     connectors.getValue(backend).disconnect(currentBinder.get())
