@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
@@ -155,17 +156,28 @@ def default_cache() -> Path:
     return Path(env) if env else DEFAULT_CACHE
 
 
-def fetch(url: str, out: Path) -> Path:
-    if out.exists():
+def fetch(url: str, out: Path, retries: int = 3) -> Path:
+    if out.exists() and out.stat().st_size > 0:
         log(f"cached  {out.name}")
         return out
-    log(f"fetch   {url}")
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(out.name + ".part")
-    with urllib.request.urlopen(url) as response, part.open("wb") as sink:
-        shutil.copyfileobj(response, sink)
-    part.replace(out)
-    return out
+    last_err: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            log(f"fetch   {url}" + (f"  (retry {attempt}/{retries})" if attempt > 1 else ""))
+            with urllib.request.urlopen(url, timeout=60) as response, part.open("wb") as sink:
+                shutil.copyfileobj(response, sink)
+            if part.stat().st_size == 0:
+                raise OSError("空响应")
+            part.replace(out)
+            return out
+        except Exception as e:
+            last_err = e
+            part.unlink(missing_ok=True)
+            if attempt < retries:
+                time.sleep(2 ** (attempt - 1))
+    raise SystemExit(f"下载失败（{retries} 次重试）: {url}\n  {last_err}")
 
 
 def rmtree(path: Path) -> None:
@@ -235,9 +247,18 @@ def install_requirements(paths: Paths, wheel_abi: str, extra: list[str]) -> None
     rmtree(site / "bin")
 
 
-def resolve_pypi_wheel(name: str, version: str, platform: str) -> str:
-    with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{version}/json") as response:
-        data = json.load(response)
+def resolve_pypi_wheel(name: str, version: str, platform: str, cache: Path) -> str:
+    cache_file = cache / f"pypi-{name}-{version}.json"
+    if cache_file.exists():
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+    else:
+        log(f"resolve {name} {version} on PyPI")
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(
+            f"https://pypi.org/pypi/{name}/{version}/json", timeout=60
+        ) as response:
+            data = json.load(response)
+        cache_file.write_text(json.dumps(data), encoding="utf-8")
     for entry in data["urls"]:
         if entry["filename"].endswith(f"{platform}.whl"):
             return entry["url"]
@@ -246,7 +267,7 @@ def resolve_pypi_wheel(name: str, version: str, platform: str) -> str:
 
 def install_source_only(paths: Paths) -> None:
     for spec in SOURCE_ONLY:
-        url = resolve_pypi_wheel(spec.name, spec.version, spec.platform)
+        url = resolve_pypi_wheel(spec.name, spec.version, spec.platform, paths.cache)
         wheel = fetch(url, paths.cache / url.rsplit("/", 1)[-1])
         staging = paths.cache / f"{spec.name}-extract"
         rmtree(staging)
