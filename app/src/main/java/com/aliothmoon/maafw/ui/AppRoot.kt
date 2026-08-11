@@ -282,6 +282,11 @@ fun AppRoot(
                                             indication = LocalIndication.current,
                                             role = Role.Tab,
                                             onClick = {
+                                                // 在二级页（如规则编辑）时先退出再切 tab，否则该页仍盖在 pager 上看不到切换
+                                                val onTab = navController.currentDestination?.route in listOf(
+                                                    Routes.HOME, Routes.TASKS, Routes.SCHEDULE, Routes.SETTINGS,
+                                                )
+                                                if (!onTab) navController.popBackStack()
                                                 scope.launch { pagerState.animateScrollToPage(index) }
                                             },
                                         ),
@@ -349,7 +354,7 @@ fun AppRoot(
             NavHost(
                 navController = navController,
                 startDestination = Routes.HOME,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(padding),
                 // 共享轴 X 前进转场，对齐 MaaMeow：推进右进左出、返回左进右出
                 enterTransition = { slideInHorizontally { it } + fadeIn() },
                 exitTransition = { slideOutHorizontally { -it } + fadeOut() },

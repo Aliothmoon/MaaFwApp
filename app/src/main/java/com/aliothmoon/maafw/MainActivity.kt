@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import com.aliothmoon.maafw.ui.AppRoot
+import com.aliothmoon.maafw.ui.ProvideInputFocusManager
 
 // per-app locale 在 API 32- 依赖 AppCompatActivity（appcompat 只包装其 context）
 class MainActivity : AppCompatActivity() {
@@ -16,7 +17,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+            ProvideInputFocusManager {
+                AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+            }
         }
     }
 

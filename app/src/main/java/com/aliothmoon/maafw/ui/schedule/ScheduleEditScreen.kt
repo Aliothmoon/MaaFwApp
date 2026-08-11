@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,11 +28,12 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.InputChip
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,6 +56,9 @@ import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.ITextField
+import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
+import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.components.MaaTimePickerDialog
 import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
@@ -108,8 +111,14 @@ fun ScheduleEditScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+                // AppRoot 的 Scaffold 已吃掉状态栏顶部 inset，这里不能再加一次
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Text(
                         stringResource(
@@ -155,8 +164,8 @@ fun ScheduleEditScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(padding)
-                .imePadding()
                 .verticalScroll(rememberScrollState())
+                .clearFocusOnBlankTap()
                 .padding(
                     start = MaaDesignTokens.Spacing.lg,
                     end = MaaDesignTokens.Spacing.lg,
@@ -164,13 +173,11 @@ fun ScheduleEditScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            OutlinedTextField(
+            ITextField(
                 value = draft.name,
                 onValueChange = { draft = draft.copy(name = it) },
-                label = { Text(stringResource(R.string.schedule_edit_name)) },
-                placeholder = { Text(stringResource(R.string.schedule_edit_name_placeholder)) },
-                singleLine = true,
-                isError = ScheduleFieldError.NAME in errors,
+                label = stringResource(R.string.schedule_edit_name),
+                placeholder = stringResource(R.string.schedule_edit_name_placeholder),
                 supportingText = {
                     if (ScheduleFieldError.NAME in errors) {
                         Text(stringResource(R.string.schedule_edit_error_name))
@@ -411,21 +418,19 @@ private fun IntervalSection(
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OutlinedTextField(
+            ITextFieldWithFocus(
                 value = intervalDaysText,
                 onValueChange = onIntervalDaysChange,
-                singleLine = true,
-                isError = ScheduleFieldError.INTERVAL in errors,
-                label = { Text(stringResource(R.string.schedule_edit_days_unit)) },
+                onFocusLost = {},
+                label = stringResource(R.string.schedule_edit_days_unit),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
             )
-            OutlinedTextField(
+            ITextFieldWithFocus(
                 value = intervalHoursText,
                 onValueChange = onIntervalHoursChange,
-                singleLine = true,
-                isError = ScheduleFieldError.INTERVAL in errors,
-                label = { Text(stringResource(R.string.schedule_edit_hours_unit)) },
+                onFocusLost = {},
+                label = stringResource(R.string.schedule_edit_hours_unit),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
             )
