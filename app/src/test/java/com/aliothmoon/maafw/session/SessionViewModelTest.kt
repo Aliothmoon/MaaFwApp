@@ -27,6 +27,8 @@ import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunLogKind
+import com.aliothmoon.maafw.runner.RunLogOutcome
+import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -185,14 +187,44 @@ class SessionViewModelTest {
         val vm = createVmWithRunner(runner)
 
         runner.emit(RunnerEvent.Progress("启动游戏", 1, 3))
-        runner.emit(RunnerEvent.TaskObservation("启动游戏", "Node.Hit"))
+        runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"NodeA"}"""))
+        runner.emit(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"启动游戏"}"""))
         runner.emit(RunnerEvent.MalformedCallback("{}"))
 
         assertEquals(
-            listOf(RunLogKind.Progress, RunLogKind.Observation, RunLogKind.Malformed),
+            listOf(
+                RunLogKind.Progress,
+                RunLogKind.Node,
+                RunLogKind.Framework,
+                RunLogKind.Malformed,
+            ),
             vm.runLog.value.map { it.kind },
         )
         assertEquals("启动游戏 1/3", vm.runLog.value.first().text)
+
+        // 事件名与 details 分开存，UI 才能把 JSON 折叠起来
+        val node = vm.runLog.value[1]
+        assertEquals("Node.Action.Failed", node.text)
+        assertEquals("""{"name":"NodeA"}""", node.detail)
+        assertEquals(RunLogOutcome.Failed, node.outcome)
+        assertEquals(RunLogOutcome.Succeeded, vm.runLog.value[2].outcome)
+    }
+
+    /** 「只看关键」滤掉的主体是 Controller 的截图与点击，那是刷屏的大头 */
+    @Test
+    fun `essential filter keeps failures and task milestones`() = runTest(mainDispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val vm = createVmWithRunner(runner)
+
+        runner.emit(RunnerEvent.Callback("Controller.Action.Succeeded", """{"action":"Screencap"}"""))
+        runner.emit(RunnerEvent.Callback("Node.Recognition.Succeeded", """{"name":"NodeA"}"""))
+        runner.emit(RunnerEvent.Callback("Node.Recognition.Failed", """{"name":"NodeB"}"""))
+        runner.emit(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"启动游戏"}"""))
+
+        assertEquals(
+            listOf("Node.Recognition.Failed", "Tasker.Task.Starting"),
+            vm.runLog.value.filter { it.isEssential }.map { it.text },
+        )
     }
 
     @Test

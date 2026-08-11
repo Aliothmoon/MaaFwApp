@@ -59,10 +59,20 @@ sealed interface ExecutionResult {
 
 /** 旁路观测（日志/进度）；不参与状态机判定 */
 sealed interface RunnerEvent {
+    /** 外壳自产的一句话，不是 MaaFramework 的原话 */
     data class Log(val message: String) : RunnerEvent
+
     data class Progress(val taskName: String, val completed: Int, val total: Int) : RunnerEvent
-    data class TaskObservation(val taskName: String, val message: String) : RunnerEvent
-    data class Unknown(val raw: String) : RunnerEvent
+
+    /**
+     * MaaFramework 的一条原样通知
+     *
+     * 两段分开带，不在这里拼串：拼上之后消费方既没法按事件名分类，也没法把
+     * [details] 单独折叠起来。识别哪一类看 [message] 前缀，不另设事件类型
+     */
+    data class Callback(val message: String, val details: String) : RunnerEvent
+
+    /** 事件名为空——协议异常，[raw] 是原样详情 */
     data class MalformedCallback(val raw: String) : RunnerEvent
 
     /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */

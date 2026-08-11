@@ -32,8 +32,7 @@ import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunTrigger
-import com.aliothmoon.maafw.runner.toLogKind
-import com.aliothmoon.maafw.runner.toLogText
+import com.aliothmoon.maafw.runner.toLogEntry
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -202,14 +201,7 @@ class SessionViewModel(
             }
             if (FocusChannel.Log !in event.focus.channels) return
         }
-        appendLog(
-            RunLogEntry(
-                id = runLogId.incrementAndGet(),
-                atMillis = System.currentTimeMillis(),
-                kind = event.toLogKind(),
-                text = event.toLogText(),
-            ),
-        )
+        appendLog(event.toLogEntry(runLogId.incrementAndGet(), System.currentTimeMillis()))
     }
 
     private fun appendLog(entry: RunLogEntry) {

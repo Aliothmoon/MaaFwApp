@@ -337,6 +337,8 @@
     <string name="run_log_count">%1$d 条</string>
     <string name="run_log_clear">清空</string>
     <string name="run_log_empty">还没有日志；开始任务后这里会出现 MaaFramework 的原始回调</string>
+    <string name="run_log_filter_essential">关键</string>
+    <string name="run_log_filter_all">全部</string>
 
     <!-- 诊断文案；构造点在 domain/Diagnostics.kt 的 DiagnosticMessages -->
     <string name="diagnostic_severity_warning">警告</string>

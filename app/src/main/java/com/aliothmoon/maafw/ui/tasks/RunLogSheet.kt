@@ -15,7 +15,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,10 +28,20 @@ import androidx.compose.ui.text.font.FontFamily
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogKind
+import com.aliothmoon.maafw.runner.RunLogOutcome
+import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
+import com.aliothmoon.maafw.ui.components.maaClickable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -37,6 +51,9 @@ import java.util.Locale
  *
  * 正文一律是 MaaFramework 的原始字符串，不翻译也不清洗——这里是排障面，
  * 加工过的文本对不上官方文档与源码就失去了价值
+ *
+ * 「不清洗」不等于「一股脑摊平」：事件名单独一行按成败上色，details_json 收进折叠区，
+ * 展开看到的仍是原文
  */
 @Composable
 internal fun RunLogSheet(
@@ -45,6 +62,11 @@ internal fun RunLogSheet(
     onDismiss: () -> Unit,
 ) {
     MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
+        var essentialOnly by remember { mutableStateOf(true) }
+        val visible = remember(entries, essentialOnly) {
+            if (essentialOnly) entries.filter { it.isEssential } else entries
+        }
+
         Column(
             modifier = sheetModifier,
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
@@ -54,9 +76,20 @@ internal fun RunLogSheet(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
             ) {
+                MaaChoiceChip(
+                    label = stringResource(R.string.run_log_filter_essential),
+                    selected = essentialOnly,
+                    onClick = { essentialOnly = true },
+                )
+                MaaChoiceChip(
+                    label = stringResource(R.string.run_log_filter_all),
+                    selected = !essentialOnly,
+                    onClick = { essentialOnly = false },
+                )
                 Text(
-                    text = stringResource(R.string.run_log_count, entries.size),
+                    text = stringResource(R.string.run_log_count, visible.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -66,7 +99,7 @@ internal fun RunLogSheet(
                 }
             }
 
-            if (entries.isEmpty()) {
+            if (visible.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -82,10 +115,19 @@ internal fun RunLogSheet(
                 return@Column
             }
 
+            // 一次只展开一条：details_json 展开就是十来行，多条同时展开这个列表没法看了
+            var expandedId by remember { mutableStateOf<Long?>(null) }
             val listState = rememberLazyListState()
-            // 新行到了就跟到底；日志面板默认看最新的那几条
-            LaunchedEffect(entries.lastOrNull()?.id) {
-                listState.animateScrollToItem(entries.lastIndex)
+            val pinnedToBottom by remember {
+                derivedStateOf {
+                    val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+                    last == null || last.index >= listState.layoutInfo.totalItemsCount - 2
+                }
+            }
+            // 只在用户本来就贴着底时才跟；否则他往上翻着看，新行一来就被拽回去。
+            // 不用 animateScrollToItem：高频事件下动画会排队打架
+            LaunchedEffect(visible.lastOrNull()?.id) {
+                if (pinnedToBottom) listState.scrollToItem(visible.lastIndex)
             }
             val formatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
             LazyColumn(
@@ -95,8 +137,13 @@ internal fun RunLogSheet(
                     .fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
             ) {
-                items(entries, key = { it.id }) { entry ->
-                    RunLogRow(entry = entry, time = formatter.format(Date(entry.atMillis)))
+                items(visible, key = { it.id }) { entry ->
+                    RunLogRow(
+                        entry = entry,
+                        time = formatter.format(Date(entry.atMillis)),
+                        expanded = expandedId == entry.id,
+                        onToggle = { expandedId = if (expandedId == entry.id) null else entry.id },
+                    )
                 }
             }
         }
@@ -104,9 +151,17 @@ internal fun RunLogSheet(
 }
 
 @Composable
-private fun RunLogRow(entry: RunLogEntry, time: String) {
+private fun RunLogRow(
+    entry: RunLogEntry,
+    time: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val parsed = rememberParsedDetail(entry)
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (entry.detail != null) Modifier.maaClickable(onClick = onToggle) else Modifier),
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
     ) {
         Text(
@@ -115,34 +170,75 @@ private fun RunLogRow(entry: RunLogEntry, time: String) {
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        // PI 模板正文按协议支持 Markdown 与 HTML 子集，等宽直出会把标签露给用户
-        if (entry.kind == RunLogKind.Focus) {
-            MaaMarkdown(
-                text = entry.text,
-                style = MaterialTheme.typography.labelSmall,
-                color = entry.kind.color(),
-                modifier = Modifier.weight(1f),
-            )
-        } else {
+        Column(modifier = Modifier.weight(1f)) {
+            // PI 模板正文按协议支持 Markdown 与 HTML 子集，等宽直出会把标签露给用户
+            if (entry.kind == RunLogKind.Focus) {
+                MaaMarkdown(
+                    text = entry.text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = entry.color(),
+                )
+                return@Column
+            }
             Text(
                 text = entry.text,
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
-                color = entry.kind.color(),
-                modifier = Modifier.weight(1f),
+                color = entry.color(),
             )
+            // 事件名旁边只露一个主语（节点名 / 任务 entry / 动作名），其余留给折叠区
+            parsed.subject?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (expanded) {
+                Text(
+                    text = parsed.pretty ?: entry.detail.orEmpty(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = MaaDesignTokens.Spacing.xxs),
+                )
+            }
         }
     }
 }
 
-/** 只靠颜色分级；正文不加前缀，免得挤掉本来就长的原始字符串 */
+/** [subject] 摘出来平铺，[pretty] 只在展开时用 */
+private data class ParsedDetail(val subject: String?, val pretty: String?)
+
+/**
+ * 解析推迟到渲染这一刻
+ *
+ * 日志条目是在 ViewModel 的收集协程（主线程）上建的，在那里给每条都解一次 JSON
+ * 会把主线程压死；LazyColumn 只组合可见行，配 remember 后一条最多解一次
+ */
 @Composable
-private fun RunLogKind.color(): Color = when (this) {
-    RunLogKind.Progress -> MaterialTheme.colorScheme.primary
-    RunLogKind.Observation -> MaterialTheme.colorScheme.onSurface
-    RunLogKind.Malformed -> MaterialTheme.colorScheme.error
-    RunLogKind.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
-    RunLogKind.Log -> MaterialTheme.colorScheme.onSurfaceVariant
-    // 唯一一条写给用户看的，颜色要压得住满屏灰字
-    RunLogKind.Focus -> MaterialTheme.colorScheme.onSurface
+private fun rememberParsedDetail(entry: RunLogEntry): ParsedDetail = remember(entry.id) {
+    val detail = entry.detail ?: return@remember ParsedDetail(null, null)
+    val root = runCatching { LOG_JSON.parseToJsonElement(detail) }.getOrNull() as? JsonObject
+        ?: return@remember ParsedDetail(null, null)
+    val subject = SUBJECT_KEYS.firstNotNullOfOrNull { (root[it] as? JsonPrimitive)?.contentOrNull }
+    val pretty = runCatching { PRETTY_JSON.encodeToString(JsonElement.serializer(), root) }.getOrNull()
+    ParsedDetail(subject?.takeIf { it.isNotBlank() }, pretty)
 }
+
+@Composable
+private fun RunLogEntry.color(): Color = when {
+    // PI 作者写给用户的那条，颜色要压得住满屏灰字
+    kind == RunLogKind.Focus -> MaterialTheme.colorScheme.onSurface
+    kind == RunLogKind.Malformed -> MaterialTheme.colorScheme.error
+    kind == RunLogKind.Progress -> MaterialTheme.colorScheme.primary
+    outcome == RunLogOutcome.Failed -> MaterialTheme.colorScheme.error
+    outcome == RunLogOutcome.Succeeded -> MaaTheme.palette.success.content
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+/** 按可辨识度排序取第一个命中的：节点名 > 任务 entry > 控制器动作 > 资源路径 */
+private val SUBJECT_KEYS = listOf("name", "entry", "action", "path")
+
+private val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
+private val PRETTY_JSON = Json { prettyPrint = true }

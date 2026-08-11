@@ -306,29 +306,17 @@ class MaaFrameworkRunnerPort(
     }
 
     /**
-     * MaaFramework 的通知只做粗分派；节点级细节留在 details_json 里由日志消费
+     * 原样转成事件，两段分开带；按前缀分类是消费方的事，这里不预先拼串也不丢字段
      *
-     * PI 声明了模板就只投递模板：那句话是作者写给用户的，同一个节点再刷一条原始转储只是噪音
+     * PI 声明了模板就只投递模板：那句话是作者写给用户的，同一条回调再刷一份原始转储只是噪音
      */
     private fun toRunnerEvent(message: String, detailsJson: String): RunnerEvent {
         if (message.isEmpty()) return RunnerEvent.MalformedCallback(detailsJson)
         FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it) }
-        return when {
-            message.startsWith(NODE_PREFIX) -> RunnerEvent.TaskObservation(message, detailsJson)
-            message.startsWith(TASKER_PREFIX) ||
-                message.startsWith(RESOURCE_PREFIX) ||
-                message.startsWith(CONTROLLER_PREFIX) -> RunnerEvent.Log("$message $detailsJson")
-
-            else -> RunnerEvent.Unknown("$message $detailsJson")
-        }
+        return RunnerEvent.Callback(message, detailsJson)
     }
 
     private companion object {
-        const val NODE_PREFIX = "Node."
-        const val TASKER_PREFIX = "Tasker."
-        const val RESOURCE_PREFIX = "Resource."
-        const val CONTROLLER_PREFIX = "Controller."
-
         /** 对账间隔：只在 Running 期问，问一次是一次 binder 往返，不必更密 */
         const val RECONCILE_INTERVAL_MS = 5_000L
 
