@@ -1,6 +1,9 @@
 package com.aliothmoon.maafw.ui.schedule
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -19,6 +24,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -35,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleIntent
@@ -44,13 +55,10 @@ import com.aliothmoon.maafw.schedule.validationErrors
 import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
-import com.aliothmoon.maafw.ui.components.MaaCard
-import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
-import com.aliothmoon.maafw.ui.components.MaaMultiChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
-import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaTimePickerDialog
 import java.time.DayOfWeek
+import java.time.format.DateTimeFormatter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -87,8 +95,11 @@ fun ScheduleEditScreen(
     // initial 只作首帧种子：打开后归草稿管，外部再变也不覆盖用户正在改的
     var draft by remember(initial.id) { mutableStateOf(initial) }
     val errors = draft.validationErrors
-    var intervalText by remember(initial.id) {
-        mutableStateOf(initial.intervalMinutes?.toString().orEmpty())
+    var intervalDaysText by remember(initial.id) {
+        mutableStateOf(initial.intervalDays?.takeIf { it > 0 }?.toString().orEmpty())
+    }
+    var intervalHoursText by remember(initial.id) {
+        mutableStateOf(initial.intervalHours?.takeIf { it > 0 }?.toString().orEmpty())
     }
     var pickingTimeIndex by remember { mutableStateOf<Int?>(null) }
     var pickingStartDate by remember { mutableStateOf(false) }
@@ -114,12 +125,35 @@ fun ScheduleEditScreen(
                         )
                     }
                 },
+                // 保存/删除放顶栏，恒可见；不再压在滚动末尾（对齐 MaaMeow）
+                actions = {
+                    if (!isNew) {
+                        IconButton(onClick = {
+                            viewModel.onIntent(ScheduleIntent.Delete(initial.id))
+                            onBack()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Outlined.DeleteOutline,
+                                contentDescription = stringResource(R.string.schedule_edit_delete),
+                            )
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            viewModel.onIntent(ScheduleIntent.Save(draft.normalized()))
+                            onBack()
+                        },
+                        enabled = errors.isEmpty(),
+                    ) {
+                        Text(stringResource(R.string.schedule_edit_save))
+                    }
+                },
             )
         },
     ) { padding ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
@@ -145,7 +179,7 @@ fun ScheduleEditScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            MaaCard(title = stringResource(R.string.schedule_edit_type)) {
+            ScheduleSection(stringResource(R.string.schedule_edit_type)) {
                 MaaSingleChoiceFlow(
                     options = listOf(
                         ScheduleType.FIXED_TIME to stringResource(R.string.schedule_edit_type_fixed),
@@ -160,6 +194,10 @@ fun ScheduleEditScreen(
                 ScheduleType.FIXED_TIME -> FixedTimeSection(
                     draft = draft,
                     errors = errors,
+                    onToggleAllDays = {
+                        val all = DayOfWeek.entries.toSet()
+                        draft = draft.copy(daysOfWeek = if (draft.daysOfWeek == all) emptySet() else all)
+                    },
                     onToggleDay = { day ->
                         val next = if (day in draft.daysOfWeek) draft.daysOfWeek - day else draft.daysOfWeek + day
                         draft = draft.copy(daysOfWeek = next)
@@ -175,54 +213,21 @@ fun ScheduleEditScreen(
                 ScheduleType.INTERVAL -> IntervalSection(
                     draft = draft,
                     errors = errors,
-                    intervalText = intervalText,
-                    onIntervalTextChange = { text ->
-                        intervalText = text.filter { it.isDigit() }.take(MAX_INTERVAL_DIGITS)
-                        draft = draft.copy(intervalMinutes = intervalText.toIntOrNull())
+                    intervalDaysText = intervalDaysText,
+                    intervalHoursText = intervalHoursText,
+                    onIntervalDaysChange = { text ->
+                        intervalDaysText = text.filter { it.isDigit() }.take(MAX_INTERVAL_DIGITS)
+                        draft = draft.copy(intervalDays = intervalDaysText.toIntOrNull())
+                    },
+                    onIntervalHoursChange = { text ->
+                        intervalHoursText = text.filter { it.isDigit() }.take(MAX_INTERVAL_DIGITS)
+                        draft = draft.copy(intervalHours = intervalHoursText.toIntOrNull())
                     },
                     onPickStartDate = { pickingStartDate = true },
                     onPickStartTime = { pickingStartTime = true },
                 )
             }
 
-            MaaCard {
-                MaaLabeledControlRow(
-                    label = stringResource(R.string.schedule_edit_enabled),
-                    trailing = {
-                        MaaSwitch(
-                            checked = draft.enabled,
-                            onCheckedChange = { draft = draft.copy(enabled = it) },
-                        )
-                    },
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-            ) {
-                if (!isNew) {
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.onIntent(ScheduleIntent.Delete(initial.id))
-                            onBack()
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(stringResource(R.string.schedule_edit_delete))
-                    }
-                }
-                OutlinedButton(
-                    onClick = {
-                        viewModel.onIntent(ScheduleIntent.Save(draft.normalized()))
-                        onBack()
-                    },
-                    enabled = errors.isEmpty(),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(R.string.schedule_edit_save))
-                }
-            }
         }
     }
 
@@ -266,20 +271,54 @@ fun ScheduleEditScreen(
     }
 }
 
+/** 小节标题 + 内容；替掉 MaaCard 的描边卡，对齐 MaaMeow 的 SectionHeader（轻、不占高） */
+@Composable
+private fun ScheduleSection(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        content()
+    }
+}
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FixedTimeSection(
     draft: ScheduleStrategy,
     errors: Set<ScheduleFieldError>,
+    onToggleAllDays: () -> Unit,
     onToggleDay: (DayOfWeek) -> Unit,
     onEditTime: (Int) -> Unit,
     onRemoveTime: (Int) -> Unit,
 ) {
-    MaaCard(title = stringResource(R.string.schedule_edit_days)) {
-        MaaMultiChoiceFlow(
-            options = DayOfWeek.entries.map { it to it.shortLabel() },
-            selected = draft.daysOfWeek,
-            onToggle = onToggleDay,
+    ScheduleSection(stringResource(R.string.schedule_edit_days)) {
+        // 选中色对齐 MaaMeow：primary 底 + onPrimary 字（非 M3 默认的 secondaryContainer）
+        val chipColors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
         )
+        val allSelected = DayOfWeek.entries.all { it in draft.daysOfWeek }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            FilterChip(
+                selected = allSelected,
+                onClick = onToggleAllDays,
+                label = { Text(stringResource(R.string.schedule_edit_every_day)) },
+                colors = chipColors,
+            )
+            DayOfWeek.entries.forEach { day ->
+                FilterChip(
+                    selected = day in draft.daysOfWeek,
+                    onClick = { onToggleDay(day) },
+                    label = { Text(day.shortLabel()) },
+                    colors = chipColors,
+                )
+            }
+        }
         if (ScheduleFieldError.DAYS in errors) {
             Text(
                 text = stringResource(R.string.schedule_edit_error_days),
@@ -288,40 +327,49 @@ private fun FixedTimeSection(
             )
         }
     }
-    MaaCard(title = stringResource(R.string.schedule_edit_times)) {
-        if (draft.executionTimes.isEmpty()) {
+    ScheduleSection(stringResource(R.string.schedule_edit_times)) {
+        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            draft.executionTimes.forEachIndexed { index, time ->
+                InputChip(
+                    selected = false,
+                    onClick = { onEditTime(index) },
+                    label = { Text(time.format(timeFormatter)) },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { onRemoveTime(index) },
+                            modifier = Modifier.size(18.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = stringResource(R.string.common_delete),
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                    },
+                )
+            }
+            AssistChip(
+                onClick = { onEditTime(draft.executionTimes.size) },
+                label = { Text(stringResource(R.string.schedule_edit_add_time)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+            )
+        }
+        if (ScheduleFieldError.TIMES in errors) {
             Text(
                 text = stringResource(R.string.schedule_edit_no_times),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (ScheduleFieldError.TIMES in errors) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.error,
             )
-        } else {
-            draft.executionTimes.forEachIndexed { index, time ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { onEditTime(index) }, modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = time.toString(),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                    IconButton(onClick = { onRemoveTime(index) }) {
-                        Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = stringResource(R.string.common_delete),
-                        )
-                    }
-                }
-            }
-        }
-        OutlinedButton(
-            onClick = { onEditTime(draft.executionTimes.size) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.schedule_edit_add_time))
         }
     }
 }
@@ -330,12 +378,14 @@ private fun FixedTimeSection(
 private fun IntervalSection(
     draft: ScheduleStrategy,
     errors: Set<ScheduleFieldError>,
-    intervalText: String,
-    onIntervalTextChange: (String) -> Unit,
+    intervalDaysText: String,
+    intervalHoursText: String,
+    onIntervalDaysChange: (String) -> Unit,
+    onIntervalHoursChange: (String) -> Unit,
     onPickStartDate: () -> Unit,
     onPickStartTime: () -> Unit,
 ) {
-    MaaCard(title = stringResource(R.string.schedule_edit_start_time)) {
+    ScheduleSection(stringResource(R.string.schedule_edit_start_time)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
@@ -355,20 +405,46 @@ private fun IntervalSection(
             )
         }
     }
-    MaaCard(title = stringResource(R.string.schedule_edit_interval)) {
-        OutlinedTextField(
-            value = intervalText,
-            onValueChange = onIntervalTextChange,
-            singleLine = true,
-            isError = ScheduleFieldError.INTERVAL in errors,
-            supportingText = {
-                if (ScheduleFieldError.INTERVAL in errors) {
-                    Text(stringResource(R.string.schedule_edit_error_interval))
-                }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+    ScheduleSection(stringResource(R.string.schedule_edit_interval)) {
+        Row(
             modifier = Modifier.fillMaxWidth(),
-        )
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = intervalDaysText,
+                onValueChange = onIntervalDaysChange,
+                singleLine = true,
+                isError = ScheduleFieldError.INTERVAL in errors,
+                label = { Text(stringResource(R.string.schedule_edit_days_unit)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = intervalHoursText,
+                onValueChange = onIntervalHoursChange,
+                singleLine = true,
+                isError = ScheduleFieldError.INTERVAL in errors,
+                label = { Text(stringResource(R.string.schedule_edit_hours_unit)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        val totalMinutes = (draft.intervalDays ?: 0) * 24 * 60 + (draft.intervalHours ?: 0) * 60
+        if (totalMinutes > 0) {
+            Text(
+                text = stringResource(R.string.schedule_edit_total_hours, totalMinutes / 60),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (ScheduleFieldError.INTERVAL in errors) {
+            Text(
+                text = stringResource(R.string.schedule_edit_error_interval),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 
@@ -403,7 +479,8 @@ private fun ScheduleStrategy.normalized(): ScheduleStrategy = when (scheduleType
         name = name.trim(),
         executionTimes = executionTimes.distinct().sorted(),
         startTimeMs = null,
-        intervalMinutes = null,
+        intervalDays = null,
+        intervalHours = null,
     )
 
     ScheduleType.INTERVAL -> copy(

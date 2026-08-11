@@ -59,6 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -346,6 +350,11 @@ fun AppRoot(
                 navController = navController,
                 startDestination = Routes.HOME,
                 modifier = Modifier.fillMaxSize(),
+                // 共享轴 X 前进转场，对齐 MaaMeow：推进右进左出、返回左进右出
+                enterTransition = { slideInHorizontally { it } + fadeIn() },
+                exitTransition = { slideOutHorizontally { -it } + fadeOut() },
+                popEnterTransition = { slideInHorizontally { -it } + fadeIn() },
+                popExitTransition = { slideOutHorizontally { it } + fadeOut() },
             ) {
                 // 主 tab 路由空占位：真实内容由上面的 HorizontalPager 渲染
                 composable(Routes.HOME) {}

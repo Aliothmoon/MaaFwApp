@@ -94,6 +94,10 @@ class ScheduleViewModel(
             }
 
             ScheduleIntent.LoadTriggerLog -> loadedLog.value = triggerLog.readAll()
+            is ScheduleIntent.DeleteTriggerLogEntry -> {
+                triggerLog.delete(intent.stableId)
+                loadedLog.value = triggerLog.readAll()
+            }
             ScheduleIntent.ClearTriggerLog -> {
                 triggerLog.clear()
                 loadedLog.value = emptyList()

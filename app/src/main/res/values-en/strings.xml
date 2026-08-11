@@ -203,8 +203,7 @@
     <string name="schedule_edit_add_time">Add time</string>
     <string name="schedule_edit_no_times">No times added</string>
     <string name="schedule_edit_start_time">First run</string>
-    <string name="schedule_edit_interval">Interval (minutes)</string>
-    <string name="schedule_edit_enabled">Enabled</string>
+    <string name="schedule_edit_interval">Execution interval</string>
     <string name="schedule_edit_save">Save</string>
     <string name="schedule_edit_delete">Delete</string>
     <string name="schedule_edit_incomplete">Incomplete rule; it will not fire once saved</string>
@@ -212,10 +211,15 @@
     <string name="schedule_edit_error_days">Select at least one day</string>
     <string name="schedule_edit_error_times">Add at least one time</string>
     <string name="schedule_edit_error_start">Pick a start time</string>
-    <string name="schedule_edit_error_interval">Interval must be greater than 0 minutes</string>
+    <string name="schedule_edit_error_interval">Interval must be greater than 0</string>
+    <string name="schedule_edit_every_day">Every day</string>
 
     <string name="schedule_interval_minutes">Every %1$d min</string>
     <string name="schedule_interval_hours">Every %1$d h</string>
+    <string name="schedule_interval_days">Every %1$d d</string>
+    <string name="schedule_edit_days_unit">Days</string>
+    <string name="schedule_edit_hours_unit">Hours</string>
+    <string name="schedule_edit_total_hours">= %1$d hours</string>
 
     <string name="schedule_log_title">Trigger log</string>
     <string name="schedule_log_empty">No triggers recorded</string>

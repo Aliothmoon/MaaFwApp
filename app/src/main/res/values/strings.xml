@@ -194,8 +194,7 @@
     <string name="schedule_edit_add_time">添加时刻</string>
     <string name="schedule_edit_no_times">还没有添加时刻</string>
     <string name="schedule_edit_start_time">首次触发</string>
-    <string name="schedule_edit_interval">间隔（分钟）</string>
-    <string name="schedule_edit_enabled">启用</string>
+    <string name="schedule_edit_interval">执行间隔</string>
     <string name="schedule_edit_save">保存</string>
     <string name="schedule_edit_delete">删除</string>
     <string name="schedule_edit_incomplete">规则不完整，保存后不会触发</string>
@@ -203,10 +202,15 @@
     <string name="schedule_edit_error_days">至少选择一天</string>
     <string name="schedule_edit_error_times">至少添加一个触发时刻</string>
     <string name="schedule_edit_error_start">请选择起始时间</string>
-    <string name="schedule_edit_error_interval">间隔须大于 0 分钟</string>
+    <string name="schedule_edit_error_interval">间隔须大于 0</string>
+    <string name="schedule_edit_every_day">每天</string>
 
     <string name="schedule_interval_minutes">每 %1$d 分钟</string>
     <string name="schedule_interval_hours">每 %1$d 小时</string>
+    <string name="schedule_interval_days">每 %1$d 天</string>
+    <string name="schedule_edit_days_unit">天</string>
+    <string name="schedule_edit_hours_unit">小时</string>
+    <string name="schedule_edit_total_hours">= %1$d 小时</string>
 
     <string name="schedule_log_title">触发日志</string>
     <string name="schedule_log_empty">还没有触发记录</string>

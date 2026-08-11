@@ -51,7 +51,7 @@ private fun nextInterval(
     afterEpochMs: Long,
 ): ZonedDateTime? {
     val startMs = strategy.startTimeMs ?: return null
-    val intervalMs = (strategy.intervalMinutes ?: return null) * 60_000L
+    val intervalMs = ((strategy.intervalDays ?: 0) * 24L + (strategy.intervalHours ?: 0)) * 3_600_000L
     if (intervalMs <= 0L) return null
     val baseline = maxOf(now.toInstant().toEpochMilli(), afterEpochMs)
     val nextMs = if (startMs > baseline) {

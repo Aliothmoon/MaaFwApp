@@ -101,12 +101,15 @@ fun <T> MaaMultiChoiceFlow(
     onToggle: (T) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** 流内前导槽；放在所有 option chip 之前，与它们同排（如星期区的「每天」） */
+    header: (@Composable () -> Unit)? = null,
 ) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
+        header?.invoke()
         options.forEach { (value, label) ->
             MaaChoiceChip(
                 label = label,

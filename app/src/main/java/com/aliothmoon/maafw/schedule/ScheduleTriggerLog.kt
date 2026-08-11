@@ -26,7 +26,10 @@ data class TriggerLogEntry(
     /** 实际被叫醒的时刻；与上一项的差值就是 Doze 与厂商省电策略的延迟 */
     val actualAt: Long,
     val result: TriggerResult,
-)
+) {
+    /** 派生稳定标识（不入盘）：定位/删除用，避免给序列化类加随机 id 导致旧记录每次解码变值 */
+    val stableId: String get() = "$strategyId|$scheduledAt|$actualAt|$result"
+}
 
 /**
  * 触发日志的读写；单文件追加，超量后从头截断
@@ -61,6 +64,19 @@ class ScheduleTriggerLog(private val logDir: () -> File) {
         }
     }
 
+    suspend fun delete(stableId: String) = withContext(Dispatchers.IO) {
+        runCatching {
+            val file = logFile()
+            if (!file.exists()) return@runCatching
+            val kept = file.readLines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { runCatching { json.decodeFromString<TriggerLogEntry>(it) }.getOrNull() }
+                .filter { it.stableId != stableId }
+            if (kept.isEmpty()) file.delete()
+            else file.writeText(kept.joinToString("\n", postfix = "\n"))
+        }.onFailure { Timber.w(it, "Failed to delete trigger log entry") }
+        Unit
+    }
     suspend fun clear() = withContext(Dispatchers.IO) {
         runCatching { logFile().delete() }
         Unit

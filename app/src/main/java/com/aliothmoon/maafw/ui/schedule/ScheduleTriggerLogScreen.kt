@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -97,8 +99,8 @@ fun ScheduleTriggerLogScreen(
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             ) {
                 // 不给 key：日志是只读快照，行没有稳定标识（同一策略可重复出现）
-                items(state.triggerLog) { entry ->
-                    TriggerLogRow(entry)
+                items(state.triggerLog, key = { it.stableId }) { entry ->
+                    TriggerLogRow(entry, onDelete = { viewModel.onIntent(ScheduleIntent.DeleteTriggerLogEntry(entry.stableId)) })
                 }
             }
         }
@@ -106,7 +108,7 @@ fun ScheduleTriggerLogScreen(
 }
 
 @Composable
-private fun TriggerLogRow(entry: TriggerLogEntry) {
+private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit) {
     MaaCardSurface(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -131,6 +133,13 @@ private fun TriggerLogRow(entry: TriggerLogEntry) {
                         else -> MaaTheme.palette.warning
                     },
                 )
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Outlined.DeleteOutline,
+                        contentDescription = stringResource(R.string.common_delete),
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    )
+                }
             }
             Text(
                 text = triggerLogTimeUiText(entry.actualAt, entry.scheduledAt).asString(),

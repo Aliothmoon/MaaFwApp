@@ -18,6 +18,7 @@ sealed interface ScheduleIntent {
     /** id 已存在即更新，否则新增 */
     data class Save(val strategy: ScheduleStrategy) : ScheduleIntent
     data class Delete(val strategyId: String) : ScheduleIntent
+    data class DeleteTriggerLogEntry(val stableId: String) : ScheduleIntent
     data class SetEnabled(val strategyId: String, val enabled: Boolean) : ScheduleIntent
 
     data object LoadTriggerLog : ScheduleIntent

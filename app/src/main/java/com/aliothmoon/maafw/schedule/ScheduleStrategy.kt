@@ -63,8 +63,10 @@ data class ScheduleStrategy(
     val executionTimes: List<@Serializable(with = LocalTimeSerializer::class) LocalTime> = emptyList(),
     /** [ScheduleType.INTERVAL]：首次触发的绝对时间 */
     val startTimeMs: Long? = null,
-    /** [ScheduleType.INTERVAL]：间隔分钟数 */
-    val intervalMinutes: Int? = null,
+    /** [ScheduleType.INTERVAL]：间隔天数 */
+    val intervalDays: Int? = null,
+    /** [ScheduleType.INTERVAL]：间隔小时数 */
+    val intervalHours: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val lastTriggeredAt: Long? = null,
     val lastResult: TriggerResult? = null,
@@ -96,7 +98,7 @@ val ScheduleStrategy.validationErrors: Set<ScheduleFieldError>
             }
             ScheduleType.INTERVAL -> {
                 if (startTimeMs == null) add(ScheduleFieldError.START)
-                if ((intervalMinutes ?: 0) <= 0) add(ScheduleFieldError.INTERVAL)
+                if ((intervalDays ?: 0) * 24 + (intervalHours ?: 0) <= 0) add(ScheduleFieldError.INTERVAL)
             }
         }
     }
