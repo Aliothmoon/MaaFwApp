@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.ThemeMode
@@ -21,6 +22,7 @@ import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.RunnerEvent
@@ -31,6 +33,7 @@ import com.aliothmoon.maafw.runner.StubRunnerScenario
 import com.aliothmoon.maafw.runner.isBusy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -109,14 +112,14 @@ class SessionViewModelTest {
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val vm = SessionViewModel(
-            project,
-            store,
-            runner,
-            RunLauncher(project, store, runner, RecordingRunKeepAlive()),
-            RecordingPreviewPort(),
-            permissions,
-            settings,
-            locale,
+            projectRepository = project,
+            configurationStore = store,
+            runnerPort = runner,
+            runLauncher = RunLauncher(project, store, runner, RecordingRunKeepAlive()),
+            previewPort = RecordingPreviewPort(),
+            permissionGateway = permissions,
+            appSettings = settings,
+            localeController = locale,
         )
         return Triple(vm, store, runner)
     }
@@ -126,14 +129,14 @@ class SessionViewModelTest {
         val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
         val store = readyStore()
         return SessionViewModel(
-            project,
-            store,
-            runner,
-            RunLauncher(project, store, runner, RecordingRunKeepAlive()),
-            RecordingPreviewPort(),
-            FakePermissionGateway(),
-            FakeAppSettingsGateway(),
-            {},
+            projectRepository = project,
+            configurationStore = store,
+            runnerPort = runner,
+            runLauncher = RunLauncher(project, store, runner, RecordingRunKeepAlive()),
+            previewPort = RecordingPreviewPort(),
+            permissionGateway = FakePermissionGateway(),
+            appSettings = FakeAppSettingsGateway(),
+            localeController = {},
         )
     }
 
@@ -237,6 +240,59 @@ class SessionViewModelTest {
             },
         )
         assertEquals(RunnerPhase.Idle, vm.uiState.value.runner.phase)
+    }
+
+    /** 前台模式的拦截在 VM 而不是 RunLauncher，只有这条路径能证明它没漏 */
+    @Test
+    fun `start in foreground mode is blocked before reaching the launcher`() = runTest(mainDispatcher) {
+        val settings = FakeAppSettingsGateway().apply { runMode.value = RunMode.FOREGROUND }
+        val (vm, _, runner) = createVm(settings = settings)
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start)
+        advanceUntilIdle()
+
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.runner_foreground_blocked)
+            },
+        )
+        // 拦在投递之前：runner 连 Preparing 都不该进
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+    }
+
+    /**
+     * 虚拟屏尺寸改由用户选之后，这条是它进 UiState 的唯一通路
+     *
+     * 两处写法都不是随手挑的：
+     * 收集器整场挂在 backgroundScope 上，订阅数不许中途归零——一归零 WhileSubscribed 就往
+     * viewModelScope 上排一个 5s 超时，测试结束 resetMain 之后它无处可去，会以
+     * UncaughtExceptionsBeforeTest 砸到下一个用例头上；
+     * 等值用 first 而不是 advanceUntilIdle——buildUiState 挂在 flowOn(Dispatchers.Default) 上，
+     * 投影不走测试调度器的虚拟时间，推进虚拟时钟等不到它
+     */
+    @Test
+    fun `preview resolution follows the resolution preference`() = runTest(mainDispatcher) {
+        val settings = FakeAppSettingsGateway()
+        val (vm, _, _) = createVm(settings = settings)
+        backgroundScope.launch { vm.uiState.collect {} }
+
+        assertEquals(
+            ResolutionPreference.P720.resolution,
+            vm.uiState.first { it.previewResolution != null }.previewResolution,
+        )
+
+        settings.resolutionPreference.value = ResolutionPreference.P1080
+
+        assertEquals(
+            ResolutionPreference.P1080.resolution,
+            vm.uiState.first { it.previewResolution == ResolutionPreference.P1080.resolution }
+                .previewResolution,
+        )
     }
 
     @Test
