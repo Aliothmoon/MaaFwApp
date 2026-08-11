@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.di.AppCoroutineScope
 import com.aliothmoon.maafw.di.appModule
 import com.aliothmoon.maafw.log.AppLogWriter
 import com.aliothmoon.maafw.log.CrashHandler
+import com.aliothmoon.maafw.log.FileLogTree
 import com.aliothmoon.maafw.log.plantLogTrees
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
@@ -40,11 +41,13 @@ class MaaFwApp : Application() {
     lateinit var logWriter: AppLogWriter
         private set
 
+    private lateinit var fileLogTree: FileLogTree
+
     override fun onCreate() {
         super.onCreate()
         AppPaths.init(this)
         logWriter = AppLogWriter()
-        plantLogTrees(logWriter)
+        fileLogTree = plantLogTrees(logWriter)
         CrashHandler(crashDir = { File(AppPaths.LOG_DIR, AppFiles.CRASH_DIR) }).install()
         val app = this
         val koin = startKoin {
@@ -65,21 +68,27 @@ class MaaFwApp : Application() {
         RemoteServiceManager.initialize(this, provider)
         koin.get<OverlayController>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
-        stopLogcatCaptureWhenDebugOff(koin.get(), koin.get(named<AppCoroutineScope>()))
+        followDebugMode(koin.get(), koin.get(named<AppCoroutineScope>()))
     }
 
     /**
-     * 关掉调试模式就停抓 logcat
+     * 调试模式的两处运行期后果
      *
-     * 抓取是在 `MaaFrameworkRunnerPort` 里按 `debugMode()` 起的，但没有对称的停止点——
-     * 不 unbind 的话 `:logcat` / `:root_logcat` 会一直跟着 pid 抓下去，用户以为关了其实没关
+     * 一是 app.log 的落盘档位：界面上这份叫「错误日志」，关着就只收 W 以上，开了才连 D/I 一起收
      *
-     * 关闭这一档有意**不重启** app：`setup()` 每轮现读 debugMode，下一轮自然就是 false，
-     * 而重启会把用户正在看的页面掀掉。开启那一档仍要重启（见 `SessionViewModel`）
+     * 二是停抓 logcat：抓取在 `MaaFrameworkRunnerPort` 里按 `debugMode()` 起，但没有对称的
+     * 停止点——不 unbind 的话 `:logcat` / `:root_logcat` 会一直跟着 pid 抓下去，用户以为关了其实没关
+     *
+     * 跟着 Flow 走而不是启动时取一次快照（MaaMeow 是快照）：关闭这一档有意**不重启** app，
+     * `setup()` 每轮现读 debugMode，下一轮自然就是 false，而重启会把用户正在看的页面掀掉。
+     * 开启那一档仍要重启（见 `SessionViewModel`）
      */
-    private fun stopLogcatCaptureWhenDebugOff(settings: AppSettingsManager, scope: CoroutineScope) {
+    private fun followDebugMode(settings: AppSettingsManager, scope: CoroutineScope) {
         settings.debugMode
-            .onEach { enabled -> if (!enabled) LogcatServiceManager.unbind() }
+            .onEach { enabled ->
+                fileLogTree.verbose = enabled
+                if (!enabled) LogcatServiceManager.unbind()
+            }
             .launchIn(scope)
     }
 }

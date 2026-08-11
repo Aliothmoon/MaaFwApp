@@ -456,7 +456,7 @@
     <string name="settings_resolution_720p">720P</string>
     <string name="settings_resolution_1080p">1080P</string>
     <string name="settings_debug_mode">调试模式</string>
-    <string name="settings_debug_mode_desc">启用后下一轮运行起记录 MaaFramework 详细日志</string>
+    <string name="settings_debug_mode_desc">启用后错误日志记录全部过程，MaaFramework 详细日志从下一轮运行起</string>
     <string name="dialog_enable_debug_title">启用调试模式</string>
     <string name="dialog_enable_debug_message">启用后需要重启 App 生效，将记录 MaaFramework 详细日志与 app、特权进程的 logcat。</string>
 

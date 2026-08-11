@@ -10,7 +10,7 @@ import timber.log.Timber
  *
  * - [ShortTagDebugTree]  debug 下打全量到 logcat，tag 取类名
  * - [ReleaseTree]        release 下只放 W 以上进 logcat
- * - [FileLogTree]        两种构建都落盘，debug 全量、release 只 W 以上
+ * - [FileLogTree]        两种构建都落盘，档位跟设置里的调试模式走
  *
  * 落盘那棵是重点：logcat 环形缓冲装不下一次长跑，而定时触发多半发生在没人看着的时候
  */
@@ -60,8 +60,18 @@ class ReleaseTree : Timber.Tree() {
  */
 class FileLogTree(private val writer: AppLogWriter) : Timber.DebugTree() {
 
+    /**
+     * 跟随设置里的调试模式，不跟构建类型：这份落盘件在界面上叫「错误日志」，
+     * 关着就该只有 W 以上，否则用户翻开满屏是 D/I 流水
+     *
+     * 普通可见字段而不是读 Flow——[isLoggable] 在任意线程的热路径上被调用。
+     * 设置读出来之前按关处理，那之前的 D/I 不落盘
+     */
+    @Volatile
+    var verbose: Boolean = false
+
     override fun isLoggable(tag: String?, priority: Int): Boolean =
-        if (BuildConfig.DEBUG) true else priority >= Log.WARN
+        verbose || priority >= Log.WARN
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         writer.submit(priority, tag, message, t)
@@ -70,9 +80,11 @@ class FileLogTree(private val writer: AppLogWriter) : Timber.DebugTree() {
 
 /**
  * 进程启动时种树；重复调用无副作用（Timber 自己不去重，所以先清一次）
+ *
+ * 返回落盘那棵：档位要等设置读出来再回填（见 `MaaFwApp`）
  */
-fun plantLogTrees(writer: AppLogWriter) {
+fun plantLogTrees(writer: AppLogWriter): FileLogTree {
     Timber.uprootAll()
     Timber.plant(if (BuildConfig.DEBUG) ShortTagDebugTree() else ReleaseTree())
-    Timber.plant(FileLogTree(writer))
+    return FileLogTree(writer).also { Timber.plant(it) }
 }
