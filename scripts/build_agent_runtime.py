@@ -45,6 +45,10 @@ PYTHON_TARBALL = (
 )
 EXTRA_INDEX = "https://chaquo.com/pypi-upstream/"
 
+# 下载产物（解释器 tarball、source-only wheel、pip wheel）的本地缓存：跨构建复用，不每次重下
+# 默认家目录；用环境变量 MAAFW_AGENT_CACHE 或 --cache 覆盖
+DEFAULT_CACHE = Path.home() / ".maafw" / "agent-runtime-cache"
+
 # gradle 用的 ABI 名 -> (NDK triple, wheel tag 里的 ABI 名)
 ABIS = {
     "arm64-v8a": ("aarch64-linux-android", "arm64_v8a"),
@@ -145,6 +149,12 @@ def log(text: str) -> None:
     print(text, flush=True)
 
 
+def default_cache() -> Path:
+    """缓存位置：--cache > MAAFW_AGENT_CACHE > ~/.maafw/agent-runtime-cache""" 
+    env = os.environ.get("MAAFW_AGENT_CACHE")
+    return Path(env) if env else DEFAULT_CACHE
+
+
 def fetch(url: str, out: Path) -> Path:
     if out.exists():
         log(f"cached  {out.name}")
@@ -203,12 +213,13 @@ def build_launcher(paths: Paths, ndk: Path, triple: str) -> None:
         )
 
 
-def install_requirements(site: Path, wheel_abi: str, extra: list[str]) -> None:
+def install_requirements(paths: Paths, wheel_abi: str, extra: list[str]) -> None:
     """pip 只按 wheel 文件名的 tag 过滤，不执行任何构建，所以能跨平台解析"""
     subprocess.run(
         [
             sys.executable, "-m", "pip", "install", "--quiet",
-            "--target", str(site),
+            "--target", str(paths.site),
+            "--cache-dir", str(paths.cache / "pip"),
             "--only-binary", ":all:",
             "--platform", f"android_{WHEEL_API}_{wheel_abi}",
             "--python-version", py_short(),
@@ -350,7 +361,7 @@ def build_abi(cache: Path, out: Path, abi: str, ndk: Path, extra: list[str]) -> 
     rmtree(paths.bundle / "prefix" / "lib" / "pkgconfig")
 
     paths.site.mkdir(parents=True, exist_ok=True)
-    install_requirements(paths.site, wheel_abi, extra)
+    install_requirements(paths, wheel_abi, extra)
     install_source_only(paths)
     trim(paths)
 
@@ -376,7 +387,7 @@ def main() -> int:
     parser.add_argument("--abi", action="append", choices=sorted(ABIS), help="默认只出 arm64-v8a")
     parser.add_argument("--require", action="append", default=[], help="追加三方依赖，可重复")
     parser.add_argument("--ndk", default=os.environ.get("NDK"), help="NDK 根目录，或用环境变量 NDK")
-    parser.add_argument("--cache", help="下载缓存目录，默认 <out>/.cache")
+    parser.add_argument("--cache", help=f"下载缓存目录，默认 {DEFAULT_CACHE}（或环境变量 MAAFW_AGENT_CACHE）")
     args = parser.parse_args()
 
     if not args.ndk:
@@ -386,7 +397,7 @@ def main() -> int:
         raise SystemExit(f"NDK 不存在：{ndk}")
 
     out = Path(args.out).resolve()
-    cache = Path(args.cache) if args.cache else out / ".cache"
+    cache = Path(args.cache) if args.cache else default_cache()
     cache.mkdir(parents=True, exist_ok=True)
 
     for abi in args.abi or ["arm64-v8a"]:
