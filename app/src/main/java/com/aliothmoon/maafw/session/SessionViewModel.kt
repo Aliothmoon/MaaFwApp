@@ -15,6 +15,8 @@ import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
 import com.aliothmoon.maafw.i18n.LocaleController
+import com.aliothmoon.maafw.privileged.DisplaySizeGateway
+import com.aliothmoon.maafw.privileged.DisplaySizeResult
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
@@ -41,6 +43,7 @@ import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.i18n.uiTextFormatted
 import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
@@ -90,6 +93,8 @@ class SessionViewModel(
     private val runLauncher: RunLauncher,
     private val previewPort: PreviewPort,
     private val permissionGateway: PermissionGateway,
+    /** 主屏分辨率的改与撤；前台模式的前置条件都由它判 */
+    private val displaySize: DisplaySizeGateway,
     private val appSettings: AppSettingsGateway,
     private val localeController: LocaleController,
     /** 已补完的 focus 模板；补完在进程级做，见 [FocusDispatcher] */
@@ -409,7 +414,9 @@ class SessionViewModel(
             is SessionIntent.SetScreenSaverEnabled ->
                 appSettings.setScreenSaverEnabled(intent.enabled)
 
-            SessionIntent.ShowOverlay -> effectChannel.send(SessionEffect.ShowOverlay)
+            SessionIntent.ShowOverlay -> openControlOverlay()
+            SessionIntent.ApplyForegroundResolution -> applyForegroundResolution()
+            SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
             SessionIntent.ShowScreenSaver -> effectChannel.send(SessionEffect.ShowScreenSaver)
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
@@ -518,6 +525,49 @@ class SessionViewModel(
                 uiTextOf(R.string.msg_backend_auth_rejected, result.backend.display)
 
             is ServiceBindResult.Failed -> uiTextOf(R.string.msg_bind_service_failed, result.reason)
+        }
+        effectChannel.send(SessionEffect.ShowMessage(message))
+    }
+
+    /**
+     * 打开控制层前的两道闸：特权后端连上了没、主屏比例合不合
+     *
+     * 校验放在这里而不是 `OverlayController`：那一层只管挂窗口，判不出「该不该挂」；
+     * 而且拦下之后要给的是可操作的提示（去改分辨率），那是 UI 层的事
+     *
+     * 两道都过了仍只给提示——面板本身还没实现（见 [SessionEffect.ShowOverlay]）
+     */
+    private suspend fun openControlOverlay() {
+        if (permissionGateway.serviceState.value != PrivilegedServiceState.Connected) {
+            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_service_required)))
+            return
+        }
+        if (!displaySize.isAspectSupported()) {
+            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_resolution_required)))
+            return
+        }
+        effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_overlay_unsupported)))
+    }
+
+    private suspend fun applyForegroundResolution() {
+        report(displaySize.applyFit16x9())
+    }
+
+    private suspend fun resetForegroundResolution() {
+        report(displaySize.reset())
+    }
+
+    private suspend fun report(result: DisplaySizeResult) {
+        val message = when (result) {
+            is DisplaySizeResult.Applied ->
+                uiTextOf(
+                    R.string.foreground_resolution_applied,
+                    uiTextFormatted("${result.width}x${result.height}"),
+                )
+
+            DisplaySizeResult.Cleared -> uiTextOf(R.string.foreground_resolution_cleared)
+            DisplaySizeResult.ServiceUnavailable -> uiTextOf(R.string.foreground_service_required)
+            is DisplaySizeResult.Failed -> result.reason
         }
         effectChannel.send(SessionEffect.ShowMessage(message))
     }

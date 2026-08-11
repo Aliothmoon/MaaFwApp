@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +45,7 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
+import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.ExpandableTipContent
 import com.aliothmoon.maafw.ui.components.ExpandableTipIcon
 import com.aliothmoon.maafw.ui.components.MaaCard
@@ -188,10 +188,9 @@ fun AddTasksSheet(
                     }
                 }
             }
-            Button(
+            MaaButton(
                 onClick = { onConfirm(selected.toList()) },
                 enabled = !locked && selected.isNotEmpty(),
-                shape = RoundedCornerShape(MaaTheme.style.radii.inner),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = MaaDesignTokens.Spacing.lg),

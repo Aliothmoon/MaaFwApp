@@ -468,6 +468,20 @@
     <string name="dialog_reinstall_pi_title">重新解包项目资源</string>
     <string name="dialog_reinstall_pi_message">将删除设备上已解包的一份并重新解包，期间不可退出。运行配置与日志不受影响。</string>
 
+    <!-- 前台模式：主屏分辨率与操作面板 -->
+    <string name="foreground_resolution_title">屏幕分辨率</string>
+    <string name="foreground_resolution_hint">前台模式在主屏上直接操作，需要 16:9 的画面比例。改动会影响整个系统，用完记得重置</string>
+    <string name="foreground_resolution_apply">修改分辨率</string>
+    <string name="foreground_resolution_reset">重置分辨率</string>
+    <string name="foreground_resolution_applied">已改为 %1$s</string>
+    <string name="foreground_resolution_cleared">已恢复出厂分辨率</string>
+    <string name="foreground_resolution_apply_failed">修改分辨率失败，该设备可能不允许</string>
+    <string name="foreground_resolution_reset_failed">重置分辨率失败，该设备可能不允许</string>
+    <string name="foreground_resolution_too_small">屏幕 %1$s 太小，放不下 16:9 的画面</string>
+    <string name="foreground_resolution_required">当前屏幕比例不是 16:9，请先点「修改分辨率」</string>
+    <string name="foreground_service_required">请先连接 Shizuku 或 Root 后端</string>
+    <string name="foreground_overlay_unsupported">前台模式的操作面板还没做好，暂时不能用</string>
+
     <!-- 设置页「通知」分组入口 -->
     <string name="settings_section_notification">通知</string>
     <string name="settings_notification_desc">任务结束时提醒，也可推送到手机以外的地方</string>

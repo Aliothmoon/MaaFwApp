@@ -474,6 +474,20 @@
     <string name="dialog_reinstall_pi_title">Unpack project resources again</string>
     <string name="dialog_reinstall_pi_message">The unpacked copy on this device will be deleted and unpacked again. Do not leave the app while it runs. Run configurations and logs are unaffected.</string>
 
+    <!-- Foreground mode: primary display size and control panel -->
+    <string name="foreground_resolution_title">Screen resolution</string>
+    <string name="foreground_resolution_hint">Foreground mode works on the main screen and needs a 16:9 picture. The change affects the whole system, so reset it when you are done</string>
+    <string name="foreground_resolution_apply">Change resolution</string>
+    <string name="foreground_resolution_reset">Reset resolution</string>
+    <string name="foreground_resolution_applied">Changed to %1$s</string>
+    <string name="foreground_resolution_cleared">Restored the original resolution</string>
+    <string name="foreground_resolution_apply_failed">Could not change the resolution; this device may not allow it</string>
+    <string name="foreground_resolution_reset_failed">Could not reset the resolution; this device may not allow it</string>
+    <string name="foreground_resolution_too_small">The screen %1$s is too small to fit a 16:9 picture</string>
+    <string name="foreground_resolution_required">The screen is not 16:9 yet — tap Change resolution first</string>
+    <string name="foreground_service_required">Connect the Shizuku or Root backend first</string>
+    <string name="foreground_overlay_unsupported">The foreground control panel is not ready yet</string>
+
     <!-- Settings "Notifications" group entry -->
     <string name="settings_section_notification">Notifications</string>
     <string name="settings_notification_desc">Get told when a run ends, on this phone or elsewhere</string>

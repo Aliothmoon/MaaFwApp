@@ -26,7 +26,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -57,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -260,9 +260,10 @@ private fun RowActionButton(
     active: Boolean = false,
 ) {
     val scheme = MaterialTheme.colorScheme
-    OutlinedButton(
+    MaaOutlinedButton(
         onClick = onClick,
         enabled = enabled,
+        // 贴在任务行右侧，圆角跟卡片对齐而不是按钮的默认档，否则会比它依附的那张卡更圆
         shape = RoundedCornerShape(MaaTheme.style.radii.card),
         contentPadding = PaddingValues(horizontal = MaaDesignTokens.Spacing.md),
         colors = ButtonDefaults.outlinedButtonColors(

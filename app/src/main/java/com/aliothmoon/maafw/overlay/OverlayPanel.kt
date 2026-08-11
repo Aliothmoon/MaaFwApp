@@ -14,7 +14,6 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -32,6 +31,7 @@ import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.i18n.asUiText
 
 /**
@@ -108,7 +108,7 @@ fun OverlayPanel(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             ) {
-                Button(
+                MaaButton(
                     onClick = onBackToApp,
                     modifier = Modifier.weight(1f),
                 ) {
@@ -118,7 +118,7 @@ fun OverlayPanel(
                         modifier = Modifier.padding(start = MaaDesignTokens.Spacing.xs),
                     )
                 }
-                Button(
+                MaaButton(
                     onClick = onStop,
                     enabled = state.phase.isBusy,
                     modifier = Modifier.weight(1f),

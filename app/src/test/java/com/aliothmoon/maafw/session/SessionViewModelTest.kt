@@ -16,7 +16,9 @@ import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.isResource
+import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
+import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.PiInstallCoordinator
@@ -168,6 +170,7 @@ class SessionViewModelTest {
         locale: (String?) -> Unit = {},
         permissions: FakePermissionGateway = FakePermissionGateway(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
+        displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val focusDispatcher = idleFocusDispatcher()
         val vm = SessionViewModel(
@@ -177,6 +180,7 @@ class SessionViewModelTest {
             runLauncher = launcherFor(project, store, runner, settings),
             previewPort = RecordingPreviewPort(),
             permissionGateway = permissions,
+            displaySize = displaySize,
             appSettings = settings,
             localeController = locale,
             focusDispatcher = focusDispatcher,
@@ -201,6 +205,7 @@ class SessionViewModelTest {
             runLauncher = launcherFor(project, store, runner, settings),
             previewPort = RecordingPreviewPort(),
             permissionGateway = FakePermissionGateway(),
+            displaySize = FakeDisplaySizeGateway(),
             appSettings = settings,
             localeController = {},
             focusDispatcher = focusDispatcher,
@@ -397,6 +402,107 @@ class SessionViewModelTest {
             },
         )
         assertEquals(RunnerPhase.Idle, vm.uiState.value.runner.phase)
+    }
+
+    /**
+     * 控制层的三道关：后端没连上 → 比例不对 → 都过了也只给「还没做好」
+     *
+     * 三条都断言**没发出** [SessionEffect.ShowOverlay]：面板真接通之前，
+     * 任何一条漏到那儿都会挂出一个空壳窗口
+     */
+    @Test
+    fun `overlay is blocked until the privileged service is connected`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway()
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.ShowOverlay)
+        advanceUntilIdle()
+
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.foreground_service_required)
+            },
+        )
+        assertTrue(effects.none { it is SessionEffect.ShowOverlay })
+    }
+
+    @Test
+    fun `overlay is blocked while the screen is not 16 to 9`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway()
+            .apply { serviceState.value = PrivilegedServiceState.Connected }
+        val displaySize = FakeDisplaySizeGateway(aspectSupported = false)
+        val (vm, _, _) = createVm(permissions = permissions, displaySize = displaySize)
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.ShowOverlay)
+        advanceUntilIdle()
+
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.foreground_resolution_required)
+            },
+        )
+        assertTrue(effects.none { it is SessionEffect.ShowOverlay })
+    }
+
+    @Test
+    fun `overlay reports unsupported even after every check passes`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway()
+            .apply { serviceState.value = PrivilegedServiceState.Connected }
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.ShowOverlay)
+        advanceUntilIdle()
+
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.foreground_overlay_unsupported)
+            },
+        )
+        assertTrue(effects.none { it is SessionEffect.ShowOverlay })
+    }
+
+    @Test
+    fun `resolution intents reach the display size gateway`() = runTest(mainDispatcher) {
+        val displaySize = FakeDisplaySizeGateway()
+        val (vm, _, _) = createVm(displaySize = displaySize)
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.ApplyForegroundResolution)
+        vm.onIntent(SessionIntent.ResetForegroundResolution)
+        advanceUntilIdle()
+
+        assertEquals(1, displaySize.applyCount)
+        assertEquals(1, displaySize.resetCount)
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.foreground_resolution_applied)
+            },
+        )
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.foreground_resolution_cleared)
+            },
+        )
     }
 
     /** 前台模式的拦截在 VM 而不是 RunLauncher，只有这条路径能证明它没漏 */

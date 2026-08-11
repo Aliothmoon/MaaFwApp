@@ -40,6 +40,8 @@ import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
 import com.aliothmoon.maafw.overlay.border.BorderOverlayManager
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.privileged.DisplaySizeController
+import com.aliothmoon.maafw.privileged.DisplaySizeGateway
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
@@ -306,6 +308,7 @@ val appModule = module {
     }
     single { PermissionManager(androidContext(), get(), get(), get()) }
     single<PermissionGateway> { get<PermissionManager>() }
+    single<DisplaySizeGateway> { DisplaySizeController(androidContext(), get()) }
 
     viewModel { RunLogArchiveViewModel(get()) }
     viewModel { RunLogDetailViewModel(get()) }
@@ -329,6 +332,7 @@ val appModule = module {
             runLauncher = get(),
             previewPort = get(),
             permissionGateway = get(),
+            displaySize = get(),
             appSettings = get(),
             localeController = AppLocales,
             focusDispatcher = get(),

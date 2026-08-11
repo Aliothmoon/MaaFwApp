@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,6 +66,7 @@ import com.aliothmoon.maafw.i18n.uiTextPlural
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
@@ -345,10 +345,9 @@ private fun TemplatePreviewPage(
                 )
             }
         }
-        Button(
+        MaaButton(
             onClick = { onCreate(name.trim(), included.toList()) },
             enabled = writeEnabled && name.isNotBlank() && included.isNotEmpty(),
-            shape = RoundedCornerShape(MaaTheme.style.radii.inner),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -414,10 +413,9 @@ private fun CreateEmptyPage(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.weight(1f))
-        Button(
+        MaaButton(
             onClick = { onCreate(name.trim()) },
             enabled = writeEnabled && name.isNotBlank(),
-            shape = RoundedCornerShape(MaaTheme.style.radii.inner),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -459,10 +457,9 @@ private fun RenameConfigurationPage(
                 .focusRequester(focusRequester),
         )
         Spacer(Modifier.weight(1f))
-        Button(
+        MaaButton(
             onClick = commit,
             enabled = writeEnabled && name.text.isNotBlank(),
-            shape = RoundedCornerShape(MaaTheme.style.radii.inner),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),

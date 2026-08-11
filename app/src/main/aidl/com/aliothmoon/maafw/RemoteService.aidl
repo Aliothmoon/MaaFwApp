@@ -49,6 +49,15 @@ interface RemoteService {
 
     oneway void setDisplayPower(boolean on) = 17;
 
+    /**
+     * 强改**主屏**分辨率；前台模式要求主屏是 16:9，这是唯一的改法
+     * 与 setVirtualDisplayResolution 不是一回事：那个改的是后台虚拟屏，改完只影响虚拟屏上的应用
+     */
+    boolean setForcedDisplaySize(int width, int height) = 18;
+
+    /** 撤掉 setForcedDisplaySize，主屏回到出厂分辨率 */
+    boolean clearForcedDisplaySize() = 19;
+
     // ── 预览 ──
     void setMonitorSurface(in Surface surface) = 20;
 

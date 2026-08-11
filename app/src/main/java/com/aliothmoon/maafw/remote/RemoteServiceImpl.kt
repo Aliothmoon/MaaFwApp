@@ -14,6 +14,7 @@ import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
+import com.aliothmoon.maafw.remote.internal.ScreenManager
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
@@ -206,6 +207,24 @@ class RemoteServiceImpl : RemoteService.Stub() {
         PowerController.setDisplayPower(on)
     }
 
+    /**
+     * 改主屏分辨率会把整个系统的 UI 重排一遍，失败要报出去而不是吞掉——
+     * 用户看到「已修改」却什么都没变，只会以为是自己屏幕不支持
+     */
+    override fun setForcedDisplaySize(width: Int, height: Int): Boolean {
+        Ln.i("$TAG: setForcedDisplaySize(${width}x$height)")
+        return runCatching { ScreenManager.setForcedDisplaySize(width, height) }
+            .onFailure { Ln.e("$TAG: setForcedDisplaySize failed: ${it.message}") }
+            .getOrDefault(false)
+    }
+
+    override fun clearForcedDisplaySize(): Boolean {
+        Ln.i("$TAG: clearForcedDisplaySize")
+        return runCatching { ScreenManager.clearForcedDisplaySize() }
+            .onFailure { Ln.e("$TAG: clearForcedDisplaySize failed: ${it.message}") }
+            .getOrDefault(false)
+    }
+
     // ── 预览 ──
 
     override fun setMonitorSurface(surface: Surface?) {
@@ -307,12 +326,22 @@ class RemoteServiceImpl : RemoteService.Stub() {
         false
     }
 
+    /**
+     * 逐项隔离，不共用一个 runCatching：原先四项串在一个块里，头一项抛了后面全跳过
+     *
+     * [ScreenManager.destroy] 尤其漏不得——它撤的是**物理主屏**的强改尺寸，
+     * 漏掉的话用户会留在一块被改小的屏幕上，而且只能靠再拉一次特权进程才撤得回来。
+     * 它自己按 flag 文件判要不要动手，没改过时是空操作
+     */
     private fun cleanup() {
-        runCatching {
-            PowerController.destroy()
-            PrimaryDisplayManager.stop()
-            VirtualDisplayManager.stop()
-        }.onFailure { Ln.e("$TAG: cleanup failed: ${it.message}") }
+        step("screen size") { ScreenManager.destroy() }
+        step("power") { PowerController.destroy() }
+        step("primary display") { PrimaryDisplayManager.stop() }
+        step("virtual display") { VirtualDisplayManager.stop() }
+    }
+
+    private inline fun step(name: String, action: () -> Unit) {
+        runCatching(action).onFailure { Ln.e("$TAG: cleanup $name failed: ${it.message}") }
     }
 
     /**

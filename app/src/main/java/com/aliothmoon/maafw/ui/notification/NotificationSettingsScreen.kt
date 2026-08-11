@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +41,7 @@ import com.aliothmoon.maafw.notification.NotificationSettingsViewModel
 import com.aliothmoon.maafw.notification.NotificationUiState
 import com.aliothmoon.maafw.notification.toPrefBoolean
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.ITextField
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaSwitch
@@ -148,7 +148,7 @@ private fun InternalCard(state: NotificationUiState, onIntent: (NotificationInte
                 )
                 val title = stringResource(R.string.notification_test_title)
                 val body = stringResource(R.string.notification_test_message)
-                Button(
+                MaaButton(
                     onClick = { onIntent(NotificationIntent.SendInternalTest(title, body)) },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -190,7 +190,7 @@ private fun ExternalTestCard(state: NotificationUiState, onIntent: (Notification
     val title = stringResource(R.string.notification_test_title)
     val body = stringResource(R.string.notification_test_message)
     MaaCard(title = stringResource(R.string.notification_section_test)) {
-        Button(
+        MaaButton(
             onClick = { onIntent(NotificationIntent.SendExternalTest(title, body)) },
             modifier = Modifier.fillMaxWidth(),
             enabled = state.enabledProviders.isNotEmpty(),

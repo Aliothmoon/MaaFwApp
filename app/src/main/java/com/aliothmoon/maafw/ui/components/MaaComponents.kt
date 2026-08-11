@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,9 +19,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -108,6 +113,59 @@ fun MaaLabeledControlRow(
             trailing()
         }
     }
+}
+
+/**
+ * 按钮的统一形状：走 `MaaTheme.style.radii.button`
+ *
+ * M3 的 `Button` 默认形状取自它自己的 token（`CornerFull` → 胶囊），**不经过主题的 `Shapes`**，
+ * 所以换主题风格也压不到它。全仓的按钮一律走这两个 wrapper，别直接用 M3 的
+ *
+ * 只包了形状的**默认值**，其余参数原样透传：颜色与内边距按场景各不相同，包死反而要再开一堆口子。
+ * [shape] 仍可覆盖，但只在「要跟旁边的输入框或卡片对齐」时才该覆盖，且写清理由
+ */
+@Composable
+fun MaaButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = RoundedCornerShape(MaaTheme.style.radii.button),
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        colors = colors,
+        contentPadding = contentPadding,
+        content = content,
+    )
+}
+
+@Composable
+fun MaaOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = RoundedCornerShape(MaaTheme.style.radii.button),
+    colors: ButtonColors = ButtonDefaults.outlinedButtonColors(),
+    border: BorderStroke? = ButtonDefaults.outlinedButtonBorder(enabled),
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        colors = colors,
+        border = border,
+        contentPadding = contentPadding,
+        content = content,
+    )
 }
 
 /**
