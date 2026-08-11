@@ -76,7 +76,7 @@ class ScheduleTriggerTest {
             name = "t",
             scheduleType = ScheduleType.INTERVAL,
             startTimeMs = start,
-            intervalMinutes = 90,
+            intervalHours = 2,
         )
         assertEquals(at("2026-08-10T12:00"), nextTriggerOf(strategy, now = at("2026-08-10T09:00")))
     }
@@ -89,7 +89,7 @@ class ScheduleTriggerTest {
             name = "t",
             scheduleType = ScheduleType.INTERVAL,
             startTimeMs = start,
-            intervalMinutes = 360,
+            intervalHours = 6,
         )
         assertEquals(at("2026-08-10T12:00"), nextTriggerOf(strategy, now = at("2026-08-10T09:30")))
     }
@@ -100,7 +100,7 @@ class ScheduleTriggerTest {
         assertNull(nextTriggerOf(base, now = at("2026-08-10T09:00")))
         assertNull(
             nextTriggerOf(
-                base.copy(startTimeMs = 0L, intervalMinutes = 0),
+                base.copy(startTimeMs = 0L, intervalHours = 0),
                 now = at("2026-08-10T09:00"),
             ),
         )

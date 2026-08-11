@@ -47,7 +47,8 @@ fun Modifier.maaClickable(
 private const val PressedScale = 0.97f
 
 private val PressSpring = spring<Float>(
-    dampingRatio = Spring.DampingRatioMediumBouncy,
+    // NoBouncy：按压反馈要干脆回弹，弹跳会让松手后还在晃、和后续动画叠出钝感
+    dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessHigh,
 )
 

@@ -63,8 +63,10 @@ data class ScheduleStrategy(
     val executionTimes: List<@Serializable(with = LocalTimeSerializer::class) LocalTime> = emptyList(),
     /** [ScheduleType.INTERVAL]：首次触发的绝对时间 */
     val startTimeMs: Long? = null,
-    /** [ScheduleType.INTERVAL]：间隔分钟数 */
-    val intervalMinutes: Int? = null,
+    /** [ScheduleType.INTERVAL]：间隔天数 */
+    val intervalDays: Int? = null,
+    /** [ScheduleType.INTERVAL]：间隔小时数 */
+    val intervalHours: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val lastTriggeredAt: Long? = null,
     val lastResult: TriggerResult? = null,
@@ -83,3 +85,23 @@ enum class TriggerResult {
     /** 前台服务起不来，闹钟链靠 receiver 兜底续上 */
     FAILED_SERVICE_START,
 }
+/** 编辑期字段级校验；空集 = 可保存 */
+enum class ScheduleFieldError { NAME, DAYS, TIMES, START, INTERVAL }
+
+val ScheduleStrategy.validationErrors: Set<ScheduleFieldError>
+    get() = buildSet {
+        if (name.trim().isBlank()) add(ScheduleFieldError.NAME)
+        when (scheduleType) {
+            ScheduleType.FIXED_TIME -> {
+                if (daysOfWeek.isEmpty()) add(ScheduleFieldError.DAYS)
+                if (executionTimes.isEmpty()) add(ScheduleFieldError.TIMES)
+            }
+            ScheduleType.INTERVAL -> {
+                if (startTimeMs == null) add(ScheduleFieldError.START)
+                if ((intervalDays ?: 0) * 24 + (intervalHours ?: 0) <= 0) add(ScheduleFieldError.INTERVAL)
+            }
+        }
+    }
+
+/** 是否可保存（无字段错误）。UI 门禁保存钮 + VM 兜底都用它 */
+val ScheduleStrategy.isValid: Boolean get() = validationErrors.isEmpty()

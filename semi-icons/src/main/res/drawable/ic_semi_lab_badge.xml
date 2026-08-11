@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: badge.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path android:fillType="evenOdd"
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M21 11.5018C20.2304 11.8228 19.3859 12 18.5 12C14.9101 12 12 9.08985 12 5.5C12 4.6141 12.1772 3.76959 12.4982 3H5C3.34315 3 2 4.34315 2 6V19C2 20.6569 3.34315 22 5 22H18C19.6569 22 21 20.6569 21 19V11.5018Z"/>
+    <path
+        android:fillColor="#FFFF7D95"
+        android:pathData="M14.0,5.5a4.5,4.5 0 1,0 9.0,0a4.5,4.5 0 1,0 -9.0,0"/>
+</vector>

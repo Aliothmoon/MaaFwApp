@@ -26,7 +26,7 @@ class ScheduleBootReceiver : BroadcastReceiver() {
         ) {
             return
         }
-        Timber.i("重排定时闹钟，触发源: %s", intent.action)
+        Timber.i("Rescheduling alarms, trigger: %s", intent.action)
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
@@ -37,7 +37,7 @@ class ScheduleBootReceiver : BroadcastReceiver() {
                     store.isLoaded.first { it }
                 }
                 if (loaded == null) {
-                    Timber.w("定时规则读取超时，本次不重排")
+                    Timber.w("Timed out reading schedule rules; skipping reschedule")
                     return@launch
                 }
                 alarms.rescheduleAll(store.strategies.value)

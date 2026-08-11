@@ -134,13 +134,15 @@ private fun TasksContent(
                         resolution = state.previewResolution,
                         surfaceReady = previewSurfaceReady,
                         running = state.runner.phase.isBusy,
+                        watchdogState = state.watchdogState,
                         content = previewContent,
                         onEnterFullscreen = onEnterFullscreen,
                     )
-                    ConfigurationSelectorCard(
+                    ConfigurationSelectorRow(
                         active = active,
                         locked = locked,
-                        onClick = { showConfigSheet = true },
+                        onSelectConfig = { showConfigSheet = true },
+                        onAddTasks = { showAddTasks = true },
                     )
 
                     if (active == null) {

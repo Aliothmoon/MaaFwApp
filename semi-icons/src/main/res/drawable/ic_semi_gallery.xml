@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: gallery.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M5.0,9.0h18.0v14.0h-18.0z"/>
+    <path android:fillType="evenOdd"
+        android:fillColor="@android:color/white"
+        android:pathData="M15.659 0.747655L2.46269 4.22036C0.836568 4.64829 -0.120338 6.32896 0.3416 7.94575L2.69291 16.1753C2.76592 16.4309 2.87002 16.6693 2.99997 16.8876V11C2.99997 8.79088 4.79083 7.00002 6.99997 7.00002H20.5L19.307 2.82472C18.8586 1.25519 17.2376 0.332237 15.659 0.747655Z"/>
+</vector>

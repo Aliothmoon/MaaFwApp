@@ -15,6 +15,9 @@ interface PermissionGateway {
     val readiness: StateFlow<ShizukuReadiness>
     val serviceState: StateFlow<PrivilegedServiceState>
 
+    /** 目标 app 在虚拟屏上的看门狗状态（特权进程轮询，app 侧只读） */
+    val watchdogState: StateFlow<WatchdogState>
+
     /** 保活相关的两项系统权限，非提权后端 */
     val systemPermissions: StateFlow<SystemPermissionState>
 

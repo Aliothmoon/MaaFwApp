@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: collapse.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M2.0,2.0h20.0v9.0h-20.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M2.0,13.0h20.0v9.0h-20.0z"/>
+    <path android:fillType="evenOdd"
+        android:fillColor="#FF4CC3FA"
+        android:pathData="M17 14.5C16.4477 14.5 16 14.9477 16 15.5V16.5H15C14.4477 16.5 14 16.9477 14 17.5C14 18.0523 14.4477 18.5 15 18.5H16V19.5C16 20.0523 16.4477 20.5 17 20.5C17.5523 20.5 18 20.0523 18 19.5V18.5H19C19.5523 18.5 20 18.0523 20 17.5C20 16.9477 19.5523 16.5 19 16.5H18V15.5C18 14.9477 17.5523 14.5 17 14.5Z"/>
+    <path android:fillType="evenOdd"
+        android:fillColor="#FF4CC3FA"
+        android:pathData="M17 3.50003C16.4477 3.50003 16 3.94775 16 4.50003V5.50003H15C14.4477 5.50003 14 5.94775 14 6.50003C14 7.05232 14.4477 7.50003 15 7.50003H16V8.50003C16 9.05232 16.4477 9.50003 17 9.50003C17.5523 9.50003 18 9.05232 18 8.50003V7.50003H19C19.5523 7.50003 20 7.05232 20 6.50003C20 5.94775 19.5523 5.50003 19 5.50003H18V4.50003C18 3.94775 17.5523 3.50003 17 3.50003Z"/>
+</vector>

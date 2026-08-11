@@ -34,7 +34,7 @@ object SystemPermissionRequester {
 
     fun isGranted(context: Context, permission: SystemPermission): Boolean = runCatching {
         XXPermissions.isGrantedPermission(context, permission.toPlatform())
-    }.onFailure { Timber.w(it, "读取权限状态失败: $permission") }.getOrDefault(false)
+    }.onFailure { Timber.w(it, "Failed to read permission state: $permission") }.getOrDefault(false)
 
     suspend fun request(activity: Activity, permission: SystemPermission): Boolean {
         if (isGranted(activity, permission)) return true

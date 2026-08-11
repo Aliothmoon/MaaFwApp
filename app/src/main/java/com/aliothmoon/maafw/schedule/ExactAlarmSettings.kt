@@ -22,6 +22,6 @@ object ExactAlarmSettings {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
-            .onFailure { Timber.w(it, "打开精确闹钟设置页失败") }
+            .onFailure { Timber.w(it, "Failed to open exact-alarm settings") }
     }
 }

@@ -22,6 +22,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -56,6 +61,35 @@ class PermissionManager(
     override val state: StateFlow<RemoteAccessState> = accessPort.state
 
     override val serviceState: StateFlow<PrivilegedServiceState> = servicePort.serviceState
+
+    /**
+     * 看门狗状态：service 连上时 2s 轮询 RemoteService.watchdogState()，断开回 IDLE。
+     * flatMapLatest 随连接态切换——断开即停轮询，避免空转
+     *
+     * 每轮现取服务面而不是扣住连上那一刻的 binder：binder 死了 serviceOrNull 即 null，
+     * 轮询当场收摊，不必等连接态那条流转过来
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val watchdogState: StateFlow<WatchdogState> = servicePort.serviceState
+        .flatMapLatest { state ->
+            if (state != PrivilegedServiceState.Connected) {
+                flowOf(WatchdogState.IDLE)
+            } else {
+                flow {
+                    while (true) {
+                        val service = servicePort.serviceOrNull() ?: break
+                        emit(
+                            WatchdogState.fromAidl(
+                                runCatching { service.watchdogState() }.getOrDefault(0),
+                            ),
+                        )
+                        delay(2_000)
+                    }
+                    emit(WatchdogState.IDLE)
+                }
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, WatchdogState.IDLE)
 
     private val serviceConnected: StateFlow<Boolean> = serviceState
         .map { it == PrivilegedServiceState.Connected }
@@ -130,14 +164,14 @@ class PermissionManager(
                     appContext.applicationInfo.uid,
                     requested,
                 )
-            }.onFailure { Timber.w(it, "特权代授失败") }.getOrNull()
+            }.onFailure { Timber.w(it, "Privileged permission grant failed") }.getOrNull()
         }
-        Timber.i("特权代授结果 requested=%s granted=%s", requested, granted)
+        Timber.i("Privileged grant result requested=%s granted=%s", requested, granted)
         // 无障碍是异步绑定的，代授返回成功不代表服务已经连上
         if (granted != null && granted and PrivilegedGrant.ACCESSIBILITY != 0) {
             withTimeoutOrNull(ACCESSIBILITY_BIND_TIMEOUT_MS) {
                 AccessibilityHelperService.isConnected.first { it }
-            } ?: Timber.w("无障碍服务代授后未在超时内连上")
+            } ?: Timber.w("Accessibility service did not connect within timeout after grant")
         }
         refresh()
     }
@@ -184,7 +218,7 @@ class PermissionManager(
             .fold(
                 onSuccess = { ServiceBindResult.Started },
                 onFailure = {
-                    Timber.e(it, "手动绑定特权进程失败")
+                    Timber.e(it, "Failed to bind privileged process manually")
                     ServiceBindResult.Failed(it.message.orEmpty())
                 },
             )

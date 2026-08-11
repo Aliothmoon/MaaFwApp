@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: collapsible.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M2.72361 5.44721C2.39116 4.78231 2.87465 4 3.61803 4H20.382C21.1253 4 21.6088 4.78231 21.2764 5.44721L18 12H6L2.72361 5.44721Z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M2.72361 18.5528C2.39116 19.2177 2.87465 20 3.61803 20H20.382C21.1253 20 21.6088 19.2177 21.2764 18.5528L18 12H6L2.72361 18.5528Z"/>
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12 2V10"/>
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M9 7L12 10L15 7"/>
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12 22V14"/>
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M9 17L12 14L15 17"/>
+</vector>

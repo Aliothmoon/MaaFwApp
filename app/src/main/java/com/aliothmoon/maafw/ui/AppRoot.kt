@@ -59,6 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -80,10 +84,12 @@ import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
+import com.aliothmoon.maafw.util.Misc
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
@@ -174,7 +180,7 @@ fun AppRoot(
         if (previewContent == null) previewFullscreen = false
     }
 
-    MaaFwTheme(darkTheme = darkTheme) {
+    MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
         // NavHost 只承载二级页面；主 tab 仍由下面的 HorizontalPager 渲染
         val navController = rememberNavController()
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
@@ -199,6 +205,8 @@ fun AppRoot(
                     // 控制层挂在 WindowManager 上、跨 Activity 存活，由 Application 级单例持有
                     SessionEffect.ShowOverlay -> overlayController.show()
                     SessionEffect.ShowScreenSaver -> screenSaverManager.show()
+
+                    SessionEffect.RestartApp -> Misc.restartApp(context)
 
                     is SessionEffect.RequestSystemPermission -> {
                         // 系统权限页以调用方 Activity 为宿主；拿不到就只能放弃这次请求
@@ -272,6 +280,11 @@ fun AppRoot(
                                             indication = LocalIndication.current,
                                             role = Role.Tab,
                                             onClick = {
+                                                // 在二级页（如规则编辑）时先退出再切 tab，否则该页仍盖在 pager 上看不到切换
+                                                val onTab = navController.currentDestination?.route in listOf(
+                                                    Routes.HOME, Routes.TASKS, Routes.SCHEDULE, Routes.SETTINGS,
+                                                )
+                                                if (!onTab) navController.popBackStack()
                                                 scope.launch { pagerState.animateScrollToPage(index) }
                                             },
                                         ),
@@ -283,7 +296,7 @@ fun AppRoot(
                                         contentDescription = stringResource(destination.labelRes),
                                         tint = tint,
                                     )
-                                    Spacer(Modifier.height(2.dp))
+                                    Spacer(Modifier.height(MaaDesignTokens.Spacing.xxs))
                                     Text(
                                         text = stringResource(destination.labelRes),
                                         style = MaterialTheme.typography.labelSmall,
@@ -339,7 +352,12 @@ fun AppRoot(
             NavHost(
                 navController = navController,
                 startDestination = Routes.HOME,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(padding),
+                // 共享轴 X 前进转场，对齐 MaaMeow：推进右进左出、返回左进右出
+                enterTransition = { slideInHorizontally { it } + fadeIn() },
+                exitTransition = { slideOutHorizontally { -it } + fadeOut() },
+                popEnterTransition = { slideInHorizontally { -it } + fadeIn() },
+                popExitTransition = { slideOutHorizontally { it } + fadeOut() },
             ) {
                 // 主 tab 路由空占位：真实内容由上面的 HorizontalPager 渲染
                 composable(Routes.HOME) {}

@@ -24,7 +24,7 @@ class ScheduleAlarmManager(private val context: Context) {
         if (!strategy.enabled) return
         val next = computeNextTrigger(strategy, afterEpochMs)
         if (next == null) {
-            Timber.d("策略 %s 算不出下一个触发点，不注册", strategy.id)
+            Timber.d("Strategy %s has no next trigger; not scheduling", strategy.id)
             return
         }
         val triggerMs = next.toInstant().toEpochMilli()
@@ -42,7 +42,7 @@ class ScheduleAlarmManager(private val context: Context) {
         } else {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
         }
-        Timber.i("策略 %s 下次触发 %s", strategy.id, next)
+        Timber.i("Strategy %s next trigger %s", strategy.id, next)
     }
 
     /** API 31 起用户可单独关掉精确闹钟；关了仍能定时（走 setAlarmClock），只是状态栏多个图标 */

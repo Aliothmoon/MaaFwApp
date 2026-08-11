@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.privileged
 
 import com.aliothmoon.maafw.RemoteService
+import com.aliothmoon.maafw.domain.RemoteBackend
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -20,6 +21,9 @@ interface PrivilegedServicePort {
 
     fun bind()
     fun unbind()
+
+    /** 当前绑定用的后端；LogcatService 要跟主服务同后端、同拉起方式，未绑定时为 null */
+    val currentBackend: RemoteBackend?
 
     /** 已连接时给出服务面，否则 null；不触发绑定 */
     fun serviceOrNull(): RemoteService?

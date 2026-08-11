@@ -9,6 +9,3 @@ class RecordingRunKeepAlive : RunKeepAlive {
         startCount++
     }
 }
-
-/** 固定屏幕尺寸，免得单测去问 WindowManager */
-val TestDisplaySource = ScreenSizeSource { DisplayResolution(2340, 1080) }

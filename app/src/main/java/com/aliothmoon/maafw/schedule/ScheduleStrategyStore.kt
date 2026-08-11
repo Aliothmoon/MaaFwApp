@@ -80,7 +80,7 @@ class ScheduleStrategyStore(private val context: Context) {
         if (raw.isNullOrEmpty()) return emptyList()
         return runCatching { json.decodeFromString<List<ScheduleStrategy>>(raw) }
             .getOrElse {
-                Timber.w(it, "定时规则解析失败，按空列表处理")
+                Timber.w(it, "Failed to parse schedule rules; treating as empty")
                 emptyList()
             }
     }

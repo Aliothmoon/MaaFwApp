@@ -19,8 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
  * 单选胶囊 chip：宽度随文字自适应，配合 FlowRow 平铺换行；
@@ -48,7 +49,7 @@ fun MaaChoiceChip(
         )
     }
     Surface(
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.button),
+        shape = RoundedCornerShape(MaaTheme.style.radii.button),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
@@ -77,10 +78,9 @@ fun MaaChoiceChip(
             leading?.invoke()
             Text(
                 text = label,
-                // label 档位间隔过大（15/12sp），chip 取中间值 13sp
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
+                // chip label：bodySmall(12) 提到 Medium，比 labelLarge(14) 收一档
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
                 ),
                 color = if (selected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
@@ -101,12 +101,15 @@ fun <T> MaaMultiChoiceFlow(
     onToggle: (T) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** 流内前导槽；放在所有 option chip 之前，与它们同排（如星期区的「每天」） */
+    header: (@Composable () -> Unit)? = null,
 ) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
+        header?.invoke()
         options.forEach { (value, label) ->
             MaaChoiceChip(
                 label = label,

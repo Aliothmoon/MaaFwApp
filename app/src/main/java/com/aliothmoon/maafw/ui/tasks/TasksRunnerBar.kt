@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
@@ -49,6 +48,7 @@ import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
  * 底部启停条
@@ -65,7 +65,7 @@ internal fun RunnerToggleButton(
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
-    val shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner)
+    val shape = RoundedCornerShape(MaaTheme.style.radii.inner)
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
@@ -85,10 +85,20 @@ internal fun RunnerToggleButton(
                 )
             }
         } else {
+            // 前台模式灰显但仍可点：点了走 Start，由 SessionViewModel 拦下并给提示
+            val foregroundBlocked = state.runMode == RunMode.FOREGROUND
             Button(
                 onClick = { onIntent(SessionIntent.Start) },
                 enabled = state.canStart,
                 shape = shape,
+                colors = if (foregroundBlocked) {
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    )
+                } else {
+                    ButtonDefaults.buttonColors()
+                },
                 modifier = toggleModifier,
             ) {
                 Text(stringResource(R.string.runner_start))
@@ -155,10 +165,10 @@ internal fun TasksQuickOptionsPanel(
                 )
                 // 吞掉卡片上的点击，否则会穿到下面的 scrim 上把自己关掉
                 .clickable(interactionSource = cardInteraction, indication = null, onClick = {}),
-            shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.card),
+            shape = RoundedCornerShape(MaaTheme.style.radii.card),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outlineVariant),
-            shadowElevation = MaaDesignTokens.Card.elevation,
+            shadowElevation = MaaTheme.style.cardElevation,
         ) {
             Column(
                 modifier = Modifier.padding(MaaDesignTokens.Spacing.md),
@@ -221,12 +231,6 @@ internal fun TasksQuickOptionsPanel(
                         onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
                     )
                 }
-                SettingToggleRow(
-                    icon = Icons.Outlined.Code,
-                    label = stringResource(R.string.settings_developer_mode),
-                    checked = state.developerMode,
-                    onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
-                )
             }
         }
     }
@@ -268,7 +272,7 @@ private fun ActionTile(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.height(ActionTileHeight),
-        shape = RoundedCornerShape(MaaDesignTokens.CornerRadius.inner),
+        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
         color = tint.copy(alpha = 0.08f),
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(MaaDesignTokens.Separator.thickness, tint.copy(alpha = 0.2f)),

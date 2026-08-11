@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,7 +24,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,7 +37,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
@@ -47,6 +53,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.session.ServiceStatus
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.StatusTone
+import com.aliothmoon.maafw.runner.screenSize
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
@@ -56,7 +63,6 @@ import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
-import com.aliothmoon.maafw.ui.components.SelectableChipGroup
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.maaClickable
 
@@ -64,41 +70,64 @@ import com.aliothmoon.maafw.ui.components.maaClickable
  * 首页版面对齐 MaaMeow：概览 -> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
  * 资源选择与运行模式从设置页迁来，避免与任务页重复
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaaDesignTokens.Spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
-    ) {
-        OverviewCard(state)
-        ResourceCard(state, onIntent)
-        RunModeCard(state, onIntent)
-        PermissionCard(state, onIntent)
-        ServiceActionButtons(state, onIntent)
-        ProjectDiagnosticsCard(state)
+    // 项目名作顶栏标题（项目未就绪时回落 app 名），钉在顶部不随内容滚动
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = (state.projectState as? ProjectState.Ready)?.definition?.name
+                        ?: stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            // AppRoot 的 Scaffold 已吃掉状态栏顶部 inset，这里不能再加一次
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                actionIconContentColor = MaterialTheme.colorScheme.primary,
+            ),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    top = MaaDesignTokens.Spacing.sm,
+                    bottom = MaaDesignTokens.Spacing.lg,
+                ),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+        ) {
+            OverviewCard(state)
+            ResourceCard(state, onIntent)
+            RunModeCard(state, onIntent)
+            PermissionCard(state, onIntent)
+            ServiceActionButtons(state, onIntent)
+            ProjectDiagnosticsCard(state)
+        }
     }
 }
 
 @Composable
 private fun OverviewCard(state: SessionUiState) {
+    // 分辨率展示用设备真实屏幕尺寸（Misc.getScreenSize），与前后台 / 虚拟屏偏好无关
+    val context = LocalContext.current
+    val screen = remember(context) { screenSize(context) }
     MaaCard(title = stringResource(R.string.home_overview)) {
-        val project = state.projectState
-        MaaInfoRow(
-            stringResource(R.string.home_name),
-            (project as? ProjectState.Ready)?.definition?.name
-                ?: stringResource(R.string.home_none),
-        )
         MaaInfoRow(
             stringResource(R.string.home_display_resolution),
-            state.screenResolution?.let { "${it.width} × ${it.height}" }
-                ?: stringResource(R.string.home_none),
+            "${screen.width} × ${screen.height}",
         )
         MaaInfoRow(
             stringResource(R.string.home_resource),
@@ -371,34 +400,45 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
 }
 
 /**
- * 运行模式：开关式（对齐 MaaMeow）——开关 ON=后台虚拟屏（默认），OFF=前台主屏
+ * 运行模式：单行展示（对齐 MaaMeow）——左 "运行模式"，右 当前模式名 + 开关；ON=后台模式（默认）
  */
 @Composable
 private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_run_mode)) {
+    // 单行：左 "运行模式"，右 当前模式名 + 开关（对齐 MaaMeow）
+    MaaCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = stringResource(
-                    if (state.runMode == RunMode.BACKGROUND) R.string.settings_run_mode_background
-                    else R.string.settings_run_mode_foreground
-                ),
-                style = MaterialTheme.typography.bodyMedium,
+                text = stringResource(R.string.settings_run_mode),
+                style = MaterialTheme.typography.titleMedium,
             )
-            MaaSwitch(
-                checked = state.runMode == RunMode.BACKGROUND,
-                enabled = !state.configurationLocked,
-                onCheckedChange = { background ->
-                    onIntent(
-                        SessionIntent.SetRunMode(
-                            if (background) RunMode.BACKGROUND else RunMode.FOREGROUND
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                Text(
+                    text = stringResource(
+                        if (state.runMode == RunMode.BACKGROUND) R.string.settings_run_mode_background
+                        else R.string.settings_run_mode_foreground
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                MaaSwitch(
+                    checked = state.runMode == RunMode.BACKGROUND,
+                    enabled = !state.configurationLocked,
+                    onCheckedChange = { background ->
+                        onIntent(
+                            SessionIntent.SetRunMode(
+                                if (background) RunMode.BACKGROUND else RunMode.FOREGROUND
+                            )
                         )
-                    )
-                },
-            )
+                    },
+                )
+            }
         }
     }
     // 控制层只有前台用得上；后台模式不再加单独的卡
@@ -436,7 +476,7 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
 }
 
 /**
- * 资源选择：SelectableChipGroup（直接引入自 MaaMeow，后面再对齐设计 token）
+ * 资源选择：MaaSingleChoiceFlow（描边胶囊，与悬浮窗/主题等单选项一致）
  */
 @Composable
 private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
@@ -450,13 +490,11 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            SelectableChipGroup(
-                label = "",
-                selectedValue = environment?.resource?.name ?: "",
+            MaaSingleChoiceFlow(
                 options = candidates.map { it.name to it.label },
-                onSelected = { onIntent(SessionIntent.SelectResource(it)) },
-                modifier = Modifier.fillMaxWidth(),
+                selected = environment?.resource?.name ?: "",
                 enabled = !state.configurationLocked,
+                onSelect = { onIntent(SessionIntent.SelectResource(it)) },
             )
         }
     }

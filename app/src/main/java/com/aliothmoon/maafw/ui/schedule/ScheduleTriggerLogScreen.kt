@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -17,7 +19,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,8 +58,14 @@ fun ScheduleTriggerLogScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+                // AppRoot 的 Scaffold 已吃掉状态栏顶部 inset，这里不能再加一次
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 title = { Text(stringResource(R.string.schedule_log_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -97,8 +107,8 @@ fun ScheduleTriggerLogScreen(
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             ) {
                 // 不给 key：日志是只读快照，行没有稳定标识（同一策略可重复出现）
-                items(state.triggerLog) { entry ->
-                    TriggerLogRow(entry)
+                items(state.triggerLog, key = { it.stableId }) { entry ->
+                    TriggerLogRow(entry, onDelete = { viewModel.onIntent(ScheduleIntent.DeleteTriggerLogEntry(entry.stableId)) })
                 }
             }
         }
@@ -106,7 +116,7 @@ fun ScheduleTriggerLogScreen(
 }
 
 @Composable
-private fun TriggerLogRow(entry: TriggerLogEntry) {
+private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit) {
     MaaCardSurface(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -131,6 +141,13 @@ private fun TriggerLogRow(entry: TriggerLogEntry) {
                         else -> MaaTheme.palette.warning
                     },
                 )
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Outlined.DeleteOutline,
+                        contentDescription = stringResource(R.string.common_delete),
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    )
+                }
             }
             Text(
                 text = triggerLogTimeUiText(entry.actualAt, entry.scheduledAt).asString(),

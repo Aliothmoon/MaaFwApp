@@ -46,18 +46,22 @@ fun ScheduleStrategy.asUiText(): UiText = when (scheduleType) {
 
     ScheduleType.INTERVAL -> uiTextJoin(
         uiTextFormatted(startTimeMs?.let { formatTriggerTime(it) }),
-        intervalMinutes?.let { intervalUiText(it) } ?: UiText.Empty,
+        intervalUiText(intervalDays ?: 0, intervalHours ?: 0),
         separator = SEGMENT_SEPARATOR,
     )
 }
 
-/** 60 的整数倍收成小时，否则原样给分钟——「每 90 分钟」比「每 1.5 小时」好读 */
-fun intervalUiText(minutes: Int): UiText =
-    if (minutes >= 60 && minutes % 60 == 0) {
-        uiTextOf(R.string.schedule_interval_hours, minutes / 60)
-    } else {
-        uiTextOf(R.string.schedule_interval_minutes, minutes)
-    }
+/** 间隔展示：天/小时按需拼，都为 0 返回空 */
+fun intervalUiText(days: Int, hours: Int): UiText = when {
+    days > 0 && hours > 0 -> uiTextJoin(
+        uiTextOf(R.string.schedule_interval_days, days),
+        uiTextOf(R.string.schedule_interval_hours, hours),
+        separator = " ",
+    )
+    days > 0 -> uiTextOf(R.string.schedule_interval_days, days)
+    hours > 0 -> uiTextOf(R.string.schedule_interval_hours, hours)
+    else -> UiText.Empty
+}
 
 fun TriggerResult.asUiText(): UiText = when (this) {
     TriggerResult.TRIGGERED -> uiTextOf(R.string.schedule_result_triggered)
@@ -85,7 +89,7 @@ fun triggerLogTimeUiText(actualAt: Long, scheduledAt: Long): UiText {
 val ScheduleStrategy.isComplete: Boolean
     get() = when (scheduleType) {
         ScheduleType.FIXED_TIME -> daysOfWeek.isNotEmpty() && executionTimes.isNotEmpty()
-        ScheduleType.INTERVAL -> startTimeMs != null && (intervalMinutes ?: 0) > 0
+        ScheduleType.INTERVAL -> startTimeMs != null && (intervalDays ?: 0) * 24 + (intervalHours ?: 0) > 0
     }
 
 private const val DELAY_THRESHOLD_SECONDS = 30L

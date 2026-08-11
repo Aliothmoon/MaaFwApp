@@ -30,7 +30,7 @@ class AccessibilityHelperService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         _isConnected.value = true
-        Timber.d("无障碍服务已连接")
+        Timber.d("Accessibility service connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
@@ -75,7 +75,7 @@ class AccessibilityHelperService : AccessibilityService() {
         if (volumeUpPressTime <= 0L || volumeDownPressTime <= 0L) return false
         if (abs(volumeUpPressTime - volumeDownPressTime) >= SIMULTANEOUS_PRESS_THRESHOLD_MS) return false
 
-        Timber.d("音量 ± 组合键触发")
+        Timber.d("Volume up/down combo triggered")
         triggered = true
         onVolumeUpDownPressed.get()?.invoke()
         return true
@@ -84,7 +84,7 @@ class AccessibilityHelperService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         _isConnected.value = false
-        Timber.d("无障碍服务已断开")
+        Timber.d("Accessibility service disconnected")
     }
 
     companion object {

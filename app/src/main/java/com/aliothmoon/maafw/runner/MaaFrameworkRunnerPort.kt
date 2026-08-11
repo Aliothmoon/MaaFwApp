@@ -1,13 +1,16 @@
 package com.aliothmoon.maafw.runner
 
+import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.project.PiInstaller
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -37,7 +40,10 @@ class MaaFrameworkRunnerPort(
     private val nativeLibraryDir: String,
     /** 每轮开始时现读，不缓存：用户可能在两轮之间改了运行模式 */
     private val runMode: () -> RunMode,
-    private val displaySource: ScreenSizeSource,
+    /** 同上：分辨率偏好可能两轮之间被改 */
+    private val resolutionPreference: () -> ResolutionPreference,
+    /** 调试模式：传给特权进程 setup 的 isDebug，开启 MaaFramework 详细日志 */
+    private val debugMode: () -> Boolean,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
     private val servicePort: PrivilegedServicePort,
@@ -129,7 +135,7 @@ class MaaFrameworkRunnerPort(
                         }
                     },
                     onFailure = { throwable ->
-                        Timber.e(throwable, "启动执行失败")
+                        Timber.e(throwable, "Failed to start run")
                         failPreparation(throwable.message ?: throwable.javaClass.simpleName)
                     },
                 )
@@ -148,7 +154,7 @@ class MaaFrameworkRunnerPort(
                 .fold(
                     onSuccess = { RunnerCommandResult.Accepted },
                     onFailure = {
-                        Timber.w(it, "停止执行失败")
+                        Timber.w(it, "Failed to stop run")
                         RunnerCommandResult.Rejected(it.message ?: "停止失败")
                     },
                 )
@@ -166,8 +172,23 @@ class MaaFrameworkRunnerPort(
     }
 
     private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): String? {
-        if (!service.setup(piRoot.absolutePath, logDir().absolutePath, BuildConfig.DEBUG)) {
+        if (!service.setup(piRoot.absolutePath, logDir().absolutePath, debugMode())) {
             return "特权进程 setup 失败"
+        }
+        // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
+        // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作
+        if (debugMode()) {
+            scope.launch(ioDispatcher) {
+                runCatching {
+                    val backend = servicePort.currentBackend ?: return@runCatching
+                    LogcatServiceManager.bind(backend)
+                    LogcatServiceManager.startCapture(
+                        appPid = Process.myPid(),
+                        servicePid = service.pid(),
+                        userDir = logDir().parentFile!!.absolutePath,
+                    )
+                }.onFailure { Timber.w(it, "LogcatService startCapture failed") }
+            }
         }
         val mode = runMode()
         if (!service.setVirtualDisplayMode(mode.displayMode)) {
@@ -175,7 +196,7 @@ class MaaFrameworkRunnerPort(
         }
         // 主屏模式不建屏也不设分辨率：尺寸是设备当下的物理尺寸，由特权进程侧的采集器供数
         val (width, height) = if (mode == RunMode.BACKGROUND) {
-            resolveDisplayResolution(plan.controller, displaySource.current()).also { (w, h) ->
+            resolutionPreference().resolution.also { (w, h) ->
                 service.setVirtualDisplayResolution(w, h, DefaultDisplayConfig.DPI)
             }
         } else {

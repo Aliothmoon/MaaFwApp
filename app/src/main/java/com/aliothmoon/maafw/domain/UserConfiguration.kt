@@ -14,7 +14,6 @@ enum class ThemeMode { System, Light, Dark }
 data class UserConfiguration(
     val initialized: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.System,
-    val developerMode: Boolean = false,
     val activeResourceName: String? = null,
     val globalOptionValues: Map<String, OptionValue> = emptyMap(),
     val controllerOptionValues: Map<String, Map<String, OptionValue>> = emptyMap(),
@@ -44,6 +43,40 @@ fun RunConfiguration.duplicate(
     name = name,
     tasks = tasks.map { it.copy(instanceId = newTaskInstanceId()) },
 )
+/**
+ * 复制任务实例：新 instanceId，继承 taskName/启用/选项；customLabel 由调用方算好（含去重）传入，插在源后
+ */
+fun RunConfiguration.duplicateTask(taskInstanceId: String, customLabel: String): RunConfiguration {
+    val tasks = tasks.toMutableList()
+    val index = tasks.indexOfFirst { it.instanceId == taskInstanceId }
+    if (index < 0) return this
+    val source = tasks[index]
+    tasks.add(index + 1, source.copy(instanceId = newTaskInstanceId(), customLabel = customLabel))
+    return copy(tasks = tasks)
+}
+
+/**
+ * 重命名任务：设显示别名；空白/null 清除回退定义 label。规范 taskName 不动，pipeline 不受影响
+ */
+fun RunConfiguration.renameTask(taskInstanceId: String, customLabel: String?): RunConfiguration =
+    copy(tasks = tasks.map {
+        if (it.instanceId == taskInstanceId) {
+            it.copy(customLabel = customLabel?.trim()?.takeUnless(String::isBlank))
+        } else it
+    })
+
+/**
+ * 算复制任务的展示名：剥掉源名末尾的「copySuffix」或「copySuffix N」得根名，再加 [copySuffix]；
+ * 与 [existing] 撞名则追加「 2/3/…」。UI 传当前各任务的展示名，避免「(副本) (副本)」
+ */
+fun uniqueCopyLabel(sourceLabel: String, copySuffix: String, existing: Collection<String>): String {
+    val root = sourceLabel.replace(Regex(Regex.escape(copySuffix) + "( \\d+)?$"), "")
+    val base = root + copySuffix
+    if (base !in existing) return base
+    var n = 2
+    while ("$base $n" in existing) n++
+    return "$base $n"
+}
 
 /**
  * 同配置内可重复 taskName；定位用 instanceId
@@ -54,6 +87,8 @@ data class ConfiguredTask(
     val taskName: String,
     val enabled: Boolean = true,
     val optionValues: Map<String, OptionValue> = emptyMap(),
+    /** 显示别名；null = 用定义 label。重命名与「(副本)」后缀都写这里，规范 taskName 不动 */
+    val customLabel: String? = null,
     val instanceId: String = newTaskInstanceId(),
 )
 

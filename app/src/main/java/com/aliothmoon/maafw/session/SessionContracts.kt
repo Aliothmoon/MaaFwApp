@@ -10,8 +10,10 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.privileged.WatchdogState
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
@@ -21,6 +23,7 @@ import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.DisplayResolution
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
@@ -35,22 +38,19 @@ data class SessionUiState(
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),
     val themeMode: ThemeMode = ThemeMode.System,
-    val developerMode: Boolean = false,
+    val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
+    val debugMode: Boolean = false,
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     val screenSaverEnabled: Boolean = false,
+    val resolutionPreference: ResolutionPreference = ResolutionPreference.P720,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
      * 前台模式即设备屏幕尺寸。项目未就绪时为 null
      */
     val previewResolution: DisplayResolution? = null,
-
-    /**
-     * 设备当前的屏幕尺寸，即 `wm size` 那一份
-     *
-     * 与 [previewResolution] 分开：后台模式下那个是虚拟屏，挂在「屏幕分辨率」标签下会误导
-     */
-    val screenResolution: DisplayResolution? = null,
+    /** 目标 app 在虚拟屏上的看门狗状态；预览小窗右上角徽标用它（AppWatchdog） */
+    val watchdogState: WatchdogState = WatchdogState.IDLE,
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     /** 授权请求进行中；只压按钮，不进 configurationLocked */
     val remoteAccessGranting: Boolean = false,
@@ -162,6 +162,20 @@ sealed interface SessionIntent {
         val taskInstanceId: String,
     ) : SessionIntent
 
+    /** 克隆任务（新 instanceId，继承 taskName/启用/选项）；customLabel 由调用方算好「展示名 (副本)」传入 */
+    data class DuplicateTask(
+        val configurationId: RunConfigurationId,
+        val taskInstanceId: String,
+        val customLabel: String,
+    ) : SessionIntent
+
+    /** 改显示别名；null/空白 = 清除别名回退定义 label（规范 taskName 不动，pipeline 不受影响） */
+    data class RenameTask(
+        val configurationId: RunConfigurationId,
+        val taskInstanceId: String,
+        val customLabel: String?,
+    ) : SessionIntent
+
     data class ToggleTask(
         val configurationId: RunConfigurationId,
         val taskInstanceId: String,
@@ -184,13 +198,14 @@ sealed interface SessionIntent {
 
     data class SelectResource(val resourceName: String) : SessionIntent
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent
+    data class SetThemeStyle(val style: ThemeStyle) : SessionIntent
 
     /**
      * null = 跟随系统；事实来源 AppLocales
      * 落地：Activity 重建 → AppRoot 检测 locale → ReloadProject
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
-    data class SetDeveloperMode(val enabled: Boolean) : SessionIntent
+    data class SetDebugMode(val enabled: Boolean) : SessionIntent
 
     /** 主屏 / 后台虚拟屏；运行中不允许改，下一轮才生效 */
     data class SetRunMode(val mode: RunMode) : SessionIntent
@@ -199,6 +214,9 @@ sealed interface SessionIntent {
 
     /** 仅后台模式：运行期是否自动盖屏保 */
     data class SetScreenSaverEnabled(val enabled: Boolean) : SessionIntent
+
+    /** 虚拟屏分辨率偏好：720P / 1080P */
+    data class SetResolutionPreference(val preference: ResolutionPreference) : SessionIntent
 
     /** 开启前台模式的控制层；要 Application 上下文挂窗口，转成 Effect */
     data object ShowOverlay : SessionIntent
@@ -260,4 +278,7 @@ sealed interface SessionEffect {
 
     data object ShowOverlay : SessionEffect
     data object ShowScreenSaver : SessionEffect
+
+    /** 调试模式已启用并落盘，重启 App 让日志管线以新状态起来（对齐 MaaMeow） */
+    data object RestartApp : SessionEffect
 }

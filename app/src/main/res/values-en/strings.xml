@@ -10,6 +10,7 @@
     <string name="common_delete">Delete</string>
     <string name="common_loading">Loading…</string>
     <string name="dialog_confirm">OK</string>
+    <string name="common_restart">Restart</string>
     <string name="dialog_cancel">Cancel</string>
 
     <!-- Tasks screen -->
@@ -24,14 +25,23 @@
     <!-- "active" is an adjective and does not inflect with quantity. -->
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_preview_waiting_surface">Waiting for frames</string>
+    <string name="virtual_display_game_running">Running</string>
+    <string name="virtual_display_game_stopped">Stopped</string>
+    <string name="virtual_display_idle">Idle</string>
     <string name="tasks_preview_exit_fullscreen">Exit fullscreen</string>
     <string name="tasks_preview_idle">Not running</string>
     <string name="tasks_remove">Remove</string>
     <string name="tasks_drag_reorder">Drag to reorder</string>
+    <string name="tasks_rename">Rename</string>
+    <string name="tasks_duplicate">Duplicate</string>
+    <string name="tasks_rename_dialog_title">Rename task</string>
+    <string name="tasks_rename_label">Name</string>
+    <string name="tasks_copy_suffix"> (Copy)</string>
     <string name="tasks_description_title">Task description</string>
 
     <!-- Runner toggle -->
     <string name="runner_start">Start tasks</string>
+    <string name="runner_foreground_blocked">Foreground mode is active; switch to background mode first</string>
     <string name="runner_stop">Stop</string>
     <string name="runner_stopping">Stopping…</string>
 
@@ -41,8 +51,8 @@
     <string name="config_copy_name">%1$s copy</string>
     <string name="config_select_hint">Tap to select or create a configuration</string>
     <plurals name="config_current_summary">
-        <item quantity="one">Current · %1$d task · %2$d active</item>
-        <item quantity="other">Current · %1$d tasks · %2$d active</item>
+        <item quantity="one">%1$d task · %2$d active</item>
+        <item quantity="other">%1$d tasks · %2$d active</item>
     </plurals>
     <string name="config_create_from_template">New from template</string>
     <string name="config_template_list_hint">Preview a template and pick the tasks you need before creating</string>
@@ -57,6 +67,7 @@
     <string name="config_task_disabled_by_default">Off by default</string>
     <string name="config_create_empty">New empty configuration</string>
     <string name="config_create_empty_hint">After creating, use “Add tasks” to pick tasks from the catalog</string>
+    <string name="config_empty_default_name">Empty config</string>
     <string name="config_rename_title">Rename configuration</string>
     <plurals name="config_task_count">
         <item quantity="one">%1$d task</item>
@@ -80,7 +91,7 @@
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
     <string name="home_name">Name</string>
-    <string name="home_resource">Resource</string>
+    <string name="home_resource">Server</string>
     <string name="home_none">None</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
     <plurals name="home_diagnostics_summary_with_errors">
@@ -111,22 +122,21 @@
     <string name="settings_follow_system">System default</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_style_default">Default</string>
+    <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_hint">Switching language reloads the project; unavailable while running</string>
     <string name="settings_run_mode">Run mode</string>
-    <string name="settings_run_mode_background">Background display</string>
-    <string name="settings_run_mode_foreground">Primary display</string>
+    <string name="settings_run_mode_background">Background mode</string>
+    <string name="settings_run_mode_foreground">Foreground mode</string>
     <string name="settings_run_mode_hint_background">Runs on a separate virtual display so the phone stays usable; resolution derived from the project declaration</string>
     <string name="settings_run_mode_hint_foreground">Drives the current screen directly, occupying the phone while running; the target app is not restarted and preview touch is disabled</string>
-    <string name="settings_resource">Resource</string>
-    <string name="settings_no_resources">The project provides no selectable resources</string>
+    <string name="settings_resource">Server selection</string>
+    <string name="settings_no_resources">The project provides no selectable servers</string>
     <string name="settings_current_resource">Current resource</string>
     <string name="settings_not_selected">Not selected</string>
     <string name="settings_resource_hint">Switching resources affects task applicability; unavailable while running</string>
-    <string name="settings_developer">Developer</string>
-    <string name="settings_developer_mode">Developer mode</string>
     <string name="settings_reload_project">Reload project</string>
-    <string name="settings_no_diagnostics">No diagnostics</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_build">Build</string>
@@ -191,16 +201,23 @@
     <string name="schedule_edit_days">Days</string>
     <string name="schedule_edit_times">Times</string>
     <string name="schedule_edit_add_time">Add time</string>
-    <string name="schedule_edit_no_times">No times added</string>
     <string name="schedule_edit_start_time">First run</string>
-    <string name="schedule_edit_interval">Interval (minutes)</string>
-    <string name="schedule_edit_enabled">Enabled</string>
+    <string name="schedule_edit_interval">Execution interval</string>
     <string name="schedule_edit_save">Save</string>
     <string name="schedule_edit_delete">Delete</string>
-    <string name="schedule_edit_incomplete">Incomplete rule; it will not fire once saved</string>
+    <string name="schedule_edit_error_name">Name cannot be empty</string>
+    <string name="schedule_edit_error_days">Select at least one day</string>
+    <string name="schedule_edit_error_times">Add at least one time</string>
+    <string name="schedule_edit_error_start">Pick a start time</string>
+    <string name="schedule_edit_error_interval">Interval must be greater than 0</string>
+    <string name="schedule_edit_every_day">Every day</string>
 
     <string name="schedule_interval_minutes">Every %1$d min</string>
     <string name="schedule_interval_hours">Every %1$d h</string>
+    <string name="schedule_interval_days">Every %1$d d</string>
+    <string name="schedule_edit_days_unit">Days</string>
+    <string name="schedule_edit_hours_unit">Hours</string>
+    <string name="schedule_edit_total_hours">= %1$d hours</string>
 
     <string name="schedule_log_title">Trigger log</string>
     <string name="schedule_log_empty">No triggers recorded</string>
@@ -245,12 +262,10 @@
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>
-    <string name="permission_backend">Privilege backend</string>
-    <string name="permission_backend_hint">Starts the privileged process; without it the virtual display cannot run</string>
+    <string name="permission_backend">Startup mode</string>
     <string name="permission_granted">Granted</string>
     <string name="permission_request">Request</string>
     <string name="permission_requesting">Requesting…</string>
-    <string name="permission_backend_unavailable">Unavailable</string>
     <string name="permission_service_connected">Privileged process connected</string>
     <string name="permission_service_disconnected">Privileged process not connected</string>
     <string name="permission_open_shizuku">Shizuku shortcut</string>
@@ -262,7 +277,7 @@
     <string name="permission_overlay">Display over other apps</string>
     <string name="permission_storage">All files access</string>
     <string name="permission_accessibility">Accessibility service</string>
-    <string name="permission_keepalive_hint">If the system reclaims the app process while tasks run in the background, the virtual display goes with it. Notification and the battery whitelist reduce that risk.</string>
+    <string name="permission_keepalive_hint">While a background task is running, the app or the game may be cleared by system power-management policies. Lock the game in the recent-apps screen and allow it high-power background running in its battery settings.</string>
     <string name="home_overview">Overview</string>
     <string name="home_display_resolution">Screen resolution</string>
     <string name="home_service_status">Service status</string>
@@ -343,4 +358,11 @@
     <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
     <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
     <string name="schedule_default_name">Schedule %1$d</string>
+    <string name="settings_resolution">Virtual display resolution</string>
+    <string name="settings_resolution_720p">720P</string>
+    <string name="settings_resolution_1080p">1080P</string>
+    <string name="settings_debug_mode">Debug mode</string>
+    <string name="settings_debug_mode_desc">Records detailed MaaFramework logs on the next run once enabled</string>
+    <string name="dialog_enable_debug_title">Enable debug mode</string>
+    <string name="dialog_enable_debug_message">Requires an app restart to take effect. Detailed MaaFramework logs plus app and privileged-process logcat will be recorded.</string>
 </resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: time-picker.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M1.75,12.0a10.25,10.25 0 1,0 20.5,0a10.25,10.25 0 1,0 -20.5,0"/>
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M14.5 6.5L12 12L17 17.5"/>
+    <path
+        android:fillColor="#FF324350"
+        android:pathData="M10.0,12.0a2.0,2.0 0 1,0 4.0,0a2.0,2.0 0 1,0 -4.0,0"/>
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M13 11.625L12 12L5 15"/>
+    <path
+        android:fillColor="#FFFBCD2C"
+        android:pathData="M11.0,12.0a1.0,1.0 0 1,0 2.0,0a1.0,1.0 0 1,0 -2.0,0"/>
+</vector>

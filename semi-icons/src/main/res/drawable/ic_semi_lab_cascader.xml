@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: cascader.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FF4CC3FA"
+        android:pathData="M2 3.54818C2 2.82211 2.74939 2.33807 3.41122 2.63664L9 5.15789V22L3.17756 19.3733C2.46078 19.05 2 18.3366 2 17.5503V3.54818Z"/>
+    <path
+        android:fillColor="#FFFBCD2C"
+        android:pathData="M15 2L20.8224 4.62666C21.5392 4.95002 22 5.6634 22 6.44974V20.4518C22 21.1779 21.2506 21.6619 20.5888 21.3634L15 18.8421V2Z"/>
+    <path
+        android:fillColor="#FF324350"
+        android:pathData="M9 5.15789L15 2V18.8421L9 22V5.15789Z"/>
+</vector>

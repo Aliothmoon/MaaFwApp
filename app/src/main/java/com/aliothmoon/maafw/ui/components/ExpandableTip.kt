@@ -5,7 +5,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -15,9 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
@@ -30,17 +26,17 @@ fun ExpandableTipIcon(
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 视觉 16dp，触控区 ≥48dp（无障碍最小触控目标）
+    // 紧凑行内用：视觉 16dp，外框 IconContainer.sm，不撑到 48dp 以免表格行被垫高
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .size(MaaDesignTokens.IconContainer.sm)
             .clip(CircleShape)
             .maaClickable(onClick = { onExpandedChange(!expanded) }),
     ) {
         Icon(
             imageVector = Icons.Filled.Info,
-            contentDescription = stringResource(R.string.tasks_description_title),
+            contentDescription = null,
             tint = if (expanded) {
                 MaterialTheme.colorScheme.primary
             } else {

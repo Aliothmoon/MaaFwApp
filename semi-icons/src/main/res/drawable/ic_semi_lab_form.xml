@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Semi Design icon; source @douyinfe/semi-icons / semi-icons-lab (MIT) -->
+<!-- svg: form.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    >
+    <path
+        android:fillColor="#FFFF7D95"
+        android:pathData="M3.051,2.888h16.0v21.0h-16.0z"/>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.249,4.668h12.0v17.0h-12.0z"/>
+    <path android:fillType="evenOdd"
+        android:fillColor="#FFAAB2BF"
+        android:pathData="M12.3094 0.909647L13.886 0.743932C14.4353 0.686203 14.9273 1.08467 14.9851 1.63393L15.2987 4.61749L7.34248 5.45372L7.0289 2.47015C6.97117 1.92089 7.36963 1.42883 7.91889 1.3711L9.49556 1.20539C9.63945 0.60446 10.1484 0.131264 10.7979 0.0629958C11.4475 -0.00527278 12.0437 0.351766 12.3094 0.909647Z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M7.656,8.437h8.0v2.0h-8.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M8.074,12.415h8.0v2.0h-8.0z"/>
+    <path
+        android:fillColor="#FFDDE3E8"
+        android:pathData="M8.492,16.393h3.35025v2.0h-3.35025z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M20.0336 9.94762L15.1077 14.9076C15.0165 14.9977 14.9448 15.1053 14.8969 15.2237L14.0353 17.3532C13.8798 17.7375 14.2655 18.1188 14.6542 17.9651L16.8082 17.1133C16.9279 17.0659 17.0367 16.995 17.1279 16.9049L22.0538 11.9449L20.0336 9.94762Z"/>
+    <path
+        android:fillColor="#FF6A6F7F"
+        android:pathData="M22.0538 11.9449L22.7211 11.2731C23.093 10.9054 23.093 10.3092 22.7211 9.94153L22.0477 9.27577C21.6758 8.90808 21.0728 8.90808 20.7009 9.27577L20.0336 9.94762L22.0538 11.9449Z"/>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M0.0,0.0h24.0v24.0h-24.0z"/>
+</vector>

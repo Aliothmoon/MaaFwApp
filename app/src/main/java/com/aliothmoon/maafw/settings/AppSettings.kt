@@ -42,4 +42,16 @@ data class AppSettings(
     /** 后台模式运行期是否自动盖上屏保；默认关，盖住整块屏幕这种事要用户先点头 */
     @PrefKey(default = "false")
     val screenSaverEnabled: String = "false",
+
+    /** [com.aliothmoon.maafw.runner.ResolutionPreference] 的 name */
+    @PrefKey(default = "P720")
+    val resolutionPreference: String = "P720",
+
+    /** 调试模式：开启后给特权进程传 isDebug，记录 MaaFramework 详细日志 */
+    @PrefKey(default = "false")
+    val debugMode: String = "false",
+
+    /** [com.aliothmoon.maafw.theme.ThemeStyle] 的 name；DEFAULT 暖石蓝，SEMI_DESIGN 取 Semi Design 配色 */
+    @PrefKey(default = "DEFAULT")
+    val themeStyle: String = "DEFAULT",
 )

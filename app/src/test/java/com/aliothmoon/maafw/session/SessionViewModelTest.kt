@@ -23,7 +23,6 @@ import com.aliothmoon.maafw.runner.RecordingPreviewPort
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunLogKind
-import com.aliothmoon.maafw.runner.TestDisplaySource
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -118,7 +117,6 @@ class SessionViewModelTest {
             permissions,
             settings,
             locale,
-            TestDisplaySource,
         )
         return Triple(vm, store, runner)
     }
@@ -136,7 +134,6 @@ class SessionViewModelTest {
             FakePermissionGateway(),
             FakeAppSettingsGateway(),
             {},
-            TestDisplaySource,
         )
     }
 

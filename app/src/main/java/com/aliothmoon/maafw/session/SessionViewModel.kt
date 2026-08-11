@@ -6,6 +6,8 @@ import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.duplicateTask
+import com.aliothmoon.maafw.domain.renameTask
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -34,8 +36,8 @@ import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
-import com.aliothmoon.maafw.runner.ScreenSizeSource
-import com.aliothmoon.maafw.runner.resolveDisplayResolution
+import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +60,9 @@ private data class SettingsSnapshot(
     val runMode: RunMode,
     val overlayControlMode: OverlayControlMode,
     val screenSaverEnabled: Boolean,
+    val resolutionPreference: ResolutionPreference,
+    val debugMode: Boolean,
+    val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -78,7 +83,6 @@ class SessionViewModel(
     private val permissionGateway: PermissionGateway,
     private val appSettings: AppSettingsGateway,
     private val localeController: LocaleController,
-    private val displaySource: ScreenSizeSource,
 ) : ViewModel() {
 
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
@@ -95,7 +99,14 @@ class SessionViewModel(
         appSettings.runMode,
         appSettings.overlayControlMode,
         appSettings.screenSaverEnabled,
-    ) { runMode, overlayMode, screenSaver -> SettingsSnapshot(runMode, overlayMode, screenSaver) }
+        appSettings.resolutionPreference,
+        appSettings.debugMode,
+    ) { runMode, overlayMode, screenSaver, resolution, debug ->
+        SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
+    }.combine(appSettings.themeStyle) { snapshot, style ->
+        snapshot.copy(themeStyle = style)
+    }
+
 
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
@@ -106,6 +117,7 @@ class SessionViewModel(
     ) { project, config, runner, privileged, settings ->
         buildUiState(project, config, runner, privileged, settings)
     }.flowOn(Dispatchers.Default) // resolve 属重计算，不占用主线程
+        .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -197,16 +209,17 @@ class SessionViewModel(
             projectState = project,
             runner = runner,
             themeMode = config.themeMode,
-            developerMode = config.developerMode,
+            debugMode = settings.debugMode,
+            themeStyle = settings.themeStyle,
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
             screenSaverEnabled = settings.screenSaverEnabled,
+            resolutionPreference = settings.resolutionPreference,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
             privilegedService = privileged.serviceState,
             systemPermissions = privileged.systemPermissions,
-            screenResolution = displaySource.current(),
         )
         if (project !is ProjectState.Ready) return base
         val session = resolveCached(project, config)
@@ -216,11 +229,7 @@ class SessionViewModel(
             taskCatalog = session.taskCatalog,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
-            previewResolution = when (runMode) {
-                RunMode.FOREGROUND -> displaySource.current()
-                RunMode.BACKGROUND ->
-                    resolveDisplayResolution(project.definition.controller, displaySource.current())
-            },
+            previewResolution = settings.resolutionPreference.resolution,
         )
     }
 
@@ -303,6 +312,17 @@ class SessionViewModel(
                     )
                 }
             }
+            is SessionIntent.DuplicateTask -> guarded {
+                mutateConfiguration(intent.configurationId) {
+                    it.duplicateTask(intent.taskInstanceId, intent.customLabel)
+                }
+            }
+
+            is SessionIntent.RenameTask -> guarded {
+                mutateConfiguration(intent.configurationId) {
+                    it.renameTask(intent.taskInstanceId, intent.customLabel)
+                }
+            }
 
             is SessionIntent.ToggleTask -> guarded {
                 mutateTask(intent.configurationId, intent.taskInstanceId) { it.copy(enabled = intent.enabled) }
@@ -333,8 +353,13 @@ class SessionViewModel(
             is SessionIntent.SetThemeMode ->
                 configurationStore.update { it.copy(themeMode = intent.mode) }
 
-            is SessionIntent.SetDeveloperMode ->
-                configurationStore.update { it.copy(developerMode = intent.enabled) }
+            is SessionIntent.SetDebugMode -> {
+                appSettings.setDebugMode(intent.enabled)
+                if (intent.enabled) effectChannel.send(SessionEffect.RestartApp)
+            }
+
+            is SessionIntent.SetThemeStyle ->
+                appSettings.setThemeStyle(intent.style)
 
             // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上
             is SessionIntent.SetRunMode -> guarded {
@@ -343,6 +368,10 @@ class SessionViewModel(
 
             is SessionIntent.SetOverlayControlMode -> guarded {
                 appSettings.setOverlayControlMode(intent.mode)
+            }
+
+            is SessionIntent.SetResolutionPreference -> guarded {
+                appSettings.setResolutionPreference(intent.preference)
             }
 
             // 不走 guarded：屏保只盖窗口，与运行配置无关，运行中恰恰是它最该开的时候
@@ -460,6 +489,12 @@ class SessionViewModel(
 
     /** 发起本身在 [RunLauncher]（进程级，定时触发共用同一条）；这里只把结局翻成 UI 消息 */
     private suspend fun start() {
+        // 前台模式不从任务页启动（对齐 MaaMeow）：按钮灰显但仍可点，点了给这条提示
+        // 只压这个入口，不下沉进 RunLauncher：定时触发不经任务页，那条路仍按配置直发
+        if (appSettings.runMode.value == RunMode.FOREGROUND) {
+            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
+            return
+        }
         when (val result = runLauncher.launch()) {
             RunLaunchResult.Started -> Unit
 

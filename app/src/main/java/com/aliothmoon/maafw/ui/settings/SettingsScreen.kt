@@ -2,13 +2,19 @@ package com.aliothmoon.maafw.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,10 +22,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.runner.ResolutionPreference
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.session.SessionIntent
@@ -27,6 +37,7 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
@@ -34,6 +45,7 @@ import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     state: SessionUiState,
@@ -42,18 +54,42 @@ fun SettingsScreen(
     onSettingsIntent: (SettingsIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(MaaDesignTokens.Spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
-    ) {
-        AppearanceCard(state, onIntent)
-        LanguageCard(state, onIntent)
-        BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
-        DeveloperCard(state, onIntent)
-        AboutCard()
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(R.string.nav_settings),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                titleContentColor = MaterialTheme.colorScheme.onBackground,
+                actionIconContentColor = MaterialTheme.colorScheme.primary,
+            ),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    top = MaaDesignTokens.Spacing.sm,
+                    bottom = MaaDesignTokens.Spacing.lg,
+                ),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+        ) {
+            AppearanceCard(state, onIntent)
+            LanguageCard(state, onIntent)
+            BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
+            ResolutionCard(state, onIntent)
+            DebugCard(state, onIntent)
+            AboutCard()
+        }
     }
 }
 
@@ -69,6 +105,16 @@ private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> U
             options = modes,
             selected = state.themeMode,
             onSelect = { onIntent(SessionIntent.SetThemeMode(it)) },
+        )
+        Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
+        val styles = listOf(
+            ThemeStyle.DEFAULT to stringResource(R.string.settings_theme_style_default),
+            ThemeStyle.SEMI_DESIGN to stringResource(R.string.settings_theme_style_semi),
+        )
+        MaaSingleChoiceFlow(
+            options = styles,
+            selected = state.themeStyle,
+            onSelect = { onIntent(SessionIntent.SetThemeStyle(it)) },
         )
     }
 }
@@ -114,37 +160,45 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
     }
 }
 
+/**
+ * 调试模式（对齐 MaaMeow）：开启后给特权进程传 isDebug，下一轮运行起记录 MaaFramework 详细日志；
+ * 启用时弹确认，关闭直接关。诊断不在这一页展示（首页/启动失败时会露面）
+ */
 @Composable
-private fun DeveloperCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_developer)) {
+private fun DebugCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    var showEnableConfirm by remember { mutableStateOf(false) }
+    // 单行：只留开关行；启用走确认弹窗，确认即落盘 + 重启 App（对齐 MaaMeow）
+    MaaCard {
         MaaLabeledControlRow(
-            label = stringResource(R.string.settings_developer_mode),
+            label = stringResource(R.string.settings_debug_mode),
             trailing = {
                 MaaSwitch(
-                    checked = state.developerMode,
-                    onCheckedChange = { onIntent(SessionIntent.SetDeveloperMode(it)) },
+                    checked = state.debugMode,
+                    onCheckedChange = { enabled ->
+                        if (enabled) showEnableConfirm = true
+                        else onIntent(SessionIntent.SetDebugMode(false))
+                    },
                 )
             },
         )
-        OutlinedButton(
-            onClick = { onIntent(SessionIntent.ReloadProject) },
-            enabled = !state.configurationLocked,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.settings_reload_project))
-        }
-        if (state.developerMode) {
-            val diagnostics = state.visibleDiagnostics
-            if (diagnostics.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.settings_no_diagnostics),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                MaaDiagnosticList(diagnostics, showSeverity = true)
-            }
-        }
+    }
+    if (showEnableConfirm) {
+        AlertDialog(
+            onDismissRequest = { showEnableConfirm = false },
+            title = { Text(stringResource(R.string.dialog_enable_debug_title)) },
+            text = { Text(stringResource(R.string.dialog_enable_debug_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showEnableConfirm = false
+                    onIntent(SessionIntent.SetDebugMode(true))
+                }) { Text(stringResource(R.string.common_restart)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEnableConfirm = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
     }
 }
 
@@ -163,22 +217,29 @@ private fun BackendCard(
     val access = settingsState.remoteAccess
     MaaCard(title = stringResource(R.string.permission_backend)) {
         MaaSingleChoiceFlow(
-            options = RemoteBackend.entries.map { entry ->
-                val suffix = if (access.isAvailable(entry)) {
-                    ""
-                } else {
-                    "（${stringResource(R.string.permission_backend_unavailable)}）"
-                }
-                entry to "${entry.display}$suffix"
-            },
+            // 对齐 MaaMeow：只列后端名，不展示「可用/不可用」——选哪个都行，可用性交给连接流程判
+            options = RemoteBackend.entries.map { it to it.display },
             selected = access.configuredBackend,
             enabled = !locked,
             onSelect = { onSettingsIntent(SettingsIntent.SetBackend(it)) },
         )
-        Text(
-            text = stringResource(R.string.permission_backend_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    }
+}
+
+/**
+ * 虚拟屏分辨率：720P / 1080P（对齐 MaaMeow 的可配置偏好）
+ */
+@Composable
+private fun ResolutionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_resolution)) {
+        MaaSingleChoiceFlow(
+            options = listOf(
+                ResolutionPreference.P720 to stringResource(R.string.settings_resolution_720p),
+                ResolutionPreference.P1080 to stringResource(R.string.settings_resolution_1080p),
+            ),
+            selected = state.resolutionPreference,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SetResolutionPreference(it)) },
         )
     }
 }

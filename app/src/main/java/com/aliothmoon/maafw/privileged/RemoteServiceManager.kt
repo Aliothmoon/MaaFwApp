@@ -64,6 +64,8 @@ object RemoteServiceManager : PrivilegedServicePort {
         .map { it.toPrivilegedServiceState() }
         .stateIn(timeoutScope, SharingStarted.Eagerly, PrivilegedServiceState.Disconnected)
 
+    override val currentBackend: RemoteBackend? get() = boundBackend
+
     // 携带绑定时的 binder，迟到的死亡通知靠身份比对丢弃
     private class BindingDeathRecipient(val binder: IBinder) : IBinder.DeathRecipient {
         override fun binderDied() = onBinderDied(this)
@@ -144,6 +146,7 @@ object RemoteServiceManager : PrivilegedServicePort {
         ShizukuManager.initSui(context.packageName)
         RemoteAccessCoordinator.initialize(backendProvider)
         RootRemoteServiceConnector.initialize(context)
+        LogcatServiceManager.initialize(context)
     }
 
     private fun onBinderDied(recipient: BindingDeathRecipient) {
