@@ -115,39 +115,24 @@ val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
     }
 }
 
-// 指纹判断已解包的 PI 是否过期；清单让解包按行直取，免去逐层 AssetManager.list()（每层都是 native 调用）
-// 不用 BuildConfig：两者都要等 syncPiAssets 执行完才算得出，而 BuildConfig 的值在 configuration 阶段就得定
-val writePiIndex = tasks.register("writePiIndex") {
+// 清单让解包按行直取，免去逐层 AssetManager.list()（每层都是 native 调用）
+// 不塞进 BuildConfig：清单要等 syncPiAssets 执行完才列得出，而 BuildConfig 的值在 configuration 阶段就得定
+// 已解包的 PI 是否过期改由 versionCode 判定（PiInstaller），构建期不再算内容指纹
+val writePiManifest = tasks.register("writePiManifest") {
     group = "build"
-    description = "算出同步后 PI 的内容指纹与解包清单，落成 assets/pi.fingerprint 与 assets/pi.manifest"
+    description = "列出同步后 PI 的解包清单，落成 assets/pi.manifest"
     dependsOn(syncPiAssets)
     val piDir = piAssetsDir.map { it.dir("pi") }
-    val fingerprintFile = piAssetsDir.map { it.file("pi.fingerprint") }
     val manifestFile = piAssetsDir.map { it.file("pi.manifest") }
     inputs.dir(piDir).withPathSensitivity(PathSensitivity.RELATIVE)
-    outputs.file(fingerprintFile)
     outputs.file(manifestFile)
     doLast {
         val root = piDir.get().asFile
-        val digest = MessageDigest.getInstance("SHA-256")
         val entries = root.walkTopDown()
             .filter { it.isFile }
             .map { it.toRelativeString(root).replace('\\', '/') }
             .sorted()
             .toList()
-        entries.forEach { entry ->
-            // 路径一并入摘要：只比内容会漏掉纯改名
-            digest.update(entry.toByteArray())
-            File(root, entry).inputStream().use { stream ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val read = stream.read(buffer)
-                    if (read <= 0) break
-                    digest.update(buffer, 0, read)
-                }
-            }
-        }
-        fingerprintFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
         // 一行一条相对路径，运行时按行读，app 侧不必解析 JSON
         manifestFile.get().asFile.writeText(entries.joinToString("\n"))
     }
@@ -332,7 +317,7 @@ android {
 }
 
 tasks.named("preBuild") {
-    dependsOn(writePiIndex, writeAgentIndex, syncAgentJniLibs)
+    dependsOn(writePiManifest, writeAgentIndex, syncAgentJniLibs)
 }
 
 // AGP 9 不再接受 Provider 形式的 sourceSet srcDir，只能走 Variant API

@@ -238,7 +238,7 @@ class MaaFrameworkRunnerPort(
      * 后端换了也会重新绑定
      */
     private suspend fun launchOnService(plan: RunPlan): String? {
-        val piRoot = installer.ensureInstalled()
+        val piRoot = installer.installedDir()
         return servicePort.useService { service -> prepareAndStart(plan, piRoot, service) }
     }
 

@@ -439,4 +439,19 @@
     <string name="settings_debug_mode_desc">启用后下一轮运行起记录 MaaFramework 详细日志</string>
     <string name="dialog_enable_debug_title">启用调试模式</string>
     <string name="dialog_enable_debug_message">启用后需要重启 App 生效，将记录 MaaFramework 详细日志与 app、特权进程的 logcat。</string>
+
+    <!-- PI 解包 -->
+    <string name="pi_install_title">正在准备项目资源</string>
+    <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
+    <string name="pi_install_note">首次启动与版本更新后需要解包一次，请勿退出。</string>
+    <string name="pi_install_failed_title">项目资源准备失败</string>
+    <string name="pi_install_failed_message">%1$s\n\n可以重试；若反复失败，请检查存储空间与外部存储是否可用。</string>
+    <string name="pi_install_retry">重试</string>
+    <string name="pi_install_error">解包失败：%1$s</string>
+
+    <string name="settings_section_pi">项目资源</string>
+    <string name="pi_reinstall_title">重新解包</string>
+    <string name="pi_reinstall_desc">清空已解包的项目资源并从安装包重新铺一份</string>
+    <string name="dialog_reinstall_pi_title">重新解包项目资源</string>
+    <string name="dialog_reinstall_pi_message">将删除设备上已解包的一份并重新解包，期间不可退出。运行配置与日志不受影响。</string>
 </resources>

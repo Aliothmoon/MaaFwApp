@@ -445,4 +445,19 @@
     <string name="settings_debug_mode_desc">Records detailed MaaFramework logs on the next run once enabled</string>
     <string name="dialog_enable_debug_title">Enable debug mode</string>
     <string name="dialog_enable_debug_message">Requires an app restart to take effect. Detailed MaaFramework logs plus app and privileged-process logcat will be recorded.</string>
+
+    <!-- PI unpacking -->
+    <string name="pi_install_title">Preparing project resources</string>
+    <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
+    <string name="pi_install_note">Unpacked once on first launch and after each version update. Please stay in the app.</string>
+    <string name="pi_install_failed_title">Failed to prepare project resources</string>
+    <string name="pi_install_failed_message">%1$s\n\nYou can retry. If it keeps failing, check free space and whether external storage is available.</string>
+    <string name="pi_install_retry">Retry</string>
+    <string name="pi_install_error">Unpacking failed: %1$s</string>
+
+    <string name="settings_section_pi">Project resources</string>
+    <string name="pi_reinstall_title">Unpack again</string>
+    <string name="pi_reinstall_desc">Clear the unpacked project resources and lay down a fresh copy from the APK</string>
+    <string name="dialog_reinstall_pi_title">Unpack project resources again</string>
+    <string name="dialog_reinstall_pi_message">The unpacked copy on this device will be deleted and unpacked again. Do not leave the app while it runs. Run configurations and logs are unaffected.</string>
 </resources>

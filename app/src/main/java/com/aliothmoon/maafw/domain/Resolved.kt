@@ -133,7 +133,7 @@ data class InputFieldState(
     val isValid: Boolean get() = validateInputCandidate(pipelineType, verify, value)
 }
 
-/** UI 即时校验与 Builder 复验共用（docs/dynamic-options.md §8） */
+/** UI 即时校验与 Builder 复验共用（docs/domain-model.md §6.6） */
 fun validateInputCandidate(type: PipelineType, verify: Regex?, candidate: String): Boolean {
     val typeOk = when (type) {
         PipelineType.StringType -> true

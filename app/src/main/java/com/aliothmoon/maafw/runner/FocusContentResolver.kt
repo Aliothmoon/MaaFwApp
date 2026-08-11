@@ -79,7 +79,7 @@ class PrivilegedFocusContentResolver(
 
     /** 读不到回落原文：PI 作者可能本来就想显示这行字 */
     private fun readProjectFile(content: String): String = runCatching {
-        val root = installer.ensureInstalled()
+        val root = installer.installedDir()
         val file = File(root, normalizeProjectPath(content))
         if (file.isFile) file.readText() else content
     }.getOrElse {

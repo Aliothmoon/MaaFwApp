@@ -97,6 +97,7 @@ fun SettingsScreen(
             ResolutionCard(state, onIntent)
             ScheduleUnlockCard(state, onIntent)
             LogCard(onOpenRunLogArchive, onOpenAppLog, onExportLogs)
+            PiCard(onIntent)
             DebugCard(state, onIntent)
             AboutCard()
         }
@@ -232,6 +233,42 @@ private fun LogCard(
             label = stringResource(R.string.log_export_title),
             description = stringResource(R.string.settings_log_export_desc),
             onClick = onExportLogs,
+        )
+    }
+}
+
+/**
+ * 重解 PI 的手动出口
+ *
+ * 平时只有 versionCode 变了才重解；PI 在仓库外，「只换 PI 没换版本号」就得从这里手动来一次
+ * （docs/privileged-runtime.md §9 的已知空档）。运行中由 ViewModel 的 guarded 挡下并给提示
+ */
+@Composable
+private fun PiCard(onIntent: (SessionIntent) -> Unit) {
+    var showConfirm by remember { mutableStateOf(false) }
+    MaaCard(title = stringResource(R.string.settings_section_pi)) {
+        MaaNavigationRow(
+            label = stringResource(R.string.pi_reinstall_title),
+            description = stringResource(R.string.pi_reinstall_desc),
+            onClick = { showConfirm = true },
+        )
+    }
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text(stringResource(R.string.dialog_reinstall_pi_title)) },
+            text = { Text(stringResource(R.string.dialog_reinstall_pi_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showConfirm = false
+                    onIntent(SessionIntent.ReinstallPi)
+                }) { Text(stringResource(R.string.dialog_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            },
         )
     }
 }

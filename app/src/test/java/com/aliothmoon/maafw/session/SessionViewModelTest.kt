@@ -17,6 +17,9 @@ import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
+import com.aliothmoon.maafw.project.PiInstallCoordinator
+import com.aliothmoon.maafw.project.PiInstaller
+import com.aliothmoon.maafw.project.PiPackage
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
@@ -53,6 +56,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonObject
+import java.io.FileNotFoundException
+import java.io.InputStream
 import kotlin.io.path.createTempDirectory
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -60,6 +65,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+
+/** 不带任何条目的 PI 包；解包走完整条路径但一个文件都不落 */
+private object EmptyPiPackage : PiPackage {
+    override fun manifest(): List<String> = emptyList()
+
+    override fun open(path: String): InputStream = throw FileNotFoundException(path)
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionViewModelTest {
@@ -156,6 +168,7 @@ class SessionViewModelTest {
             localeController = locale,
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
+            piInstall = emptyPiInstall(),
             computeDispatcher = mainDispatcher,
         )
         return Triple(vm, store, runner)
@@ -180,6 +193,7 @@ class SessionViewModelTest {
             localeController = {},
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
+            piInstall = emptyPiInstall(),
             computeDispatcher = mainDispatcher,
         )
     }
@@ -205,6 +219,17 @@ class SessionViewModelTest {
         scope = backgroundScope,
         ioDispatcher = mainDispatcher,
     )
+
+    /**
+     * 空清单的解包：VM 这一层只关心它放不放行 reload，解包本身另有 PiInstallerTest 覆盖
+     */
+    private fun emptyPiInstall(): PiInstallCoordinator {
+        val base = createTempDirectory("pi-install").toFile()
+        return PiInstallCoordinator(
+            installer = PiInstaller(EmptyPiPackage, { base }, versionCode = 1),
+            ioDispatcher = mainDispatcher,
+        )
+    }
 
     /** 不接任何 RunnerPort 的 dispatcher：focus 的补完另有 FocusDispatcherTest 覆盖 */
     private fun TestScope.idleFocusDispatcher(

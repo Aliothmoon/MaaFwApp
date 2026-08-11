@@ -33,7 +33,7 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 
 /**
  * 按 OptionEditorState 树渲染；子 option 与父共用 task 级 value map
- * carded：顶层各包白卡；缩进/字号见 docs/ui-implementation-notes.md B4
+ * carded：顶层各包白卡；缩进/字号见 docs/design-system.md §5.1
  */
 @Composable
 fun OptionEditorList(

@@ -21,6 +21,7 @@ import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
+import com.aliothmoon.maafw.project.PiInstallState
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.ResolutionPreference
@@ -31,6 +32,8 @@ import com.aliothmoon.maafw.runner.isBusy
 /** 跨页工作会话聚合态；Activity 作用域单实例，UI 只读 */
 data class SessionUiState(
     val projectState: ProjectState = ProjectState.Loading,
+    /** PI 解包，排在 projectState 之前：解包不完成就没有 PI 可加载 */
+    val piInstallState: PiInstallState = PiInstallState.NotChecked,
     val configurationList: List<ResolvedRunConfiguration> = emptyList(),
     val activeConfiguration: ResolvedRunConfiguration? = null,
     val taskCatalog: List<TaskCatalogGroup> = emptyList(),
@@ -233,6 +236,9 @@ sealed interface SessionIntent {
     /** 不等运行开始，立刻盖上屏保；同样要 Application 上下文 */
     data object ShowScreenSaver : SessionIntent
     data object ReloadProject : SessionIntent
+
+    /** 无条件重解 PI 再重载；失败弹窗的重试与设置页的手动重来是同一个动作 */
+    data object ReinstallPi : SessionIntent
 
     data object Start : SessionIntent
     data object Stop : SessionIntent

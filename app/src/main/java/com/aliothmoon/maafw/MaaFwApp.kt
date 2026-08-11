@@ -28,6 +28,7 @@ import com.aliothmoon.maafw.project.AssetPiPackage
 import com.aliothmoon.maafw.project.DefaultProjectRepository
 import com.aliothmoon.maafw.project.InstalledProjectSource
 import com.aliothmoon.maafw.project.PI_ASSET_ROOT
+import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.ProjectLoader
 import com.aliothmoon.maafw.project.ProjectRepository
@@ -43,7 +44,6 @@ import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
-import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
@@ -163,9 +163,10 @@ val appModule = module {
                     "外部私有目录不可用（外部存储未挂载），PI 无法解包"
                 }
             },
-            fingerprint = readPiFingerprint(context),
+            versionCode = BuildConfig.VERSION_CODE,
         )
     }
+    single { PiInstallCoordinator(get(), Dispatchers.IO) }
     single<ProjectSource> { InstalledProjectSource(get()) }
     single { ProjectLoader(get(), localeProvider = AppLocales::currentProjectTag) }
     single<ProjectRepository> { DefaultProjectRepository(get(), Dispatchers.IO) }
@@ -384,6 +385,7 @@ val appModule = module {
             localeController = AppLocales,
             focusDispatcher = get(),
             recorder = get(),
+            piInstall = get(),
             computeDispatcher = Dispatchers.Default,
         )
     }

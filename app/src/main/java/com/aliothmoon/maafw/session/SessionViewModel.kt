@@ -21,6 +21,7 @@ import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ServiceBindResult
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermissionState
+import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
@@ -94,6 +95,7 @@ class SessionViewModel(
     private val focusDispatcher: FocusDispatcher,
     /** 运行日志的产地；VM 只转发它的流并转达「清空」 */
     private val recorder: RunLogRecorder,
+    private val piInstall: PiInstallCoordinator,
     /**
      * resolve 那步的落点；生产是 Dispatchers.Default
      *
@@ -139,6 +141,7 @@ class SessionViewModel(
         buildUiState(project, config, runner, privileged, settings)
     }.flowOn(computeDispatcher) // resolve 属重计算，不占用主线程
         .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
+        .combine(piInstall.state) { base, install -> base.copy(piInstallState = install) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -166,7 +169,10 @@ class SessionViewModel(
     private val intents = Channel<SessionIntent>(Channel.UNLIMITED)
 
     init {
-        viewModelScope.launch { projectRepository.reload() }
+        // 解包在前、加载在后；解包没成，reload 只会拿到一句「PI 尚未解包」
+        viewModelScope.launch {
+            if (piInstall.ensureInstalled()) projectRepository.reload()
+        }
         viewModelScope.launch {
             for (intent in intents) handle(intent)
         }
@@ -420,6 +426,10 @@ class SessionViewModel(
 
             SessionIntent.ReloadProject -> guarded {
                 projectRepository.reload()
+            }
+
+            SessionIntent.ReinstallPi -> guarded {
+                if (piInstall.reinstall()) projectRepository.reload()
             }
 
             SessionIntent.Start -> start()

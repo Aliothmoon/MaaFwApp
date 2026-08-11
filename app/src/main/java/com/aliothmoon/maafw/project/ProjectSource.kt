@@ -31,12 +31,12 @@ class DirectoryProjectSource(private val root: File) : ProjectSource {
 }
 
 /**
- * 首次访问时解包，之后委托给解包目录
- * 解包是阻塞 IO，由 ProjectRepository 在 IO dispatcher 上触发 load 来保证不占主线程
+ * 委托给已解包的目录，自身不解包
+ * 解包归 [PiInstallCoordinator]；这里再兜一次的话，失败会以「interface.json 读取失败」的面目出现
  */
 class InstalledProjectSource(private val installer: PiInstaller) : ProjectSource {
 
-    private val delegate: ProjectSource by lazy { DirectoryProjectSource(installer.ensureInstalled()) }
+    private val delegate: ProjectSource by lazy { DirectoryProjectSource(installer.installedDir()) }
 
     // 解包目录名是外壳定的固定值，不带项目信息；PI 未声明 name 时回落它作中性兜底
     override val projectName: String = PI_ASSET_ROOT

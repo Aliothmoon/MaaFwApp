@@ -91,6 +91,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
+import com.aliothmoon.maafw.ui.components.PiInstallDialog
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
 import com.aliothmoon.maafw.ui.navigation.Routes
@@ -128,7 +129,7 @@ private enum class TopDestination(
     Settings(R.string.nav_settings, Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
-/** Route：收集 state、消费 Effect、承载三 tab；VM 为 Activity 作用域 */
+/** Route：收集 state、消费 Effect、承载四个主 tab 与二级页面的 NavHost；VM 为 Activity 作用域 */
 @Composable
 fun AppRoot(
     onDarkThemeChanged: (Boolean) -> Unit,
@@ -247,6 +248,12 @@ fun AppRoot(
             onDismiss = { viewModel.onIntent(SessionIntent.SkipShizukuCheck) },
             onSwitchToRoot = { settingsViewModel.onIntent(SettingsIntent.SetBackend(RemoteBackend.ROOT)) },
             isRequesting = state.remoteAccessGranting,
+        )
+
+        // 排在 Shizuku 引导之后才盖得住它：PI 没铺好之前，授不授权都无事可做
+        PiInstallDialog(
+            state = state.piInstallState,
+            onRetry = { viewModel.onIntent(SessionIntent.ReinstallPi) },
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
