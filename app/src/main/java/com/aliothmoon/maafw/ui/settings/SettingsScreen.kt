@@ -42,6 +42,7 @@ import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
+import com.aliothmoon.maafw.ui.components.MaaNavigationRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +56,10 @@ fun SettingsScreen(
     onIntent: (SessionIntent) -> Unit,
     settingsState: SettingsUiState,
     onSettingsIntent: (SettingsIntent) -> Unit,
+    // 二级页面与 SAF 都需要 Activity 宿主，导航与弹窗归 AppRoot 那一层
+    onOpenRunLogArchive: () -> Unit,
+    onOpenAppLog: () -> Unit,
+    onExportLogs: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -91,6 +96,7 @@ fun SettingsScreen(
             BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
             ResolutionCard(state, onIntent)
             ScheduleUnlockCard(state, onIntent)
+            LogCard(onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             DebugCard(state, onIntent)
             AboutCard()
         }
@@ -201,6 +207,32 @@ private fun ScheduleUnlockCard(state: SessionUiState, onIntent: (SessionIntent) 
                 },
             )
         }
+    }
+}
+
+/** 三个入口都是「离开这一页」，不带任何开关，因此不参与运行锁定 */
+@Composable
+private fun LogCard(
+    onOpenRunLogArchive: () -> Unit,
+    onOpenAppLog: () -> Unit,
+    onExportLogs: () -> Unit,
+) {
+    MaaCard(title = stringResource(R.string.settings_section_log)) {
+        MaaNavigationRow(
+            label = stringResource(R.string.log_archive_title),
+            description = stringResource(R.string.settings_log_archive_desc),
+            onClick = onOpenRunLogArchive,
+        )
+        MaaNavigationRow(
+            label = stringResource(R.string.app_log_title),
+            description = stringResource(R.string.settings_log_error_desc),
+            onClick = onOpenAppLog,
+        )
+        MaaNavigationRow(
+            label = stringResource(R.string.log_export_title),
+            description = stringResource(R.string.settings_log_export_desc),
+            onClick = onExportLogs,
+        )
     }
 }
 

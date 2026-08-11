@@ -5,6 +5,7 @@ import android.util.Log
 import com.aliothmoon.maafw.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -96,7 +97,12 @@ class AppLogWriter(private val logDir: () -> File) {
         writtenBytes = -1L
     }
 
-    /** 只留一份历史：留多份会在设备上堆出几十 MB，而排障基本只看最近一次 */
+    /**
+     * 满一份就整体后移一位，最老的丢掉
+     *
+     * 留 [MAX_FILES] 份而不是一份：一次长跑几分钟就能把 4MB 写满，只留一份的话
+     * 用户回头来看时现场早被后来的日志顶掉了
+     */
     private fun rotateIfNeeded() {
         if (writtenBytes < 0) {
             val file = currentFile()
@@ -106,16 +112,43 @@ class AppLogWriter(private val logDir: () -> File) {
         if (writtenBytes < MAX_FILE_BYTES) return
 
         closeStream()
-        val current = currentFile()
-        val previous = File(current.parentFile, PREVIOUS_FILE_NAME)
+        val dir = logDir()
         runCatching {
-            if (previous.exists()) previous.delete()
-            current.renameTo(previous)
+            File(dir, rotatedName(MAX_FILES - 1)).delete()
+            for (index in MAX_FILES - 2 downTo 1) {
+                val from = File(dir, rotatedName(index))
+                if (from.exists()) from.renameTo(File(dir, rotatedName(index + 1)))
+            }
+            currentFile().renameTo(File(dir, rotatedName(1)))
         }
         writtenBytes = 0L
     }
 
+    /** 当前那份在最前，其余按新旧；错误日志页与导出都吃这个顺序 */
+    fun listFiles(): List<File> = runCatching {
+        logDir().listFiles()
+            ?.filter { it.isFile && FILE_PATTERN.matches(it.name) }
+            ?.sortedByDescending { it.lastModified() }
+            .orEmpty()
+    }.getOrElse {
+        Log.w(TAG, "Failed to list app logs", it)
+        emptyList()
+    }
+
+    /**
+     * 走同一条通道，保证与写入串行——直接删会把正在写的那个流的文件描述符悬空
+     *
+     * 返回 Job 让调用方 join 得到：删完再刷新列表，否则刷出来的还是旧的那几份
+     */
+    fun clearAll(): Job = scope.launch {
+        closeStream()
+        runCatching { listFiles().forEach { it.delete() } }
+            .onFailure { Log.w(TAG, "Failed to clear app logs", it) }
+    }
+
     private fun currentFile(): File = File(logDir().apply { mkdirs() }, CURRENT_FILE_NAME)
+
+    private fun rotatedName(index: Int): String = "app.$index.log"
 
     private fun format(priority: Int, tag: String?, message: String, throwable: Throwable?): String {
         val level = when (priority) {
@@ -137,9 +170,12 @@ class AppLogWriter(private val logDir: () -> File) {
     private companion object {
         const val TAG = "AppLogWriter"
         const val CURRENT_FILE_NAME = "app.log"
-        const val PREVIOUS_FILE_NAME = "app.log.1"
         const val BUFFER_SIZE = 8 * 1024
         const val MAX_FILE_BYTES = 4L * 1024 * 1024
+        const val MAX_FILES = 5
         const val QUEUE_CAPACITY = 512
+
+        /** `app.log` 与 `app.<n>.log`；与 [rotatedName] 是一对，改一处要改两处 */
+        val FILE_PATTERN = Regex("""app(\.\d+)?\.log""")
     }
 }

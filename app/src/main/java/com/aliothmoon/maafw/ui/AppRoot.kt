@@ -94,6 +94,11 @@ import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
 import com.aliothmoon.maafw.ui.navigation.Routes
+import com.aliothmoon.maafw.ui.logs.AppLogDetailScreen
+import com.aliothmoon.maafw.ui.logs.AppLogScreen
+import com.aliothmoon.maafw.ui.logs.LogExportController
+import com.aliothmoon.maafw.ui.logs.RunLogArchiveScreen
+import com.aliothmoon.maafw.ui.logs.RunLogDetailScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
@@ -187,6 +192,7 @@ fun AppRoot(
         val scope = rememberCoroutineScope()
         val snackbarHostState = remember { SnackbarHostState() }
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
+        var exportSheetVisible by remember { mutableStateOf(false) }
 
         val context = LocalContext.current
         LaunchedEffect(Unit) {
@@ -344,6 +350,9 @@ fun AppRoot(
                         onIntent = viewModel::onIntent,
                         settingsState = settingsState,
                         onSettingsIntent = settingsViewModel::onIntent,
+                        onOpenRunLogArchive = { navController.navigate(Routes.RUN_LOG_ARCHIVE) },
+                        onOpenAppLog = { navController.navigate(Routes.APP_LOG) },
+                        onExportLogs = { exportSheetVisible = true },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -381,9 +390,50 @@ fun AppRoot(
                 composable(Routes.SCHEDULE_TRIGGER_LOG) {
                     ScheduleTriggerLogScreen(onBack = { navController.popBackStack() })
                 }
+                composable(Routes.RUN_LOG_ARCHIVE) {
+                    RunLogArchiveScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpen = { navController.navigate(Routes.runLogDetail(it)) },
+                    )
+                }
+                composable(Routes.APP_LOG) {
+                    AppLogScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpen = { navController.navigate(Routes.appLogDetail(it)) },
+                    )
+                }
+                composable(
+                    route = Routes.APP_LOG_DETAIL,
+                    arguments = listOf(
+                        navArgument(Routes.APP_LOG_DETAIL_ARG) { type = NavType.StringType },
+                    ),
+                ) { entry ->
+                    AppLogDetailScreen(
+                        fileName = entry.arguments?.getString(Routes.APP_LOG_DETAIL_ARG).orEmpty(),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable(
+                    route = Routes.RUN_LOG_DETAIL,
+                    arguments = listOf(
+                        navArgument(Routes.RUN_LOG_DETAIL_ARG) { type = NavType.StringType },
+                    ),
+                ) { entry ->
+                    RunLogDetailScreen(
+                        fileName = entry.arguments?.getString(Routes.RUN_LOG_DETAIL_ARG).orEmpty(),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
         }
         }
+
+        // 无条件挂在这一层：它注册的 SAF launcher 要活得比 sheet 的显隐久
+        LogExportController(
+            visible = exportSheetVisible,
+            onDismiss = { exportSheetVisible = false },
+            onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+        )
 
         // 挂在 Scaffold 之外，才盖得住底部 tab 栏与系统栏
         val fullscreenResolution = state.previewResolution

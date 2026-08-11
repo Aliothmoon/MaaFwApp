@@ -26,6 +26,8 @@ import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.runner.RunLogRecorder
+import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusContentResolver
@@ -51,6 +53,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonObject
+import kotlin.io.path.createTempDirectory
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -141,6 +144,7 @@ class SessionViewModelTest {
         permissions: FakePermissionGateway = FakePermissionGateway(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
+        val focusDispatcher = idleFocusDispatcher()
         val vm = SessionViewModel(
             projectRepository = project,
             configurationStore = store,
@@ -150,7 +154,8 @@ class SessionViewModelTest {
             permissionGateway = permissions,
             appSettings = settings,
             localeController = locale,
-            focusDispatcher = idleFocusDispatcher(),
+            focusDispatcher = focusDispatcher,
+            recorder = recorderFor(runner, focusDispatcher),
             computeDispatcher = mainDispatcher,
         )
         return Triple(vm, store, runner)
@@ -174,9 +179,32 @@ class SessionViewModelTest {
             appSettings = settings,
             localeController = {},
             focusDispatcher = focusDispatcher,
+            recorder = recorderFor(runner, focusDispatcher),
             computeDispatcher = mainDispatcher,
         )
     }
+
+    /**
+     * 运行日志的产地；VM 只转发它的流
+     *
+     * 落盘那条路走不到——单测不经 `SessionLogHook` 开会话，[RunSessionLogStore] 的目录
+     * 因此从头到尾没被碰过
+     */
+    private fun TestScope.recorderFor(
+        runner: RunnerPort,
+        focusDispatcher: FocusDispatcher,
+    ) = RunLogRecorder(
+        runnerPort = runner,
+        focusDispatcher = focusDispatcher,
+        store = RunSessionLogStore(
+            logDir = { createTempDirectory("run-log").toFile() },
+            ioDispatcher = mainDispatcher,
+        ),
+        renderText = { it.toString() },
+        includeDetails = { false },
+        scope = backgroundScope,
+        ioDispatcher = mainDispatcher,
+    )
 
     /** 不接任何 RunnerPort 的 dispatcher：focus 的补完另有 FocusDispatcherTest 覆盖 */
     private fun TestScope.idleFocusDispatcher(

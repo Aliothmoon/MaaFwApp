@@ -23,4 +23,20 @@ object Routes {
 
     /** 定时触发日志 */
     const val SCHEDULE_TRIGGER_LOG = "schedule_trigger_log"
+
+    /** 历史运行日志列表 */
+    const val RUN_LOG_ARCHIVE = "run_log_archive"
+
+    /** 某一份历史日志的正文；file 是 `RunSessionLogFile.fileName` */
+    const val RUN_LOG_DETAIL = "run_log_detail/{file}"
+    const val RUN_LOG_DETAIL_ARG = "file"
+    fun runLogDetail(fileName: String) = "run_log_detail/$fileName"
+
+    /** 错误日志（app 自身的警告与错误） */
+    const val APP_LOG = "app_log"
+
+    /** 某一份错误日志的正文；file 是 `AppLogFileInfo.name` */
+    const val APP_LOG_DETAIL = "app_log_detail/{file}"
+    const val APP_LOG_DETAIL_ARG = "file"
+    fun appLogDetail(fileName: String) = "app_log_detail/$fileName"
 }

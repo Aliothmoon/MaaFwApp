@@ -354,6 +354,48 @@
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
 
+    <!-- Run history: one file per run -->
+    <string name="log_archive_title">Run history</string>
+    <string name="log_archive_empty">No history yet. Finishing a run leaves one here.</string>
+    <string name="log_archive_meta">%1$d tasks · %2$s</string>
+    <string name="log_archive_cleanup">Clean up old</string>
+    <string name="log_archive_delete_title">Delete this record</string>
+    <string name="log_archive_delete_message">Delete the run from %1$s? This cannot be undone.</string>
+    <string name="log_detail_title">Run detail</string>
+    <string name="log_detail_started">Started %1$s</string>
+    <string name="log_detail_tasks">Tasks: %1$s</string>
+    <string name="log_detail_ended">Ended %1$s</string>
+    <string name="log_detail_empty">This log is empty</string>
+    <string name="log_outcome_completed">All completed</string>
+    <string name="log_outcome_completed_with_failures">Some failed</string>
+    <string name="log_outcome_cancelled">Cancelled</string>
+    <string name="log_outcome_failed">Failed</string>
+    <string name="log_outcome_not_run">Never started</string>
+
+    <!-- Error log: the app's own warnings and errors, written by AppLogWriter -->
+    <string name="app_log_title">Error log</string>
+    <string name="app_log_empty">No error log yet</string>
+    <string name="app_log_clear">Clear all</string>
+    <!-- size · last written -->
+    <string name="app_log_meta">%1$s · %2$s</string>
+    <string name="app_log_clear_title">Clear error log</string>
+    <string name="app_log_clear_message">Delete every error log file? This cannot be undone.</string>
+
+    <!-- Export -->
+    <string name="log_export_title">Export logs</string>
+    <string name="log_export_share">Share</string>
+    <string name="log_export_save">Save to device</string>
+    <string name="log_export_running">Packing…</string>
+    <string name="log_export_failed">Export failed: nothing to export</string>
+    <string name="log_export_saved">Saved as %1$s</string>
+    <string name="log_export_subject">MaaFwApp logs</string>
+
+    <!-- Settings "Logs" group entries -->
+    <string name="settings_section_log">Logs</string>
+    <string name="settings_log_archive_desc">One file per run, kept for review</string>
+    <string name="settings_log_error_desc">The app\'s own warnings and errors</string>
+    <string name="settings_log_export_desc">Pack into a zip to attach to a report</string>
+
     <!-- Diagnostic texts; built by DiagnosticMessages in domain/Diagnostics.kt -->
     <string name="diagnostic_severity_warning">Warning</string>
     <string name="diagnostic_severity_error">Error</string>

@@ -41,7 +41,9 @@ private inline fun <R> PrivilegedServicePort.callOrDefault(
  *
  * 倒计时排最后：等待期间屏幕该已经亮着、屏保该已经盖好，用户看到的才是最终态
  */
-private object HookOrder {
+internal object HookOrder {
+    /** 排在所有环境动作之前，收尾时因此最后关：文件开着的窗口覆盖住整轮 */
+    const val SESSION_LOG = -10
     const val AUTO_SLEEP = 0
     const val WAKE_UNLOCK = 10
     const val SCREEN_SAVER = 20

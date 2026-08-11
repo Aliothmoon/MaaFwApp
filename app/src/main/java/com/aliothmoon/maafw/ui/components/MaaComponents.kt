@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -106,6 +107,49 @@ fun MaaLabeledControlRow(
         ) {
             trailing()
         }
+    }
+}
+
+/**
+ * 点进二级页面的一行：标题 + 说明 + 右侧箭头
+ *
+ * 与 [MaaLabeledControlRow] 分开：那个的尾部是控件、点的是控件本身；这个整行可点，
+ * 语义是「离开当前页」
+ */
+@Composable
+fun MaaNavigationRow(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    description: String? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .maaClickable(onClick = onClick)
+            .padding(vertical = MaaDesignTokens.Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+        ) {
+            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            description?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+        )
     }
 }
 

@@ -23,7 +23,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import com.aliothmoon.maafw.R
@@ -32,10 +31,10 @@ import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.theme.MaaDesignTokens
-import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.components.runLogColor
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -170,7 +169,7 @@ private fun RunLogRow(
                 MaaMarkdown(
                     text = body,
                     style = MaterialTheme.typography.labelSmall,
-                    color = entry.color(),
+                    color = runLogColor(entry.kind),
                 )
                 return@Column
             }
@@ -179,7 +178,7 @@ private fun RunLogRow(
                 style = MaterialTheme.typography.labelSmall,
                 // 合成过的是人话，按正文排版；原始转储保持等宽，对得上官方文档
                 fontFamily = if (entry.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
-                color = entry.color(),
+                color = runLogColor(entry.kind),
             )
             // 原始转储旁只露一个主语（节点名 / 任务 entry / 动作名），其余留给折叠区；
             // 合成过的正文里主语已经在了，再露一次是重复
@@ -222,20 +221,6 @@ private fun rememberParsedDetail(entry: RunLogEntry): ParsedDetail = remember(en
     val subject = SUBJECT_KEYS.firstNotNullOfOrNull { (root[it] as? JsonPrimitive)?.contentOrNull }
     val pretty = runCatching { PRETTY_JSON.encodeToString(JsonElement.serializer(), root) }.getOrNull()
     ParsedDetail(subject?.takeIf { it.isNotBlank() }, pretty)
-}
-
-/** 分级配色对齐桌面端 MXU 的 `getLogColor` */
-@Composable
-private fun RunLogEntry.color(): Color = when (kind) {
-    RunLogKind.Success -> MaaTheme.palette.success.content
-    RunLogKind.Warning -> MaaTheme.palette.warning.content
-    RunLogKind.Error -> MaterialTheme.colorScheme.error
-    RunLogKind.Info -> MaterialTheme.colorScheme.primary
-    // PI 作者写给用户的那条，颜色要压得住满屏灰字
-    RunLogKind.Focus -> MaterialTheme.colorScheme.onSurface
-    // stderr 上多半是 traceback 或加载器警告，切到「全部」时要能一眼挑出来
-    RunLogKind.AgentError -> MaterialTheme.colorScheme.error
-    RunLogKind.Agent, RunLogKind.Verbose -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 /** 按可辨识度排序取第一个命中的：节点名 > 任务 entry > 控制器动作 > 资源路径 */

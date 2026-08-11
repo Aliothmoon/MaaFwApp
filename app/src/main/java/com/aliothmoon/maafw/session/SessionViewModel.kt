@@ -29,15 +29,12 @@ import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
-import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunTrigger
-import com.aliothmoon.maafw.runner.RunLogComposer
-import com.aliothmoon.maafw.runner.RunLogContext
+import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerCommandResult
-import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
@@ -50,17 +47,13 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicLong
 
 /** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
 private data class SettingsSnapshot(
@@ -99,6 +92,8 @@ class SessionViewModel(
     private val localeController: LocaleController,
     /** 已补完的 focus 模板；补完在进程级做，见 [FocusDispatcher] */
     private val focusDispatcher: FocusDispatcher,
+    /** 运行日志的产地；VM 只转发它的流并转达「清空」 */
+    private val recorder: RunLogRecorder,
     /**
      * resolve 那步的落点；生产是 Dispatchers.Default
      *
@@ -156,14 +151,13 @@ class SessionViewModel(
      */
     val previewMarkers: StateFlow<List<PreviewTouchMarker>> = previewPort.markers
 
-    /** 运行日志，同样单独一条流：一次长跑上千条，混进聚合态会让整棵树按日志频率重组 */
-    private val _runLog = MutableStateFlow<List<RunLogEntry>>(emptyList())
-    val runLog: StateFlow<List<RunLogEntry>> = _runLog.asStateFlow()
-
-    private val runLogId = AtomicLong(0L)
-
-    // 只在 dispatchRunnerEvent 这一条协程里用，不必加锁
-    private val logComposer = RunLogComposer()
+    /**
+     * 运行日志，同样单独一条流：一次长跑上千条，混进聚合态会让整棵树按日志频率重组
+     *
+     * 合成与落盘都在进程级的 [RunLogRecorder] 里，这里只是转发——挂在 VM 上时切语言
+     * Activity 一重建日志就没了，定时触发更是压根没有 VM
+     */
+    val runLog: StateFlow<List<RunLogEntry>> = recorder.runLog
 
     private val effectChannel = Channel<SessionEffect>(Channel.BUFFERED)
     val effects: Flow<SessionEffect> = effectChannel.receiveAsFlow()
@@ -175,9 +169,6 @@ class SessionViewModel(
         viewModelScope.launch { projectRepository.reload() }
         viewModelScope.launch {
             for (intent in intents) handle(intent)
-        }
-        viewModelScope.launch {
-            runnerPort.events.collect { event -> dispatchRunnerEvent(event) }
         }
         viewModelScope.launch {
             focusDispatcher.resolved.collect { focus -> dispatchFocus(focus) }
@@ -199,41 +190,15 @@ class SessionViewModel(
         intents.trySend(intent)
     }
 
-    /** focus 不在这条路上走：它要先经 [FocusDispatcher] 补完 */
-    private fun dispatchRunnerEvent(event: RunnerEvent) {
-        if (event is RunnerEvent.Focus) return
-        composeAndAppend(event, runLogContext())
-    }
-
-    /** Notification 渠道不归这里：那一档在 app 退到后台时也得响，由前台服务直接收补完流 */
+    /**
+     * Toast 那一档
+     *
+     * Log 档归 [RunLogRecorder]，Notification 档归前台服务——后者在 app 退到后台时也得响，
+     * 拿不到 VM。三档各收各的，同一条 focus 因此可能同时走三条路，这是协议本来的语义
+     */
     private fun dispatchFocus(focus: FocusMessage) {
         if (FocusChannel.Toast in focus.channels) {
             effectChannel.trySend(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
-        }
-        if (FocusChannel.Log in focus.channels) {
-            composeAndAppend(RunnerEvent.Focus(focus), runLogContext())
-        }
-    }
-
-    private fun composeAndAppend(event: RunnerEvent, context: RunLogContext) {
-        logComposer.compose(
-            event = event,
-            id = runLogId.incrementAndGet(),
-            atMillis = System.currentTimeMillis(),
-            context = context,
-        )?.let(::appendLog)
-    }
-
-    /** 现读而不缓存：当前任务名每条都在变 */
-    private fun runLogContext(): RunLogContext = RunLogContext(
-        currentTaskName = runnerPort.state.value.activeExecution?.currentTaskName,
-        resourceLabel = uiState.value.environment?.resource?.label,
-    )
-
-    private fun appendLog(entry: RunLogEntry) {
-        _runLog.update { current ->
-            val start = (current.size - RUN_LOG_CAPACITY + 1).coerceAtLeast(0)
-            current.subList(start, current.size) + entry
         }
     }
 
@@ -409,6 +374,8 @@ class SessionViewModel(
             is SessionIntent.SetThemeMode ->
                 configurationStore.update { it.copy(themeMode = intent.mode) }
 
+            // 只有开启才重启：关闭这一档由组合根的观察者停掉 logcat 抓取，
+            // 而 setup() 每轮现读 debugMode，下一轮自然是 false，没必要把用户的页面掀掉
             is SessionIntent.SetDebugMode -> {
                 appSettings.setDebugMode(intent.enabled)
                 if (intent.enabled) effectChannel.send(SessionEffect.RestartApp)
@@ -479,11 +446,7 @@ class SessionViewModel(
 
             SessionIntent.RefreshPermissions -> permissionGateway.refresh()
 
-            // 合成器的去重与洪泛滑窗都靠前后文，清空之后那些前文已经不在了
-            SessionIntent.ClearRunLog -> {
-                logComposer.reset()
-                _runLog.value = emptyList()
-            }
+            SessionIntent.ClearRunLog -> recorder.clear()
         }
     }
 

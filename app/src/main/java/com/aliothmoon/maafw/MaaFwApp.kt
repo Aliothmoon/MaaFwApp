@@ -10,7 +10,15 @@ import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.AppLocales
+import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.log.AppLogDetailViewModel
+import com.aliothmoon.maafw.log.AppLogViewModel
 import com.aliothmoon.maafw.log.AppLogWriter
+import com.aliothmoon.maafw.log.CrashHandler
+import com.aliothmoon.maafw.log.LogExportService
+import com.aliothmoon.maafw.log.RunLogArchiveViewModel
+import com.aliothmoon.maafw.log.RunLogDetailViewModel
 import com.aliothmoon.maafw.log.plantLogTrees
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
@@ -24,6 +32,7 @@ import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.ProjectLoader
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectSource
+import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
@@ -51,6 +60,9 @@ import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.RemotePreviewPort
 import com.aliothmoon.maafw.runner.RunKeepAlive
 import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.runner.RunLogRecorder
+import com.aliothmoon.maafw.runner.RunSessionLogStore
+import com.aliothmoon.maafw.runner.SessionLogHook
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager
 import com.aliothmoon.maafw.schedule.ScheduleStrategyStore
@@ -61,6 +73,8 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import java.io.File
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -79,14 +93,25 @@ private const val MAA_LOG_DIR_NAME = "log"
 
 class MaaFwApp : Application() {
 
+    /**
+     * 落盘那棵树的出口
+     *
+     * 挂在 Application 上而不是让 Koin 造：种树必须早于 `startKoin`（Koin 自身与各 single
+     * 的构造日志也要落盘），而同一个文件只能有一个写入者，Koin 再造一份就是两个流写同一个文件
+     */
+    lateinit var logWriter: AppLogWriter
+        private set
+
     override fun onCreate() {
         super.onCreate()
-        // 先种树再启 Koin：Koin 自身与各 single 的构造日志也要落盘
-        plantLogTrees(
-            AppLogWriter(
-                logDir = { File(getExternalFilesDir(null) ?: filesDir, MAA_LOG_DIR_NAME) },
-            ),
+        logWriter = AppLogWriter(
+            logDir = { File(getExternalFilesDir(null) ?: filesDir, MAA_LOG_DIR_NAME) },
         )
+        plantLogTrees(logWriter)
+        // 崩溃兜底也要早于 Koin：各 single 的构造本身就可能抛
+        CrashHandler(
+            crashDir = { File(getExternalFilesDir(null) ?: filesDir, "$MAA_LOG_DIR_NAME/crash") },
+        ).install()
         val koin = startKoin {
             androidLogger(if (BuildConfig.DEBUG) Level.DEBUG else Level.NONE)
             androidContext(this@MaaFwApp)
@@ -101,6 +126,22 @@ class MaaFwApp : Application() {
         // 控制层与屏保都跟着 runMode 装卸，得在进程起来时就开始观察
         koin.get<OverlayController>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
+        stopLogcatCaptureWhenDebugOff(koin.get(), koin.get(named<AppCoroutineScope>()))
+    }
+
+    /**
+     * 关掉调试模式就停抓 logcat
+     *
+     * 抓取是在 `MaaFrameworkRunnerPort` 里按 `debugMode()` 起的，但没有对称的停止点——
+     * 不 unbind 的话 `:logcat` / `:root_logcat` 会一直跟着 pid 抓下去，用户以为关了其实没关
+     *
+     * 关闭这一档有意**不重启** app：`setup()` 每轮现读 debugMode，下一轮自然就是 false，
+     * 而重启会把用户正在看的页面掀掉。开启那一档仍要重启（见 `SessionViewModel`）
+     */
+    private fun stopLogcatCaptureWhenDebugOff(settings: AppSettingsManager, scope: CoroutineScope) {
+        settings.debugMode
+            .onEach { enabled -> if (!enabled) LogcatServiceManager.unbind() }
+            .launchIn(scope)
     }
 }
 
@@ -197,6 +238,52 @@ val appModule = module {
         )
     }
 
+    // 运行日志的产地也在进程级：切语言 Activity 重建、定时触发没有 VM，挂在 VM 上都会断
+    single {
+        val context = androidContext()
+        RunSessionLogStore(
+            logDir = {
+                File(
+                    checkNotNull(context.getExternalFilesDir(null)) {
+                        "外部私有目录不可用（外部存储未挂载）"
+                    },
+                    MAA_LOG_DIR_NAME,
+                )
+            },
+            ioDispatcher = Dispatchers.IO,
+        )
+    }
+    single { LocalizedTextRenderer(androidContext()) }
+    single { (androidContext() as MaaFwApp).logWriter }
+    single {
+        val context = androidContext()
+        val baseDir = {
+            checkNotNull(context.getExternalFilesDir(null)) {
+                "外部私有目录不可用（外部存储未挂载）"
+            }
+        }
+        LogExportService(
+            context = context,
+            baseDir = baseDir,
+            // 两棵一起收：debug/ 那份的路径在特权进程侧是硬解析的，没法并进 log/
+            roots = { listOf(File(baseDir(), MAA_LOG_DIR_NAME), File(baseDir(), AppFiles.DEBUG_DIR)) },
+            debugMode = get<AppSettingsManager>().debugMode::value,
+            ioDispatcher = Dispatchers.IO,
+        )
+    }
+    single {
+        val renderer = get<LocalizedTextRenderer>()
+        RunLogRecorder(
+            runnerPort = get(),
+            focusDispatcher = get(),
+            store = get(),
+            renderText = renderer::render,
+            includeDetails = get<AppSettingsManager>().debugMode::value,
+            scope = get(named<AppCoroutineScope>()),
+            ioDispatcher = Dispatchers.IO,
+        )
+    }
+
     single<PreviewPort> {
         RemotePreviewPort(
             scope = get(named<AppCoroutineScope>()),
@@ -222,6 +309,7 @@ val appModule = module {
             prechecks = listOf(ForegroundModePrecheck),
             // engage 顺序由各自的 order 定，这里的书写顺序不算数（见 EnvironmentHooks.kt）
             hooks = listOf(
+                SessionLogHook(get()),
                 AutoSleepHook(get()),
                 WakeUnlockHook(get(), get<AppSettingsManager>()),
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
@@ -279,6 +367,11 @@ val appModule = module {
     single { PermissionManager(androidContext(), get(), get(), get()) }
     single<PermissionGateway> { get<PermissionManager>() }
 
+    viewModel { RunLogArchiveViewModel(get()) }
+    viewModel { RunLogDetailViewModel(get()) }
+    viewModel { AppLogViewModel(get(), Dispatchers.IO) }
+    viewModel { AppLogDetailViewModel(get(), Dispatchers.IO) }
+
     viewModel {
         SessionViewModel(
             projectRepository = get(),
@@ -290,6 +383,7 @@ val appModule = module {
             appSettings = get(),
             localeController = AppLocales,
             focusDispatcher = get(),
+            recorder = get(),
             computeDispatcher = Dispatchers.Default,
         )
     }

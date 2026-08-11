@@ -348,6 +348,48 @@
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
 
+    <!-- 历史日志：每轮运行落盘一份 -->
+    <string name="log_archive_title">运行历史</string>
+    <string name="log_archive_empty">还没有历史记录；跑完一轮会在这里留下一份</string>
+    <string name="log_archive_meta">%1$d 个任务 · %2$s</string>
+    <string name="log_archive_cleanup">清理过期</string>
+    <string name="log_archive_delete_title">删除这份记录</string>
+    <string name="log_archive_delete_message">删除 %1$s 的运行记录？删掉就找不回来了</string>
+    <string name="log_detail_title">运行详情</string>
+    <string name="log_detail_started">开始 %1$s</string>
+    <string name="log_detail_tasks">任务：%1$s</string>
+    <string name="log_detail_ended">结束 %1$s</string>
+    <string name="log_detail_empty">这份日志是空的</string>
+    <string name="log_outcome_completed">全部完成</string>
+    <string name="log_outcome_completed_with_failures">部分失败</string>
+    <string name="log_outcome_cancelled">已取消</string>
+    <string name="log_outcome_failed">失败</string>
+    <string name="log_outcome_not_run">未开始</string>
+
+    <!-- 错误日志：app 自身的警告与错误，由 AppLogWriter 落盘 -->
+    <string name="app_log_title">错误日志</string>
+    <string name="app_log_empty">还没有错误日志</string>
+    <string name="app_log_clear">全部清除</string>
+    <!-- 大小 · 最后写入时间 -->
+    <string name="app_log_meta">%1$s · %2$s</string>
+    <string name="app_log_clear_title">清除错误日志</string>
+    <string name="app_log_clear_message">删除全部错误日志文件？删掉就找不回来了</string>
+
+    <!-- 导出 -->
+    <string name="log_export_title">导出日志</string>
+    <string name="log_export_share">分享</string>
+    <string name="log_export_save">保存到设备</string>
+    <string name="log_export_running">正在打包…</string>
+    <string name="log_export_failed">导出失败：没有可导出的日志</string>
+    <string name="log_export_saved">已保存为 %1$s</string>
+    <string name="log_export_subject">MaaFwApp 日志</string>
+
+    <!-- 设置页「日志」分组入口 -->
+    <string name="settings_section_log">日志</string>
+    <string name="settings_log_archive_desc">每轮运行按次落盘，可回看</string>
+    <string name="settings_log_error_desc">应用自身的警告与错误</string>
+    <string name="settings_log_export_desc">打成 zip，反馈问题时带上</string>
+
     <!-- 诊断文案；构造点在 domain/Diagnostics.kt 的 DiagnosticMessages -->
     <string name="diagnostic_severity_warning">警告</string>
     <string name="diagnostic_severity_error">错误</string>

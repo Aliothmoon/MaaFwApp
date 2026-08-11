@@ -1,12 +1,14 @@
 package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.i18n.UiText
+import kotlinx.serialization.Serializable
 
 /**
  * 运行日志的一条
  *
- * 只在内存，进程重启即清空——与 ExecutionResult 同属执行期产物，不得落盘
- * （docs/persistence-diagnostics.md §2「不持久化」）
+ * 本类型只在内存，进程重启即清空——[text] 带的是资源 id，跨版本会变，落不了盘。
+ * 要落盘的那份由 [RunLogRecorder] 渲染成 [RunSessionRecord.Line] 另写
+ * （docs/persistence-diagnostics.md §2「诊断产物」）
  *
  * [text] 与 [detail] 分开存：正文是给人读的一句话，原始 details_json 收在折叠区，
  * 拼成一个串就既没法单独上色也没法折叠
@@ -25,7 +27,10 @@ data class RunLogEntry(
  *
  * [Verbose] 是本项目多出来的一档：MXU 把认不出的回调直接丢掉，我们降级留着，
  * 「全部」档可见。排障时对得上官方文档与源码的原文比什么都值钱
+ *
+ * 按名字进会话日志文件，所以**只能加不能改名**：改了旧文件里那些行会解不出来被跳过
  */
+@Serializable
 enum class RunLogKind {
     Info,
     Success,
