@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -167,6 +167,7 @@ internal fun ConfigurationSheet(
                 }
 
                 is ConfigSheetPage.CreateEmpty -> CreateEmptyPage(
+                    existingNames = existingNames,
                     writeEnabled = !locked,
                     onBack = { page = ConfigSheetPage.Home },
                     onClose = onDismiss,
@@ -332,7 +333,8 @@ private fun TemplatePreviewPage(
         }
         LazyColumn(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            contentPadding = PaddingValues(bottom = MaaDesignTokens.Spacing.xs),
         ) {
             items(templateTasks, key = { it.taskName }) { task ->
                 TemplateTaskRow(
@@ -346,6 +348,7 @@ private fun TemplatePreviewPage(
         Button(
             onClick = { onCreate(name.trim(), included.toList()) },
             enabled = writeEnabled && name.isNotBlank() && included.isNotEmpty(),
+            shape = RoundedCornerShape(MaaTheme.style.radii.inner),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -365,34 +368,36 @@ private fun TemplateTaskRow(
     writeEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .maaClickable(enabled = writeEnabled, onClick = { onToggle(!checked) }),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(checked = checked, onCheckedChange = onToggle, enabled = writeEnabled)
-        Text(
-            text = task.label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (!task.enabled) {
-            MaaToneBadge(text = stringResource(R.string.config_task_disabled_by_default), tone = MaaTheme.palette.neutral)
-        }
-    }
+    TaskPickRow(
+        label = task.label,
+        checked = checked,
+        enabled = writeEnabled,
+        onToggle = onToggle,
+        trailing = if (!task.enabled) {
+            {
+                MaaToneBadge(
+                    text = stringResource(R.string.config_task_disabled_by_default),
+                    tone = MaaTheme.palette.neutral,
+                )
+            }
+        } else {
+            null
+        },
+    )
 }
 
 @Composable
 private fun CreateEmptyPage(
+    existingNames: List<String>,
     writeEnabled: Boolean,
     onBack: () -> Unit,
     onClose: () -> Unit,
     onCreate: (String) -> Unit,
 ) {
-    var name by rememberSaveable { mutableStateOf("") }
+    val defaultName = stringResource(R.string.config_empty_default_name)
+    var name by rememberSaveable {
+        mutableStateOf(uniqueConfigurationName(defaultName, existingNames))
+    }
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
         MaaSheetHeader(title = stringResource(R.string.config_create_empty), onClose = onClose, onBack = onBack)
         OutlinedTextField(
@@ -412,6 +417,7 @@ private fun CreateEmptyPage(
         Button(
             onClick = { onCreate(name.trim()) },
             enabled = writeEnabled && name.isNotBlank(),
+            shape = RoundedCornerShape(MaaTheme.style.radii.inner),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -456,6 +462,7 @@ private fun RenameConfigurationPage(
         Button(
             onClick = commit,
             enabled = writeEnabled && name.text.isNotBlank(),
+            shape = RoundedCornerShape(MaaTheme.style.radii.inner),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = MaaDesignTokens.Spacing.lg),

@@ -22,7 +22,6 @@
     <string name="tasks_empty_task_hint">从任务目录选择要执行的任务</string>
     <string name="tasks_add_task">添加任务</string>
     <string name="tasks_run_order">任务列表</string>
-    <string name="tasks_list_summary">%1$d 个任务 · %2$d 个有效</string>
     <string name="tasks_live_preview">实时预览</string>
     <string name="tasks_preview_waiting_surface">等待画面</string>
     <string name="virtual_display_game_running">运行中</string>
@@ -46,7 +45,7 @@
     <string name="config_copy_name">%1$s 副本</string>
     <string name="config_select_hint">点击选择或新建配置</string>
     <plurals name="config_current_summary">
-        <item quantity="other">当前配置 · %1$d 个任务 · %2$d 个有效</item>
+        <item quantity="other">%1$d 个任务 · %2$d 个有效</item>
     </plurals>
     <string name="config_create_from_template">从模板新建</string>
     <string name="config_template_list_hint">预览模板内容，按需挑选任务后创建</string>
@@ -60,6 +59,7 @@
     <string name="config_task_disabled_by_default">默认停用</string>
     <string name="config_create_empty">新建空配置</string>
     <string name="config_create_empty_hint">创建后可通过「添加任务」从任务目录挑选任务</string>
+    <string name="config_empty_default_name">空配置</string>
     <string name="config_rename_title">重命名配置</string>
     <plurals name="config_task_count">
         <item quantity="other">%1$d 个任务</item>

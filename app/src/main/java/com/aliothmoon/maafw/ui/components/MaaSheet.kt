@@ -43,7 +43,7 @@ private const val SheetEnterMs = 100
 private const val SheetScrimAlpha = 0.4f
 
 /**
- * 统一的 modal sheet 脚手架：固定 3/5 高度、跳过半展开、禁手势拖拽（无把手），
+ * 统一的 modal sheet 脚手架：固定 3/4 高度、跳过半展开、禁手势拖拽（无把手），
  * 关闭走遮罩点击 / 返回键 / 标题栏按钮
  *
  * 不用 M3 ModalBottomSheet：它另开窗口 + 不可调的 leisurely 入场弹簧，观感偏慢。

@@ -15,12 +15,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,7 +44,6 @@ import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TaskCatalogItem
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
-import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.ExpandableTipContent
@@ -55,8 +54,6 @@ import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
-import com.aliothmoon.maafw.ui.components.maaClickable
-import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 
@@ -143,7 +140,7 @@ fun AddTasksSheet(
 
                 query.isNotBlank() -> LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                 ) {
                     filteredCatalog.forEach { group ->
                         item(key = "group-${group.groupName}") {
@@ -178,7 +175,7 @@ fun AddTasksSheet(
                         ?: catalog.first()
                     LazyColumn(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+                        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                     ) {
                         items(currentGroup.tasks, key = { it.taskName }) { item ->
                             CatalogRow(
@@ -194,6 +191,7 @@ fun AddTasksSheet(
             Button(
                 onClick = { onConfirm(selected.toList()) },
                 enabled = !locked && selected.isNotEmpty(),
+                shape = RoundedCornerShape(MaaTheme.style.radii.inner),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = MaaDesignTokens.Spacing.lg),
@@ -274,42 +272,44 @@ private fun CatalogRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     var expanded by remember(item.taskName) { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .maaClickable(enabled = enabled, onClick = { onCheckedChange(!checked) }),
-        verticalAlignment = Alignment.CenterVertically,
+    val hasDescription = !item.description.isNullOrBlank()
+    // 说明不嵌在选项行里：点 i 后在整行下方另起一块展开，与可选行并列
+    Column(
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxsLg),
     ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = item.label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (item.applicable) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-                if (!item.description.isNullOrBlank()) {
-                    Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
+        TaskPickRow(
+            label = item.label,
+            checked = checked,
+            enabled = enabled,
+            onToggle = onCheckedChange,
+            labelColor = if (item.applicable) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            trailing = if (hasDescription) {
+                {
                     ExpandableTipIcon(expanded = expanded, onExpandedChange = { expanded = it })
                 }
-            }
-            when {
-                item.unavailableReason != null -> Text(
-                    text = item.unavailableReason.asString(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-
-                !item.description.isNullOrBlank() -> ExpandableTipContent(visible = expanded) {
-                    MaaMarkdown(
-                        text = item.description,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+            } else {
+                null
+            },
+            belowLabel = item.unavailableReason?.let { reason ->
+                {
+                    Text(
+                        text = reason.asString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
+            },
+        )
+        if (hasDescription) {
+            ExpandableTipContent(visible = expanded) {
+                MaaMarkdown(
+                    text = item.description.orEmpty(),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
             }
         }
     }

@@ -12,6 +12,10 @@ object MaaDesignTokens {
 
     object Spacing {
         val xxs: Dp = 2.dp
+
+        /** 介于 [xxs] 与 [xs]：紧凑行竖直内边距等「再收一档又不贴死」 */
+        val xxsLg: Dp = 3.dp
+
         val xs: Dp = 4.dp
         val sm: Dp = 8.dp
         val md: Dp = 12.dp
@@ -105,8 +109,8 @@ object MaaDesignTokens {
     }
 
     object Sheet {
-        /** 全部 modal sheet 统一固定高度：屏幕的 3/5 */
-        const val heightFraction = 0.6f
+        /** 全部 modal sheet 统一固定高度：屏幕的 3/4 */
+        const val heightFraction = 0.75f
     }
 }
 

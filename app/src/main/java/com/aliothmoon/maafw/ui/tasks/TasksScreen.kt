@@ -138,10 +138,11 @@ private fun TasksContent(
                         content = previewContent,
                         onEnterFullscreen = onEnterFullscreen,
                     )
-                    ConfigurationSelectorCard(
+                    ConfigurationSelectorRow(
                         active = active,
                         locked = locked,
-                        onClick = { showConfigSheet = true },
+                        onSelectConfig = { showConfigSheet = true },
+                        onAddTasks = { showAddTasks = true },
                     )
 
                     if (active == null) {
