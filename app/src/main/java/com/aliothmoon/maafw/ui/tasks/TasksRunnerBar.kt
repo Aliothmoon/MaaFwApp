@@ -23,13 +23,11 @@ import androidx.compose.material.icons.outlined.Nightlight
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TouchApp
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +48,8 @@ import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaButton
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
@@ -67,17 +67,15 @@ internal fun RunnerToggleButton(
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
-    val shape = RoundedCornerShape(MaaTheme.style.radii.inner)
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
     ) {
         val toggleModifier = Modifier.weight(1f)
         if (phase.isBusy) {
-            OutlinedButton(
+            MaaOutlinedButton(
                 onClick = { onIntent(SessionIntent.Stop) },
                 enabled = phase != RunnerPhase.Stopping,
-                shape = shape,
                 modifier = toggleModifier,
             ) {
                 Text(
@@ -89,10 +87,9 @@ internal fun RunnerToggleButton(
         } else {
             // 前台模式灰显但仍可点：点了走 Start，由 SessionViewModel 拦下并给提示
             val foregroundBlocked = state.runMode == RunMode.FOREGROUND
-            Button(
+            MaaButton(
                 onClick = { onIntent(SessionIntent.Start) },
                 enabled = state.canStart,
-                shape = shape,
                 colors = if (foregroundBlocked) {
                     ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
@@ -112,9 +109,8 @@ internal fun RunnerToggleButton(
         } else {
             MaterialTheme.colorScheme.onSurface
         }
-        OutlinedButton(
+        MaaOutlinedButton(
             onClick = onToggleQuickOptions,
-            shape = shape,
             contentPadding = PaddingValues(horizontal = MaaDesignTokens.Spacing.md),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
             border = BorderStroke(

@@ -242,8 +242,18 @@ sealed interface SessionIntent {
     /** 虚拟屏分辨率偏好：720P / 1080P */
     data class SetResolutionPreference(val preference: ResolutionPreference) : SessionIntent
 
-    /** 开启前台模式的控制层；要 Application 上下文挂窗口，转成 Effect */
+    /**
+     * 开启前台模式的控制层
+     *
+     * 先过一道校验（特权后端 + 主屏比例），过了也**暂时只给提示**——面板本身还没实现
+     */
     data object ShowOverlay : SessionIntent
+
+    /** 把主屏改成能放下的最大 16:9；前台模式的前置条件 */
+    data object ApplyForegroundResolution : SessionIntent
+
+    /** 撤回出厂分辨率 */
+    data object ResetForegroundResolution : SessionIntent
 
     /** 不等运行开始，立刻盖上屏保；同样要 Application 上下文 */
     data object ShowScreenSaver : SessionIntent
@@ -303,6 +313,13 @@ sealed interface SessionEffect {
     data object OpenShizuku : SessionEffect
     data class RequestSystemPermission(val permission: SystemPermission) : SessionEffect
 
+    /**
+     * 控制层的落点，暂时**没有发出者**
+     *
+     * 前台模式的操作面板还没实现，[SessionIntent.ShowOverlay] 校验通过后只给一句提示。
+     * 管线（Effect → AppRoot → OverlayController.show）保持接通，实现好之后把
+     * `SessionViewModel` 里那句提示换回发这条即可
+     */
     data object ShowOverlay : SessionEffect
     data object ShowScreenSaver : SessionEffect
 

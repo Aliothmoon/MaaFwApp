@@ -25,7 +25,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Text
@@ -58,6 +57,8 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaButton
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
@@ -316,7 +317,7 @@ private fun ExpandToggle(expanded: Boolean, onToggle: () -> Unit) {
 private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
         val connected = state.privilegedServiceConnected
-        OutlinedButton(
+        MaaOutlinedButton(
             onClick = { onIntent(SessionIntent.TogglePrivilegedService) },
             // 连接中不给点：这时候再发一次 bind 只会把状态搅乱
             enabled = state.privilegedService != PrivilegedServiceState.Connecting,
@@ -342,7 +343,7 @@ private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent
             )
         }
         if (state.remoteAccess.configuredBackend == RemoteBackend.SHIZUKU) {
-            OutlinedButton(
+            MaaOutlinedButton(
                 onClick = { onIntent(SessionIntent.OpenShizuku) },
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -441,8 +442,45 @@ private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
             }
         }
     }
-    // 控制层只有前台用得上；后台模式不再加单独的卡
-    if (state.runMode == RunMode.FOREGROUND) OverlayModeCard(state, onIntent)
+    // 这两张卡只有前台用得上；后台模式在自己建的虚拟屏上跑，主屏尺寸与控制层都不相干
+    if (state.runMode == RunMode.FOREGROUND) {
+        ForegroundResolutionCard(onIntent)
+        OverlayModeCard(state, onIntent)
+    }
+}
+
+/**
+ * 主屏分辨率（对齐 MaaMeow）：改成 16:9 / 撤回出厂值
+ *
+ * 前台模式直接在主屏上采集与注入，比例不对识别就会整体错位，所以这一步排在控制层前面。
+ * 两个按钮不随运行锁定禁用：改的是设备环境不是运行配置，跑飞了时用户正需要能撤回来
+ */
+@Composable
+private fun ForegroundResolutionCard(onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.foreground_resolution_title)) {
+        Text(
+            text = stringResource(R.string.foreground_resolution_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        ) {
+            MaaButton(
+                onClick = { onIntent(SessionIntent.ApplyForegroundResolution) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.foreground_resolution_apply), maxLines = 1)
+            }
+            MaaOutlinedButton(
+                onClick = { onIntent(SessionIntent.ResetForegroundResolution) },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(stringResource(R.string.foreground_resolution_reset), maxLines = 1)
+            }
+        }
+    }
 }
 
 @Composable
@@ -466,7 +504,8 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        OutlinedButton(
+        // 点了先过校验（后端 + 主屏比例），过了也只给一句「还没做好」
+        MaaOutlinedButton(
             onClick = { onIntent(SessionIntent.ShowOverlay) },
             modifier = Modifier.fillMaxWidth(),
         ) {

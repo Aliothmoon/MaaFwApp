@@ -24,7 +24,6 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +41,7 @@ import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaEmptyState
 
@@ -82,7 +82,7 @@ fun TasksScreen(
                         modifier = Modifier.size(MaaDesignTokens.IconSize.xl),
                     )
                     Text(stringResource(R.string.tasks_project_load_failed), color = MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = { onIntent(SessionIntent.ReloadProject) }) {
+                    MaaOutlinedButton(onClick = { onIntent(SessionIntent.ReloadProject) }) {
                         Text(stringResource(R.string.tasks_reload))
                     }
                 }

@@ -46,6 +46,7 @@ import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.MaaSwitchRow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
@@ -61,6 +62,7 @@ fun SettingsScreen(
     // 二级页面与 SAF 都需要 Activity 宿主，导航与弹窗归 AppRoot 那一层
     onOpenRunLogArchive: () -> Unit,
     onOpenAppLog: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     onExportLogs: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -95,6 +97,7 @@ fun SettingsScreen(
         ) {
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
+            NotificationCard(onOpenNotificationSettings)
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
             OtherCard(state, settingsState, onIntent, onSettingsIntent)
@@ -211,6 +214,18 @@ private fun ScheduleCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
                 },
             )
         }
+    }
+}
+
+/** 只是入口；档位与渠道都在二级页面里改，不参与运行锁定 */
+@Composable
+private fun NotificationCard(onOpen: () -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_section_notification), collapsible = true) {
+        MaaNavigationRow(
+            label = stringResource(R.string.notification_settings_title),
+            description = stringResource(R.string.settings_notification_desc),
+            onClick = onOpen,
+        )
     }
 }
 

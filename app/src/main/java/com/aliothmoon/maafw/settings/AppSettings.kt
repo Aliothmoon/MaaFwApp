@@ -68,6 +68,15 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val themeStyle: String = "DEFAULT",
 
+    /**
+     * [com.aliothmoon.maafw.domain.EventNotificationLevel] 的 name
+     *
+     * 只管「跑完了 / 出错了」这类事件通知，前台服务常驻通知与 PI 的 focus 通知不受它影响——
+     * 前者是保活的载体，关掉整个执行就失去保护
+     */
+    @PrefKey(default = "DEFAULT")
+    val eventNotificationLevel: String = "DEFAULT",
+
     /** 定时触发时是否亮屏解锁；默认关，注入 PIN 这种事要用户先点头。手动 Start 不走这条 */
     @PrefKey(default = "false")
     val wakeUnlockEnabled: String = "false",

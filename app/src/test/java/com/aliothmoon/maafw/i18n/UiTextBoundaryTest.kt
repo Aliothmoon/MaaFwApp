@@ -86,11 +86,15 @@ class UiTextBoundaryTest {
          * `UiText.resolve` 本身就是解析出口
          * 两个 Service 就地渲染通知：它们有 Context，文案不存值也不跨层传；代价是运行中的
          * 通知不跟着切语言更新，通知本身是瞬时的，可以接受
+         *
+         * [RunEventNotifier] 只就地取 channel 的名字与说明：channel 建出来之后名字由系统留着，
+         * 换成 UiText 也不会跟着切语言更新——那得删掉重建 channel，而那会丢掉用户在系统里的调整
          */
         val EAGER_RESOLVE_ALLOWED = setOf(
             "i18n/UiText.kt",
             "service/RunForegroundService.kt",
             "schedule/ScheduleExecutionService.kt",
+            "notification/RunEventNotifier.kt",
         )
 
         /**

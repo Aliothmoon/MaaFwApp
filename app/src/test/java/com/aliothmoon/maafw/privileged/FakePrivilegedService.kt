@@ -69,6 +69,8 @@ open class FakePrivilegedService : RemoteService {
     override fun moveAppToVirtualDisplay(packageName: String?): Boolean = true
     override fun setForceFullscreenOnVirtualDisplay(enabled: Boolean) = Unit
     override fun setDisplayPower(on: Boolean) = Unit
+    override fun setForcedDisplaySize(width: Int, height: Int): Boolean = true
+    override fun clearForcedDisplaySize(): Boolean = true
     override fun setMonitorSurface(surface: Surface?) = Unit
     override fun setTouchCallback(callback: ITouchEventCallback?) = Unit
     override fun touchDown(x: Int, y: Int) = Unit

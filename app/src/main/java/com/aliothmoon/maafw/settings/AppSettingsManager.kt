@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.domain.EventNotificationLevel
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
@@ -78,6 +79,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _touchPreviewEnabled = MutableStateFlow(defaults.touchPreviewEnabled.toBoolean())
     override val touchPreviewEnabled: StateFlow<Boolean> = _touchPreviewEnabled.asStateFlow()
 
+    private val _eventNotificationLevel =
+        MutableStateFlow(parseEventNotificationLevel(defaults.eventNotificationLevel))
+    val eventNotificationLevel: StateFlow<EventNotificationLevel> = _eventNotificationLevel.asStateFlow()
+
     private val _resolutionPreference = MutableStateFlow(parseResolutionPreference(defaults.resolutionPreference))
     override val resolutionPreference: StateFlow<ResolutionPreference> = _resolutionPreference.asStateFlow()
 
@@ -110,6 +115,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _resolutionPreference.value = parseResolutionPreference(s.resolutionPreference)
                 _debugMode.value = s.debugMode.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
+                _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
                 _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
                 _wakeCredential.value = s.wakeCredential
                 // 必须是最后一行：置位即宣告上面全部就位
@@ -166,6 +172,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[themeStyle] = style.name }
     }
 
+    suspend fun setEventNotificationLevel(level: EventNotificationLevel) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[eventNotificationLevel] = level.name }
+    }
+
     override suspend fun setWakeUnlockEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[wakeUnlockEnabled] = enabled.toString() }
     }
@@ -191,4 +201,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseThemeStyle(raw: String): ThemeStyle =
         runCatching { ThemeStyle.valueOf(raw) }.getOrDefault(ThemeStyle.DEFAULT)
+
+    private fun parseEventNotificationLevel(raw: String): EventNotificationLevel =
+        runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)
 }

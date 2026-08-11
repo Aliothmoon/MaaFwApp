@@ -32,6 +32,9 @@ object Routes {
     const val RUN_LOG_DETAIL_ARG = "file"
     fun runLogDetail(fileName: String) = "run_log_detail/$fileName"
 
+    /** 通知设置：系统事件通知档位 + 外部推送渠道 */
+    const val NOTIFICATION_SETTINGS = "notification_settings"
+
     /** 错误日志（app 自身的警告与错误） */
     const val APP_LOG = "app_log"
 

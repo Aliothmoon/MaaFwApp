@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
@@ -55,6 +54,7 @@ import com.aliothmoon.maafw.schedule.validationErrors
 import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.ITextField
@@ -475,17 +475,17 @@ private fun IntervalSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            // 这两个是「点开选值」的表单项，不是动作按钮；M3 的 Button 恒为 CornerFull
-            // （CircleShape，不读主题圆角），默认形状会在一排输入框中间突兀成胶囊
+            // 这两个是「点开选值」的表单项，不是动作按钮：圆角要跟同屏的 ITextField 对齐
+            // （两者都取 radii.inner），走按钮的默认档会比旁边的输入框圆一圈
             val fieldShape = MaterialTheme.shapes.extraSmall
-            OutlinedButton(
+            MaaOutlinedButton(
                 onClick = onPickStartDate,
                 shape = fieldShape,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(draft.startZoned()?.toLocalDate()?.toString() ?: LocalDate.now().toString())
             }
-            OutlinedButton(
+            MaaOutlinedButton(
                 onClick = onPickStartTime,
                 shape = fieldShape,
                 modifier = Modifier.weight(1f),

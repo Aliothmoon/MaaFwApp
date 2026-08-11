@@ -35,6 +35,9 @@ private inline fun <R> PrivilegedServicePort.callOrDefault(
  * release  CLOSE_APP     -> SCREEN_SAVER    -> WAKE_UNLOCK      -> AUTO_SLEEP
  * ```
  *
+ * 会话日志与通知播报不在这一组（[HookOrder.SESSION_LOG] / [HookOrder.NOTIFICATION]）：
+ * 它们不改设备环境，排在两端只为把整轮夹在中间
+ *
  * 收尾逆序正好是「关应用 → 掀屏保 → 熄屏」这个物理顺序。
  * 自动熄屏排在最前只为**采样**：它要知道本轮开始时手机是不是本来就醒着，
  * 那个值一旦唤醒过就再也采不到了
@@ -44,6 +47,9 @@ private inline fun <R> PrivilegedServicePort.callOrDefault(
 internal object HookOrder {
     /** 排在所有环境动作之前，收尾时因此最后关：文件开着的窗口覆盖住整轮 */
     const val SESSION_LOG = -10
+
+    /** 紧随会话日志：收尾时排在所有环境动作之后，播报的是环境都撤干净之后的结局 */
+    const val NOTIFICATION = -5
     const val AUTO_SLEEP = 0
     const val WAKE_UNLOCK = 10
     const val SCREEN_SAVER = 20

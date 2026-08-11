@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import zipfile
 from dataclasses import dataclass, field
@@ -44,6 +45,10 @@ PYTHON_TARBALL = (
     "https://repo1.maven.org/maven2/com/chaquo/python/python/{ver}/python-{ver}-{triple}.tar.gz"
 )
 EXTRA_INDEX = "https://chaquo.com/pypi-upstream/"
+
+# 下载产物（解释器 tarball、source-only wheel、pip wheel）的本地缓存：跨构建复用，不每次重下
+# 默认在脚本所在项目根下（与 scripts/ 同级）；用环境变量 MAAFW_AGENT_CACHE 或 --cache 覆盖
+DEFAULT_CACHE = Path(__file__).resolve().parents[1] / ".agent-runtime-cache"
 
 # gradle 用的 ABI 名 -> (NDK triple, wheel tag 里的 ABI 名)
 ABIS = {
@@ -145,17 +150,34 @@ def log(text: str) -> None:
     print(text, flush=True)
 
 
-def fetch(url: str, out: Path) -> Path:
-    if out.exists():
+def default_cache() -> Path:
+    """缓存位置：--cache > MAAFW_AGENT_CACHE > ~/.maafw/agent-runtime-cache""" 
+    env = os.environ.get("MAAFW_AGENT_CACHE")
+    return Path(env) if env else DEFAULT_CACHE
+
+
+def fetch(url: str, out: Path, retries: int = 3) -> Path:
+    if out.exists() and out.stat().st_size > 0:
         log(f"cached  {out.name}")
         return out
-    log(f"fetch   {url}")
     out.parent.mkdir(parents=True, exist_ok=True)
     part = out.with_name(out.name + ".part")
-    with urllib.request.urlopen(url) as response, part.open("wb") as sink:
-        shutil.copyfileobj(response, sink)
-    part.replace(out)
-    return out
+    last_err: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            log(f"fetch   {url}" + (f"  (retry {attempt}/{retries})" if attempt > 1 else ""))
+            with urllib.request.urlopen(url, timeout=60) as response, part.open("wb") as sink:
+                shutil.copyfileobj(response, sink)
+            if part.stat().st_size == 0:
+                raise OSError("空响应")
+            part.replace(out)
+            return out
+        except Exception as e:
+            last_err = e
+            part.unlink(missing_ok=True)
+            if attempt < retries:
+                time.sleep(2 ** (attempt - 1))
+    raise SystemExit(f"下载失败（{retries} 次重试）: {url}\n  {last_err}")
 
 
 def rmtree(path: Path) -> None:
@@ -203,12 +225,13 @@ def build_launcher(paths: Paths, ndk: Path, triple: str) -> None:
         )
 
 
-def install_requirements(site: Path, wheel_abi: str, extra: list[str]) -> None:
+def install_requirements(paths: Paths, wheel_abi: str, extra: list[str]) -> None:
     """pip 只按 wheel 文件名的 tag 过滤，不执行任何构建，所以能跨平台解析"""
     subprocess.run(
         [
             sys.executable, "-m", "pip", "install", "--quiet",
-            "--target", str(site),
+            "--target", str(paths.site),
+            "--cache-dir", str(paths.cache / "pip"),
             "--only-binary", ":all:",
             "--platform", f"android_{WHEEL_API}_{wheel_abi}",
             "--python-version", py_short(),
@@ -224,9 +247,18 @@ def install_requirements(site: Path, wheel_abi: str, extra: list[str]) -> None:
     rmtree(site / "bin")
 
 
-def resolve_pypi_wheel(name: str, version: str, platform: str) -> str:
-    with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{version}/json") as response:
-        data = json.load(response)
+def resolve_pypi_wheel(name: str, version: str, platform: str, cache: Path) -> str:
+    cache_file = cache / f"pypi-{name}-{version}.json"
+    if cache_file.exists():
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+    else:
+        log(f"resolve {name} {version} on PyPI")
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(
+            f"https://pypi.org/pypi/{name}/{version}/json", timeout=60
+        ) as response:
+            data = json.load(response)
+        cache_file.write_text(json.dumps(data), encoding="utf-8")
     for entry in data["urls"]:
         if entry["filename"].endswith(f"{platform}.whl"):
             return entry["url"]
@@ -235,7 +267,7 @@ def resolve_pypi_wheel(name: str, version: str, platform: str) -> str:
 
 def install_source_only(paths: Paths) -> None:
     for spec in SOURCE_ONLY:
-        url = resolve_pypi_wheel(spec.name, spec.version, spec.platform)
+        url = resolve_pypi_wheel(spec.name, spec.version, spec.platform, paths.cache)
         wheel = fetch(url, paths.cache / url.rsplit("/", 1)[-1])
         staging = paths.cache / f"{spec.name}-extract"
         rmtree(staging)
@@ -350,7 +382,7 @@ def build_abi(cache: Path, out: Path, abi: str, ndk: Path, extra: list[str]) -> 
     rmtree(paths.bundle / "prefix" / "lib" / "pkgconfig")
 
     paths.site.mkdir(parents=True, exist_ok=True)
-    install_requirements(paths.site, wheel_abi, extra)
+    install_requirements(paths, wheel_abi, extra)
     install_source_only(paths)
     trim(paths)
 
@@ -376,7 +408,7 @@ def main() -> int:
     parser.add_argument("--abi", action="append", choices=sorted(ABIS), help="默认只出 arm64-v8a")
     parser.add_argument("--require", action="append", default=[], help="追加三方依赖，可重复")
     parser.add_argument("--ndk", default=os.environ.get("NDK"), help="NDK 根目录，或用环境变量 NDK")
-    parser.add_argument("--cache", help="下载缓存目录，默认 <out>/.cache")
+    parser.add_argument("--cache", help=f"下载缓存目录，默认 {DEFAULT_CACHE}（或环境变量 MAAFW_AGENT_CACHE）")
     args = parser.parse_args()
 
     if not args.ndk:
@@ -386,7 +418,7 @@ def main() -> int:
         raise SystemExit(f"NDK 不存在：{ndk}")
 
     out = Path(args.out).resolve()
-    cache = Path(args.cache) if args.cache else out / ".cache"
+    cache = Path(args.cache) if args.cache else default_cache()
     cache.mkdir(parents=True, exist_ok=True)
 
     for abi in args.abi or ["arm64-v8a"]:

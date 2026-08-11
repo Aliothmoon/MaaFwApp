@@ -19,10 +19,29 @@ import com.aliothmoon.maafw.log.AppLogViewModel
 import com.aliothmoon.maafw.log.LogExportService
 import com.aliothmoon.maafw.log.RunLogArchiveViewModel
 import com.aliothmoon.maafw.log.RunLogDetailViewModel
+import com.aliothmoon.maafw.notification.ExternalNotificationService
+import com.aliothmoon.maafw.notification.NotificationCenter
+import com.aliothmoon.maafw.notification.NotificationSettingsManager
+import com.aliothmoon.maafw.notification.NotificationSettingsViewModel
+import com.aliothmoon.maafw.notification.RunEventNotifier
+import com.aliothmoon.maafw.notification.provider.BarkProvider
+import com.aliothmoon.maafw.notification.provider.CustomWebhookProvider
+import com.aliothmoon.maafw.notification.provider.DingTalkProvider
+import com.aliothmoon.maafw.notification.provider.DiscordProvider
+import com.aliothmoon.maafw.notification.provider.DiscordWebhookProvider
+import com.aliothmoon.maafw.notification.provider.GotifyProvider
+import com.aliothmoon.maafw.notification.provider.KookProvider
+import com.aliothmoon.maafw.notification.provider.NotificationHttpClient
+import com.aliothmoon.maafw.notification.provider.QmsgProvider
+import com.aliothmoon.maafw.notification.provider.ServerChanProvider
+import com.aliothmoon.maafw.notification.provider.SmtpProvider
+import com.aliothmoon.maafw.notification.provider.TelegramProvider
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
 import com.aliothmoon.maafw.overlay.border.BorderOverlayManager
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.privileged.DisplaySizeController
+import com.aliothmoon.maafw.privileged.DisplaySizeGateway
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
@@ -46,6 +65,7 @@ import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
+import com.aliothmoon.maafw.runner.NotificationHook
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
 import com.aliothmoon.maafw.runner.RemotePreviewPort
@@ -70,6 +90,7 @@ import com.aliothmoon.maafw.settings.SettingsViewModel
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -199,6 +220,7 @@ val appModule = module {
             // engage 顺序由各自的 order 定，这里的书写顺序不算数（见 EnvironmentHooks.kt）
             hooks = listOf(
                 SessionLogHook(get()),
+                NotificationHook(get()),
                 AutoSleepHook(get()),
                 WakeUnlockHook(get(), get<AppSettingsManager>()),
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
@@ -214,6 +236,47 @@ val appModule = module {
     // app 设置与运行配置分开存：前者不该被 UserConfiguration 的 schema 重置波及
     single { AppSettingsManager(androidContext()) }
     single<AppSettingsGateway> { get<AppSettingsManager>() }
+
+    // ── 通知：系统事件通知 + 外部推送 ──
+    single { NotificationSettingsManager(androidContext()) }
+    single { RunEventNotifier(androidContext(), get()) }
+    // 渠道单独一个 OkHttp 实例：Markwon 那份的拦截器与缓存是给取图配的，两者别互相牵连
+    single { NotificationHttpClient(OkHttpClient.Builder().build()) }
+    single {
+        val http = get<NotificationHttpClient>()
+        val settings = get<NotificationSettingsManager>()
+        ExternalNotificationService(
+            settingsManager = settings,
+            // 写成显式列表而不是 getAll()：顺序与齐全度得在一处看得见，
+            // 漏一个只会表现成「这个渠道的开关打开了却不发」（见 NOTIFICATION_PROVIDER_ORDER）
+            providerList = listOf(
+                ServerChanProvider(http, settings),
+                TelegramProvider(http, settings),
+                DiscordProvider(http, settings),
+                DingTalkProvider(http, settings),
+                KookProvider(http, settings),
+                DiscordWebhookProvider(http, settings),
+                SmtpProvider(settings),
+                BarkProvider(http, settings),
+                QmsgProvider(http, settings),
+                GotifyProvider(http, settings),
+                CustomWebhookProvider(http, settings),
+            ),
+            scope = get(named<AppCoroutineScope>()),
+            ioDispatcher = MaaDispatchers.IO,
+        )
+    }
+    single {
+        val renderer = get<LocalizedTextRenderer>()
+        NotificationCenter(
+            eventNotifier = get(),
+            external = get(),
+            settings = get(),
+            recorder = get(),
+            renderText = renderer::render,
+            servicePort = get(),
+        )
+    }
 
     // 前台模式的控制层；后台虚拟屏模式下 setup 里会把它整层卸掉
     single { BorderOverlayManager(androidContext()) }
@@ -245,11 +308,21 @@ val appModule = module {
     }
     single { PermissionManager(androidContext(), get(), get(), get()) }
     single<PermissionGateway> { get<PermissionManager>() }
+    single<DisplaySizeGateway> { DisplaySizeController(androidContext(), get()) }
 
     viewModel { RunLogArchiveViewModel(get()) }
     viewModel { RunLogDetailViewModel(get()) }
     viewModel { AppLogViewModel(get(), MaaDispatchers.IO) }
     viewModel { AppLogDetailViewModel(get(), MaaDispatchers.IO) }
+
+    viewModel {
+        NotificationSettingsViewModel(
+            settingsManager = get(),
+            appSettingsManager = get(),
+            externalService = get(),
+            eventNotifier = get(),
+        )
+    }
 
     viewModel {
         SessionViewModel(
@@ -260,6 +333,7 @@ val appModule = module {
             previewPort = get(),
             permissionGateway = get(),
             servicePort = get(),
+            displaySize = get(),
             appSettings = get(),
             localeController = AppLocales,
             focusDispatcher = get(),
