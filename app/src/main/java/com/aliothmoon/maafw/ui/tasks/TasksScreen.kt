@@ -1,7 +1,13 @@
 package com.aliothmoon.maafw.ui.tasks
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -149,28 +155,49 @@ private fun TasksContent(
 
                     // 日志接管任务列表那块，不另开弹层：这两样不会同时看，
                     // 而全屏弹层会把下面那颗启停按钮一起挡掉
-                    when {
-                        showRunLog -> RunLogPanel(
-                            entries = runLog,
-                            onClear = { onIntent(SessionIntent.ClearRunLog) },
-                            modifier = Modifier.weight(1f),
-                        )
+                    //
+                    // 走竖向而不是横向：横向是 pager 换 tab 的语汇，同一块地方两种含义的
+                    // 横滑会读混。日志从上方压下来，正对着上面那颗开关
+                    AnimatedContent(
+                        targetState = showRunLog,
+                        transitionSpec = {
+                            val opening = targetState
+                            val enter = fadeIn(MaaMotion.enter()) +
+                                slideInVertically(MaaMotion.enter()) {
+                                    if (opening) -it / SlideFraction else it / SlideFraction
+                                }
+                            val exit = fadeOut(MaaMotion.exit()) +
+                                slideOutVertically(MaaMotion.exit()) {
+                                    if (opening) it / SlideFraction else -it / SlideFraction
+                                }
+                            enter.togetherWith(exit)
+                        },
+                        label = "tasksBody",
+                        modifier = Modifier.weight(1f),
+                    ) { logOpen ->
+                        when {
+                            logOpen -> RunLogPanel(
+                                entries = runLog,
+                                onClear = { onIntent(SessionIntent.ClearRunLog) },
+                                modifier = Modifier.fillMaxSize(),
+                            )
 
-                        active == null -> EmptyState(
-                            icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
-                            title = stringResource(R.string.tasks_empty_config_title),
-                            hint = stringResource(R.string.tasks_empty_config_hint),
-                            modifier = Modifier.weight(1f),
-                        )
+                            active == null -> EmptyState(
+                                icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
+                                title = stringResource(R.string.tasks_empty_config_title),
+                                hint = stringResource(R.string.tasks_empty_config_hint),
+                                modifier = Modifier.fillMaxSize(),
+                            )
 
-                        else -> TaskList(
-                            active = active,
-                            locked = locked,
-                            onIntent = onIntent,
-                            onRequestAddTasks = { showAddTasks = true },
-                            onEditTask = { editingTaskInstanceId = it },
-                            modifier = Modifier.weight(1f),
-                        )
+                            else -> TaskList(
+                                active = active,
+                                locked = locked,
+                                onIntent = onIntent,
+                                onRequestAddTasks = { showAddTasks = true },
+                                onEditTask = { editingTaskInstanceId = it },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(MaaDesignTokens.Spacing.xs))
@@ -247,3 +274,10 @@ private fun TasksContent(
         )
     }
 }
+
+/**
+ * 切换时的位移取区域高度的几分之一
+ *
+ * 这块地方有小半屏高，取 1/3 那类比例位移一百多 dp，一个开关不该有这么大的动静
+ */
+private const val SlideFraction = 6

@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.res.stringResource
@@ -52,6 +50,10 @@ import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.uniqueCopyLabel
 import com.aliothmoon.maafw.session.SessionIntent
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
@@ -202,40 +204,48 @@ internal fun ConfigurationSelectorRow(
     onToggleLog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 固定高度而非 IntrinsicSize.Min：三件东西各有各的固有高度（卡按文字、按钮按 Material
+    // 最小尺寸），交给固有高度对齐必然是最高的那个说了算，压不下来
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min),
+            .height(ConfigRowHeight),
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ConfigurationSelectorCard(
-            active = active,
-            locked = locked,
-            onClick = onSelectConfig,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-        )
-        RowActionButton(
-            onClick = onAddTasks,
-            enabled = !locked && active != null,
-            icon = MaaIcons.Add,
-            label = stringResource(R.string.tasks_add_task),
-        )
-        // 只给图标：三件东西挤一行，再带上文字配置卡就只剩个名字了
-        RowActionButton(
-            onClick = onToggleLog,
-            enabled = true,
-            icon = if (logOpen) MaaIcons.Close else MaaIcons.History,
-            label = null,
-            contentDescription = stringResource(
-                if (logOpen) R.string.tasks_log_close else R.string.tasks_log_open,
-            ),
-            active = logOpen,
-        )
+        // 按钮的 48dp 最小触控区会把整行顶起来；这一行本来就贴着预览卡，让位给任务列表
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            ConfigurationSelectorCard(
+                active = active,
+                locked = locked,
+                onClick = onSelectConfig,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            )
+            RowActionButton(
+                onClick = onAddTasks,
+                enabled = !locked && active != null,
+                icon = MaaIcons.Add,
+                label = stringResource(R.string.tasks_add_task),
+            )
+            // 只给图标：三件东西挤一行，再带上文字配置卡就只剩个名字了
+            RowActionButton(
+                onClick = onToggleLog,
+                enabled = true,
+                icon = if (logOpen) MaaIcons.Close else MaaIcons.History,
+                label = null,
+                contentDescription = stringResource(
+                    if (logOpen) R.string.tasks_log_close else R.string.tasks_log_open,
+                ),
+                active = logOpen,
+            )
+        }
     }
 }
+
+/** 配置行三件套的统一高度：容得下一行 titleMedium，再低就压字了 */
+private val ConfigRowHeight = 44.dp
 
 /**
  * 配置行右侧的动作钮：primary 字色 + 中性描边（有框，不要 primary 色框）
@@ -297,10 +307,9 @@ private fun ConfigurationSelectorCard(
         modifier = modifier,
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = MaaDesignTokens.Spacing.md,
-                vertical = MaaDesignTokens.Spacing.sm,
-            ),
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(horizontal = MaaDesignTokens.Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
@@ -311,28 +320,15 @@ private fun ConfigurationSelectorCard(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(MaaDesignTokens.IconSize.md),
             )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = active?.name ?: stringResource(R.string.config_select),
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = if (active != null) {
-                        pluralStringResource(
-                            R.plurals.config_current_summary,
-                            active.tasks.size,
-                            active.tasks.size,
-                            active.effectiveTaskCount,
-                        )
-                    } else {
-                        stringResource(R.string.config_select_hint)
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            // 只留配置名：任务数与有效数在下面的列表里一眼就能数，
+            // 摆在这儿只是把这一行撑成两行高
+            Text(
+                text = active?.name ?: stringResource(R.string.config_select),
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             Icon(
                 imageVector = Icons.Outlined.UnfoldMore,
                 contentDescription = null,

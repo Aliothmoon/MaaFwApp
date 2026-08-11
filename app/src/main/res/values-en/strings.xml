@@ -22,7 +22,6 @@
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
     <string name="tasks_run_order">Task list</string>
-    <!-- "active" is an adjective and does not inflect with quantity. -->
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_preview_waiting_surface">Waiting for frames</string>
     <string name="virtual_display_game_running">Running</string>
@@ -49,11 +48,6 @@
     <string name="config_title">Configurations</string>
     <string name="config_select">Select configuration</string>
     <string name="config_copy_name">%1$s copy</string>
-    <string name="config_select_hint">Tap to select or create a configuration</string>
-    <plurals name="config_current_summary">
-        <item quantity="one">%1$d task · %2$d active</item>
-        <item quantity="other">%1$d tasks · %2$d active</item>
-    </plurals>
     <string name="config_create_from_template">New from template</string>
     <string name="config_template_list_hint">Preview a template and pick the tasks you need before creating</string>
     <string name="config_name_label">Configuration name</string>
@@ -98,7 +92,6 @@
         <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
         <item quantity="other">Diagnostics: %1$d (%2$d errors)</item>
     </plurals>
-    <!-- "active" is an adjective and does not inflect with quantity. -->
 
     <!-- Runner phase / result -->
     <string name="phase_unavailable">Unavailable: %1$s</string>

@@ -48,10 +48,6 @@
     <string name="config_title">配置</string>
     <string name="config_select">选择配置</string>
     <string name="config_copy_name">%1$s 副本</string>
-    <string name="config_select_hint">点击选择或新建配置</string>
-    <plurals name="config_current_summary">
-        <item quantity="other">%1$d 个任务 · %2$d 个有效</item>
-    </plurals>
     <string name="config_create_from_template">从模板新建</string>
     <string name="config_template_list_hint">预览模板内容，按需挑选任务后创建</string>
     <string name="config_name_label">配置名称</string>
