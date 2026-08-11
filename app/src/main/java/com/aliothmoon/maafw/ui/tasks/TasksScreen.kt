@@ -3,10 +3,10 @@ package com.aliothmoon.maafw.ui.tasks
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -162,14 +162,22 @@ private fun TasksContent(
                         targetState = showRunLog,
                         transitionSpec = {
                             val opening = targetState
-                            val enter = fadeIn(MaaMotion.enter()) +
-                                slideInVertically(MaaMotion.enter()) {
-                                    if (opening) -it / SlideFraction else it / SlideFraction
-                                }
-                            val exit = fadeOut(MaaMotion.exit()) +
-                                slideOutVertically(MaaMotion.exit()) {
-                                    if (opening) it / SlideFraction else -it / SlideFraction
-                                }
+                            // 先淡出、后淡入（Material 的 fade through）：两边都没有不透明底，
+                            // 齐头并进时任务卡片会一片片盖住下面的日志文字，盖住的当场消失、
+                            // 缝隙里的还在，看着就是闪
+                            //
+                            // 但也不能完全错开——交接那一帧两边都是全透明，空一帧同样像闪。
+                            // 让淡入早于淡出结束一点点，重叠区间落在两边都很淡的地方
+                            val enter = fadeIn(
+                                tween(FadeInMillis, FadeInDelayMillis, MaaMotion.EmphasizedDecelerate),
+                            ) + slideInVertically(
+                                tween(FadeInMillis, FadeInDelayMillis, MaaMotion.EmphasizedDecelerate),
+                            ) { if (opening) -it / SlideFraction else it / SlideFraction }
+                            // 退场只淡不滑：这一段本来就短，位移看不出来，
+                            // 却要多维护一份跟进场对齐的方向
+                            val exit = fadeOut(
+                                tween(FadeOutMillis, easing = MaaMotion.EmphasizedAccelerate),
+                            )
                             enter.togetherWith(exit)
                         },
                         label = "tasksBody",
@@ -281,3 +289,9 @@ private fun TasksContent(
  * 这块地方有小半屏高，取 1/3 那类比例位移一百多 dp，一个开关不该有这么大的动静
  */
 private const val SlideFraction = 6
+
+// 淡出 0–120ms，淡入 80–300ms：只在 80–120 这 40ms 重叠，那会儿两边都不到两成不透明度，
+// 卡片底色淡得盖不住东西。整体仍是 MaaMotion.DURATION_MEDIUM
+private const val FadeOutMillis = 120
+private const val FadeInDelayMillis = 80
+private const val FadeInMillis = MaaMotion.DURATION_MEDIUM - FadeInDelayMillis
