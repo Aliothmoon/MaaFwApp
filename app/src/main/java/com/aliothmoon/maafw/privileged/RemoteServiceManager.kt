@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.privileged
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import android.os.IBinder
@@ -45,7 +46,7 @@ object RemoteServiceManager : PrivilegedServicePort {
     private var currentDeathRecipient: BindingDeathRecipient? = null // guarded by lock
     private val _state = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
 
-    private val timeoutScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val timeoutScope = CoroutineScope(MaaDispatchers.Default + SupervisorJob())
     private val connectAttempt = AtomicInteger(0)
 
     private val connectors: Map<RemoteBackend, RemoteServiceConnectorBackend> = mapOf(

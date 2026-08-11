@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.di
+import com.aliothmoon.maafw.MaaDispatchers
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
@@ -73,7 +74,7 @@ val appModule = module {
         val handler = CoroutineExceptionHandler { _, throwable ->
             Timber.e(throwable, "AppCoroutineScope uncaught")
         }
-        CoroutineScope(SupervisorJob() + Dispatchers.Default + handler)
+        CoroutineScope(SupervisorJob() + MaaDispatchers.Default + handler)
     }
 
     single {

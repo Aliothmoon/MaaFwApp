@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.log
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.os.Build
 import com.aliothmoon.maafw.constant.AppPaths
@@ -27,7 +28,7 @@ import java.time.format.DateTimeFormatter
  */
 class AppLogWriter {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+    private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO.limitedParallelism(1))
     private val channel = Channel<String>(capacity = QUEUE_CAPACITY)
 
     private val timestampFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")

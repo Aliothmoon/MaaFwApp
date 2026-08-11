@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.privileged
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.ComponentName
 import android.content.Context
@@ -51,7 +52,7 @@ object LogcatServiceManager {
     // --- Root ---
     private val initialized = AtomicBoolean(false)
     private lateinit var appContext: Context
-    private val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(1) + SupervisorJob())
+    private val scope = CoroutineScope(MaaDispatchers.IO.limitedParallelism(1) + SupervisorJob())
     private var rootActiveLaunch: RootActiveLaunch? = null
 
     fun initialize(context: Context) {
@@ -132,7 +133,7 @@ object LogcatServiceManager {
         val token = UUID.randomUUID().toString()
         val deferred = RootServiceBootstrapRegistry.register(token)
         val job = scope.launch {
-            val startResult = withContext(Dispatchers.IO) { startRootService(token) }
+            val startResult = withContext(MaaDispatchers.IO) { startRootService(token) }
             val active = rootActiveLaunch
             if (active?.token != token) {
                 RootServiceBootstrapRegistry.unregister(token)

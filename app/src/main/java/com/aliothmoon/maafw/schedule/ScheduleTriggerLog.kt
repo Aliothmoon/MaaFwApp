@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.schedule
+import com.aliothmoon.maafw.MaaDispatchers
 
 import com.aliothmoon.maafw.constant.AppPaths
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +62,7 @@ class ScheduleTriggerLog {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun append(entry: TriggerLogEntry) = withContext(Dispatchers.IO) {
+    suspend fun append(entry: TriggerLogEntry) = withContext(MaaDispatchers.IO) {
         runCatching {
             val file = logFile()
             file.appendText(json.encodeToString(entry) + "\n")
@@ -70,7 +71,7 @@ class ScheduleTriggerLog {
         Unit
     }
 
-    suspend fun readAll(): List<TriggerLogEntry> = withContext(Dispatchers.IO) {
+    suspend fun readAll(): List<TriggerLogEntry> = withContext(MaaDispatchers.IO) {
         val file = logFile()
         if (!file.exists()) return@withContext emptyList()
         runCatching {
@@ -84,7 +85,7 @@ class ScheduleTriggerLog {
         }
     }
 
-    suspend fun delete(stableId: String) = withContext(Dispatchers.IO) {
+    suspend fun delete(stableId: String) = withContext(MaaDispatchers.IO) {
         runCatching {
             val file = logFile()
             if (!file.exists()) return@runCatching
@@ -97,7 +98,7 @@ class ScheduleTriggerLog {
         }.onFailure { Timber.w(it, "Failed to delete trigger log entry") }
         Unit
     }
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    suspend fun clear() = withContext(MaaDispatchers.IO) {
         runCatching { logFile().delete() }
         Unit
     }

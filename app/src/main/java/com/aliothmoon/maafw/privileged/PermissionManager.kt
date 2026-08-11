@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.privileged
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -158,7 +159,7 @@ class PermissionManager(
     private suspend fun grantViaPrivileged() {
         // 对齐 MaaMeow：特权进程上线即把全集代授一遍，不再按运行模式挑
         val requested = PrivilegedGrant.ALL
-        val granted = withContext(Dispatchers.IO) {
+        val granted = withContext(MaaDispatchers.IO) {
             runCatching {
                 servicePort.serviceOrNull()?.grantPermissions(
                     appContext.packageName,
@@ -255,7 +256,7 @@ class PermissionManager(
             remoteState.shizukuGranted -> ShizukuReadinessStage.Ready
             remoteState.shizukuAvailable -> ShizukuReadinessStage.NeedAuth
             else -> when (
-                withContext(Dispatchers.IO) {
+                withContext(MaaDispatchers.IO) {
                     ShizukuInstallHelper.checkStatus(appContext, launchPackage)
                 }
             ) {

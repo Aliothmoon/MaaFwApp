@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.ui.components
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import android.graphics.Typeface
@@ -245,7 +246,7 @@ class DescriptionFetcher private constructor(context: Context) {
         .build()
 
     /** 失败时回落返回原始 URL 文本 */
-    suspend fun fetch(url: String): String = withContext(Dispatchers.IO) {
+    suspend fun fetch(url: String): String = withContext(MaaDispatchers.IO) {
         try {
             client.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (!response.isSuccessful) error("HTTP ${response.code}")

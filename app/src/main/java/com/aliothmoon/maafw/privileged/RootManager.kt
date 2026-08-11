@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.privileged
+import com.aliothmoon.maafw.MaaDispatchers
 
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.domain.RemoteBackend
@@ -45,7 +46,7 @@ object RootManager : RemoteAccessPermissionBackend {
         return false
     }
 
-    override suspend fun requestPermission(): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun requestPermission(): Boolean = withContext(MaaDispatchers.IO) {
         val granted = runCatching {
             Shell.getShell().isRoot
         }.onFailure {

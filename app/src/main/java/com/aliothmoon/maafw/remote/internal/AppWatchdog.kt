@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.remote.internal
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.os.SystemClock
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
@@ -31,7 +32,7 @@ object AppWatchdog {
     private const val REPIN_GRACE_MS = 5000L
     private const val MAX_REPIN_ATTEMPTS = 3
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+    private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO.limitedParallelism(1))
 
     private val _state = MutableStateFlow(STATE_IDLE)
     val state: StateFlow<Int> = _state.asStateFlow()

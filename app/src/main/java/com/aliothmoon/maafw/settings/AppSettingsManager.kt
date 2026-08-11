@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.settings
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -30,7 +31,7 @@ import kotlinx.coroutines.runBlocking
  */
 class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO)
 
     companion object {
         private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")
