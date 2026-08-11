@@ -70,7 +70,12 @@ class RunLogComposer {
         return RunLogEntry(id, atMillis, composed.kind, composed.text, composed.detail)
     }
 
-    /** 洪泛滑窗按两条流合起来算：刷屏就是刷屏，不分它从哪条管道出来 */
+    /**
+     * 洪泛滑窗按**行**计，不按事件计
+     *
+     * 特权进程会把同一瞬间涌出来的若干行攒成一次回调，按事件计的话一批 64 行只算 1，
+     * 阈值永远踩不到，抑制器等于关掉了。两条流合起来算：刷屏就是刷屏，不分从哪条管道出来
+     */
     private fun agentEntry(event: RunnerEvent.AgentOutput, atMillis: Long): Composed? {
         while (agentTimestamps.isNotEmpty() && atMillis - agentTimestamps.first() >= AGENT_FLOOD_WINDOW_MS) {
             agentTimestamps.removeFirst()
@@ -81,7 +86,7 @@ class RunLogComposer {
             agentFlooded = false
             return Composed(RunLogKind.Warning, uiTextOf(R.string.run_log_agent_flood_recovered))
         }
-        agentTimestamps.addLast(atMillis)
+        repeat(event.lineCount) { agentTimestamps.addLast(atMillis) }
         if (agentTimestamps.size >= AGENT_FLOOD_THRESHOLD) {
             agentFlooded = true
             return Composed(RunLogKind.Warning, uiTextOf(R.string.run_log_agent_flood))

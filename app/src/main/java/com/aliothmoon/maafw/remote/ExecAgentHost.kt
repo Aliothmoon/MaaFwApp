@@ -2,6 +2,10 @@ package com.aliothmoon.maafw.remote
 
 import com.aliothmoon.maafw.third.Ln
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
 
 /**
@@ -86,8 +90,19 @@ class ExecAgentHost(
  */
 private class ProcessAgentSession(
     private val process: Process,
-    private val onOutput: (line: String, fromStderr: Boolean) -> Unit,
+    onOutput: (line: String, fromStderr: Boolean) -> Unit,
 ) : AgentSession {
+
+    /** 单线程够用：定时冲洗只是把攒下的串交出去 */
+    private val flusher = Executors.newSingleThreadScheduledExecutor { r ->
+        Thread(r, "agent-flush").apply { isDaemon = true }
+    }
+
+    // 每条流各攒各的，不共用一个批：混在一起就得像 MXU 那样标 "mixed"，
+    // 而下游要靠这个字段决定配色，标成 mixed 等于又分不出来了
+    private val batchers = listOf(false, true).map { fromStderr ->
+        AgentOutputBatcher(fromStderr, flusher, onOutput)
+    }
 
     private val pumps = listOf(
         pump(process.inputStream, fromStderr = false),
@@ -96,14 +111,18 @@ private class ProcessAgentSession(
 
     private fun pump(stream: java.io.InputStream, fromStderr: Boolean): Thread {
         val tag = if (fromStderr) "agent!" else "agent|"
+        val batcher = batchers[if (fromStderr) 1 else 0]
         return Thread({
             runCatching {
                 stream.bufferedReader().forEachLine { line ->
+                    // logcat 那份逐行不批：它本来就是流水账，攒起来反而不好对时间
                     Ln.i("$tag $line")
-                    runCatching { onOutput(line, fromStderr) }
-                        .onFailure { Ln.w("ExecAgentHost: agent output dispatch failed: ${it.message}") }
+                    batcher.add(line)
                 }
             }
+            // 读到 EOF 说明 child 的这条流已经关了，把最后攒的交出去——
+            // 崩溃现场的最后几行 traceback 恰恰都在这里
+            batcher.flush()
         }, if (fromStderr) "agent-err-pump" else "agent-out-pump").apply {
             isDaemon = true
             start()
@@ -119,9 +138,77 @@ private class ProcessAgentSession(
             process.destroyForcibly()
         }
         pumps.forEach { it.interrupt() }
+        batchers.forEach { it.flush() }
+        flusher.shutdownNow()
     }
 
     private companion object {
         const val TERMINATE_TIMEOUT_MILLIS = 2_000L
+    }
+}
+
+/**
+ * 把同一瞬间涌出来的若干行攒成一次回调
+ *
+ * 省的是 binder 那一跳：child 一次 dump 上百行时，逐行发就是上百次 oneway 调用。
+ * 桌面端 MXU 同样攒（`AgentOutputBatcher`），窗口取 1ms——不为省延迟，只为合并突发
+ *
+ * 窗口给到 [WINDOW_MILLIS] 而不是 1ms：过 binder 比进程内发事件贵，窗口太小攒不住；
+ * 但也不能再大，日志里 agent 的话与 MaaFramework 的回调是交错着看的，攒久了顺序就乱了
+ */
+private class AgentOutputBatcher(
+    private val fromStderr: Boolean,
+    private val flusher: ScheduledExecutorService,
+    private val sink: (line: String, fromStderr: Boolean) -> Unit,
+) {
+
+    private val lock = Any()
+    private val pending = StringBuilder()
+    private var lines = 0
+    private var scheduled: ScheduledFuture<*>? = null
+
+    fun add(line: String) {
+        val ready = synchronized(lock) {
+            if (lines > 0) pending.append('\n')
+            pending.append(line)
+            lines++
+            when {
+                // 攒够就立刻走，别让单次事务无限长大
+                lines >= MAX_LINES -> takeLocked()
+                else -> {
+                    if (scheduled == null) {
+                        scheduled = runCatching {
+                            flusher.schedule({ flush() }, WINDOW_MILLIS, TimeUnit.MILLISECONDS)
+                        }.getOrNull()
+                    }
+                    null
+                }
+            }
+        }
+        emit(ready)
+    }
+
+    fun flush() = emit(synchronized(lock) { takeLocked() })
+
+    /** 必须在锁外发：这一步要过 binder，占着锁会把泵线程也堵上 */
+    private fun emit(batch: String?) {
+        if (batch == null) return
+        runCatching { sink(batch, fromStderr) }
+            .onFailure { Ln.w("ExecAgentHost: agent output dispatch failed: ${it.message}") }
+    }
+
+    private fun takeLocked(): String? {
+        scheduled?.cancel(false)
+        scheduled = null
+        if (lines == 0) return null
+        val batch = pending.toString()
+        pending.setLength(0)
+        lines = 0
+        return batch
+    }
+
+    private companion object {
+        const val WINDOW_MILLIS = 30L
+        const val MAX_LINES = 64
     }
 }

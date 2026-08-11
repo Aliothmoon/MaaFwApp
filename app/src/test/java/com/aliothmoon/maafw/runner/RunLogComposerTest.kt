@@ -141,6 +141,24 @@ class RunLogComposerTest {
         assertEquals(false, compose(agentLine("err", fromStderr = true))!!.isEssential)
     }
 
+    /**
+     * 特权进程攒批之后，洪泛滑窗必须按行计
+     *
+     * 按事件计的话一批 64 行只算 1，阈值永远踩不到，抑制器等于关掉了
+     */
+    @Test
+    fun `a batched burst counts every line toward the flood window`() {
+        val burst = (1..AGENT_THRESHOLD).joinToString("\n") { "line $it" }
+        assertEquals(RunLogKind.Warning, compose(agentLine(burst), 0)?.kind)
+    }
+
+    /** 单行批的行数是 1，别把没有换行的那种算成 0 */
+    @Test
+    fun `a single line batch counts as one`() {
+        assertEquals(1, RunnerEvent.AgentOutput("only", fromStderr = false).lineCount)
+        assertEquals(3, RunnerEvent.AgentOutput("a\nb\nc", fromStderr = false).lineCount)
+    }
+
     private companion object {
         const val AGENT_THRESHOLD = 15
         const val AGENT_WINDOW_MS = 2_000L

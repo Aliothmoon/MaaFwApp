@@ -81,7 +81,10 @@ sealed interface RunnerEvent {
      * [fromStderr] 的用处是把「agent 自己 print 的」与「加载器、解释器写的」分开——
      * 链接器的 unused DT entry 警告走 stderr，那不是 agent 在说话
      */
-    data class AgentOutput(val line: String, val fromStderr: Boolean) : RunnerEvent
+    data class AgentOutput(val line: String, val fromStderr: Boolean) : RunnerEvent {
+        /** 特权进程按窗口攒批，[line] 可能是用换行连起来的好几行 */
+        val lineCount: Int get() = line.count { it == '\n' } + 1
+    }
 
     /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */
     data class Focus(val focus: FocusMessage) : RunnerEvent
