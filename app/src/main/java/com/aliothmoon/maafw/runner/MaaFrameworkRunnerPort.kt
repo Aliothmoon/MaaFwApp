@@ -2,10 +2,14 @@ package com.aliothmoon.maafw.runner
 
 import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextFromFramework
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
@@ -70,7 +74,7 @@ class MaaFrameworkRunnerPort(
         scope.launch {
             servicePort.serviceState.collect { serviceState ->
                 if (serviceState == PrivilegedServiceState.Died) {
-                    abortRun("特权进程已退出", "特权进程在执行期间死亡，强制收回执行态")
+                    abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died mid-run, forcing abort")
                 }
             }
         }
@@ -96,7 +100,7 @@ class MaaFrameworkRunnerPort(
                 // onFinished 在宽限期内落地了，一切正常
                 if (!_state.value.phase.isBusy) return@collectLatest
                 if (remoteRunning() != false) continue
-                abortRun("特权进程报告本轮已结束", "对账发现执行早已结束但结果没回来，强制收回执行态")
+                abortRun(uiTextOf(R.string.msg_fail_privileged_reported_finished), "reconciliation found run already finished but result missing, forcing abort")
                 return@collectLatest
             }
         }
@@ -111,7 +115,7 @@ class MaaFrameworkRunnerPort(
      * 用 getAndUpdate 原子判并换：真正的 onFinished 可能刚好抢在前头落地，
      * 那一份结果比这里编的准，不能覆盖
      */
-    private fun abortRun(resultReason: String, logMessage: String) {
+    private fun abortRun(resultReason: UiText, logMessage: String) {
         val previous = _state.getAndUpdate { current ->
             if (!current.phase.isBusy) {
                 current
@@ -171,7 +175,7 @@ class MaaFrameworkRunnerPort(
                 RunOutcome.COMPLETED -> ExecutionResult.Completed(results)
                 RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
                 RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
-                else -> ExecutionResult.Failed(reason.orEmpty().ifEmpty { "执行失败" }, results)
+                else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
             }
             _state.value = RunnerState(phase = RunnerPhase.Idle, latestResult = result)
         }
@@ -179,7 +183,7 @@ class MaaFrameworkRunnerPort(
 
     override suspend fun start(plan: RunPlan): RunnerCommandResult {
         if (_state.value.phase.isBusy) {
-            return RunnerCommandResult.Rejected("已有执行在进行中")
+            return RunnerCommandResult.Rejected(uiTextOf(R.string.msg_reject_already_running))
         }
         _state.value = RunnerState(
             phase = RunnerPhase.Preparing,
@@ -207,7 +211,7 @@ class MaaFrameworkRunnerPort(
                     },
                     onFailure = { throwable ->
                         Timber.e(throwable, "Failed to start run")
-                        failPreparation(throwable.message ?: throwable.javaClass.simpleName)
+                        failPreparation(uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName))
                     },
                 )
         }
@@ -226,7 +230,7 @@ class MaaFrameworkRunnerPort(
                     onSuccess = { RunnerCommandResult.Accepted },
                     onFailure = {
                         Timber.w(it, "Failed to stop run")
-                        RunnerCommandResult.Rejected(it.message ?: "停止失败")
+                        RunnerCommandResult.Rejected(if (it.message.isNullOrBlank()) uiTextOf(R.string.msg_reject_stop_failed) else uiTextFromFramework(it.message))
                     },
                 )
         }
@@ -237,14 +241,14 @@ class MaaFrameworkRunnerPort(
      * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
      * 后端换了也会重新绑定
      */
-    private suspend fun launchOnService(plan: RunPlan): String? {
+    private suspend fun launchOnService(plan: RunPlan): UiText? {
         val piRoot = installer.ensureInstalled()
         return servicePort.useService { service -> prepareAndStart(plan, piRoot, service) }
     }
 
-    private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): String? {
+    private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): UiText? {
         if (!service.setup(piRoot.absolutePath, logDir().absolutePath, debugMode())) {
-            return "特权进程 setup 失败"
+            return uiTextOf(R.string.msg_reject_setup_failed)
         }
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
         // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作
@@ -263,7 +267,7 @@ class MaaFrameworkRunnerPort(
         }
         val mode = runMode()
         if (!service.setVirtualDisplayMode(mode.displayMode)) {
-            return "切换显示模式失败: $mode"
+            return uiTextOf(R.string.msg_reject_switch_display_mode, mode)
         }
         // 主屏模式不建屏也不设分辨率：尺寸是设备当下的物理尺寸，由特权进程侧的采集器供数
         val (width, height) = if (mode == RunMode.BACKGROUND) {
@@ -274,7 +278,7 @@ class MaaFrameworkRunnerPort(
             DisplayResolution(0, 0)
         }
         if (service.startVirtualDisplay() == DefaultDisplayConfig.DISPLAY_NONE) {
-            return if (mode == RunMode.FOREGROUND) "主屏采集启动失败" else "虚拟显示器启动失败"
+            return if (mode == RunMode.FOREGROUND) uiTextOf(R.string.msg_reject_primary_capture) else uiTextOf(R.string.msg_reject_virtual_display)
         }
 
         service.setRunnerCallback(callback)
@@ -296,12 +300,12 @@ class MaaFrameworkRunnerPort(
             nativeLibraryDir = nativeLibraryDir,
         )
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
-            return "特权进程拒绝了本次执行"
+            return uiTextOf(R.string.msg_reject_service_rejected)
         }
         return null
     }
 
-    private fun failPreparation(reason: String): RunnerCommandResult {
+    private fun failPreparation(reason: UiText): RunnerCommandResult {
         _state.value = RunnerState(
             phase = RunnerPhase.Idle,
             latestResult = ExecutionResult.Failed(reason),

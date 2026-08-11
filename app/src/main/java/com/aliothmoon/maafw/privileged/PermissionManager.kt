@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -219,7 +220,7 @@ class PermissionManager(
                 onSuccess = { ServiceBindResult.Started },
                 onFailure = {
                     Timber.e(it, "Failed to bind privileged process manually")
-                    ServiceBindResult.Failed(it.message.orEmpty())
+                    ServiceBindResult.Failed(uiTextFromFramework(it.message))
                 },
             )
     }

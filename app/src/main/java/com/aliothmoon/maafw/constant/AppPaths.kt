@@ -27,7 +27,9 @@ object AppPaths {
         private set
 
     fun init(context: Context) {
-        val root = externalFilesRoot(context)
+        val root = checkNotNull(context.getExternalFilesDir(null)) {
+            "外部私有目录不可用（外部存储未挂载）"
+        }
         externalRoot = root
         logDir = File(root, AppFiles.LOG_DIR)
         focusDir = File(logDir, AppFiles.FOCUS_DIR)

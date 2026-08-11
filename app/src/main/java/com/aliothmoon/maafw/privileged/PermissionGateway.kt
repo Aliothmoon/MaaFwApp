@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.privileged
 
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.i18n.UiText
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -55,7 +56,7 @@ sealed interface ServiceBindResult {
     data object AlreadyConnected : ServiceBindResult
     data class BackendUnavailable(val backend: RemoteBackend) : ServiceBindResult
     data class AuthRejected(val backend: RemoteBackend) : ServiceBindResult
-    data class Failed(val reason: String) : ServiceBindResult
+    data class Failed(val reason: UiText) : ServiceBindResult
 }
 
 /**

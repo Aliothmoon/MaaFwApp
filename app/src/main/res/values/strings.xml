@@ -271,6 +271,19 @@
     <string name="msg_hook_failed">运行环境准备失败：%1$s</string>
     <string name="msg_cannot_stop">无法停止：%1$s</string>
 
+    <!-- Runner 拒绝/失败原因：reason 现为 UiText，不再当 %s 拼接 -->
+    <string name="msg_fail_default">执行失败</string>
+    <string name="msg_fail_privileged_exited">特权进程已退出</string>
+    <string name="msg_fail_privileged_reported_finished">特权进程报告本轮已结束</string>
+    <string name="msg_fail_wait_settle_timeout">等待运行结束超时</string>
+    <string name="msg_reject_already_running">已有执行在进行中</string>
+    <string name="msg_reject_stop_failed">停止失败</string>
+    <string name="msg_reject_setup_failed">特权进程 setup 失败</string>
+    <string name="msg_reject_switch_display_mode">切换显示模式失败：%1$s</string>
+    <string name="msg_reject_primary_capture">主屏采集启动失败</string>
+    <string name="msg_reject_virtual_display">虚拟显示器启动失败</string>
+    <string name="msg_reject_service_rejected">特权进程拒绝了本次执行</string>
+
     <!-- 资源切换与运行选项 -->
     <string name="resource_switch_title">资源</string>
     <string name="runner_quick_options">快捷选项</string>

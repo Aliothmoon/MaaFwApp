@@ -45,8 +45,8 @@ sealed interface RunLaunchResult {
     data object ConfigurationMissing : RunLaunchResult
     data class Invalid(val diagnostics: List<Diagnostic>) : RunLaunchResult
 
-    /** RunnerPort 拒绝；原文来自 Runner，不翻译 */
-    data class Rejected(val reason: String) : RunLaunchResult
+    /** RunnerPort 拒绝原因；UiText 随 locale 解析（外壳自产走 resId，底层原文走 uiTextFromFramework） */
+    data class Rejected(val reason: UiText) : RunLaunchResult
 
     /** 被某道 [RunPrecheck] 拦下，或 gating 挂载物挂了 */
     data class Blocked(val reason: UiText) : RunLaunchResult
@@ -272,7 +272,7 @@ class RunLauncher(
         }
         if (settled == null) Timber.w("timed out waiting for run to settle, forcing teardown")
         val result = (settled ?: runnerPort.state.value).latestResult
-            ?: ExecutionResult.Failed("等待运行结束超时")
+            ?: ExecutionResult.Failed(uiTextOf(R.string.msg_fail_wait_settle_timeout))
         finalize(ArrayDeque(pending), RunEndReason.Ran(result))
     }
 

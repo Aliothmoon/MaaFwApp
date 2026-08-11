@@ -27,11 +27,3 @@ object AppFiles {
     const val LOGCAT_APP_DIR = "logcat/app"
 }
 
-/**
- * 外部私有目录根；装配期算一次，不可用统一抛此消息
- * 回落语义（如 AppLogWriter 退到 filesDir）由各装配点自取，不走这里
- */
-fun externalFilesRoot(context: Context): File =
-    checkNotNull(context.getExternalFilesDir(null)) {
-        "外部私有目录不可用（外部存储未挂载）"
-    }
