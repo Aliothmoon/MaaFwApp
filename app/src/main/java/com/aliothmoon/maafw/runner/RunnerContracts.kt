@@ -36,6 +36,7 @@ data class ActiveExecution(
     val executionId: String,
     val runConfigurationId: RunConfigurationId,
     val currentTaskName: String?,
+    /** 恒等于 [taskResults] 的条数：已结束的才算完成，正在跑的那条不算 */
     val completedTaskCount: Int,
     val totalTaskCount: Int,
     val taskResults: List<TaskResult>,

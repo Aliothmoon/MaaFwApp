@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.project.PiInstaller
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.launch
@@ -19,12 +20,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * RunnerPort 的真实实现：本对象跑在 app 进程，MaaFramework 实例在特权进程里，两者经 binder 通信
@@ -58,21 +59,52 @@ class MaaFrameworkRunnerPort(
     )
     override val events: Flow<RunnerEvent> = _events.asSharedFlow()
 
-    /** 当前这轮的任务名，按 RunPlan 顺序；onTaskFinished 靠它算进度 */
-    private val activeTasks = AtomicReference<List<String>>(emptyList())
+    init {
+        // 特权进程死了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
+        // 跟着卡死，UI 全灰且再也发不起下一轮。只认 Died：主动 unbind 只是断了 app 这侧的
+        // binder，远端仍握着我们的 callback stub，那一轮还在跑、结果照样会回来
+        scope.launch {
+            servicePort.serviceState.collect { serviceState ->
+                if (serviceState == PrivilegedServiceState.Died) abortOnServiceDeath()
+            }
+        }
+    }
+
+    /**
+     * 用 getAndUpdate 原子判并换：onFinished 可能刚好抢在死亡通知前落地，
+     * 那一份结果比这里编的准，不能覆盖
+     */
+    private fun abortOnServiceDeath() {
+        val previous = _state.getAndUpdate { current ->
+            if (!current.phase.isBusy) {
+                current
+            } else {
+                RunnerState(
+                    phase = RunnerPhase.Idle,
+                    latestResult = ExecutionResult.Failed(
+                        "特权进程已退出",
+                        current.activeExecution?.taskResults.orEmpty(),
+                    ),
+                )
+            }
+        }
+        if (previous.phase.isBusy) {
+            Timber.w("特权进程在执行期间死亡，强制收回执行态")
+        }
+    }
 
     private val callback = object : IMaaRunnerCallback.Stub() {
         override fun onEvent(message: String?, detailsJson: String?) {
             _events.tryEmit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
 
+        // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂
         override fun onTaskStarted(taskName: String?, index: Int, total: Int) {
             val name = taskName.orEmpty()
             _state.update { current ->
                 current.copy(
                     activeExecution = current.activeExecution?.copy(
                         currentTaskName = name,
-                        completedTaskCount = index,
                         totalTaskCount = total,
                     ),
                 )
@@ -84,10 +116,11 @@ class MaaFrameworkRunnerPort(
             val result = TaskResult(taskName.orEmpty(), success, message)
             _state.update { current ->
                 val execution = current.activeExecution ?: return@update current
+                val results = execution.taskResults + result
                 current.copy(
                     activeExecution = execution.copy(
-                        completedTaskCount = execution.completedTaskCount + 1,
-                        taskResults = execution.taskResults + result,
+                        completedTaskCount = results.size,
+                        taskResults = results,
                     ),
                 )
             }
@@ -101,7 +134,6 @@ class MaaFrameworkRunnerPort(
                 RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
                 else -> ExecutionResult.Failed(reason.orEmpty().ifEmpty { "执行失败" }, results)
             }
-            activeTasks.set(emptyList())
             _state.value = RunnerState(phase = RunnerPhase.Idle, latestResult = result)
         }
     }
@@ -207,7 +239,6 @@ class MaaFrameworkRunnerPort(
         }
 
         service.setRunnerCallback(callback)
-        activeTasks.set(plan.tasks.map { it.taskName })
 
         val payload = RunPlanPayload(
             resourcePaths = plan.resource.paths.map { File(piRoot, it).absolutePath },
