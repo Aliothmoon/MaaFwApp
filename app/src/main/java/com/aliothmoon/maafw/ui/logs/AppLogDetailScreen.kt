@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.ui.logs
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,10 +35,11 @@ import org.koin.androidx.compose.koinViewModel
 /**
  * 一份错误日志的正文（二级页面）
  *
- * 横向滚动挂在 **LazyColumn 上**而不是每一行上（对齐 MaaMeow 的 `ErrorLogDetailView`）：
- * 挂在行上的话即使共用同一个 ScrollState 也是各滚各的，长短行会错位，读堆栈时对不上列
+ * 长行换行，不挂横向滚动：`LazyColumn` 外面套 `horizontalScroll` 时列表宽度取的是当前可见的
+ * 最长一行——竖向一滑宽度就变、横向偏移跟着被夹一次，真机上卡到滑不动。MaaMeow 的
+ * `ErrorLogDetailView` 是那个写法，这边照抄了一遍仍然卡，就不跟了
  *
- * 不换行、不截断：堆栈行很长，换行会把调用链拆得没法读；截尾则让用户看到残缺现场
+ * 不截断：截尾等于让用户看半个现场
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,12 +90,17 @@ fun AppLogDetailScreen(
             return@Scaffold
         }
 
+        // 样式与配色在列表外算一次：给 Text 传 fontFamily 会在每行每次重组合成一份新
+        // TextStyle，滚动时这份开销按可见行数翻倍（MaaMeow 那边直接用常量 TextStyle）
+        val lineStyle = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace)
+        val errorColor = MaterialTheme.colorScheme.error
+        val warningColor = MaaTheme.palette.warning.content
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = MaaDesignTokens.Spacing.lg)
-                .horizontalScroll(rememberScrollState()),
+                .padding(horizontal = MaaDesignTokens.Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
             contentPadding = PaddingValues(vertical = MaaDesignTokens.Spacing.lg),
         ) {
@@ -104,10 +108,8 @@ fun AppLogDetailScreen(
             itemsIndexed(state.lines) { _, line ->
                 Text(
                     text = line,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    softWrap = false,
-                    color = appLogLineColor(line),
+                    style = lineStyle,
+                    color = appLogLineColor(line, errorColor, warningColor),
                 )
             }
         }
@@ -120,14 +122,13 @@ fun AppLogDetailScreen(
  * 不照抄 MaaMeow 的 `contains("[ERROR]")`——它的写入器打的是全词级别，我们打的是单字母，
  * 那个判据在这里一条也命不中。堆栈的续行没有时间戳，取不到级别就跟着默认色
  */
-@Composable
-private fun appLogLineColor(line: String): Color {
+private fun appLogLineColor(line: String, error: Color, warning: Color): Color {
     val marker = line.indexOf(LEVEL_MARKER)
     if (marker < 0 || line.length <= marker + LEVEL_MARKER.length + 1) return Color.Unspecified
     if (line[marker + LEVEL_MARKER.length + 1] != ' ') return Color.Unspecified
     return when (line[marker + LEVEL_MARKER.length]) {
-        'E', 'A' -> MaterialTheme.colorScheme.error
-        'W' -> MaaTheme.palette.warning.content
+        'E', 'A' -> error
+        'W' -> warning
         else -> Color.Unspecified
     }
 }
