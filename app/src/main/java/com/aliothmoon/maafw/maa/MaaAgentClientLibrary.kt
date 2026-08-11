@@ -14,16 +14,8 @@ import com.sun.jna.Pointer
  */
 interface MaaAgentClientLibrary : Library {
 
-    /**
-     * 绑定回环 TCP，port 传 0 即由系统分配；identifier 随即变成实际端口的十进制串
-     *
-     * Android 上只能走这条：Shizuku 身份（shell 域）在 `/data/local/tmp` 建不了 sock_file，
-     * 实测 bind 抛 `zmq::error_t: Permission denied` 直接 abort 掉整个特权进程，
-     * 而那个目录是 shell 自己的且能建普通文件——SELinux 卡的是 socket 那一类，且不打 audit
-     */
     fun MaaAgentClientCreateTcp(port: Short): Pointer?
 
-    /** identifier 传 null 即由 MaaFramework 生成 uuid 并走 IPC；Android 上不可用，见上 */
     fun MaaAgentClientCreateV2(identifier: Pointer?): Pointer?
 
     fun MaaAgentClientDestroy(client: Pointer?)
