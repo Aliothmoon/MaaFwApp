@@ -179,10 +179,12 @@ fun ScheduleEditScreen(
                 onValueChange = { draft = draft.copy(name = it) },
                 label = stringResource(R.string.schedule_edit_name),
                 placeholder = stringResource(R.string.schedule_edit_name_placeholder),
-                supportingText = {
-                    if (ScheduleFieldError.NAME in errors) {
-                        Text(stringResource(R.string.schedule_edit_error_name))
-                    }
+                // 没错误就传 null：M3 只看这个槽是不是 null，槽里的 composable 什么都不吐
+                // 也照样占一行高，无错时下面会空出一条带子
+                supportingText = if (ScheduleFieldError.NAME in errors) {
+                    { Text(stringResource(R.string.schedule_edit_error_name)) }
+                } else {
+                    null
                 },
                 modifier = Modifier.fillMaxWidth(),
             )

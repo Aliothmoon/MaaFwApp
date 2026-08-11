@@ -273,6 +273,11 @@ private fun InputFields(
             // 仅合法候选立即提交；UI 先拒，Builder 再验
             var text by remember(option.name, field.name, field.value) { mutableStateOf(field.value) }
             val valid = validateInputCandidate(field.pipelineType, field.verify, text)
+            val supporting: String? = if (valid) {
+                field.description
+            } else {
+                field.patternMessage ?: stringResource(R.string.option_input_invalid)
+            }
             OutlinedTextField(
                 value = text,
                 onValueChange = { candidate ->
@@ -285,12 +290,9 @@ private fun InputFields(
                     }
                 },
                 label = { Text(field.label) },
-                supportingText = {
-                    when {
-                        !valid -> Text(field.patternMessage ?: stringResource(R.string.option_input_invalid))
-                        field.description != null -> Text(field.description)
-                    }
-                },
+                // 同 ScheduleEditScreen：既无错误也无描述时必须传 null，
+                // 否则空槽照样占一行高，一列输入框之间会撑出空带
+                supportingText = supporting?.let { message -> { Text(message) } },
                 isError = !valid,
                 enabled = !locked,
                 singleLine = true,
