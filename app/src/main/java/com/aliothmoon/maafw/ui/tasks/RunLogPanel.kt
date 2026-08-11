@@ -27,9 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogKind
-import com.aliothmoon.maafw.runner.RunLogOutcome
 import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
@@ -51,9 +51,8 @@ import java.util.Locale
  * 内嵌而非弹层：看日志时多半同时要看任务进度与那颗启停按钮，全屏弹层把两者都挡了。
  * 开关在配置行右侧，本组件不自带关闭钮
  *
- * 正文一律是 MaaFramework 的原始字符串，不翻译也不清洗——这里是排障面，
- * 加工过的文本对不上官方文档与源码就失去了价值。「不清洗」不等于「一股脑摊平」：
- * 事件名单独一行按成败上色，details_json 收进折叠区，展开看到的仍是原文
+ * 「关键」档是 `RunLogComposer` 合成过的人话；「全部」档另外露出没被合成的原始回调，
+ * 那些保持等宽、可展开看原样 details_json——排障时对得上官方文档与源码的原文比什么都值钱
  */
 @Composable
 internal fun RunLogPanel(
@@ -152,6 +151,7 @@ private fun RunLogRow(
     onToggle: () -> Unit,
 ) {
     val parsed = rememberParsedDetail(entry)
+    val body = entry.text.asString()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -168,25 +168,29 @@ private fun RunLogRow(
             // PI 模板正文按协议支持 Markdown 与 HTML 子集，等宽直出会把标签露给用户
             if (entry.kind == RunLogKind.Focus) {
                 MaaMarkdown(
-                    text = entry.text,
+                    text = body,
                     style = MaterialTheme.typography.labelSmall,
                     color = entry.color(),
                 )
                 return@Column
             }
             Text(
-                text = entry.text,
+                text = body,
                 style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
+                // 合成过的是人话，按正文排版；原始转储保持等宽，对得上官方文档
+                fontFamily = if (entry.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
                 color = entry.color(),
             )
-            // 事件名旁边只露一个主语（节点名 / 任务 entry / 动作名），其余留给折叠区
-            parsed.subject?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            // 原始转储旁只露一个主语（节点名 / 任务 entry / 动作名），其余留给折叠区；
+            // 合成过的正文里主语已经在了，再露一次是重复
+            if (entry.kind == RunLogKind.Verbose) {
+                parsed.subject?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (expanded) {
                 Text(
@@ -220,15 +224,16 @@ private fun rememberParsedDetail(entry: RunLogEntry): ParsedDetail = remember(en
     ParsedDetail(subject?.takeIf { it.isNotBlank() }, pretty)
 }
 
+/** 分级配色对齐桌面端 MXU 的 `getLogColor` */
 @Composable
-private fun RunLogEntry.color(): Color = when {
+private fun RunLogEntry.color(): Color = when (kind) {
+    RunLogKind.Success -> MaaTheme.palette.success.content
+    RunLogKind.Warning -> MaaTheme.palette.warning.content
+    RunLogKind.Error -> MaterialTheme.colorScheme.error
+    RunLogKind.Info -> MaterialTheme.colorScheme.primary
     // PI 作者写给用户的那条，颜色要压得住满屏灰字
-    kind == RunLogKind.Focus -> MaterialTheme.colorScheme.onSurface
-    kind == RunLogKind.Malformed -> MaterialTheme.colorScheme.error
-    kind == RunLogKind.Progress -> MaterialTheme.colorScheme.primary
-    outcome == RunLogOutcome.Failed -> MaterialTheme.colorScheme.error
-    outcome == RunLogOutcome.Succeeded -> MaaTheme.palette.success.content
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
+    RunLogKind.Focus -> MaterialTheme.colorScheme.onSurface
+    RunLogKind.Agent, RunLogKind.Verbose -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 /** 按可辨识度排序取第一个命中的：节点名 > 任务 entry > 控制器动作 > 资源路径 */

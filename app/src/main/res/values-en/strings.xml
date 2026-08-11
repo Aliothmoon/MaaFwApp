@@ -342,6 +342,17 @@
     <string name="tasks_log">Log</string>
     <string name="run_log_filter_essential">Key</string>
     <string name="run_log_filter_all">All</string>
+    <string name="run_log_connecting">Connecting to device…</string>
+    <string name="run_log_connected">Device connected</string>
+    <string name="run_log_connect_failed">Device connection failed</string>
+    <string name="run_log_resource_loading">Loading resource: %1$s</string>
+    <string name="run_log_resource_loaded">Resource loaded: %1$s</string>
+    <string name="run_log_resource_failed">Resource failed to load: %1$s</string>
+    <string name="run_log_task_starting">Task started: %1$s</string>
+    <string name="run_log_task_succeeded">Task completed: %1$s</string>
+    <string name="run_log_task_failed">Task failed: %1$s</string>
+    <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
+    <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
 
     <!-- Diagnostic texts; built by DiagnosticMessages in domain/Diagnostics.kt -->
     <string name="diagnostic_severity_warning">Warning</string>

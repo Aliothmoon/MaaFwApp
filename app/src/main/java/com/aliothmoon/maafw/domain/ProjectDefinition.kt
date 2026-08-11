@@ -14,6 +14,13 @@ data class ProjectDefinition(
     val templates: List<ConfigurationTemplate>,
     /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
     val agents: List<AgentDefinition> = emptyList(),
+    /**
+     * 当前语言的 `$key` 查表原样保留一份
+     *
+     * 声明层的 label/description 在加载期就物化完了，本不需要它；留着是为了 pipeline 的
+     * `focus` 模板——那是运行期才随回调到达的正文，查表只能推迟到那时候
+     */
+    val translations: Map<String, String> = emptyMap(),
 ) {
     fun task(taskName: String): TaskDefinition? = taskIndex[taskName]
 

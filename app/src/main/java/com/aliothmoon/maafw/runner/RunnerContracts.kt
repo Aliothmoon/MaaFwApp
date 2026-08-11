@@ -75,6 +75,9 @@ sealed interface RunnerEvent {
     /** 事件名为空——协议异常，[raw] 是原样详情 */
     data class MalformedCallback(val raw: String) : RunnerEvent
 
+    /** agent child 的一行输出；与 MaaFramework 的通知不是同一回事，单列一档 */
+    data class AgentOutput(val line: String) : RunnerEvent
+
     /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */
     data class Focus(val focus: FocusMessage) : RunnerEvent
 }

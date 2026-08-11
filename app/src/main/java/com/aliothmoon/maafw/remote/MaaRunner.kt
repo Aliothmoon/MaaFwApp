@@ -87,6 +87,11 @@ class MaaRunner(private val agentHost: AgentHost) {
         callbackRef.set(callback)
     }
 
+    /** agent child 的一行输出；由 [AgentHost] 的泵线程调用，app 侧不在时静默丢弃 */
+    fun onAgentLine(line: String) {
+        notify { onAgentOutput(line) }
+    }
+
     /**
      * 全局选项是进程级单例，setup 时设一次即可
      *

@@ -133,6 +133,10 @@ class MaaFrameworkRunnerPort(
             _events.tryEmit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
 
+        override fun onAgentOutput(line: String?) {
+            _events.tryEmit(RunnerEvent.AgentOutput(line.orEmpty()))
+        }
+
         // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂
         override fun onTaskStarted(taskName: String?, index: Int, total: Int) {
             val name = taskName.orEmpty()

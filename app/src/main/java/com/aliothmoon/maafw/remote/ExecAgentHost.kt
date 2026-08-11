@@ -13,7 +13,10 @@ import java.util.zip.ZipFile
  * PI 的 `child_exec` 在这里不解释也不执行：设备 PATH 上没有解释器，PI 解包目录又是 noexec；
  * 真正拉起哪个可执行体由构建期的 `agent-runtime.json` 决定（docs/pi-compatibility.md）
  */
-class ExecAgentHost : AgentHost {
+class ExecAgentHost(
+    /** child 的每一行输出；默认丢弃，只有接了运行日志的调用点才传 */
+    private val onOutput: (String) -> Unit = {},
+) : AgentHost {
 
     override fun launch(request: AgentLaunchRequest): AgentSession {
         val descriptor = readDescriptor(request.apkPath)
@@ -58,7 +61,7 @@ class ExecAgentHost : AgentHost {
         Ln.i("ExecAgentHost: launching $command (cwd=${request.workingDir})")
         val process = runCatching { builder.start() }
             .getOrElse { throw AgentLaunchException("agent 启动失败：${it.message}", it) }
-        return ProcessAgentSession(process)
+        return ProcessAgentSession(process, onOutput)
     }
 
     private fun readDescriptor(apkPath: String): AgentRuntimeDescriptor? = runCatching {
@@ -73,14 +76,24 @@ class ExecAgentHost : AgentHost {
 }
 
 /**
- * child 的 stdout/stderr 合流后转进 logcat：Android 上进程没有可看的控制台，
+ * child 的 stdout/stderr 合流后同时转进 logcat 与 [onOutput]：Android 上进程没有可看的控制台，
  * 不抽干这条管道，child 写满管道缓冲后会直接卡死
+ *
+ * logcat 那份留着不撤：[onOutput] 要过 binder，app 进程不在时那头没人接，而 child 起不来
+ * 的现场恰恰常发生在那种时候
  */
-private class ProcessAgentSession(private val process: Process) : AgentSession {
+private class ProcessAgentSession(
+    private val process: Process,
+    private val onOutput: (String) -> Unit,
+) : AgentSession {
 
     private val pump = Thread({
         runCatching {
-            process.inputStream.bufferedReader().forEachLine { Ln.i("agent| $it") }
+            process.inputStream.bufferedReader().forEachLine { line ->
+                Ln.i("agent| $line")
+                runCatching { onOutput(line) }
+                    .onFailure { Ln.w("ExecAgentHost: agent output dispatch failed: ${it.message}") }
+            }
         }
     }, "agent-log-pump").apply {
         isDaemon = true

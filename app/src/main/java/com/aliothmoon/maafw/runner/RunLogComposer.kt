@@ -1,0 +1,215 @@
+package com.aliothmoon.maafw.runner
+
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextFromFramework
+import com.aliothmoon.maafw.i18n.uiTextFromProject
+import com.aliothmoon.maafw.i18n.uiTextOf
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+
+/**
+ * 把 MaaFramework 的原始回调合成为人能读的一行
+ *
+ * 分工照搬桌面端 MXU 的 `useMaaCallbackLogger`：Runner 只把回调原样投出来，
+ * 认得出「哪个任务」「哪个资源」的是读得到 PI 与用户配置的这一层。放这儿而不是 Runner 里，
+ * 是因为 Runner 按分层不解析 ProjectInterface
+ *
+ * 有状态：资源多路径加载与 agent 洪泛都要靠前后文去重，所以按轮持有，
+ * 每轮开始前调 [reset]
+ */
+class RunLogComposer {
+
+    private var lastKind: RunLogKind? = null
+    private var lastText: UiText? = null
+
+    /** agent 输出的时间戳滑窗；超阈值就闭嘴，与 MXU 的 2s/15 条同参数 */
+    private val agentTimestamps = ArrayDeque<Long>()
+    private var agentFlooded = false
+
+    fun reset() {
+        lastKind = null
+        lastText = null
+        agentTimestamps.clear()
+        agentFlooded = false
+    }
+
+    /** 返回 null 表示这条不展示（被去重掉，或洪泛期的 agent 输出） */
+    fun compose(event: RunnerEvent, id: Long, atMillis: Long, context: RunLogContext): RunLogEntry? {
+        val composed = when (event) {
+            is RunnerEvent.Log -> Composed(RunLogKind.Info, uiTextFromFramework(event.message))
+
+            is RunnerEvent.Progress -> Composed(
+                RunLogKind.Info,
+                uiTextFromFramework("${event.taskName} ${event.completed}/${event.total}"),
+            )
+
+            is RunnerEvent.Focus -> Composed(
+                RunLogKind.Focus,
+                // 模板正文里的 $key 到这一步才查得了表：翻译表是 PI 的东西，Runner 拿不到
+                uiTextFromProject(context.resolveI18n(event.focus.content)),
+            )
+
+            is RunnerEvent.AgentOutput -> agentEntry(event.line, atMillis) ?: return null
+
+            is RunnerEvent.MalformedCallback -> Composed(
+                RunLogKind.Error,
+                uiTextFromFramework(MALFORMED_LABEL),
+                detail = event.raw,
+            )
+
+            is RunnerEvent.Callback -> callbackEntry(event, context)
+        }
+
+        // 资源多路径逐条发同样的通知，合成后文案一模一样；连着重复只留第一条
+        // （MXU 靠 res_id 的 isFirst/isLast 做同一件事）
+        if (composed.kind == lastKind && composed.text == lastText) return null
+        lastKind = composed.kind
+        lastText = composed.text
+
+        return RunLogEntry(id, atMillis, composed.kind, composed.text, composed.detail)
+    }
+
+    private fun agentEntry(line: String, atMillis: Long): Composed? {
+        while (agentTimestamps.isNotEmpty() && atMillis - agentTimestamps.first() >= AGENT_FLOOD_WINDOW_MS) {
+            agentTimestamps.removeFirst()
+        }
+        if (agentFlooded) {
+            // 速率降下来才恢复，并且明说恢复了——静悄悄地少显示一段比显示不全更糟
+            if (agentTimestamps.size >= AGENT_FLOOD_THRESHOLD) return null
+            agentFlooded = false
+            return Composed(RunLogKind.Warning, uiTextOf(R.string.run_log_agent_flood_recovered))
+        }
+        agentTimestamps.addLast(atMillis)
+        if (agentTimestamps.size >= AGENT_FLOOD_THRESHOLD) {
+            agentFlooded = true
+            return Composed(RunLogKind.Warning, uiTextOf(R.string.run_log_agent_flood))
+        }
+        return Composed(RunLogKind.Agent, uiTextFromProject(line))
+    }
+
+    /**
+     * 认得出的合成人话，认不出的降级为原始转储
+     *
+     * MXU 把认不出的直接丢掉；这里留成 [RunLogKind.Verbose]，「全部」档可见——
+     * 排障时对得上官方文档与源码的原文比什么都值钱
+     */
+    private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed {
+        val details = parseDetails(event.details)
+        val verbose = Composed(RunLogKind.Verbose, uiTextFromFramework(event.message), event.details)
+
+        return when (event.message) {
+            CONTROLLER_STARTING, CONTROLLER_SUCCEEDED, CONTROLLER_FAILED -> {
+                // 只讲连接；点击与截图是每帧都来的动作，讲出来就是刷屏
+                if (!details.isConnectAction()) return verbose
+                when (event.message) {
+                    CONTROLLER_STARTING -> Composed(RunLogKind.Info, uiTextOf(R.string.run_log_connecting))
+                    CONTROLLER_SUCCEEDED -> Composed(RunLogKind.Success, uiTextOf(R.string.run_log_connected))
+                    else -> Composed(RunLogKind.Error, uiTextOf(R.string.run_log_connect_failed), event.details)
+                }
+            }
+
+            RESOURCE_STARTING -> Composed(
+                RunLogKind.Info,
+                uiTextOf(R.string.run_log_resource_loading, context.resourceLabel(details)),
+            )
+
+            RESOURCE_SUCCEEDED -> Composed(
+                RunLogKind.Success,
+                uiTextOf(R.string.run_log_resource_loaded, context.resourceLabel(details)),
+            )
+
+            RESOURCE_FAILED -> Composed(
+                RunLogKind.Error,
+                uiTextOf(R.string.run_log_resource_failed, context.resourceLabel(details)),
+                event.details,
+            )
+
+            TASK_STARTING -> Composed(
+                RunLogKind.Info,
+                uiTextOf(R.string.run_log_task_starting, context.taskLabel(details)),
+            )
+
+            TASK_SUCCEEDED -> Composed(
+                RunLogKind.Success,
+                uiTextOf(R.string.run_log_task_succeeded, context.taskLabel(details)),
+            )
+
+            TASK_FAILED -> Composed(
+                RunLogKind.Error,
+                uiTextOf(R.string.run_log_task_failed, context.taskLabel(details)),
+                event.details,
+            )
+
+            else -> verbose
+        }
+    }
+
+    private fun parseDetails(raw: String): JsonObject? =
+        runCatching { LOG_JSON.parseToJsonElement(raw) }.getOrNull() as? JsonObject
+
+    private data class Composed(
+        val kind: RunLogKind,
+        val text: UiText,
+        val detail: String? = null,
+    )
+
+    private companion object {
+        const val CONTROLLER_STARTING = "Controller.Action.Starting"
+        const val CONTROLLER_SUCCEEDED = "Controller.Action.Succeeded"
+        const val CONTROLLER_FAILED = "Controller.Action.Failed"
+        const val RESOURCE_STARTING = "Resource.Loading.Starting"
+        const val RESOURCE_SUCCEEDED = "Resource.Loading.Succeeded"
+        const val RESOURCE_FAILED = "Resource.Loading.Failed"
+        const val TASK_STARTING = "Tasker.Task.Starting"
+        const val TASK_SUCCEEDED = "Tasker.Task.Succeeded"
+        const val TASK_FAILED = "Tasker.Task.Failed"
+
+        const val AGENT_FLOOD_WINDOW_MS = 2_000L
+        const val AGENT_FLOOD_THRESHOLD = 15
+
+        val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
+    }
+}
+
+/**
+ * 合成一行人话需要的、Runner 给不出的那些东西
+ *
+ * [currentTaskName] 取自 `ActiveExecution`：MXU 靠 `task_id → selectedTaskId` 的映射表回认，
+ * 我们是串行投递、同时只有一个任务在跑，当前任务名本身就是权威，不必再建一张表
+ */
+data class RunLogContext(
+    val currentTaskName: String? = null,
+    val resourceLabel: String? = null,
+    /** PI 的 `languages` 查表，供模板正文的 `$key` 用 */
+    val translations: Map<String, String> = emptyMap(),
+) {
+    fun resolveI18n(text: String): String {
+        if (!text.startsWith("$")) return text
+        val key = text.substring(1)
+        return translations[key] ?: key
+    }
+
+    /** 拿不到当前任务名就退回 PI 的 entry：宁可显示内部名，也不显示空 */
+    fun taskLabel(details: JsonObject?): String =
+        currentTaskName?.takeIf { it.isNotBlank() }
+            ?: details.string("entry")
+            ?: UNKNOWN_SUBJECT
+
+    /** 一轮只加载一个 resource 的若干路径，用它的展示名比逐条报绝对路径有用 */
+    fun resourceLabel(details: JsonObject?): String =
+        resourceLabel?.takeIf { it.isNotBlank() }
+            ?: details.string("path")?.substringAfterLast('/')
+            ?: UNKNOWN_SUBJECT
+}
+
+internal fun JsonObject?.string(key: String): String? =
+    (this?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+
+/** `action` 的取值官方是 `Connect`，宽容收一个小写写法 */
+private fun JsonObject?.isConnectAction(): Boolean =
+    this.string("action")?.equals("Connect", ignoreCase = true) == true
+
+private const val UNKNOWN_SUBJECT = "?"

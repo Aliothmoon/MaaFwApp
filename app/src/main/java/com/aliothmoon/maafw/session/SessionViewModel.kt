@@ -32,7 +32,8 @@ import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunTrigger
-import com.aliothmoon.maafw.runner.toLogEntry
+import com.aliothmoon.maafw.runner.RunLogComposer
+import com.aliothmoon.maafw.runner.RunLogContext
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -157,6 +158,9 @@ class SessionViewModel(
 
     private val runLogId = AtomicLong(0L)
 
+    // 只在 dispatchRunnerEvent 这一条协程里用，不必加锁
+    private val logComposer = RunLogComposer()
+
     private val effectChannel = Channel<SessionEffect>(Channel.BUFFERED)
     val effects: Flow<SessionEffect> = effectChannel.receiveAsFlow()
 
@@ -189,19 +193,36 @@ class SessionViewModel(
     }
 
     /**
-     * PI 模板消息按声明的渠道投递，其余事件一律进日志
+     * PI 模板消息按声明的渠道投递，其余事件交给 [RunLogComposer] 合成
      *
      * Notification 渠道不在这里发：Effect 要 UI 层在场才消费得掉，而那一档的用意正是
      * 「应用在后台时也收得到」，由执行期一直活着的 RunForegroundService 接
      */
     private fun dispatchRunnerEvent(event: RunnerEvent) {
+        val context = runLogContext()
         if (event is RunnerEvent.Focus) {
             if (FocusChannel.Toast in event.focus.channels) {
-                effectChannel.trySend(SessionEffect.ShowMessage(uiTextFromProject(event.focus.content)))
+                val resolved = context.resolveI18n(event.focus.content)
+                effectChannel.trySend(SessionEffect.ShowMessage(uiTextFromProject(resolved)))
             }
             if (FocusChannel.Log !in event.focus.channels) return
         }
-        appendLog(event.toLogEntry(runLogId.incrementAndGet(), System.currentTimeMillis()))
+        logComposer.compose(
+            event = event,
+            id = runLogId.incrementAndGet(),
+            atMillis = System.currentTimeMillis(),
+            context = context,
+        )?.let(::appendLog)
+    }
+
+    /** 现读而不缓存：任务名每条都在变，翻译表则会随重载语言换掉 */
+    private fun runLogContext(): RunLogContext {
+        val project = projectRepository.state.value
+        return RunLogContext(
+            currentTaskName = runnerPort.state.value.activeExecution?.currentTaskName,
+            resourceLabel = uiState.value.environment?.resource?.label,
+            translations = (project as? ProjectState.Ready)?.definition?.translations.orEmpty(),
+        )
     }
 
     private fun appendLog(entry: RunLogEntry) {
@@ -453,7 +474,11 @@ class SessionViewModel(
 
             SessionIntent.RefreshPermissions -> permissionGateway.refresh()
 
-            SessionIntent.ClearRunLog -> _runLog.value = emptyList()
+            // 合成器的去重与洪泛滑窗都靠前后文，清空之后那些前文已经不在了
+            SessionIntent.ClearRunLog -> {
+                logComposer.reset()
+                _runLog.value = emptyList()
+            }
         }
     }
 

@@ -336,6 +336,17 @@
     <string name="tasks_log">日志</string>
     <string name="run_log_filter_essential">关键</string>
     <string name="run_log_filter_all">全部</string>
+    <string name="run_log_connecting">正在连接设备…</string>
+    <string name="run_log_connected">设备连接成功</string>
+    <string name="run_log_connect_failed">设备连接失败</string>
+    <string name="run_log_resource_loading">正在加载资源: %1$s</string>
+    <string name="run_log_resource_loaded">资源加载成功: %1$s</string>
+    <string name="run_log_resource_failed">资源加载失败: %1$s</string>
+    <string name="run_log_task_starting">任务开始: %1$s</string>
+    <string name="run_log_task_succeeded">任务完成: %1$s</string>
+    <string name="run_log_task_failed">任务失败: %1$s</string>
+    <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
+    <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
 
     <!-- 诊断文案；构造点在 domain/Diagnostics.kt 的 DiagnosticMessages -->
     <string name="diagnostic_severity_warning">警告</string>

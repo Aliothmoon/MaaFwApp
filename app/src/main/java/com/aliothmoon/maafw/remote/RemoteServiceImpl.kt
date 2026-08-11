@@ -38,7 +38,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
     private val appPid = AtomicInteger(0)
     private val destroyed = AtomicBoolean(false)
     private var piRoot: String? = null
-    private val runner = MaaRunner(ExecAgentHost())
+    // 两者互相引用：host 要把 child 的输出交回 runner 的回调。用 lazy 打破初始化顺序——
+    // host 的 lambda 到真正有输出时才读 runner，那会儿它早已建好
+    private val runner: MaaRunner by lazy { MaaRunner(agentHost) }
+    private val agentHost: ExecAgentHost by lazy { ExecAgentHost { runner.onAgentLine(it) } }
 
     init {
         RemoteBootTrace.mark("CTOR_START")

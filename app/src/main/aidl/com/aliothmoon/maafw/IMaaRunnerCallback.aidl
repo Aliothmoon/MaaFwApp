@@ -15,4 +15,11 @@ oneway interface IMaaRunnerCallback {
 
     /** outcome 取 RunOutcome 的取值；reason 仅在整轮失败时非空 */
     void onFinished(int outcome, String reason) = 4;
+
+    /**
+     * agent child 的一行输出（stdout 与 stderr 已合流）
+     *
+     * 不走 onEvent：那是 MaaFramework 的通知通道，agent 的话不是 MaaFramework 说的
+     */
+    void onAgentOutput(String line) = 5;
 }

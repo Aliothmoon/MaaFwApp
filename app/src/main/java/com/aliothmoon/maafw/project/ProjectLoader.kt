@@ -119,6 +119,7 @@ class ProjectLoader(
             options = state.options,
             templates = templates,
             agents = projectInterface.agents,
+            translations = translations,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
     }

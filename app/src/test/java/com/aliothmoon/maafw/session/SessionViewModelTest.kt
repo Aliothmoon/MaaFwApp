@@ -26,8 +26,8 @@ import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.runner.RunLogKind
-import com.aliothmoon.maafw.runner.RunLogOutcome
 import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
@@ -175,55 +175,45 @@ class SessionViewModelTest {
 
         assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.size)
         // 丢的是最老的，最新一条必须还在
-        assertEquals("line ${RUN_LOG_CAPACITY + 19}", vm.runLog.value.last().text)
+        assertEquals(UiText.Verbatim("line ${RUN_LOG_CAPACITY + 19}"), vm.runLog.value.last().text)
 
         vm.onIntent(SessionIntent.ClearRunLog)
         assertTrue(vm.runLog.value.isEmpty())
     }
 
+    /** 合成规则由 RunLogComposerTest 覆盖，这里只验 ViewModel 确实把事件送进了合成器 */
     @Test
-    fun `run log maps every event kind`() = runTest(mainDispatcher) {
+    fun `run log routes events through the composer`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
         val vm = createVmWithRunner(runner)
 
-        runner.emit(RunnerEvent.Progress("启动游戏", 1, 3))
-        runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"NodeA"}"""))
         runner.emit(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"启动游戏"}"""))
+        runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"NodeA"}"""))
         runner.emit(RunnerEvent.MalformedCallback("{}"))
 
         assertEquals(
-            listOf(
-                RunLogKind.Progress,
-                RunLogKind.Node,
-                RunLogKind.Framework,
-                RunLogKind.Malformed,
-            ),
+            listOf(RunLogKind.Success, RunLogKind.Verbose, RunLogKind.Error),
             vm.runLog.value.map { it.kind },
         )
-        assertEquals("启动游戏 1/3", vm.runLog.value.first().text)
-
-        // 事件名与 details 分开存，UI 才能把 JSON 折叠起来
-        val node = vm.runLog.value[1]
-        assertEquals("Node.Action.Failed", node.text)
-        assertEquals("""{"name":"NodeA"}""", node.detail)
-        assertEquals(RunLogOutcome.Failed, node.outcome)
-        assertEquals(RunLogOutcome.Succeeded, vm.runLog.value[2].outcome)
+        // 认不出的那条保留原文与 details，「全部」档才有东西可看
+        assertEquals(UiText.Verbatim("Node.Action.Failed"), vm.runLog.value[1].text)
+        assertEquals("""{"name":"NodeA"}""", vm.runLog.value[1].detail)
     }
 
-    /** 「只看关键」滤掉的主体是 Controller 的截图与点击，那是刷屏的大头 */
+    /** 「只看关键」留下合成过的，滤掉没被合成的原始回调 */
     @Test
-    fun `essential filter keeps failures and task milestones`() = runTest(mainDispatcher) {
+    fun `essential filter drops raw callbacks`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
         val vm = createVmWithRunner(runner)
 
         runner.emit(RunnerEvent.Callback("Controller.Action.Succeeded", """{"action":"Screencap"}"""))
-        runner.emit(RunnerEvent.Callback("Node.Recognition.Succeeded", """{"name":"NodeA"}"""))
         runner.emit(RunnerEvent.Callback("Node.Recognition.Failed", """{"name":"NodeB"}"""))
         runner.emit(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"启动游戏"}"""))
 
+        // 只剩「任务开始」；截图动作与节点识别失败都是原始回调，节点失败在协议里是正常控制流
         assertEquals(
-            listOf("Node.Recognition.Failed", "Tasker.Task.Starting"),
-            vm.runLog.value.filter { it.isEssential }.map { it.text },
+            listOf(RunLogKind.Info),
+            vm.runLog.value.filter { it.isEssential }.map { it.kind },
         )
     }
 
