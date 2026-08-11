@@ -229,7 +229,6 @@
     <string name="run_countdown_remaining">Starting in %1$d s</string>
     <string name="run_countdown_start_now">Start now</string>
     <string name="run_countdown_cancel">Skip this run</string>
-    <string name="schedule_edit_countdown">Countdown (seconds)</string>
     <string name="settings_schedule_unlock">Scheduled task unlock</string>
     <string name="settings_wake_unlock">Wake and unlock on scheduled triggers</string>
     <string name="settings_wake_credential">Unlock PIN</string>

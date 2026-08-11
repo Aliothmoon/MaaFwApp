@@ -136,7 +136,6 @@ class ScheduleExecutionService : Service() {
                 trigger = RunTrigger.Schedule(
                     strategy.id,
                     ScheduleRunOptions(
-                        countdownSeconds = strategy.countdownSeconds,
                         autoSleepAfterTask = strategy.autoSleepAfterTask,
                         skipAutoSleepIfAwake = strategy.skipAutoSleepIfAwake,
                         closeAppAfterTask = strategy.closeAppAfterTask,

@@ -65,8 +65,6 @@ data class ScheduleStrategy(
      * 默认 false——半夜把用户手动起的长跑掐掉，比这条定时没跑更难解释
      */
     val forceStart: Boolean = false,
-    /** 投递前倒计时秒数；0 = 不倒计时，直接开跑 */
-    val countdownSeconds: Int = 0,
     /** 任务结束后自动熄屏 */
     val autoSleepAfterTask: Boolean = false,
     /** 启动时已亮屏则不熄屏——视为用户正在用手机 */

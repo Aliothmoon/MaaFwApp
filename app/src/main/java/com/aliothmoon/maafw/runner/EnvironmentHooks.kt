@@ -187,16 +187,18 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
  */
 object CountdownHook : RunEnvHook {
 
+    /** 与 MaaMeow 的 `LaunchRequest.DEFAULT_COUNTDOWN_SECONDS` 一致，同样不开放配置 */
+    private const val COUNTDOWN_SECONDS = 30
+
     override val id: String = "countdown"
     override val anchor: Anchor = Anchor.BeforeDispatch
     override val order: Int = HookOrder.COUNTDOWN
     override val gating: Boolean = true
 
     override suspend fun engage(ctx: RunContext): Release? {
-        val total = (ctx.trigger as? RunTrigger.Schedule)?.options?.countdownSeconds ?: 0
-        if (total <= 0) return null
+        if (ctx.trigger !is RunTrigger.Schedule) return null
 
-        for (remaining in total downTo 1) {
+        for (remaining in COUNTDOWN_SECONDS downTo 1) {
             // 先看「立即开始」：两个都置位时以它为准（同 MaaMeow），
             // 两个布尔分不出先后，而「点了取消又点开始」比反过来常见得多
             if (ctx.signals.startNowRequested) break

@@ -34,7 +34,6 @@ value class ConfirmToken(val value: String)
 
 /** 定时规则上那几项只对本次触发生效的选项 */
 data class ScheduleRunOptions(
-    val countdownSeconds: Int = 0,
     val autoSleepAfterTask: Boolean = false,
     val skipAutoSleepIfAwake: Boolean = true,
     val closeAppAfterTask: Boolean = false,

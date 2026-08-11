@@ -220,7 +220,6 @@
     <string name="run_countdown_remaining">%1$d 秒后开始</string>
     <string name="run_countdown_start_now">立即开始</string>
     <string name="run_countdown_cancel">取消本次</string>
-    <string name="schedule_edit_countdown">倒计时（秒）</string>
     <string name="settings_schedule_unlock">定时任务解锁</string>
     <string name="settings_wake_unlock">定时触发时亮屏解锁</string>
     <string name="settings_wake_credential">解锁 PIN</string>

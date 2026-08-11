@@ -205,11 +205,12 @@ class EnvironmentHooksTest {
         assertNull(CountdownHook.engage(context()))
     }
 
+    /** 秒数不开放配置，定时触发一律等这么久 */
     @Test
-    fun `countdown waits and reports each second`() = runTest {
+    fun `countdown waits thirty seconds and reports each one`() = runTest {
         val ticks = mutableListOf<String>()
         val ctx = RunContext(
-            trigger = RunTrigger.Schedule("s1", ScheduleRunOptions(countdownSeconds = 3)),
+            trigger = RunTrigger.Schedule("s1"),
             runMode = RunMode.BACKGROUND,
             plan = plan,
             progress = RunProgress { hookId, _ -> ticks += hookId },
@@ -217,15 +218,15 @@ class EnvironmentHooksTest {
 
         CountdownHook.engage(ctx)
 
-        assertEquals(3, ticks.size)
-        assertEquals(3_000L, currentTime)
+        assertEquals(30, ticks.size)
+        assertEquals(30_000L, currentTime)
     }
 
     @Test
     fun `start now cuts the wait short`() = runTest {
         val signals = RunSignals().apply { requestStartNow() }
 
-        CountdownHook.engage(scheduleContext(ScheduleRunOptions(countdownSeconds = 30), signals))
+        CountdownHook.engage(scheduleContext(signals = signals))
 
         assertEquals(0L, currentTime)
     }
@@ -236,7 +237,7 @@ class EnvironmentHooksTest {
         val signals = RunSignals().apply { requestCancel() }
 
         assertTrue(CountdownHook.gating)
-        assertTrue(runCatching { CountdownHook.engage(scheduleContext(ScheduleRunOptions(countdownSeconds = 30), signals)) }.isFailure)
+        assertTrue(runCatching { CountdownHook.engage(scheduleContext(signals = signals)) }.isFailure)
     }
 
     /** 两个都点过说明用户改了主意，以「立即开始」为准 */
@@ -247,7 +248,7 @@ class EnvironmentHooksTest {
             requestStartNow()
         }
 
-        assertNull(CountdownHook.engage(scheduleContext(ScheduleRunOptions(countdownSeconds = 30), signals)))
+        assertNull(CountdownHook.engage(scheduleContext(signals = signals)))
     }
 
     // ── 关目标应用 ──────────────────────────────────────────────────

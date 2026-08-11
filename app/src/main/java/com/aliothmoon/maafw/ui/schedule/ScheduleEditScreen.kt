@@ -105,9 +105,6 @@ fun ScheduleEditScreen(
     var intervalHoursText by remember(initial.id) {
         mutableStateOf(initial.intervalHours?.takeIf { it > 0 }?.toString().orEmpty())
     }
-    var countdownText by remember(initial.id) {
-        mutableStateOf(initial.countdownSeconds.takeIf { it > 0 }?.toString().orEmpty())
-    }
     var pickingTimeIndex by remember { mutableStateOf<Int?>(null) }
     var pickingStartDate by remember { mutableStateOf(false) }
     var pickingStartTime by remember { mutableStateOf(false) }
@@ -213,16 +210,6 @@ fun ScheduleEditScreen(
 
             // 「高级选项」整组是逐条规则的，不是全局设置——对齐 MaaMeow 的归属
             ScheduleSection(stringResource(R.string.schedule_edit_advanced)) {
-                ITextFieldWithFocus(
-                    value = countdownText,
-                    onValueChange = { countdownText = it },
-                    onFocusLost = {
-                        draft = draft.copy(countdownSeconds = countdownText.toIntOrNull() ?: 0)
-                    },
-                    label = stringResource(R.string.schedule_edit_countdown),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    inputFilter = { it.length <= MAX_COUNTDOWN_DIGITS && it.all(Char::isDigit) },
-                )
                 ScheduleToggleRow(
                     label = stringResource(R.string.schedule_edit_force_start),
                     tip = stringResource(R.string.schedule_edit_force_start_tip),
@@ -602,5 +589,4 @@ private fun java.time.ZonedDateTime.toEpochMs(): Long = toInstant().toEpochMilli
 
 private const val DEFAULT_HOUR = 8
 private const val MAX_INTERVAL_DIGITS = 5
-private const val MAX_COUNTDOWN_DIGITS = 3
 private const val NEW_STRATEGY = "new"
