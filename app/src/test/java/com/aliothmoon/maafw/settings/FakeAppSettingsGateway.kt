@@ -43,4 +43,34 @@ class FakeAppSettingsGateway : AppSettingsGateway {
     override suspend fun setThemeStyle(style: ThemeStyle) {
         themeStyle.value = style
     }
+
+    override val wakeUnlockEnabled = MutableStateFlow(false)
+
+    override suspend fun setWakeUnlockEnabled(enabled: Boolean) {
+        wakeUnlockEnabled.value = enabled
+    }
+
+    override val wakeCredential = MutableStateFlow("")
+
+    override suspend fun setWakeCredential(credential: String) {
+        wakeCredential.value = credential.filter(Char::isDigit)
+    }
+
+    override val autoSleepAfterRun = MutableStateFlow(false)
+
+    override suspend fun setAutoSleepAfterRun(enabled: Boolean) {
+        autoSleepAfterRun.value = enabled
+    }
+
+    override val skipAutoSleepIfAwake = MutableStateFlow(true)
+
+    override suspend fun setSkipAutoSleepIfAwake(enabled: Boolean) {
+        skipAutoSleepIfAwake.value = enabled
+    }
+
+    override val closeAppAfterRun = MutableStateFlow(false)
+
+    override suspend fun setCloseAppAfterRun(enabled: Boolean) {
+        closeAppAfterRun.value = enabled
+    }
 }

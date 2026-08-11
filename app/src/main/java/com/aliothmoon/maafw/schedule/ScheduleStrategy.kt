@@ -59,6 +59,14 @@ data class ScheduleStrategy(
      * 反序列化即得 null，语义正好是「跟着我当前用的配置走」，不需要单独的迁移步骤
      */
     val runConfigurationId: String? = null,
+    /**
+     * 到点时已有执行在跑：true 掐掉它再上，false 让这次触发落空
+     *
+     * 默认 false——半夜把用户手动起的长跑掐掉，比这条定时没跑更难解释
+     */
+    val forceStart: Boolean = false,
+    /** 投递前倒计时秒数；0 = 不倒计时，直接开跑 */
+    val countdownSeconds: Int = 0,
     /** [ScheduleType.FIXED_TIME]：命中的星期 */
     val daysOfWeek: Set<@Serializable(with = DayOfWeekSerializer::class) DayOfWeek> = emptySet(),
     /** [ScheduleType.FIXED_TIME]：每天的触发时刻，已排序 */
@@ -86,6 +94,9 @@ enum class TriggerResult {
 
     /** 服务起来了但没能发起执行，细分见 [TriggerFailureReason] */
     FAILED_START,
+
+    /** 同一次闹钟被系统重投；只在日志里留痕，不改策略的 lastResult */
+    DUPLICATE,
 
     /** 策略被删或数据没读出来 */
     FAILED_VALIDATION,

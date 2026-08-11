@@ -43,6 +43,9 @@ import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,6 +90,7 @@ fun SettingsScreen(
             LanguageCard(state, onIntent)
             BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
             ResolutionCard(state, onIntent)
+            RunEnvironmentCard(state, onIntent)
             DebugCard(state, onIntent)
             AboutCard()
         }
@@ -156,6 +160,73 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
             text = stringResource(R.string.settings_language_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * 运行前后的设备环境动作
+ *
+ * 都不进 `configurationLocked`：改的是下一轮的事——挂载物的条件在 engage 时就冻结了，
+ * 运行中改不影响本轮（见 docs/runner-execution.md §5.2）
+ */
+@Composable
+private fun RunEnvironmentCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_run_environment)) {
+        MaaLabeledControlRow(
+            label = stringResource(R.string.settings_wake_unlock),
+            trailing = {
+                MaaSwitch(
+                    checked = state.wakeUnlockEnabled,
+                    onCheckedChange = { onIntent(SessionIntent.SetWakeUnlockEnabled(it)) },
+                )
+            },
+        )
+        if (state.wakeUnlockEnabled) {
+            // 只收数字：注入按键只打得出 0-9，图案与密码锁屏的面板模拟不出来
+            ITextFieldWithFocus(
+                value = state.wakeCredential,
+                onValueChange = { onIntent(SessionIntent.SetWakeCredential(it)) },
+                onFocusLost = {},
+                label = stringResource(R.string.settings_wake_credential),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                inputFilter = { it.all(Char::isDigit) },
+                supportingText = {
+                    Text(
+                        text = stringResource(R.string.settings_wake_credential_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+            )
+        }
+        MaaLabeledControlRow(
+            label = stringResource(R.string.settings_auto_sleep),
+            trailing = {
+                MaaSwitch(
+                    checked = state.autoSleepAfterRun,
+                    onCheckedChange = { onIntent(SessionIntent.SetAutoSleepAfterRun(it)) },
+                )
+            },
+        )
+        if (state.autoSleepAfterRun) {
+            MaaLabeledControlRow(
+                label = stringResource(R.string.settings_skip_sleep_if_awake),
+                trailing = {
+                    MaaSwitch(
+                        checked = state.skipAutoSleepIfAwake,
+                        onCheckedChange = { onIntent(SessionIntent.SetSkipAutoSleepIfAwake(it)) },
+                    )
+                },
+            )
+        }
+        MaaLabeledControlRow(
+            label = stringResource(R.string.settings_close_app_after_run),
+            trailing = {
+                MaaSwitch(
+                    checked = state.closeAppAfterRun,
+                    onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterRun(it)) },
+                )
+            },
         )
     }
 }

@@ -81,6 +81,26 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         .map { parseThemeStyle(it.themeStyle) }
         .stateIn(scope, SharingStarted.Eagerly, parseThemeStyle(initialSettings.themeStyle))
 
+    override val wakeUnlockEnabled: StateFlow<Boolean> = settings
+        .map { it.wakeUnlockEnabled.toBoolean() }
+        .stateIn(scope, SharingStarted.Eagerly, initialSettings.wakeUnlockEnabled.toBoolean())
+
+    override val wakeCredential: StateFlow<String> = settings
+        .map { it.wakeCredential }
+        .stateIn(scope, SharingStarted.Eagerly, initialSettings.wakeCredential)
+
+    override val autoSleepAfterRun: StateFlow<Boolean> = settings
+        .map { it.autoSleepAfterRun.toBoolean() }
+        .stateIn(scope, SharingStarted.Eagerly, initialSettings.autoSleepAfterRun.toBoolean())
+
+    override val skipAutoSleepIfAwake: StateFlow<Boolean> = settings
+        .map { it.skipAutoSleepIfAwake.toBoolean() }
+        .stateIn(scope, SharingStarted.Eagerly, initialSettings.skipAutoSleepIfAwake.toBoolean())
+
+    override val closeAppAfterRun: StateFlow<Boolean> = settings
+        .map { it.closeAppAfterRun.toBoolean() }
+        .stateIn(scope, SharingStarted.Eagerly, initialSettings.closeAppAfterRun.toBoolean())
+
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
         context.dataStore.edit { it[startupBackend] = backend.name }
     }
@@ -119,6 +139,28 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setThemeStyle(style: ThemeStyle): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[themeStyle] = style.name }
+    }
+
+    override suspend fun setWakeUnlockEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wakeUnlockEnabled] = enabled.toString() }
+    }
+
+    /** 只留数字：注入按键只能打出 0-9，图案与密码锁屏的面板模拟不出来 */
+    override suspend fun setWakeCredential(credential: String): Unit = with(AppSettingsSchema) {
+        val digits = credential.filter(Char::isDigit)
+        context.dataStore.edit { it[wakeCredential] = digits }
+    }
+
+    override suspend fun setAutoSleepAfterRun(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[autoSleepAfterRun] = enabled.toString() }
+    }
+
+    override suspend fun setSkipAutoSleepIfAwake(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[skipAutoSleepIfAwake] = enabled.toString() }
+    }
+
+    override suspend fun setCloseAppAfterRun(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[closeAppAfterRun] = enabled.toString() }
     }
 
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */

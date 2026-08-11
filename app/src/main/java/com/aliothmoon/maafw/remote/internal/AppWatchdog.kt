@@ -37,7 +37,10 @@ object AppWatchdog {
     val state: StateFlow<Int> = _state.asStateFlow()
 
     private var job: Job? = null
-    private var targetPackage: String? = null
+    /** 运行期反推出来的目标包名；收尾要关它，而 app 侧不维护包名表 */
+    @Volatile
+    var targetPackage: String? = null
+        private set
     private var driftFirstSeenMs = 0L
     private var driftRepinAttempts = 0
     private var diedNotified = false

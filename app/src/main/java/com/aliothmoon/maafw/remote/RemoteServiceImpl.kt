@@ -16,8 +16,10 @@ import com.aliothmoon.maafw.remote.internal.PowerController
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
+import com.aliothmoon.maafw.remote.internal.WakeUnlockController
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
+import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.Workarounds
 import android.view.Surface
 import android.os.Process
@@ -70,6 +72,34 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun pid(): Int = Process.myPid()
 
     override fun watchdogState(): Int = AppWatchdog.state.value
+
+    // ── 亮屏与解锁 ──
+
+    override fun unlock(credential: String?): Int =
+        WakeUnlockController.unlock(credential.orEmpty())
+
+    override fun testUnlock(credential: String?): Int =
+        WakeUnlockController.testUnlock(credential.orEmpty())
+
+    override fun lockAndSleep(): Int = WakeUnlockController.lockAndSleep()
+
+    override fun isScreenOn(): Boolean =
+        runCatching { ServiceManager.getPowerManager().isScreenOn(0) }.getOrDefault(true)
+
+    override fun stopTargetApp(): Boolean {
+        val target = AppWatchdog.targetPackage ?: run {
+            Ln.i("$TAG: stopTargetApp skipped, watchdog never acquired a target")
+            return false
+        }
+        return runCatching {
+            ServiceManager.getActivityManager().forceStopPackage(target)
+            Ln.i("$TAG: force-stopped $target")
+            true
+        }.getOrElse {
+            Ln.w("$TAG: stopTargetApp failed: ${'$'}it")
+            false
+        }
+    }
 
     override fun heartbeat(pid: Int) {
         appPid.set(pid)

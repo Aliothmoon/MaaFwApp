@@ -21,6 +21,10 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
     RunLaunchResult.Started ->
         ScheduleLaunchOutcome(TriggerResult.STARTED)
 
+    // 闹钟被重投而已，不是这次触发的结果；调用方应当整条丢掉，不记账
+    RunLaunchResult.DuplicateRequest ->
+        ScheduleLaunchOutcome(TriggerResult.DUPLICATE)
+
     RunLaunchResult.ProjectNotReady ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.PROJECT_NOT_READY)
 
@@ -39,4 +43,11 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
     is RunLaunchResult.Blocked,
     is RunLaunchResult.NeedsConfirmation,
     -> ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED)
+}
+
+/** 框架侧的落点枚举翻成落盘的那一份；两边分开，schema 不跟着框架改 */
+fun com.aliothmoon.maafw.runner.HookOutcome.toTriggerStepOutcome(): TriggerStepOutcome = when (this) {
+    com.aliothmoon.maafw.runner.HookOutcome.ENGAGED -> TriggerStepOutcome.ENGAGED
+    com.aliothmoon.maafw.runner.HookOutcome.SKIPPED -> TriggerStepOutcome.SKIPPED
+    com.aliothmoon.maafw.runner.HookOutcome.FAILED -> TriggerStepOutcome.FAILED
 }

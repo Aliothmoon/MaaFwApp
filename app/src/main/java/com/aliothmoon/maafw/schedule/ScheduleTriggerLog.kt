@@ -28,10 +28,27 @@ data class TriggerLogEntry(
     val result: TriggerResult,
     /** 仅 [TriggerResult.FAILED_START] 有值；老记录为 null */
     val failureReason: TriggerFailureReason? = null,
+    /**
+     * 发起过程里每个环境挂载物的落点，按 engage 顺序
+     *
+     * 只到投递为止——收尾发生在整轮结束之后，那时这条早写完了。
+     * 存 hookId 而不是把动作枚举进协议：挂载物可扩展，枚举一次就得改一次 schema
+     */
+    val steps: List<TriggerStep> = emptyList(),
 ) {
     /** 派生稳定标识（不入盘）：定位/删除用，避免给序列化类加随机 id 导致旧记录每次解码变值 */
     val stableId: String get() = "$strategyId|$scheduledAt|$actualAt|$result"
 }
+
+/** 一步：挂载物 id + 它这一轮的落点 */
+@Serializable
+data class TriggerStep(
+    val hookId: String,
+    val outcome: TriggerStepOutcome,
+)
+
+@Serializable
+enum class TriggerStepOutcome { ENGAGED, SKIPPED, FAILED }
 
 /**
  * 触发日志的读写；单文件追加，超量后从头截断

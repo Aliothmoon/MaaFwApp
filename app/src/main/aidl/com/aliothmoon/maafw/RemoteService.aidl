@@ -91,4 +91,27 @@ interface RemoteService {
 
     /** 看门狗状态：0=IDLE / 1=WATCHING / 2=APP_DIED（目标 app 是否仍在虚拟屏上） */
     int watchdogState() = 60;
+
+    // ── 亮屏与解锁 ──
+
+    /**
+     * 亮屏并解除锁屏；credential 是纯数字 PIN，无凭证锁屏传空串
+     * 返回值见 WakeUnlockResult。整段在特权进程内同步完成——息屏后 app 侧协程会被挂起
+     */
+    int unlock(String credential) = 70;
+
+    /** 设置页自测：先上锁息屏再解一次 */
+    int testUnlock(String credential) = 71;
+
+    /** 上锁并息屏；跑完自动熄屏用它 */
+    int lockAndSleep() = 72;
+
+    /**
+     * 强停虚拟屏上的目标应用；包名取自看门狗运行期反推的那个
+     * 放在特权侧而不是让 app 传包名：外壳不维护包名表，运行期只有这边知道
+     */
+    boolean stopTargetApp() = 73;
+
+    /** 屏幕当前是否亮着；采「本轮开始时手机是不是醒着」用它 */
+    boolean isScreenOn() = 74;
 }

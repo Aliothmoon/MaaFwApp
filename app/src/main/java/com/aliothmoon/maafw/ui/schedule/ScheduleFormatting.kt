@@ -67,6 +67,7 @@ fun intervalUiText(days: Int, hours: Int): UiText = when {
 fun TriggerResult.asUiText(): UiText = when (this) {
     TriggerResult.TRIGGERED -> uiTextOf(R.string.schedule_result_triggered)
     TriggerResult.STARTED -> uiTextOf(R.string.schedule_result_started)
+    TriggerResult.DUPLICATE -> uiTextOf(R.string.schedule_result_duplicate)
     TriggerResult.FAILED_START -> uiTextOf(R.string.schedule_result_failed_start)
     TriggerResult.FAILED_VALIDATION -> uiTextOf(R.string.schedule_result_failed_validation)
     TriggerResult.FAILED_SERVICE_START -> uiTextOf(R.string.schedule_result_failed_service)

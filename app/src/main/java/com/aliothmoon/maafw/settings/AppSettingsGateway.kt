@@ -29,4 +29,22 @@ interface AppSettingsGateway {
 
     val themeStyle: StateFlow<ThemeStyle>
     suspend fun setThemeStyle(style: ThemeStyle)
+
+    // ── 运行环境（挂载物读它，engage 时读到的即冻结值）──
+
+    val wakeUnlockEnabled: StateFlow<Boolean>
+    suspend fun setWakeUnlockEnabled(enabled: Boolean)
+
+    /** 纯数字 PIN；非数字会被 setter 过滤掉 */
+    val wakeCredential: StateFlow<String>
+    suspend fun setWakeCredential(credential: String)
+
+    val autoSleepAfterRun: StateFlow<Boolean>
+    suspend fun setAutoSleepAfterRun(enabled: Boolean)
+
+    val skipAutoSleepIfAwake: StateFlow<Boolean>
+    suspend fun setSkipAutoSleepIfAwake(enabled: Boolean)
+
+    val closeAppAfterRun: StateFlow<Boolean>
+    suspend fun setCloseAppAfterRun(enabled: Boolean)
 }

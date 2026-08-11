@@ -56,6 +56,7 @@ import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.ITextField
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
@@ -103,6 +104,9 @@ fun ScheduleEditScreen(
     }
     var intervalHoursText by remember(initial.id) {
         mutableStateOf(initial.intervalHours?.takeIf { it > 0 }?.toString().orEmpty())
+    }
+    var countdownText by remember(initial.id) {
+        mutableStateOf(initial.countdownSeconds.takeIf { it > 0 }?.toString().orEmpty())
     }
     var pickingTimeIndex by remember { mutableStateOf<Int?>(null) }
     var pickingStartDate by remember { mutableStateOf(false) }
@@ -203,6 +207,34 @@ fun ScheduleEditScreen(
                         selected = draft.runConfigurationId
                             ?.takeIf { id -> state.configurations.any { it.id == id } },
                         onSelect = { draft = draft.copy(runConfigurationId = it) },
+                    )
+                }
+            }
+
+            ScheduleSection(stringResource(R.string.schedule_edit_countdown)) {
+                ITextFieldWithFocus(
+                    value = countdownText,
+                    onValueChange = { countdownText = it },
+                    onFocusLost = {
+                        draft = draft.copy(countdownSeconds = countdownText.toIntOrNull() ?: 0)
+                    },
+                    label = stringResource(R.string.schedule_edit_countdown),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    inputFilter = { it.length <= MAX_COUNTDOWN_DIGITS && it.all(Char::isDigit) },
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                ) {
+                    Text(
+                        text = stringResource(R.string.schedule_edit_force_start),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    MaaSwitch(
+                        checked = draft.forceStart,
+                        onCheckedChange = { draft = draft.copy(forceStart = it) },
                     )
                 }
             }
@@ -534,4 +566,5 @@ private fun java.time.ZonedDateTime.toEpochMs(): Long = toInstant().toEpochMilli
 
 private const val DEFAULT_HOUR = 8
 private const val MAX_INTERVAL_DIGITS = 5
+private const val MAX_COUNTDOWN_DIGITS = 3
 private const val NEW_STRATEGY = "new"

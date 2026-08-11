@@ -36,6 +36,12 @@ import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
+import com.aliothmoon.maafw.runner.AutoSleepHook
+import com.aliothmoon.maafw.runner.CloseTargetAppHook
+import com.aliothmoon.maafw.runner.RunScreenSaver
+import com.aliothmoon.maafw.runner.ScreenSaverHook
+import com.aliothmoon.maafw.runner.WakeUnlockHook
+import com.aliothmoon.maafw.runner.CountdownHook
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.PreviewPort
@@ -169,6 +175,13 @@ val appModule = module {
 
     // 发起一轮执行是进程级用例：定时触发落在 Service 里，拿不到 Activity 作用域的 VM
     single<RunKeepAlive> { ForegroundRunKeepAlive(androidContext()) }
+    single<RunScreenSaver> {
+        val manager = get<ScreenSaverOverlayManager>()
+        object : RunScreenSaver {
+            override suspend fun show(): Boolean = manager.show()
+            override suspend fun hide() = manager.hide()
+        }
+    }
     single {
         RunLauncher(
             projectRepository = get(),
@@ -176,7 +189,15 @@ val appModule = module {
             runnerPort = get(),
             // 两份都写成显式有序列表而不是 getAll()：顺序即语义，得在一处看得见
             prechecks = listOf(ForegroundModePrecheck),
-            hooks = listOf(KeepAliveHook(get())),
+            // engage 顺序由各自的 order 定，这里的书写顺序不算数（见 EnvironmentHooks.kt）
+            hooks = listOf(
+                AutoSleepHook(get(), get<AppSettingsManager>()),
+                WakeUnlockHook(get(), get<AppSettingsManager>()),
+                ScreenSaverHook(get<AppSettingsManager>(), get()),
+                CloseTargetAppHook(get(), get<AppSettingsManager>()),
+                CountdownHook,
+                KeepAliveHook(get()),
+            ),
             runMode = get<AppSettingsManager>().runMode::value,
             scope = get(named<AppCoroutineScope>()),
         )

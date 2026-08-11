@@ -43,6 +43,12 @@ data class SessionUiState(
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     val screenSaverEnabled: Boolean = false,
+    /** 运行前后的设备环境动作；具体语义见 docs/runner-execution.md §5.2 */
+    val wakeUnlockEnabled: Boolean = false,
+    val wakeCredential: String = "",
+    val autoSleepAfterRun: Boolean = false,
+    val skipAutoSleepIfAwake: Boolean = true,
+    val closeAppAfterRun: Boolean = false,
     val resolutionPreference: ResolutionPreference = ResolutionPreference.P720,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
@@ -214,6 +220,14 @@ sealed interface SessionIntent {
 
     /** 仅后台模式：运行期是否自动盖屏保 */
     data class SetScreenSaverEnabled(val enabled: Boolean) : SessionIntent
+
+    data class SetWakeUnlockEnabled(val enabled: Boolean) : SessionIntent
+
+    /** 非数字会被落盘那一层滤掉：注入按键只打得出 0-9 */
+    data class SetWakeCredential(val credential: String) : SessionIntent
+    data class SetAutoSleepAfterRun(val enabled: Boolean) : SessionIntent
+    data class SetSkipAutoSleepIfAwake(val enabled: Boolean) : SessionIntent
+    data class SetCloseAppAfterRun(val enabled: Boolean) : SessionIntent
 
     /** 虚拟屏分辨率偏好：720P / 1080P */
     data class SetResolutionPreference(val preference: ResolutionPreference) : SessionIntent

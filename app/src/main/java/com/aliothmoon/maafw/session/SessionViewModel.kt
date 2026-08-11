@@ -65,6 +65,16 @@ private data class SettingsSnapshot(
     val resolutionPreference: ResolutionPreference,
     val debugMode: Boolean,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
+    val env: EnvSnapshot = EnvSnapshot(),
+)
+
+/** 运行环境那几项；单独一层只为把 combine 的元数压回上限内 */
+private data class EnvSnapshot(
+    val wakeUnlockEnabled: Boolean = false,
+    val wakeCredential: String = "",
+    val autoSleepAfterRun: Boolean = false,
+    val skipAutoSleepIfAwake: Boolean = true,
+    val closeAppAfterRun: Boolean = false,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -115,7 +125,17 @@ class SessionViewModel(
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
     }.combine(appSettings.themeStyle) { snapshot, style ->
         snapshot.copy(themeStyle = style)
-    }
+    }.combine(
+        combine(
+            appSettings.wakeUnlockEnabled,
+            appSettings.wakeCredential,
+            appSettings.autoSleepAfterRun,
+            appSettings.skipAutoSleepIfAwake,
+            appSettings.closeAppAfterRun,
+        ) { wake, credential, sleep, skipIfAwake, closeApp ->
+            EnvSnapshot(wake, credential, sleep, skipIfAwake, closeApp)
+        },
+    ) { snapshot, env -> snapshot.copy(env = env) }
 
 
     val uiState: StateFlow<SessionUiState> = combine(
@@ -224,6 +244,11 @@ class SessionViewModel(
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
             screenSaverEnabled = settings.screenSaverEnabled,
+            wakeUnlockEnabled = settings.env.wakeUnlockEnabled,
+            wakeCredential = settings.env.wakeCredential,
+            autoSleepAfterRun = settings.env.autoSleepAfterRun,
+            skipAutoSleepIfAwake = settings.env.skipAutoSleepIfAwake,
+            closeAppAfterRun = settings.env.closeAppAfterRun,
             resolutionPreference = settings.resolutionPreference,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
@@ -371,6 +396,23 @@ class SessionViewModel(
             is SessionIntent.SetThemeStyle ->
                 appSettings.setThemeStyle(intent.style)
 
+            // 环境开关不走 guarded：改的是下一轮的事，运行中改不影响本轮
+            // （挂载物的条件在 engage 时就冻结了）
+            is SessionIntent.SetWakeUnlockEnabled ->
+                appSettings.setWakeUnlockEnabled(intent.enabled)
+
+            is SessionIntent.SetWakeCredential ->
+                appSettings.setWakeCredential(intent.credential)
+
+            is SessionIntent.SetAutoSleepAfterRun ->
+                appSettings.setAutoSleepAfterRun(intent.enabled)
+
+            is SessionIntent.SetSkipAutoSleepIfAwake ->
+                appSettings.setSkipAutoSleepIfAwake(intent.enabled)
+
+            is SessionIntent.SetCloseAppAfterRun ->
+                appSettings.setCloseAppAfterRun(intent.enabled)
+
             // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上
             is SessionIntent.SetRunMode -> guarded {
                 appSettings.setRunMode(intent.mode)
@@ -505,7 +547,8 @@ class SessionViewModel(
      */
     private suspend fun start() {
         when (val result = runLauncher.launch(RunTrigger.Manual)) {
-            RunLaunchResult.Started -> Unit
+            // 手动发起不传 requestId，这条到不了
+            RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
 
             RunLaunchResult.ProjectNotReady ->
                 effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
