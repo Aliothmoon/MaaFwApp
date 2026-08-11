@@ -37,23 +37,18 @@ val gitVersionName: String by lazy {
     }
 }
 
-// 换一个 PI = 改这处配置 + 重新出包；代码与仓库都不感知具体项目
 val piSourceDir: String? = (localProperties.getProperty("pi.sourceDir")
     ?: System.getenv("PI_SOURCE_DIR"))?.takeIf { it.isNotBlank() }
 
 val piAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/piAssets")
 
-// 布局 <dir>/agent-runtime.json + <dir>/<abi>/{jniLibs,bundle}/；不配置就是不带 agent
+
 val agentSourceDir: String? = (localProperties.getProperty("agent.sourceDir")
     ?: System.getenv("AGENT_SOURCE_DIR"))?.takeIf { it.isNotBlank() }
 
-// local.properties: agent.abi=arm64-v8a
-// 生成目录跨 variant 共享，没法按 buildType 分 ABI，本地只带一份运行时靠这个键
-val agentAbiPatterns: List<String> = (localProperties.getProperty("agent.abi") ?: "")
-    .split(',')
-    .map(String::trim)
-    .filter(String::isNotEmpty)
-    .ifEmpty { listOf("*") }
+val agentAbiPatterns: List<String> =
+    (localProperties.getProperty("agent.abi") ?: "").split(',').map(String::trim)
+        .filter(String::isNotEmpty).ifEmpty { listOf("*") }
 
 val agentAssetsDir: Provider<Directory> = layout.buildDirectory.dir("generated/agentAssets")
 val agentJniLibsDir: Provider<Directory> = layout.buildDirectory.dir("generated/agentJniLibs")
@@ -63,16 +58,11 @@ val emptyAgentSource: File =
 
 val shippedAbis: List<String> = listOf("arm64-v8a", "x86_64")
 
-// local.properties: build.debugAbi=arm64-v8a；只编一个 ABI 能省掉一半 CMake 与打包时间
-val debugAbiFilters: List<String> = (localProperties.getProperty("build.debugAbi") ?: "")
-    .split(',')
-    .map(String::trim)
-    .filter(String::isNotEmpty)
-    .ifEmpty { shippedAbis }
+val debugAbiFilters: List<String> =
+    (localProperties.getProperty("build.debugAbi") ?: "").split(',').map(String::trim)
+        .filter(String::isNotEmpty).ifEmpty { shippedAbis }
 
-// 只对可枚举的顶层项做白名单，命中的目录整体拷贝
-// 不用黑名单：PI 协议允许 description 与图片引用子目录里的任意 md 和资源，
-// 按扩展名通配排除会误伤 announcement、locales 等目录下被引用的正文
+
 val piIncludePatterns: List<String> = listOf(
     "interface.json",
     "tasks/**",
@@ -82,9 +72,7 @@ val piIncludePatterns: List<String> = listOf(
     "locales/**",
     "CONTACT",
     "LICENSE",
-) + (localProperties.getProperty("pi.includeExtra") ?: "")
-    .split(',')
-    .map(String::trim)
+) + (localProperties.getProperty("pi.includeExtra") ?: "").split(',').map(String::trim)
     .filter(String::isNotEmpty)
 
 val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
@@ -107,8 +95,7 @@ val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
     }
 }
 
-// 清单让解包按行直取，免去逐层 AssetManager.list()（每层都是 native 调用）
-// 不塞进 BuildConfig：清单要等 syncPiAssets 执行完才列得出，而 BuildConfig 的值在 configuration 阶段就得定
+
 val writePiManifest = tasks.register("writePiManifest") {
     group = "build"
     description = "列出同步后 PI 的解包清单，落成 assets/pi.manifest"
@@ -119,19 +106,12 @@ val writePiManifest = tasks.register("writePiManifest") {
     outputs.file(manifestFile)
     doLast {
         val root = piDir.get().asFile
-        val entries = root.walkTopDown()
-            .filter { it.isFile }
-            .map { it.toRelativeString(root).replace('\\', '/') }
-            .sorted()
-            .toList()
+        val entries = root.walkTopDown().filter { it.isFile }
+            .map { it.toRelativeString(root).replace('\\', '/') }.sorted().toList()
         manifestFile.get().asFile.writeText(entries.joinToString("\n"))
     }
 }
 
-// bundle 打成单个 zip 再进 assets，不散装铺开
-// AAPT 会按默认规则改写 assets：`<dir>_*` 整目录丢掉（Python 的 `_pyrepl/` 首当其冲）、
-// `.*` 丢掉、`.gz` 解压后改名。实测 1554 个条目进包只剩 1272 个。归档之后它碰不到里面的名字，
-// 顺带省掉运行时在上百 MB 的 APK 里做上千次条目查找
 val packAgentBundles = tasks.register<Zip>("packAgentBundles") {
     group = "build"
     description = "把 agent.sourceDir 的 bundle 按 ABI 打包进 assets/agent"
@@ -182,7 +162,6 @@ val syncAgentJniLibs = tasks.register<Sync>("syncAgentJniLibs") {
     }
 }
 
-// 描述文件不进指纹：它不影响解包出来的字节，改描述不该触发重解一棵上百 MB 的树
 val writeAgentIndex = tasks.register("writeAgentIndex") {
     group = "build"
     description = "算出 agent 运行时归档的内容指纹，落成 assets/agent.fingerprint"
@@ -203,7 +182,8 @@ val writeAgentIndex = tasks.register("writeAgentIndex") {
                 digest.update(buffer, 0, read)
             }
         }
-        fingerprintFile.get().asFile.writeText(digest.digest().joinToString("") { "%02x".format(it) })
+        fingerprintFile.get().asFile.writeText(
+            digest.digest().joinToString("") { "%02x".format(it) })
     }
 }
 
@@ -237,13 +217,9 @@ android {
 
     packaging {
         jniLibs {
-            // 必须解压成真实文件：launcher 要被 execv 执行，
-            // MaaFramework 又靠 dladdr 取自身 .so 所在目录再 dlopen 兄弟库（MaaUtils 的 library_dir()）
             useLegacyPackaging = true
         }
         resources {
-            // 三个 mail jar 各带一份同名署名文件，不处理直接构建失败；
-            // 用 pickFirsts 而不是 excludes，留一份总比全丢掉强
             pickFirsts += setOf(
                 "META-INF/LICENSE.md",
                 "META-INF/NOTICE.md",
@@ -253,16 +229,16 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH")
-                ?: localProperties.getProperty("KEYSTORE_PATH", "")
+            val keystorePath =
+                System.getenv("KEYSTORE_PATH") ?: localProperties.getProperty("KEYSTORE_PATH", "")
             if (keystorePath.isNotEmpty()) {
                 storeFile = file(keystorePath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                     ?: localProperties.getProperty("KEYSTORE_PASSWORD", "")
-                keyAlias = System.getenv("KEY_ALIAS")
-                    ?: localProperties.getProperty("KEY_ALIAS", "")
-                keyPassword = System.getenv("KEY_PASSWORD")
-                    ?: localProperties.getProperty("KEY_PASSWORD", "")
+                keyAlias =
+                    System.getenv("KEY_ALIAS") ?: localProperties.getProperty("KEY_ALIAS", "")
+                keyPassword =
+                    System.getenv("KEY_PASSWORD") ?: localProperties.getProperty("KEY_PASSWORD", "")
             }
         }
     }
@@ -279,11 +255,10 @@ android {
             }
             isMinifyEnabled = false
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
-            val keystorePath = System.getenv("KEYSTORE_PATH")
-                ?: localProperties.getProperty("KEYSTORE_PATH", "")
+            val keystorePath =
+                System.getenv("KEYSTORE_PATH") ?: localProperties.getProperty("KEYSTORE_PATH", "")
             if (keystorePath.isNotEmpty()) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -312,9 +287,6 @@ tasks.named("preBuild") {
     dependsOn(writePiManifest, writeAgentIndex, syncAgentJniLibs)
 }
 
-// AGP 9 不再接受 Provider 形式的 sourceSet srcDir，只能走 Variant API
-// 选静态目录而非 generated：各 variant 共享同一份产物，避免 debug/release 各拷一遍
-// 代价是不自动携带 task 依赖，由上面的 preBuild dependsOn 兜住
 androidComponents {
     onVariants { variant ->
         variant.sources.assets?.addStaticSourceDirectory(piAssetsDir.get().asFile.absolutePath)
@@ -323,15 +295,13 @@ androidComponents {
     }
 }
 
-// addStaticSourceDirectory 只让合并任务在执行时读到目录，不把它登记成输入：
-// 实测改了 PI 或 agent 运行时之后 mergeXxxAssets 仍判 UP-TO-DATE，APK 里留着上一次的内容
-// 这里补一条内容级输入把 up-to-date 判定接上；用 fileTree 而非 inputs.dir，目录缺失时才不会校验失败
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
     inputs.files(piAssetsDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(agentAssetsDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
-    inputs.files(agentJniLibsDir.map { it.asFileTree }).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(agentJniLibsDir.map { it.asFileTree })
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 kotlin {
