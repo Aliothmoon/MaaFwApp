@@ -22,6 +22,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -53,6 +58,30 @@ class PermissionManager(
     override val serviceState: StateFlow<PrivilegedServiceState> = RemoteServiceManager.state
         .map { it.toPrivilegedServiceState() }
         .stateIn(scope, SharingStarted.Eagerly, PrivilegedServiceState.Disconnected)
+
+    /**
+     * 看门狗状态：service 连上时 2s 轮询 RemoteService.watchdogState()，断开回 IDLE。
+     * flatMapLatest 随连接态切换——断开即停轮询，避免空转
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val watchdogState: StateFlow<WatchdogState> = RemoteServiceManager.state
+        .flatMapLatest { st ->
+            if (st is RemoteServiceManager.ServiceState.Connected) {
+                flow {
+                    while (true) {
+                        emit(
+                            WatchdogState.fromAidl(
+                                runCatching { st.service.watchdogState() }.getOrDefault(0),
+                            ),
+                        )
+                        delay(2_000)
+                    }
+                }
+            } else {
+                flowOf(WatchdogState.IDLE)
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, WatchdogState.IDLE)
 
     private val serviceConnected: StateFlow<Boolean> = serviceState
         .map { it == PrivilegedServiceState.Connected }

@@ -25,6 +25,9 @@
     <string name="tasks_list_summary">%1$d 个任务 · %2$d 个有效</string>
     <string name="tasks_live_preview">实时预览</string>
     <string name="tasks_preview_waiting_surface">等待画面</string>
+    <string name="virtual_display_game_running">运行中</string>
+    <string name="virtual_display_game_stopped">已停止</string>
+    <string name="virtual_display_idle">空闲</string>
     <string name="tasks_preview_exit_fullscreen">退出全屏</string>
     <string name="tasks_preview_idle">未在运行</string>
     <string name="tasks_remove">移除</string>

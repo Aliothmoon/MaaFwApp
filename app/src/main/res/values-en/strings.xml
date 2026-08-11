@@ -26,6 +26,9 @@
     <!-- "active" is an adjective and does not inflect with quantity. -->
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_preview_waiting_surface">Waiting for frames</string>
+    <string name="virtual_display_game_running">Running</string>
+    <string name="virtual_display_game_stopped">Stopped</string>
+    <string name="virtual_display_idle">Idle</string>
     <string name="tasks_preview_exit_fullscreen">Exit fullscreen</string>
     <string name="tasks_preview_idle">Not running</string>
     <string name="tasks_remove">Remove</string>

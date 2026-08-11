@@ -110,6 +110,21 @@ object ActivityUtils {
     }
 
     /**
+     * 返回运行在 [displayId] 上的最顶层 app 包名；没有任务或 API 不支持时返回 null。
+     * 看门狗用它从虚拟屏反推目标 app，无需外部告知包名。
+     */
+    fun getTopPackageOnDisplay(displayId: Int): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        if (taskDisplayIdField == null) return null
+        return runCatching {
+            val am = FakeContext.get().getSystemService(ActivityManager::class.java) ?: return null
+            @Suppress("DEPRECATION")
+            am.getRunningTasks(100).firstOrNull { task -> getTaskDisplayId(task) == displayId }
+                ?.topActivity?.packageName
+        }.onFailure { Ln.w("getTopPackageOnDisplay: failed", it) }.getOrNull()
+    }
+
+    /**
      * 检查指定包名的应用最近的活动 task 是否运行在给定 displayId 上。
      * API 28 无 TaskInfo.displayId 字段（@hide），宽松返回 true（不拦截）。
      * 任何异常也宽松返回 true，避免误伤。

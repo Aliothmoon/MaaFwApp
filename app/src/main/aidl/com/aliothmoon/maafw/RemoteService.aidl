@@ -88,4 +88,7 @@ interface RemoteService {
 
     /** MaaFramework 版本；未加载返回 null */
     String maaVersion() = 54;
+
+    /** 看门狗状态：0=IDLE / 1=WATCHING / 2=APP_DIED（目标 app 是否仍在虚拟屏上） */
+    int watchdogState() = 60;
 }

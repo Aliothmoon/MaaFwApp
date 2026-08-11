@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.privileged.WatchdogState
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.theme.ThemeStyle
@@ -48,6 +49,8 @@ data class SessionUiState(
      * 前台模式是设备物理屏尺寸。项目未就绪时为 null
      */
     val previewResolution: DisplayResolution? = null,
+    /** 目标 app 在虚拟屏上的看门狗状态；预览小窗右上角徽标用它（AppWatchdog） */
+    val watchdogState: WatchdogState = WatchdogState.IDLE,
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     /** 授权请求进行中；只压按钮，不进 configurationLocked */
     val remoteAccessGranting: Boolean = false,

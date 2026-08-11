@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
+import com.aliothmoon.maafw.remote.internal.AppWatchdog
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
@@ -50,6 +51,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun destroy() {
         if (!destroyed.compareAndSet(false, true)) return
         Ln.i("$TAG: destroy()")
+        AppWatchdog.stopWatching()
         InputControlUtils.setTouchCallback(null)
         runner.destroy()
         cleanup()
@@ -66,6 +68,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     override fun pid(): Int = Process.myPid()
+
+    override fun watchdogState(): Int = AppWatchdog.state.value
 
     override fun heartbeat(pid: Int) {
         appPid.set(pid)
@@ -135,6 +139,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     override fun stopVirtualDisplay() {
+        AppWatchdog.stopWatching()
         when (virtualDisplayMode.get()) {
             DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
             DisplayMode.BACKGROUND -> {
@@ -202,10 +207,15 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun startRun(runPlanJson: String?): Boolean {
         if (runPlanJson.isNullOrBlank()) return false
-        return runner.start(runPlanJson)
+        val started = runner.start(runPlanJson)
+        if (started) AppWatchdog.startWatching()
+        return started
     }
 
-    override fun stopRun(): Boolean = runner.stop()
+    override fun stopRun(): Boolean {
+        AppWatchdog.stopWatching()
+        return runner.stop()
+    }
 
     override fun isRunning(): Boolean = runner.isRunning()
 

@@ -9,8 +9,13 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -43,6 +49,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.privileged.WatchdogState
 import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.session.PreviewTouchAction
@@ -109,6 +116,7 @@ internal fun LivePreview(
     resolution: DisplayResolution?,
     surfaceReady: Boolean,
     running: Boolean,
+    watchdogState: WatchdogState,
     content: (@Composable () -> Unit)?,
     onEnterFullscreen: () -> Unit,
 ) {
@@ -124,7 +132,35 @@ internal fun LivePreview(
         Box(Modifier.fillMaxSize()) {
             content()
             PreviewStatusMask(surfaceReady = surfaceReady, running = running)
+            WatchdogStatusBadge(
+                state = watchdogState,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(MaaDesignTokens.Spacing.sm),
+            )
         }
+    }
+}
+@Composable
+private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modifier) {
+    // 三态着色：WATCHING 绿 / APP_DIED 红 / IDLE 灰（对齐 MaaMeow 预览小窗右上角徽标）
+    val (dotColor, label) = when (state) {
+        WatchdogState.WATCHING ->
+            Color(0xFF4CAF50) to stringResource(R.string.virtual_display_game_running)
+        WatchdogState.APP_DIED ->
+            Color(0xFFF44336) to stringResource(R.string.virtual_display_game_stopped)
+        WatchdogState.IDLE ->
+            Color(0xFF9E9E9E) to stringResource(R.string.virtual_display_idle)
+    }
+    Row(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(MaaDesignTokens.CornerRadius.button))
+            .padding(horizontal = MaaDesignTokens.Spacing.sm, vertical = MaaDesignTokens.Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(MaaDesignTokens.IconSize.dotMd).clip(CircleShape).background(dotColor))
+        Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color.White)
     }
 }
 

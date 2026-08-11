@@ -134,6 +134,7 @@ private fun TasksContent(
                         resolution = state.previewResolution,
                         surfaceReady = previewSurfaceReady,
                         running = state.runner.phase.isBusy,
+                        watchdogState = state.watchdogState,
                         content = previewContent,
                         onEnterFullscreen = onEnterFullscreen,
                     )

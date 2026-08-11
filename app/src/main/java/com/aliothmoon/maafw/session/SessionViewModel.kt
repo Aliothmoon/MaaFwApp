@@ -105,6 +105,7 @@ class SessionViewModel(
         snapshot.copy(themeStyle = style)
     }
 
+
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
         configurationStore.data,
@@ -114,6 +115,7 @@ class SessionViewModel(
     ) { project, config, runner, privileged, settings ->
         buildUiState(project, config, runner, privileged, settings)
     }.flowOn(Dispatchers.Default) // resolve 属重计算，不占用主线程
+        .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
