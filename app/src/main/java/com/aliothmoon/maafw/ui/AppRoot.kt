@@ -50,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -130,6 +131,23 @@ private enum class TopDestination(
     Settings(R.string.nav_settings, Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
+/** M3 NavigationBar 固定 80dp 且 padding 不可调，底栏自建成这个高度 */
+private val BottomBarHeight = 56.dp
+
+/**
+ * 二级页面在位时截断整屏的命中测试
+ *
+ * 主 tab 那层还活着只是被盖住，不截就能隔着二级页横滑切页、点到底栏
+ */
+private fun Modifier.blockPointerInput(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        // Main pass 排在子节点之后，二级页自己的手势先走，这里只收剩下的
+        while (true) {
+            awaitPointerEvent().changes.forEach { it.consume() }
+        }
+    }
+}
+
 /** Route：收集 state、消费 Effect、承载四个主 tab 与二级页面的 NavHost；VM 为 Activity 作用域 */
 @Composable
 fun AppRoot(
@@ -190,6 +208,10 @@ fun AppRoot(
     MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
         // NavHost 只承载二级页面；主 tab 仍由下面的 HorizontalPager 渲染
         val navController = rememberNavController()
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        // 首帧 backStackEntry 还没就绪，那时必然停在 startDestination
+        val currentRoute = navBackStackEntry?.destination?.route
+        val onSubPage = currentRoute != null && currentRoute !in Routes.mainTabs
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
         val scope = rememberCoroutineScope()
         val snackbarHostState = remember { SnackbarHostState() }
@@ -261,9 +283,7 @@ fun AppRoot(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-                // M3 NavigationBar 固定 80dp 且 padding 不可调，自建 56dp
                 Column {
                     HorizontalDivider(
                         thickness = MaaDesignTokens.Separator.thickness,
@@ -274,7 +294,7 @@ fun AppRoot(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .navigationBarsPadding()
-                                .height(56.dp)
+                                .height(BottomBarHeight)
                                 .selectableGroup(),
                         ) {
                             TopDestination.entries.forEachIndexed { index, destination ->
@@ -294,11 +314,6 @@ fun AppRoot(
                                             indication = LocalIndication.current,
                                             role = Role.Tab,
                                             onClick = {
-                                                // 在二级页（如规则编辑）时先退出再切 tab，否则该页仍盖在 pager 上看不到切换
-                                                val onTab = navController.currentDestination?.route in listOf(
-                                                    Routes.HOME, Routes.TASKS, Routes.SCHEDULE, Routes.SETTINGS,
-                                                )
-                                                if (!onTab) navController.popBackStack()
                                                 scope.launch { pagerState.animateScrollToPage(index) }
                                             },
                                         ),
@@ -366,11 +381,19 @@ fun AppRoot(
                     )
                 }
             }
+        }
 
+        // 二级页面自成一层：留在 Scaffold 体内会被底栏从高度里扣掉一截，盖不住它
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (onSubPage) Modifier.blockPointerInput() else Modifier),
+        ) {
             NavHost(
                 navController = navController,
                 startDestination = Routes.HOME,
-                modifier = Modifier.fillMaxSize().padding(padding),
+                // 不吃任何 inset：状态栏与导航栏由各二级页自己的 Scaffold 处理
+                modifier = Modifier.fillMaxSize(),
                 // 共享轴 X 前进转场，对齐 MaaMeow：推进右进左出、返回左进右出
                 enterTransition = { slideInHorizontally { it } + fadeIn() },
                 exitTransition = { slideOutHorizontally { -it } + fadeOut() },
@@ -438,6 +461,15 @@ fun AppRoot(
                 }
             }
         }
+
+        // 挂在二级页面之上，否则整屏的二级页一盖，snackbar 就没人看得见
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = if (onSubPage) 0.dp else BottomBarHeight),
+        )
         }
 
         // 无条件挂在这一层：它注册的 SAF launcher 要活得比 sheet 的显隐久

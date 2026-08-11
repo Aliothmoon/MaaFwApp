@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -58,14 +57,11 @@ fun ScheduleTriggerLogScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
-                // AppRoot 的 Scaffold 已吃掉状态栏顶部 inset，这里不能再加一次
-                windowInsets = WindowInsets(0, 0, 0, 0),
                 title = { Text(stringResource(R.string.schedule_log_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
