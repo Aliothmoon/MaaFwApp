@@ -15,6 +15,17 @@ class FocusParserTest {
         assertNull(FocusParser.parse("Node.Action.Starting", """{"task_id":1,"name":"NodeA"}"""))
     }
 
+    /**
+     * MaaFramework 给**每一条**节点回调都带 `focus` 键，没配模板时值是 null
+     *
+     * 实测一轮冒烟 222 条回调里 184 条如此。只判键名在不在，等于一条都没筛掉
+     */
+    @Test
+    fun `a null focus field is filtered out without parsing`() {
+        val details = """{"focus":null,"name":"SmokeStopApp","reco_id":400000015,"task_id":200000008}"""
+        assertNull(FocusParser.parse("Node.Recognition.Starting", details))
+    }
+
     @Test
     fun `other message in the same focus map is not picked up`() {
         val details = """{"name":"NodeA","focus":{"Node.Action.Failed":"炸了"}}"""

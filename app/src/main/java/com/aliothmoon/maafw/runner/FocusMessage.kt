@@ -56,11 +56,17 @@ fun substituteFocusPlaceholders(content: String, placeholders: Map<String, Strin
 object FocusParser {
 
     /**
-     * 带 focus 的回调是极少数，先按串筛掉其余的
+     * 先按串筛掉没有模板的回调，别为它们各解一次完整 JSON
      *
-     * 一次长跑有几千条节点回调，为它们各解一次完整 JSON 只是白烧 binder 线程
+     * **光看有没有 `"focus"` 不够**：MaaFramework 给每一条节点回调都带这个键，没配模板时
+     * 值是 `null`。实测一轮冒烟 222 条回调里 184 条是 `"focus":null`、真模板 0 条，
+     * 只判键名等于没筛。所以要把 null 那种也排掉
+     *
+     * 排的是字面量而不是解析结果：万一哪版输出带了空格没匹配上，也只是退回去解一次 JSON，
+     * 结果照样对——宁可慢一次，不可漏一条
      */
     private const val FOCUS_MARKER = "\"focus\""
+    private const val FOCUS_ABSENT = "\"focus\":null"
 
     private const val FOCUS_KEY = "focus"
     private const val CONTENT_KEY = "content"
@@ -76,7 +82,8 @@ object FocusParser {
 
     /** 返回 null 表示这条回调没有模板，按原始转储处理 */
     fun parse(message: String, detailsJson: String): FocusMessage? {
-        if (message.isEmpty() || !detailsJson.contains(FOCUS_MARKER)) return null
+        if (message.isEmpty()) return null
+        if (!detailsJson.contains(FOCUS_MARKER) || detailsJson.contains(FOCUS_ABSENT)) return null
 
         val details = runCatching { json.parseToJsonElement(detailsJson) }.getOrNull() as? JsonObject
             ?: return null

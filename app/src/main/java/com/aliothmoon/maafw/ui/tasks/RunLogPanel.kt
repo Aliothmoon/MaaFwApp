@@ -125,7 +125,7 @@ internal fun RunLogPanel(
         LaunchedEffect(visible.lastOrNull()?.id) {
             if (pinnedToBottom) listState.scrollToItem(visible.lastIndex)
         }
-        val formatter = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.US) }
+        val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f),
