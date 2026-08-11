@@ -179,7 +179,7 @@
     <string name="schedule_title">Schedules</string>
     <string name="schedule_add">New rule</string>
     <string name="schedule_empty">No schedules yet</string>
-    <string name="schedule_empty_hint">Firing only wakes the app and records an entry; task execution is not wired yet</string>
+    <string name="schedule_empty_hint">Firing only wakes the app and records an entry; task execution is not triggered yet</string>
     <string name="schedule_next_trigger">Next %1$s</string>
     <string name="schedule_next_none">Incomplete rule, will not fire</string>
     <string name="schedule_disabled">Disabled</string>
@@ -238,14 +238,14 @@
     <string name="schedule_edit_close_app_tip">Background mode only; a manual stop never closes it</string>
     <string name="schedule_result_failed_start">Did not start</string>
     <string name="schedule_reason_configuration_missing">The bound run configuration was deleted</string>
-    <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be compiled</string>
+    <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be prepared</string>
     <string name="schedule_reason_blocked">A start check did not pass</string>
     <string name="schedule_reason_rejected">A run is already in progress</string>
     <string name="schedule_edit_configuration">Run configuration</string>
     <string name="schedule_edit_configuration_active">Follow current selection</string>
     <string name="schedule_edit_configuration_none">No run configurations yet; create one on the Tasks page</string>
     <string name="schedule_result_failed_validation">Rule missing</string>
-    <string name="schedule_result_failed_service">Service failed</string>
+    <string name="schedule_result_failed_service">Service failed to start</string>
 
     <!-- Navigation & dialogs -->
     <string name="nav_home">Home</string>
@@ -284,10 +284,10 @@
     <string name="msg_fail_wait_settle_timeout">Timed out waiting for the run to settle</string>
     <string name="msg_reject_already_running">A run is already in progress</string>
     <string name="msg_reject_stop_failed">Failed to stop</string>
-    <string name="msg_reject_setup_failed">Privileged process setup failed</string>
+    <string name="msg_reject_setup_failed">Privileged process initialization failed</string>
     <string name="msg_reject_switch_display_mode">Failed to switch display mode: %1$s</string>
     <string name="msg_reject_primary_capture">Failed to start primary screen capture</string>
-    <string name="msg_reject_virtual_display">Failed to start virtual display</string>
+    <string name="msg_reject_virtual_display">Virtual display failed to start; check service permissions</string>
     <string name="msg_reject_service_rejected">Privileged process rejected the run</string>
 
     <!-- Server switching & run options -->
@@ -326,7 +326,7 @@
     <string name="home_status_disconnected">Not started</string>
     <string name="home_status_project_loading">Loading project…</string>
     <string name="home_status_project_failed">Project load failed</string>
-    <string name="home_status_runner_unavailable">Runner unavailable</string>
+    <string name="home_status_runner_unavailable">Cannot run tasks</string>
     <string name="home_status_preparing">Starting task…</string>
     <string name="home_status_running">Running</string>
     <string name="home_status_stopping">Stopping task…</string>
@@ -351,7 +351,7 @@
     <string name="run_log_title">Run log</string>
     <string name="run_log_count">%1$d entries</string>
     <string name="run_log_clear">Clear</string>
-    <string name="run_log_empty">No entries yet. MaaFramework callbacks show up here once a run starts.</string>
+    <string name="run_log_empty">No entries yet. MaaFramework output appears here once a run starts.</string>
     <string name="tasks_log">Log</string>
     <string name="run_log_filter_essential">Key</string>
     <string name="run_log_filter_all">All</string>
@@ -369,7 +369,7 @@
 
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>
-    <string name="log_archive_empty">No history yet. Finishing a run leaves one here.</string>
+    <string name="log_archive_empty">No history yet. Each finished run is recorded here.</string>
     <string name="log_archive_meta">%1$d tasks · %2$s</string>
     <string name="log_archive_cleanup">Clean up old</string>
     <string name="log_archive_delete_title">Delete this record</string>
@@ -378,7 +378,7 @@
     <string name="log_detail_started">Started %1$s</string>
     <string name="log_detail_tasks">Tasks: %1$s</string>
     <string name="log_detail_ended">Ended %1$s</string>
-    <string name="log_detail_empty">This log is empty</string>
+    <string name="log_detail_empty">This run record is empty</string>
     <string name="log_outcome_completed">All completed</string>
     <string name="log_outcome_completed_with_failures">Some failed</string>
     <string name="log_outcome_cancelled">Cancelled</string>
@@ -405,9 +405,9 @@
 
     <!-- Settings "Logs" group entries -->
     <string name="settings_section_log">Logs</string>
-    <string name="settings_log_archive_desc">One file per run, kept for review</string>
-    <string name="settings_log_error_desc">The app\'s own warnings and errors</string>
-    <string name="settings_log_export_desc">Pack into a zip to attach to a report</string>
+    <string name="settings_log_archive_desc">View the execution log of each run</string>
+    <string name="settings_log_error_desc">View the app\'s own exceptions and errors</string>
+    <string name="settings_log_export_desc">Pack all logs into a ZIP file to share</string>
 
     <!-- Diagnostic texts; built by DiagnosticMessages in domain/Diagnostics.kt -->
     <string name="diagnostic_severity_warning">Warning</string>
@@ -451,7 +451,7 @@
     <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
     <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
     <string name="schedule_default_name">Schedule %1$d</string>
-    <string name="settings_resolution">Virtual display resolution</string>
+    <string name="settings_resolution">Background mode resolution</string>
     <string name="settings_resolution_720p">720P</string>
     <string name="settings_resolution_1080p">1080P</string>
     <string name="settings_debug_mode">Debug mode</string>
@@ -462,15 +462,15 @@
     <!-- PI unpacking -->
     <string name="pi_install_title">Preparing project resources</string>
     <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
-    <string name="pi_install_note">Unpacked once on first launch and after each version update. Please stay in the app.</string>
+    <string name="pi_install_note">Extracted once on first launch and after each version update. Please wait…</string>
     <string name="pi_install_failed_title">Failed to prepare project resources</string>
-    <string name="pi_install_failed_message">%1$s\n\nYou can retry. If it keeps failing, check free space and whether external storage is available.</string>
+    <string name="pi_install_failed_message">%1$s\n\nCheck that there is enough free space, then retry.</string>
     <string name="pi_install_retry">Retry</string>
-    <string name="pi_install_error">Unpacking failed: %1$s</string>
+    <string name="pi_install_error">Extraction failed: %1$s</string>
 
     <string name="settings_section_pi">Project resources</string>
-    <string name="pi_reinstall_title">Unpack again</string>
-    <string name="pi_reinstall_desc">Clear the unpacked project resources and lay down a fresh copy from the APK</string>
-    <string name="dialog_reinstall_pi_title">Unpack project resources again</string>
-    <string name="dialog_reinstall_pi_message">The unpacked copy on this device will be deleted and unpacked again. Do not leave the app while it runs. Run configurations and logs are unaffected.</string>
+    <string name="pi_reinstall_title">Extract resources again</string>
+    <string name="pi_reinstall_desc">Extract the project resources again from the APK</string>
+    <string name="dialog_reinstall_pi_title">Extract project resources again</string>
+    <string name="dialog_reinstall_pi_message">Extract the project resources again?\n\nThe copy on this device will be deleted and extracted again. Please do not leave the app while this runs. Run configurations and logs are unaffected.</string>
 </resources>

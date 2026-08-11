@@ -116,7 +116,7 @@
     <string name="settings_run_mode">运行模式</string>
     <string name="settings_run_mode_background">后台模式</string>
     <string name="settings_run_mode_foreground">前台模式</string>
-    <string name="settings_run_mode_hint_background">另建一块虚拟屏跑任务，手机可以照常用；分辨率由项目声明推导</string>
+    <string name="settings_run_mode_hint_background">在独立的虚拟屏幕上运行任务，手机可正常使用；分辨率由项目声明推导</string>
     <string name="settings_run_mode_hint_foreground">直接操作当前屏幕，运行期间手机被占用；不会重启目标应用，预览里也不接管触摸</string>
     <string name="settings_resource">服务器选择</string>
     <string name="settings_no_resources">项目未提供可选服务器</string>
@@ -130,7 +130,7 @@
 
     <!-- 通知 -->
     <string name="notification_channel_run">任务执行</string>
-    <string name="notification_channel_run_desc">执行期间常驻，用于挡住系统清理后台</string>
+    <string name="notification_channel_run_desc">执行期间常驻，避免应用被系统回收</string>
     <string name="notification_channel_focus">项目消息</string>
     <string name="notification_channel_focus_desc">PI 项目在运行中要求推送给你的提示</string>
     <string name="notification_focus_title">项目消息</string>
@@ -159,7 +159,7 @@
     <!-- 运行期屏保 -->
     <string name="settings_screen_saver">熄屏挂机</string>
     <string name="settings_screen_saver_auto">运行时自动熄屏</string>
-    <string name="settings_screen_saver_hint">后台跑任务时把整屏压黑，只留时钟、电量与最新一条日志；向右滑动解锁，任务结束自动撤掉</string>
+    <string name="settings_screen_saver_hint">后台运行时将屏幕显示为全黑，仅保留时钟、电量与最新一条日志；向右滑动解锁，任务结束后自动关闭</string>
     <string name="settings_screen_saver_show">立即熄屏</string>
     <string name="screensaver_idle">等待任务开始…</string>
     <string name="screensaver_swipe_to_unlock">向右滑动解锁</string>
@@ -173,7 +173,7 @@
     <string name="schedule_title">定时任务</string>
     <string name="schedule_add">新建规则</string>
     <string name="schedule_empty">还没有定时规则</string>
-    <string name="schedule_empty_hint">到点只会把应用叫醒并记一笔，暂不触发任务执行</string>
+    <string name="schedule_empty_hint">到达设定时间只会唤醒应用并记录一次，暂不触发任务执行</string>
     <string name="schedule_next_trigger">下次 %1$s</string>
     <string name="schedule_next_none">规则不完整，不会触发</string>
     <string name="schedule_disabled">已停用</string>
@@ -225,21 +225,21 @@
     <string name="settings_wake_credential_hint">只支持纯数字 PIN；明文存在本机，导出配置时会清空</string>
     <string name="schedule_edit_advanced">高级选项</string>
     <string name="schedule_edit_force_start">强制启动</string>
-    <string name="schedule_edit_force_start_tip">到点时若已有执行在跑，中断它再执行本条</string>
+    <string name="schedule_edit_force_start_tip">到达设定时间时若有任务正在执行，中断后执行本规则</string>
     <string name="schedule_edit_auto_sleep">任务结束后自动熄屏</string>
     <string name="schedule_edit_skip_sleep_if_awake">启动时已亮屏则不熄屏</string>
     <string name="schedule_edit_close_app">任务结束后关闭目标应用</string>
     <string name="schedule_edit_close_app_tip">仅后台模式生效；手动停止任务不会关闭</string>
     <string name="schedule_result_failed_start">未能开始</string>
     <string name="schedule_reason_configuration_missing">绑定的运行配置已被删除</string>
-    <string name="schedule_reason_invalid_plan">配置有错，无法编译本次执行</string>
+    <string name="schedule_reason_invalid_plan">配置有错，无法生成本次执行</string>
     <string name="schedule_reason_blocked">启动前检查未通过</string>
     <string name="schedule_reason_rejected">已有执行在进行中</string>
     <string name="schedule_edit_configuration">运行配置</string>
     <string name="schedule_edit_configuration_active">跟随当前选中</string>
-    <string name="schedule_edit_configuration_none">还没有运行配置，先去任务页建一个</string>
+    <string name="schedule_edit_configuration_none">还没有运行配置，请先在任务页创建</string>
     <string name="schedule_result_failed_validation">规则缺失</string>
-    <string name="schedule_result_failed_service">服务未起</string>
+    <string name="schedule_result_failed_service">服务启动失败</string>
 
     <!-- 导航与对话框 -->
     <string name="nav_home">首页</string>
@@ -266,7 +266,7 @@
     <string name="msg_template_not_found">模板“%1$s”不存在</string>
     <string name="msg_cannot_start">无法开始：%1$s</string>
     <string name="msg_launch_in_progress">正在启动中，请稍候</string>
-    <string name="msg_precheck_ignored_confirmation">启动检查未消费用户确认，已中止</string>
+    <string name="msg_precheck_ignored_confirmation">启动检查未处理确认结果，已中止</string>
     <string name="msg_hook_timeout">运行环境准备超时：%1$s</string>
     <string name="msg_hook_failed">运行环境准备失败：%1$s</string>
     <string name="msg_cannot_stop">无法停止：%1$s</string>
@@ -278,10 +278,10 @@
     <string name="msg_fail_wait_settle_timeout">等待运行结束超时</string>
     <string name="msg_reject_already_running">已有执行在进行中</string>
     <string name="msg_reject_stop_failed">停止失败</string>
-    <string name="msg_reject_setup_failed">特权进程 setup 失败</string>
+    <string name="msg_reject_setup_failed">特权进程初始化失败</string>
     <string name="msg_reject_switch_display_mode">切换显示模式失败：%1$s</string>
     <string name="msg_reject_primary_capture">主屏采集启动失败</string>
-    <string name="msg_reject_virtual_display">虚拟显示器启动失败</string>
+    <string name="msg_reject_virtual_display">虚拟屏幕启动失败，请检查服务权限</string>
     <string name="msg_reject_service_rejected">特权进程拒绝了本次执行</string>
 
     <!-- 资源切换与运行选项 -->
@@ -320,7 +320,7 @@
     <string name="home_status_disconnected">未启动</string>
     <string name="home_status_project_loading">项目加载中…</string>
     <string name="home_status_project_failed">项目加载失败</string>
-    <string name="home_status_runner_unavailable">执行器不可用</string>
+    <string name="home_status_runner_unavailable">无法执行任务</string>
     <string name="home_status_preparing">任务启动中…</string>
     <string name="home_status_running">运行中</string>
     <string name="home_status_stopping">任务停止中…</string>
@@ -345,7 +345,7 @@
     <string name="run_log_title">运行日志</string>
     <string name="run_log_count">%1$d 条</string>
     <string name="run_log_clear">清空</string>
-    <string name="run_log_empty">还没有日志；开始任务后这里会出现 MaaFramework 的原始回调</string>
+    <string name="run_log_empty">还没有日志；开始任务后 MaaFramework 的运行输出会显示在这里</string>
     <string name="tasks_log">日志</string>
     <string name="run_log_filter_essential">关键</string>
     <string name="run_log_filter_all">全部</string>
@@ -363,16 +363,16 @@
 
     <!-- 历史日志：每轮运行落盘一份 -->
     <string name="log_archive_title">运行历史</string>
-    <string name="log_archive_empty">还没有历史记录；跑完一轮会在这里留下一份</string>
+    <string name="log_archive_empty">还没有历史记录；每次运行结束后会记录在这里</string>
     <string name="log_archive_meta">%1$d 个任务 · %2$s</string>
     <string name="log_archive_cleanup">清理过期</string>
     <string name="log_archive_delete_title">删除这份记录</string>
-    <string name="log_archive_delete_message">删除 %1$s 的运行记录？删掉就找不回来了</string>
+    <string name="log_archive_delete_message">删除 %1$s 的运行记录？此操作无法撤销。</string>
     <string name="log_detail_title">运行详情</string>
     <string name="log_detail_started">开始 %1$s</string>
     <string name="log_detail_tasks">任务：%1$s</string>
     <string name="log_detail_ended">结束 %1$s</string>
-    <string name="log_detail_empty">这份日志是空的</string>
+    <string name="log_detail_empty">此运行记录为空</string>
     <string name="log_outcome_completed">全部完成</string>
     <string name="log_outcome_completed_with_failures">部分失败</string>
     <string name="log_outcome_cancelled">已取消</string>
@@ -386,7 +386,7 @@
     <!-- 大小 · 最后写入时间 -->
     <string name="app_log_meta">%1$s · %2$s</string>
     <string name="app_log_clear_title">清除错误日志</string>
-    <string name="app_log_clear_message">删除全部错误日志文件？删掉就找不回来了</string>
+    <string name="app_log_clear_message">删除全部错误日志文件？此操作无法撤销。</string>
 
     <!-- 导出 -->
     <string name="log_export_title">导出日志</string>
@@ -399,9 +399,9 @@
 
     <!-- 设置页「日志」分组入口 -->
     <string name="settings_section_log">日志</string>
-    <string name="settings_log_archive_desc">每轮运行按次落盘，可回看</string>
-    <string name="settings_log_error_desc">应用自身的警告与错误</string>
-    <string name="settings_log_export_desc">打成 zip，反馈问题时带上</string>
+    <string name="settings_log_archive_desc">查看每次运行的执行日志</string>
+    <string name="settings_log_error_desc">查看应用异常和错误记录</string>
+    <string name="settings_log_export_desc">打包所有日志为 ZIP 文件分享</string>
 
     <!-- 诊断文案；构造点在 domain/Diagnostics.kt 的 DiagnosticMessages -->
     <string name="diagnostic_severity_warning">警告</string>
@@ -445,7 +445,7 @@
     <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
     <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
     <string name="schedule_default_name">定时任务 %1$d</string>
-    <string name="settings_resolution">虚拟屏分辨率</string>
+    <string name="settings_resolution">后台模式分辨率</string>
     <string name="settings_resolution_720p">720P</string>
     <string name="settings_resolution_1080p">1080P</string>
     <string name="settings_debug_mode">调试模式</string>
@@ -453,18 +453,18 @@
     <string name="dialog_enable_debug_title">启用调试模式</string>
     <string name="dialog_enable_debug_message">启用后需要重启 App 生效，将记录 MaaFramework 详细日志与 app、特权进程的 logcat。</string>
 
-    <!-- PI 解包 -->
+    <!-- PI 解压 -->
     <string name="pi_install_title">正在准备项目资源</string>
     <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
-    <string name="pi_install_note">首次启动与版本更新后需要解包一次，请勿退出。</string>
+    <string name="pi_install_note">首次启动与版本更新后需要解压一次，请稍候…</string>
     <string name="pi_install_failed_title">项目资源准备失败</string>
-    <string name="pi_install_failed_message">%1$s\n\n可以重试；若反复失败，请检查存储空间与外部存储是否可用。</string>
+    <string name="pi_install_failed_message">%1$s\n\n请检查存储空间是否充足，然后重试。</string>
     <string name="pi_install_retry">重试</string>
-    <string name="pi_install_error">解包失败：%1$s</string>
+    <string name="pi_install_error">解压失败：%1$s</string>
 
     <string name="settings_section_pi">项目资源</string>
-    <string name="pi_reinstall_title">重新解包</string>
-    <string name="pi_reinstall_desc">清空已解包的项目资源并从安装包重新铺一份</string>
-    <string name="dialog_reinstall_pi_title">重新解包项目资源</string>
-    <string name="dialog_reinstall_pi_message">将删除设备上已解包的一份并重新解包，期间不可退出。运行配置与日志不受影响。</string>
+    <string name="pi_reinstall_title">重新解压资源</string>
+    <string name="pi_reinstall_desc">从安装包重新解压项目资源</string>
+    <string name="dialog_reinstall_pi_title">重新解压项目资源</string>
+    <string name="dialog_reinstall_pi_message">确定要重新解压项目资源吗？\n\n这将删除设备上已解压的项目资源并重新解压，请勿在此期间退出应用。运行配置与日志不受影响。</string>
 </resources>
