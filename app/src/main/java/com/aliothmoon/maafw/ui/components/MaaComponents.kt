@@ -127,7 +127,7 @@ fun MaaCardSurface(
     )
 }
 
-/** outline 作分隔线色时 M3 未选中滑块会糊进轨道；改用 onSurfaceVariant */
+/** 未选中态走调色板的 `switchOff`：outline 与轨道同色会糊，onSurfaceVariant 又压得慌 */
 @Composable
 fun MaaSwitch(
     checked: Boolean,
@@ -141,8 +141,8 @@ fun MaaSwitch(
         modifier = modifier,
         enabled = enabled,
         colors = SwitchDefaults.colors(
-            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            uncheckedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            uncheckedThumbColor = MaaTheme.palette.switchOff,
+            uncheckedBorderColor = MaaTheme.palette.switchOff,
         ),
     )
 }

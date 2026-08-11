@@ -200,6 +200,15 @@ data class MaaPalette(
     val info: MaaTone,
     val violet: MaaTone,
     val neutral: MaaTone,
+    /**
+     * 未选中开关的滑块与描边
+     *
+     * 单开一档是因为四套 scheme 里没有现成角色能接：`outline` 在暖石亮色下与
+     * `surfaceContainerHighest`（未选中轨道）同为 `#E7E5E4`，滑块会整个糊进轨道；
+     * 退回 `onSurfaceVariant` 又是中性色里最重的一档，整圈描边压得慌。
+     * 取值落在两者中间——亮色比轨道深一档可辨即可，暗色维持原亮度
+     */
+    val switchOff: Color,
 ) {
     /** 按稳定顺序取一组强调色，用于分组徽章、任务色条等 */
     val accents: List<MaaTone> get() = listOf(info, violet, warning, success)
@@ -211,6 +220,8 @@ private val LightMaaPalette = MaaPalette(
     info = MaaTone(Color(0xFF0284C7), Color(0xFFE0F2FE)),
     violet = MaaTone(Color(0xFF7C3AED), Color(0xFFEDE9FE)),
     neutral = MaaTone(Color(0xFF78716C), Color(0xFFF5F5F4)),
+    // stone-400：比轨道 stone-200 深一档，比 onSurfaceVariant（stone-500）轻
+    switchOff = Color(0xFFA8A29E),
 )
 
 private val DarkMaaPalette = MaaPalette(
@@ -219,6 +230,8 @@ private val DarkMaaPalette = MaaPalette(
     info = MaaTone(Color(0xFF38BDF8), Color(0xFF0C4A6E)),
     violet = MaaTone(Color(0xFFA78BFA), Color(0xFF4C1D95)),
     neutral = MaaTone(Color(0xFF98989D), Color(0xFF2C2C2E)),
+    // 暗色下轨道本就深，滑块再压就看不见了；维持 onSurfaceVariant 的亮度
+    switchOff = Color(0xFF98989D),
 )
 
 // Semi 功能色：success=green-5、warning=orange-5、info=blue-5、violet=violet-5（global.scss）
@@ -228,6 +241,8 @@ private val SemiLightMaaPalette = MaaPalette(
     info = MaaTone(Color(0xFF0064FA), Color(0xFFEAF5FF)),
     violet = MaaTone(Color(0xFF6A3AC7), Color(0xFFF3EDF9)),
     neutral = MaaTone(Color(0xFF6B7075), Color(0xFFF9F9F9)),
+    // Semi 的边框色 grey-3；它自己的开关关闭态描边是 transparent、滑块纯白，比这还轻
+    switchOff = Color(0xFFC6CACD),
 )
 
 private val SemiDarkMaaPalette = MaaPalette(
@@ -236,6 +251,7 @@ private val SemiDarkMaaPalette = MaaPalette(
     info = MaaTone(Color(0xFF54A9FF), Color(0xFF053170)),
     violet = MaaTone(Color(0xFF9B7CF0), Color(0xFF2A1A5C)),
     neutral = MaaTone(Color(0xFFA7ABB0), Color(0xFF2E3238)),
+    switchOff = Color(0xFFA7ABB0),
 )
 
 val LocalMaaPalette = staticCompositionLocalOf { LightMaaPalette }
