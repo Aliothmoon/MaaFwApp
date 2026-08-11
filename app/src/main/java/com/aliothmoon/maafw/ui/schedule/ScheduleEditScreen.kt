@@ -208,34 +208,6 @@ fun ScheduleEditScreen(
                 }
             }
 
-            // 「高级选项」整组是逐条规则的，不是全局设置——对齐 MaaMeow 的归属
-            ScheduleSection(stringResource(R.string.schedule_edit_advanced)) {
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_force_start),
-                    tip = stringResource(R.string.schedule_edit_force_start_tip),
-                    checked = draft.forceStart,
-                    onCheckedChange = { draft = draft.copy(forceStart = it) },
-                )
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_auto_sleep),
-                    checked = draft.autoSleepAfterTask,
-                    onCheckedChange = { draft = draft.copy(autoSleepAfterTask = it) },
-                )
-                if (draft.autoSleepAfterTask) {
-                    ScheduleToggleRow(
-                        label = stringResource(R.string.schedule_edit_skip_sleep_if_awake),
-                        checked = draft.skipAutoSleepIfAwake,
-                        onCheckedChange = { draft = draft.copy(skipAutoSleepIfAwake = it) },
-                    )
-                }
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_close_app),
-                    tip = stringResource(R.string.schedule_edit_close_app_tip),
-                    checked = draft.closeAppAfterTask,
-                    onCheckedChange = { draft = draft.copy(closeAppAfterTask = it) },
-                )
-            }
-
             ScheduleSection(stringResource(R.string.schedule_edit_type)) {
                 MaaSingleChoiceFlow(
                     options = listOf(
@@ -285,6 +257,34 @@ fun ScheduleEditScreen(
                 )
             }
 
+            // 排在最后：这一组是「跑起来之后怎么收场」，改的频率远低于上面的时间与配置。
+            // 整组是逐条规则的，不是全局设置——对齐 MaaMeow 的归属
+            ScheduleSection(stringResource(R.string.schedule_edit_advanced)) {
+                ScheduleToggleRow(
+                    label = stringResource(R.string.schedule_edit_force_start),
+                    tip = stringResource(R.string.schedule_edit_force_start_tip),
+                    checked = draft.forceStart,
+                    onCheckedChange = { draft = draft.copy(forceStart = it) },
+                )
+                ScheduleToggleRow(
+                    label = stringResource(R.string.schedule_edit_auto_sleep),
+                    checked = draft.autoSleepAfterTask,
+                    onCheckedChange = { draft = draft.copy(autoSleepAfterTask = it) },
+                )
+                if (draft.autoSleepAfterTask) {
+                    ScheduleToggleRow(
+                        label = stringResource(R.string.schedule_edit_skip_sleep_if_awake),
+                        checked = draft.skipAutoSleepIfAwake,
+                        onCheckedChange = { draft = draft.copy(skipAutoSleepIfAwake = it) },
+                    )
+                }
+                ScheduleToggleRow(
+                    label = stringResource(R.string.schedule_edit_close_app),
+                    tip = stringResource(R.string.schedule_edit_close_app_tip),
+                    checked = draft.closeAppAfterTask,
+                    onCheckedChange = { draft = draft.copy(closeAppAfterTask = it) },
+                )
+            }
         }
     }
 
