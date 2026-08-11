@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.schedule
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -28,7 +29,7 @@ import timber.log.Timber
  */
 class ScheduleStrategyStore(private val context: Context) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _isLoaded = MutableStateFlow(false)

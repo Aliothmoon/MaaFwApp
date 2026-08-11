@@ -1,5 +1,12 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -17,21 +24,33 @@ class PiInstallerTest {
     @get:Rule
     val temp = TemporaryFolder()
 
+    @Before
+    fun mockAppPaths() {
+        mockkObject(AppPaths)
+    }
+
+    @After
+    fun unmockAppPaths() {
+        unmockkObject(AppPaths)
+    }
+
     private val files = mapOf(
         "interface.json" to """{"interface_version":2}""",
         "tasks/a.json" to "{}",
         "resource/base/pipeline/x.json" to "{}",
     )
 
-    private fun installer(base: File, pkg: PiPackage, versionCode: Int) =
-        PiInstaller(pkg, { base }, versionCode)
+    private fun installer(base: File, pkg: PiPackage, versionCode: Int): PiInstaller {
+        every { AppPaths.externalRoot } returns base
+        return PiInstaller(pkg, versionCode)
+    }
 
     @Test
     fun `首次解包产出完整目录树并写下标记`() {
         val base = temp.newFolder("external")
         val root = installer(base, MapPiPackage(files), 11).ensureInstalled()
 
-        assertEquals(PiInstaller.PI_DIR_NAME, root.name)
+        assertEquals(AppFiles.PI_DIR, root.name)
         assertEquals("""{"interface_version":2}""", File(root, "interface.json").readText())
         assertTrue(File(root, "tasks/a.json").isFile)
         assertTrue(File(root, "resource/base/pipeline/x.json").isFile)
@@ -100,8 +119,9 @@ class PiInstallerTest {
                 if (path == "interface.json") "{}".byteInputStream() else throw FileNotFoundException(path)
         }
 
+        every { AppPaths.externalRoot } returns base
         assertThrows(Exception::class.java) {
-            PiInstaller(broken, { base }, 11).ensureInstalled()
+            PiInstaller(broken, 11).ensureInstalled()
         }
         assertFalse(File(base, PiInstaller.PI_MARKER_NAME).exists())
     }
@@ -161,11 +181,12 @@ class PiInstallerTest {
     @Test
     fun `installedDir 在未解包时抛出`() {
         val base = temp.newFolder("external")
-        val pi = PiInstaller(MapPiPackage(files), { base }, 11)
+        every { AppPaths.externalRoot } returns base
+        val pi = PiInstaller(MapPiPackage(files), 11)
 
         assertThrows(IllegalStateException::class.java) { pi.installedDir() }
 
         pi.ensureInstalled()
-        assertEquals(PiInstaller.PI_DIR_NAME, pi.installedDir().name)
+        assertEquals(AppFiles.PI_DIR, pi.installedDir().name)
     }
 }

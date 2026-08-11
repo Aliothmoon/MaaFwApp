@@ -1,10 +1,10 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,10 +40,7 @@ sealed interface PiInstallState {
  *
  * 调用方须先等到 [PiInstallState.Ready] 再去 `ProjectRepository.reload()`
  */
-class PiInstallCoordinator(
-    private val installer: PiInstaller,
-    private val ioDispatcher: CoroutineDispatcher,
-) {
+class PiInstallCoordinator(private val installer: PiInstaller) {
 
     private val _state = MutableStateFlow<PiInstallState>(PiInstallState.NotChecked)
     val state: StateFlow<PiInstallState> = _state.asStateFlow()
@@ -61,7 +58,7 @@ class PiInstallCoordinator(
         if (!force && _state.value == PiInstallState.Ready) return@withLock true
         _state.value = PiInstallState.Checking
         try {
-            withContext(ioDispatcher) {
+            withContext(MaaDispatchers.IO) {
                 val onProgress: PiUnpackProgress = { done, total, path ->
                     _state.value = PiInstallState.Unpacking(done, total, path)
                 }

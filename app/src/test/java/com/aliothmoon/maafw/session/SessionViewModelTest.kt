@@ -1,6 +1,8 @@
 package com.aliothmoon.maafw.session
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
@@ -52,6 +54,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -106,12 +111,20 @@ class SessionViewModelTest {
 
     @Before
     fun setUp() {
+        mockkObject(MaaDispatchers)
+        every { MaaDispatchers.Default } returns mainDispatcher
+        every { MaaDispatchers.IO } returns mainDispatcher
+        // VM init 就会去解包，落点必须先指走：AppPaths 在单测里没 init 过，直读 lateinit 会抛
+        mockkObject(AppPaths)
+        every { AppPaths.externalRoot } returns createTempDirectory("pi-install").toFile()
         Dispatchers.setMain(mainDispatcher)
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        unmockkObject(MaaDispatchers)
+        unmockkObject(AppPaths)
     }
 
     private fun readyStore(
@@ -169,7 +182,6 @@ class SessionViewModelTest {
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
             piInstall = emptyPiInstall(),
-            computeDispatcher = mainDispatcher,
         )
         return Triple(vm, store, runner)
     }
@@ -194,7 +206,6 @@ class SessionViewModelTest {
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
             piInstall = emptyPiInstall(),
-            computeDispatcher = mainDispatcher,
         )
     }
 
@@ -223,13 +234,8 @@ class SessionViewModelTest {
     /**
      * 空清单的解包：VM 这一层只关心它放不放行 reload，解包本身另有 PiInstallerTest 覆盖
      */
-    private fun emptyPiInstall(): PiInstallCoordinator {
-        val base = createTempDirectory("pi-install").toFile()
-        return PiInstallCoordinator(
-            installer = PiInstaller(EmptyPiPackage, { base }, versionCode = 1),
-            ioDispatcher = mainDispatcher,
-        )
-    }
+    private fun emptyPiInstall() =
+        PiInstallCoordinator(PiInstaller(EmptyPiPackage, versionCode = 1))
 
     /** 不接任何 RunnerPort 的 dispatcher：focus 的补完另有 FocusDispatcherTest 覆盖 */
     private fun TestScope.idleFocusDispatcher(

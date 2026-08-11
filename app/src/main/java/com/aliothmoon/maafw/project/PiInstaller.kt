@@ -1,6 +1,8 @@
 package com.aliothmoon.maafw.project
 
 import android.content.Context
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
@@ -49,8 +51,6 @@ typealias PiUnpackProgress = (done: Int, total: Int, path: String) -> Unit
  */
 class PiInstaller(
     private val pkg: PiPackage,
-    /** 外部私有目录不可用时抛出，交由调用方记成可读诊断，不在此处静默回落 */
-    private val baseDir: () -> File,
     private val versionCode: Int,
     private val parallelism: Int = Runtime.getRuntime().availableProcessors(),
 ) {
@@ -60,7 +60,7 @@ class PiInstaller(
      * 尚未解包时抛出——那说明调用顺序错了，不该在这里补一次几十 MB 的搬运
      */
     fun installedDir(): File {
-        val target = File(baseDir(), PI_DIR_NAME)
+        val target = File(AppPaths.externalRoot, AppFiles.PI_DIR)
         check(target.isDirectory) { "PI 尚未解包：${target.absolutePath}" }
         return target
     }
@@ -71,8 +71,8 @@ class PiInstaller(
      */
     @Synchronized
     fun ensureInstalled(onProgress: PiUnpackProgress = NO_PROGRESS): File {
-        val base = baseDir()
-        val target = File(base, PI_DIR_NAME)
+        val base = AppPaths.externalRoot
+        val target = File(base, AppFiles.PI_DIR)
         val marker = File(base, PI_MARKER_NAME)
         if (target.isDirectory && marker.isFile && marker.readText().trim() == versionCode.toString()) {
             return target
@@ -82,10 +82,11 @@ class PiInstaller(
 
     /** 不看标记，无条件重解；设置页的手动重来与失败重试都走这条 */
     @Synchronized
-    fun reinstall(onProgress: PiUnpackProgress = NO_PROGRESS): File = install(baseDir(), onProgress)
+    fun reinstall(onProgress: PiUnpackProgress = NO_PROGRESS): File =
+        install(AppPaths.externalRoot, onProgress)
 
     private fun install(base: File, onProgress: PiUnpackProgress): File {
-        val target = File(base, PI_DIR_NAME)
+        val target = File(base, AppFiles.PI_DIR)
         val marker = File(base, PI_MARKER_NAME)
 
         // 顺序不能换：标记先失效，解包中途掉电时残留内容不会被当成完整的一份
@@ -146,9 +147,6 @@ class PiInstaller(
     }
 
     companion object {
-        /** 解包内容的固定目录名；路径稳定，版本靠标记文件而非目录名区分 */
-        const val PI_DIR_NAME = "pi"
-
         /** 提交标记：解包全部成功后才写，内容是出这个包时的 versionCode */
         const val PI_MARKER_NAME = "pi.version"
 

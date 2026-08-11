@@ -277,6 +277,19 @@
     <string name="msg_hook_failed">Run environment setup failed: %1$s</string>
     <string name="msg_cannot_stop">Cannot stop: %1$s</string>
 
+    <!-- Runner reject/failure reasons: reason is now UiText, no longer interpolated as %s -->
+    <string name="msg_fail_default">Run failed</string>
+    <string name="msg_fail_privileged_exited">Privileged process exited</string>
+    <string name="msg_fail_privileged_reported_finished">Privileged process reported the run already finished</string>
+    <string name="msg_fail_wait_settle_timeout">Timed out waiting for the run to settle</string>
+    <string name="msg_reject_already_running">A run is already in progress</string>
+    <string name="msg_reject_stop_failed">Failed to stop</string>
+    <string name="msg_reject_setup_failed">Privileged process setup failed</string>
+    <string name="msg_reject_switch_display_mode">Failed to switch display mode: %1$s</string>
+    <string name="msg_reject_primary_capture">Failed to start primary screen capture</string>
+    <string name="msg_reject_virtual_display">Failed to start virtual display</string>
+    <string name="msg_reject_service_rejected">Privileged process rejected the run</string>
+
     <!-- Server switching & run options -->
     <string name="resource_switch_title">Resource</string>
     <string name="runner_quick_options">Options</string>

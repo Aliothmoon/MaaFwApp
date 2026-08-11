@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.i18n.UiText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -54,7 +55,7 @@ sealed interface ExecutionResult {
     data class Completed(override val taskResults: List<TaskResult>) : ExecutionResult
     data class CompletedWithFailures(override val taskResults: List<TaskResult>) : ExecutionResult
     data class Cancelled(override val taskResults: List<TaskResult>) : ExecutionResult
-    data class Failed(val reason: String, override val taskResults: List<TaskResult> = emptyList()) : ExecutionResult
+    data class Failed(val reason: UiText, override val taskResults: List<TaskResult> = emptyList()) : ExecutionResult
 }
 
 /** 旁路观测（日志/进度）；不参与状态机判定 */
@@ -92,5 +93,5 @@ sealed interface RunnerEvent {
 
 sealed interface RunnerCommandResult {
     data object Accepted : RunnerCommandResult
-    data class Rejected(val reason: String) : RunnerCommandResult
+    data class Rejected(val reason: UiText) : RunnerCommandResult
 }

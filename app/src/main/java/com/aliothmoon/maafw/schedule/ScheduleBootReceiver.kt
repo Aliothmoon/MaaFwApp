@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.schedule
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -28,7 +29,7 @@ class ScheduleBootReceiver : BroadcastReceiver() {
         }
         Timber.i("Rescheduling alarms, trigger: %s", intent.action)
         val pendingResult = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        CoroutineScope(SupervisorJob() + MaaDispatchers.IO).launch {
             try {
                 val koin = GlobalContext.get()
                 val store: ScheduleStrategyStore = koin.get()

@@ -1,13 +1,13 @@
 package com.aliothmoon.maafw.remote.internal
 
 import android.view.Display
+import com.aliothmoon.maafw.constant.ShellDirs
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
-import java.io.File
 
 object ScreenManager {
     private const val TAG = "ScreenManager"
-    private val _flag = File("/data/local/tmp/maa_screen_flag")
+    private val _flag = ShellDirs.SCREEN_FLAG
 
     var flag: Boolean
         get() = runCatching { _flag.exists() }.onFailure {

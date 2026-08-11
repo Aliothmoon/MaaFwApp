@@ -4,13 +4,29 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import com.aliothmoon.maafw.MaaDispatchers
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultProjectRepositoryTest {
+
+    @Before
+    fun mockDispatchers() {
+        mockkObject(MaaDispatchers)
+    }
+
+    @After
+    fun unmockDispatchers() {
+        unmockkObject(MaaDispatchers)
+    }
 
     private class MapSource(private val files: Map<String, String>) : ProjectSource {
         override val projectName: String = "demo"
@@ -22,6 +38,7 @@ class DefaultProjectRepositoryTest {
     @Test
     fun `reload maps successful load to Ready`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
+        every { MaaDispatchers.IO } returns dispatcher
         val source = MapSource(
             mapOf(
                 "interface.json" to """
@@ -34,7 +51,7 @@ class DefaultProjectRepositoryTest {
                 """.trimIndent(),
             ),
         )
-        val repo = DefaultProjectRepository(ProjectLoader(source), dispatcher)
+        val repo = DefaultProjectRepository(ProjectLoader(source))
         repo.reload()
         advanceUntilIdle()
         val ready = repo.state.value as ProjectState.Ready
@@ -45,7 +62,8 @@ class DefaultProjectRepositoryTest {
     @Test
     fun `reload maps missing interface to Error`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val repo = DefaultProjectRepository(ProjectLoader(MapSource(emptyMap())), dispatcher)
+        every { MaaDispatchers.IO } returns dispatcher
+        val repo = DefaultProjectRepository(ProjectLoader(MapSource(emptyMap())))
         repo.reload()
         advanceUntilIdle()
         assertTrue(repo.state.value is ProjectState.Error)
@@ -72,7 +90,8 @@ class DefaultProjectRepositoryTest {
                 """.trimIndent()
             }
         }
-        val repo = DefaultProjectRepository(ProjectLoader(source), kotlinx.coroutines.Dispatchers.IO)
+        val repo = DefaultProjectRepository(ProjectLoader(source))
+        every { MaaDispatchers.IO } returns kotlinx.coroutines.Dispatchers.IO
         val first = backgroundScope.async(kotlinx.coroutines.Dispatchers.IO) { repo.reload() }
         Thread.sleep(10)
         val second = backgroundScope.async(kotlinx.coroutines.Dispatchers.IO) { repo.reload() }

@@ -1,9 +1,11 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.isFilePath
 import com.aliothmoon.maafw.project.normalizeProjectPath
+import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -48,15 +50,12 @@ fun focusContentNeedsIo(content: String): Boolean =
  */
 class PrivilegedFocusContentResolver(
     private val installer: PiInstaller,
-    /** 截图落点；须是特权进程写得进、app 也读得到的目录 */
-    private val imageDir: () -> File,
     private val servicePort: PrivilegedServicePort,
-    private val ioDispatcher: CoroutineDispatcher,
 ) : FocusContentResolver {
 
     private val slot = AtomicInteger(0)
 
-    override suspend fun resolve(content: String): String = withContext(ioDispatcher) {
+    override suspend fun resolve(content: String): String = withContext(MaaDispatchers.IO) {
         if (content.contains(FOCUS_IMAGE_PLACEHOLDER)) {
             return@withContext content.replace(FOCUS_IMAGE_PLACEHOLDER, captureImageUri())
         }
@@ -65,11 +64,11 @@ class PrivilegedFocusContentResolver(
 
     /** 拿不到就替换成空串，与桌面端 MXU 一致：留着占位符更难看 */
     private suspend fun captureImageUri(): String {
-        val target = File(imageDir(), "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
+        val target = File(AppPaths.focusDir, "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
         val saved = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
             // 用 serviceOrNull 而不是 useService：一条日志不值得为它发起重连与授权请求
             runCatching { servicePort.serviceOrNull()?.saveCachedImage(target.absolutePath) }
-                .onFailure { Timber.w(it, "focus {image} 取缓存帧失败") }
+                .onFailure { Timber.w(it, "focus {image}: failed to fetch cached frame") }
                 .getOrNull()
         }
         if (saved != true) return ""
@@ -83,7 +82,7 @@ class PrivilegedFocusContentResolver(
         val file = File(root, normalizeProjectPath(content))
         if (file.isFile) file.readText() else content
     }.getOrElse {
-        Timber.w(it, "focus 正文按文件路径读取失败：%s", content)
+        Timber.w(it, "focus body read failed for file path: %s", content)
         content
     }
 

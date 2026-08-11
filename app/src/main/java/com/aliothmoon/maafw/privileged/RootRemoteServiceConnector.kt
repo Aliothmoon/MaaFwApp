@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.privileged
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import android.os.Build
@@ -6,7 +7,7 @@ import android.os.IBinder
 import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.RemoteService
-import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.remote.RemoteServiceImpl
 import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
@@ -31,7 +32,7 @@ object RootRemoteServiceConnector : RemoteServiceConnectorBackend {
     private const val ROOT_BIND_TIMEOUT_MS = 15_000L
 
     private val initialized = AtomicBoolean(false)
-    private val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(1) + SupervisorJob())
+    private val scope = CoroutineScope(MaaDispatchers.IO.limitedParallelism(1) + SupervisorJob())
 
     private lateinit var appContext: Context
 
@@ -50,7 +51,7 @@ object RootRemoteServiceConnector : RemoteServiceConnectorBackend {
         val token = UUID.randomUUID().toString()
         val deferred = RootServiceBootstrapRegistry.register(token)
         val job = scope.launch {
-            val startResult = withContext(Dispatchers.IO) {
+            val startResult = withContext(MaaDispatchers.IO) {
                 startRemoteService(token)
             }
             val active = activeLaunch
@@ -168,7 +169,7 @@ object RootRemoteServiceConnector : RemoteServiceConnectorBackend {
     }
 
     private fun debugLogFile(): File {
-        val dir = File(appContext.getExternalFilesDir(null), AppFiles.DEBUG_DIR)
+        val dir = AppPaths.debugDir
         dir.mkdirs()
         return File(dir, "root_launch_debug.log")
     }

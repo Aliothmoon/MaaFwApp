@@ -3,8 +3,9 @@ package com.aliothmoon.maafw.log
 import android.os.Build
 import android.util.Log
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.constant.AppPaths
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
@@ -25,9 +26,9 @@ import java.time.format.DateTimeFormatter
  * 写入串行且异步：调用点可能在任意线程甚至主线程的热路径上，不能让它等 IO。
  * 通道满了就丢——日志不该反压业务
  */
-class AppLogWriter(private val logDir: () -> File) {
+class AppLogWriter {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+    private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO.limitedParallelism(1))
     private val channel = Channel<String>(capacity = QUEUE_CAPACITY)
 
     private val timestampFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
@@ -54,12 +55,12 @@ class AppLogWriter(private val logDir: () -> File) {
         append(
             buildString {
                 append("\n").append("=".repeat(60)).append("\n")
-                append("启动时间 : ").append(ZonedDateTime.now().format(timestampFormat)).append("\n")
-                append("版本     : ").append(BuildConfig.VERSION_NAME)
+                append("Startup time : ").append(ZonedDateTime.now().format(timestampFormat)).append("\n")
+                append("Version     : ").append(BuildConfig.VERSION_NAME)
                 append(" (").append(BuildConfig.VERSION_CODE).append(") ")
                 append(BuildConfig.BUILD_TYPE).append("\n")
-                append("设备     : ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n")
-                append("系统     : Android ").append(Build.VERSION.RELEASE)
+                append("Device     : ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n")
+                append("OS     : Android ").append(Build.VERSION.RELEASE)
                 append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")
                 append("ABI      : ").append(Build.SUPPORTED_ABIS.joinToString()).append("\n")
                 append("=".repeat(60)).append("\n\n")
@@ -112,7 +113,7 @@ class AppLogWriter(private val logDir: () -> File) {
         if (writtenBytes < MAX_FILE_BYTES) return
 
         closeStream()
-        val dir = logDir()
+        val dir = AppPaths.logDir
         runCatching {
             File(dir, rotatedName(MAX_FILES - 1)).delete()
             for (index in MAX_FILES - 2 downTo 1) {
@@ -126,7 +127,7 @@ class AppLogWriter(private val logDir: () -> File) {
 
     /** 当前那份在最前，其余按新旧；错误日志页与导出都吃这个顺序 */
     fun listFiles(): List<File> = runCatching {
-        logDir().listFiles()
+        AppPaths.logDir.listFiles()
             ?.filter { it.isFile && FILE_PATTERN.matches(it.name) }
             ?.sortedByDescending { it.lastModified() }
             .orEmpty()
@@ -146,7 +147,7 @@ class AppLogWriter(private val logDir: () -> File) {
             .onFailure { Log.w(TAG, "Failed to clear app logs", it) }
     }
 
-    private fun currentFile(): File = File(logDir().apply { mkdirs() }, CURRENT_FILE_NAME)
+    private fun currentFile(): File = File(AppPaths.logDir.apply { mkdirs() }, CURRENT_FILE_NAME)
 
     private fun rotatedName(index: Int): String = "app.$index.log"
 

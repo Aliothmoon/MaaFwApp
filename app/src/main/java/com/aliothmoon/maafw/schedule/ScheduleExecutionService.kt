@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.schedule
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -54,7 +55,7 @@ class ScheduleExecutionService : Service() {
     private val triggerLog: ScheduleTriggerLog by inject()
     private val runLauncher: RunLauncher by inject()
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val serviceScope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO)
 
     /** 生命周期跟在途触发数走，不跟最后一个 startId：并发触发时后到的收尾会把前一条掐掉 */
     private val inFlight = AtomicInteger(0)

@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.privileged
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import android.os.IBinder
@@ -45,7 +46,7 @@ object RemoteServiceManager : PrivilegedServicePort {
     private var currentDeathRecipient: BindingDeathRecipient? = null // guarded by lock
     private val _state = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
 
-    private val timeoutScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val timeoutScope = CoroutineScope(MaaDispatchers.Default + SupervisorJob())
     private val connectAttempt = AtomicInteger(0)
 
     private val connectors: Map<RemoteBackend, RemoteServiceConnectorBackend> = mapOf(
@@ -142,7 +143,7 @@ object RemoteServiceManager : PrivilegedServicePort {
         context: Context,
         backendProvider: () -> RemoteBackend,
     ) {
-        ServiceBootLogger.init(context)
+        ServiceBootLogger.init()
         ShizukuManager.initSui(context.packageName)
         RemoteAccessCoordinator.initialize(backendProvider)
         RootRemoteServiceConnector.initialize(context)
@@ -225,7 +226,7 @@ object RemoteServiceManager : PrivilegedServicePort {
                 }
                 ServiceBootLogger.event(
                     "CONNECT_TIMEOUT",
-                    "still CONNECTING after ${CONNECT_TIMEOUT_MS}ms (backend=$backend attempt=$attempt) — 服务进程疑似启动失败/未回投 binder，见 service_boot_debug.log"
+                    "still CONNECTING after ${CONNECT_TIMEOUT_MS}ms (backend=$backend attempt=$attempt) — service process likely failed to start or did not return binder, see service_boot_debug.log"
                 )
                 runCatching {
                     connectors.getValue(backend).disconnect(currentBinder.get())

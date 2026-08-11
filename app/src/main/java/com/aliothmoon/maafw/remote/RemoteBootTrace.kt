@@ -17,7 +17,7 @@ import java.io.File
  *
  * 因此这里用 Environment.getExternalStorageDirectory() + BuildConfig.APPLICATION_ID 自行推导出与
  * App 侧 getExternalFilesDir(null) 相同的路径：
- *   /storage/emulated/0/Android/data/{pkg}/files/Maa/debug/service_boot_debug.log
+ *   /storage/emulated/0/Android/data/{pkg}/files/debug/service_boot_debug.log
  * shell uid 对该目录可写（LogcatCaptureServiceImpl 已实测写 {userDir}/debug/...），文件与
  * root_launch_debug.log 同目录、可被 App 直接读取，无需 /data/local/tmp、无需跨进程拷贝。
  *

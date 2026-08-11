@@ -3,18 +3,18 @@ package com.aliothmoon.maafw.remote.internal
 import android.os.Build
 import com.aliothmoon.maafw.constant.AndroidVersions
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
+import com.aliothmoon.maafw.constant.ShellDirs
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.DisplayControl
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.wrappers.SurfaceControl
-import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 object PowerController {
     private const val TAG = "PowerController"
     private const val USER_ACTIVITY_INTERVAL_MS = 4_000L
-    private val file = File("/data/local/tmp/maa_power_off_flag")
+    private val file = ShellDirs.POWER_OFF_FLAG
 
     private val keepAliveDisplayId = AtomicInteger(DefaultDisplayConfig.DISPLAY_NONE)
     private val keepAliveRunning = AtomicBoolean(false)

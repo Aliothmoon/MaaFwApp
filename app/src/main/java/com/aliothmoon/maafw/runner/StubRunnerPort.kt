@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
@@ -55,7 +56,7 @@ class StubRunnerPort(
 
     override suspend fun start(plan: RunPlan): RunnerCommandResult = commandMutex.withLock {
         if (_state.value.phase != RunnerPhase.Idle) {
-            return RunnerCommandResult.Rejected("Busy")
+            return RunnerCommandResult.Rejected(uiTextFromFramework("Busy"))
         }
         val context = ExecutionContext(UUID.randomUUID().toString())
         currentContext = context
@@ -76,7 +77,7 @@ class StubRunnerPort(
         val context = currentContext
         val phase = _state.value.phase
         if (context == null || phase == RunnerPhase.Idle || phase is RunnerPhase.Unavailable) {
-            return RunnerCommandResult.Rejected("NotRunning")
+            return RunnerCommandResult.Rejected(uiTextFromFramework("NotRunning"))
         }
         context.stopRequested.set(true)
         _state.update { it.copy(phase = RunnerPhase.Stopping) }
@@ -88,7 +89,7 @@ class StubRunnerPort(
         delay(scenario.prepareDelayMillis)
 
         scenario.preparationFailure?.let { reason ->
-            finish(ExecutionResult.Failed(reason))
+            finish(ExecutionResult.Failed(uiTextFromFramework(reason)))
             return
         }
 

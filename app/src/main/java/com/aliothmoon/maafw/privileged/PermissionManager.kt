@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.privileged
+import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -7,6 +8,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -157,7 +159,7 @@ class PermissionManager(
     private suspend fun grantViaPrivileged() {
         // 对齐 MaaMeow：特权进程上线即把全集代授一遍，不再按运行模式挑
         val requested = PrivilegedGrant.ALL
-        val granted = withContext(Dispatchers.IO) {
+        val granted = withContext(MaaDispatchers.IO) {
             runCatching {
                 servicePort.serviceOrNull()?.grantPermissions(
                     appContext.packageName,
@@ -219,7 +221,7 @@ class PermissionManager(
                 onSuccess = { ServiceBindResult.Started },
                 onFailure = {
                     Timber.e(it, "Failed to bind privileged process manually")
-                    ServiceBindResult.Failed(it.message.orEmpty())
+                    ServiceBindResult.Failed(uiTextFromFramework(it.message))
                 },
             )
     }
@@ -254,7 +256,7 @@ class PermissionManager(
             remoteState.shizukuGranted -> ShizukuReadinessStage.Ready
             remoteState.shizukuAvailable -> ShizukuReadinessStage.NeedAuth
             else -> when (
-                withContext(Dispatchers.IO) {
+                withContext(MaaDispatchers.IO) {
                     ShizukuInstallHelper.checkStatus(appContext, launchPackage)
                 }
             ) {

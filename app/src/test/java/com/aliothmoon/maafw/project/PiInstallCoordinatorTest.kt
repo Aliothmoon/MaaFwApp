@@ -1,14 +1,22 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.constant.AppPaths
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 
@@ -26,13 +34,28 @@ class PiInstallCoordinatorTest {
 
     private val dispatcher = UnconfinedTestDispatcher()
 
+    @Before
+    fun mockGlobals() {
+        mockkObject(MaaDispatchers)
+        every { MaaDispatchers.IO } returns dispatcher
+        mockkObject(AppPaths)
+    }
+
+    @After
+    fun unmockGlobals() {
+        unmockkObject(MaaDispatchers)
+        unmockkObject(AppPaths)
+    }
+
     private val files = mapOf(
         "interface.json" to """{"interface_version":2}""",
         "tasks/a.json" to "{}",
     )
 
-    private fun coordinatorFor(pkg: PiPackage, base: java.io.File, versionCode: Int = 11) =
-        PiInstallCoordinator(PiInstaller(pkg, { base }, versionCode), dispatcher)
+    private fun coordinatorFor(pkg: PiPackage, base: File, versionCode: Int = 11): PiInstallCoordinator {
+        every { AppPaths.externalRoot } returns base
+        return PiInstallCoordinator(PiInstaller(pkg, versionCode))
+    }
 
     @Test
     fun `初始态是未检查`() = runTest(dispatcher) {
