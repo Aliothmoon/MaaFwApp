@@ -55,7 +55,7 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val themeStyle: String = "DEFAULT",
 
-    /** 运行前是否亮屏解锁；默认关，注入 PIN 这种事要用户先点头 */
+    /** 定时触发时是否亮屏解锁；默认关，注入 PIN 这种事要用户先点头。手动 Start 不走这条 */
     @PrefKey(default = "false")
     val wakeUnlockEnabled: String = "false",
 
@@ -69,15 +69,4 @@ data class AppSettings(
     @PrefKey(default = "")
     val wakeCredential: String = "",
 
-    /** 跑完自动上锁息屏 */
-    @PrefKey(default = "false")
-    val autoSleepAfterRun: String = "false",
-
-    /** 本轮开始时手机就醒着（用户在用）就不自动熄屏 */
-    @PrefKey(default = "true")
-    val skipAutoSleepIfAwake: String = "true",
-
-    /** 跑完强停虚拟屏上的目标应用 */
-    @PrefKey(default = "false")
-    val closeAppAfterRun: String = "false",
 )

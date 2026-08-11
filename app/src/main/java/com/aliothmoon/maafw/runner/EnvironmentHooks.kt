@@ -65,6 +65,9 @@ class WakeUnlockHook(
     override val gating: Boolean = true
 
     override suspend fun engage(ctx: RunContext): Release? {
+        // 只对定时触发生效（对齐 MaaMeow 的「定时任务解锁方式」）：手动 Start 时
+        // 用户正对着亮屏解锁的手机按按钮，解一次是空操作
+        if (ctx.trigger !is RunTrigger.Schedule) return null
         if (!settings.wakeUnlockEnabled.value) return null
 
         val credential = settings.wakeCredential.value
@@ -117,10 +120,7 @@ class ScreenSaverHook(
 }
 
 /** 跑完强停目标应用；engage 什么都不做，只为占一个收尾位 */
-class CloseTargetAppHook(
-    private val servicePort: PrivilegedServicePort,
-    private val settings: AppSettingsGateway,
-) : RunEnvHook {
+class CloseTargetAppHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
 
     override val id: String = "close-target-app"
     override val anchor: Anchor = Anchor.BeforeDispatch
@@ -129,7 +129,8 @@ class CloseTargetAppHook(
 
     override suspend fun engage(ctx: RunContext): Release? {
         if (ctx.runMode != RunMode.BACKGROUND) return null
-        if (!settings.closeAppAfterRun.value) return null
+        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return null
+        if (!options.closeAppAfterTask) return null
 
         return Release { reason ->
             // 只认自然跑完：投递被拒或用户手动停时把人家的应用关掉，太粗暴
@@ -146,10 +147,7 @@ class CloseTargetAppHook(
  * order 最小不是因为它先做事——engage 只采样。它要在**唤醒之前**读到屏幕状态，
  * 唤醒之后 isScreenOn 永远是 true，「用户本来就在用手机」就判不出来了
  */
-class AutoSleepHook(
-    private val servicePort: PrivilegedServicePort,
-    private val settings: AppSettingsGateway,
-) : RunEnvHook {
+class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
 
     override val id: String = "auto-sleep"
     override val anchor: Anchor = Anchor.BeforeDispatch
@@ -157,10 +155,11 @@ class AutoSleepHook(
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): Release? {
-        if (!settings.autoSleepAfterRun.value) return null
+        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return null
+        if (!options.autoSleepAfterTask) return null
 
         val tookOverIdleDevice = !servicePort.callOrDefault("isScreenOn", true) { it.isScreenOn() }
-        val skipIfAwake = settings.skipAutoSleepIfAwake.value
+        val skipIfAwake = options.skipAutoSleepIfAwake
         // 两个采样值都在这里捕进闭包：收尾时再去读，读到的是那时的屏幕状态与开关，不是本轮开始时的
         return Release { reason ->
             when {
@@ -194,7 +193,7 @@ object CountdownHook : RunEnvHook {
     override val gating: Boolean = true
 
     override suspend fun engage(ctx: RunContext): Release? {
-        val total = (ctx.trigger as? RunTrigger.Schedule)?.countdownSeconds ?: 0
+        val total = (ctx.trigger as? RunTrigger.Schedule)?.options?.countdownSeconds ?: 0
         if (total <= 0) return null
 
         for (remaining in total downTo 1) {

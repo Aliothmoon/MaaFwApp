@@ -7,12 +7,12 @@ import com.aliothmoon.maafw.i18n.UiText
 sealed interface RunTrigger {
     data object Manual : RunTrigger
     /**
-     * [countdownSeconds] 挂在这里而不是全局设置：倒计时是逐条规则的，
-     * 而挂载物拿不到策略——它只看得见 RunContext
+     * [options] 挂在 trigger 上而不是全局设置：这几项都是**逐条规则**的
+     * （对齐 MaaMeow 定时编辑页的「高级选项」），而挂载物拿不到策略，只看得见 RunContext
      */
     data class Schedule(
         val strategyId: String,
-        val countdownSeconds: Int = 0,
+        val options: ScheduleRunOptions = ScheduleRunOptions(),
     ) : RunTrigger
 }
 
@@ -31,6 +31,14 @@ value class RunRequestId(val value: String)
 /** 一次确认的身份；检查靠它认出「这条问过了，用户点了头」 */
 @JvmInline
 value class ConfirmToken(val value: String)
+
+/** 定时规则上那几项只对本次触发生效的选项 */
+data class ScheduleRunOptions(
+    val countdownSeconds: Int = 0,
+    val autoSleepAfterTask: Boolean = false,
+    val skipAutoSleepIfAwake: Boolean = true,
+    val closeAppAfterTask: Boolean = false,
+)
 
 /**
  * 发起过程中来自用户的两个打断信号

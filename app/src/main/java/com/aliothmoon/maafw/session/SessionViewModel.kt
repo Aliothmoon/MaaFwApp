@@ -68,13 +68,10 @@ private data class SettingsSnapshot(
     val env: EnvSnapshot = EnvSnapshot(),
 )
 
-/** 运行环境那几项；单独一层只为把 combine 的元数压回上限内 */
+/** 定时任务解锁那两项；单独一层只为把 combine 的元数压回上限内 */
 private data class EnvSnapshot(
     val wakeUnlockEnabled: Boolean = false,
     val wakeCredential: String = "",
-    val autoSleepAfterRun: Boolean = false,
-    val skipAutoSleepIfAwake: Boolean = true,
-    val closeAppAfterRun: Boolean = false,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -126,15 +123,7 @@ class SessionViewModel(
     }.combine(appSettings.themeStyle) { snapshot, style ->
         snapshot.copy(themeStyle = style)
     }.combine(
-        combine(
-            appSettings.wakeUnlockEnabled,
-            appSettings.wakeCredential,
-            appSettings.autoSleepAfterRun,
-            appSettings.skipAutoSleepIfAwake,
-            appSettings.closeAppAfterRun,
-        ) { wake, credential, sleep, skipIfAwake, closeApp ->
-            EnvSnapshot(wake, credential, sleep, skipIfAwake, closeApp)
-        },
+        combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
     ) { snapshot, env -> snapshot.copy(env = env) }
 
 
@@ -246,9 +235,6 @@ class SessionViewModel(
             screenSaverEnabled = settings.screenSaverEnabled,
             wakeUnlockEnabled = settings.env.wakeUnlockEnabled,
             wakeCredential = settings.env.wakeCredential,
-            autoSleepAfterRun = settings.env.autoSleepAfterRun,
-            skipAutoSleepIfAwake = settings.env.skipAutoSleepIfAwake,
-            closeAppAfterRun = settings.env.closeAppAfterRun,
             resolutionPreference = settings.resolutionPreference,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
@@ -404,14 +390,6 @@ class SessionViewModel(
             is SessionIntent.SetWakeCredential ->
                 appSettings.setWakeCredential(intent.credential)
 
-            is SessionIntent.SetAutoSleepAfterRun ->
-                appSettings.setAutoSleepAfterRun(intent.enabled)
-
-            is SessionIntent.SetSkipAutoSleepIfAwake ->
-                appSettings.setSkipAutoSleepIfAwake(intent.enabled)
-
-            is SessionIntent.SetCloseAppAfterRun ->
-                appSettings.setCloseAppAfterRun(intent.enabled)
 
             // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上
             is SessionIntent.SetRunMode -> guarded {

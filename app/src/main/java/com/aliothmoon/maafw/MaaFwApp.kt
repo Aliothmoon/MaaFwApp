@@ -191,10 +191,10 @@ val appModule = module {
             prechecks = listOf(ForegroundModePrecheck),
             // engage 顺序由各自的 order 定，这里的书写顺序不算数（见 EnvironmentHooks.kt）
             hooks = listOf(
-                AutoSleepHook(get(), get<AppSettingsManager>()),
+                AutoSleepHook(get()),
                 WakeUnlockHook(get(), get<AppSettingsManager>()),
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
-                CloseTargetAppHook(get(), get<AppSettingsManager>()),
+                CloseTargetAppHook(get()),
                 CountdownHook,
                 KeepAliveHook(get()),
             ),

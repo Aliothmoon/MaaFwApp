@@ -211,7 +211,8 @@ fun ScheduleEditScreen(
                 }
             }
 
-            ScheduleSection(stringResource(R.string.schedule_edit_countdown)) {
+            // 「高级选项」整组是逐条规则的，不是全局设置——对齐 MaaMeow 的归属
+            ScheduleSection(stringResource(R.string.schedule_edit_advanced)) {
                 ITextFieldWithFocus(
                     value = countdownText,
                     onValueChange = { countdownText = it },
@@ -222,21 +223,30 @@ fun ScheduleEditScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     inputFilter = { it.length <= MAX_COUNTDOWN_DIGITS && it.all(Char::isDigit) },
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-                ) {
-                    Text(
-                        text = stringResource(R.string.schedule_edit_force_start),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    MaaSwitch(
-                        checked = draft.forceStart,
-                        onCheckedChange = { draft = draft.copy(forceStart = it) },
+                ScheduleToggleRow(
+                    label = stringResource(R.string.schedule_edit_force_start),
+                    tip = stringResource(R.string.schedule_edit_force_start_tip),
+                    checked = draft.forceStart,
+                    onCheckedChange = { draft = draft.copy(forceStart = it) },
+                )
+                ScheduleToggleRow(
+                    label = stringResource(R.string.schedule_edit_auto_sleep),
+                    checked = draft.autoSleepAfterTask,
+                    onCheckedChange = { draft = draft.copy(autoSleepAfterTask = it) },
+                )
+                if (draft.autoSleepAfterTask) {
+                    ScheduleToggleRow(
+                        label = stringResource(R.string.schedule_edit_skip_sleep_if_awake),
+                        checked = draft.skipAutoSleepIfAwake,
+                        onCheckedChange = { draft = draft.copy(skipAutoSleepIfAwake = it) },
                     )
                 }
+                ScheduleToggleRow(
+                    label = stringResource(R.string.schedule_edit_close_app),
+                    tip = stringResource(R.string.schedule_edit_close_app_tip),
+                    checked = draft.closeAppAfterTask,
+                    onCheckedChange = { draft = draft.copy(closeAppAfterTask = it) },
+                )
             }
 
             ScheduleSection(stringResource(R.string.schedule_edit_type)) {
@@ -332,6 +342,32 @@ fun ScheduleEditScreen(
 }
 
 /** 小节标题 + 内容；替掉 MaaCard 的描边卡，对齐 MaaMeow 的 SectionHeader（轻、不占高） */
+@Composable
+private fun ScheduleToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    tip: String? = null,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+            tip?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
 @Composable
 private fun ScheduleSection(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {

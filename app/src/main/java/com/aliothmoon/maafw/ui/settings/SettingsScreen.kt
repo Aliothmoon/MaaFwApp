@@ -90,7 +90,7 @@ fun SettingsScreen(
             LanguageCard(state, onIntent)
             BackendCard(settingsState, state.configurationLocked, onSettingsIntent)
             ResolutionCard(state, onIntent)
-            RunEnvironmentCard(state, onIntent)
+            ScheduleUnlockCard(state, onIntent)
             DebugCard(state, onIntent)
             AboutCard()
         }
@@ -165,14 +165,16 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
 }
 
 /**
- * 运行前后的设备环境动作
+ * 定时任务的亮屏解锁（对齐 MaaMeow 的「定时任务解锁方式」）
  *
- * 都不进 `configurationLocked`：改的是下一轮的事——挂载物的条件在 engage 时就冻结了，
- * 运行中改不影响本轮（见 docs/runner-execution.md §5.2）
+ * 只有解锁是全局的：熄屏、关应用、倒计时、强制启动都是**逐条规则**的，
+ * 落在定时编辑页的「高级选项」里，不在这一页
+ *
+ * 不进 `configurationLocked`：改的是下一轮的事，挂载物的条件在 engage 时就冻结了
  */
 @Composable
-private fun RunEnvironmentCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_run_environment)) {
+private fun ScheduleUnlockCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    MaaCard(title = stringResource(R.string.settings_schedule_unlock)) {
         MaaLabeledControlRow(
             label = stringResource(R.string.settings_wake_unlock),
             trailing = {
@@ -199,35 +201,6 @@ private fun RunEnvironmentCard(state: SessionUiState, onIntent: (SessionIntent) 
                 },
             )
         }
-        MaaLabeledControlRow(
-            label = stringResource(R.string.settings_auto_sleep),
-            trailing = {
-                MaaSwitch(
-                    checked = state.autoSleepAfterRun,
-                    onCheckedChange = { onIntent(SessionIntent.SetAutoSleepAfterRun(it)) },
-                )
-            },
-        )
-        if (state.autoSleepAfterRun) {
-            MaaLabeledControlRow(
-                label = stringResource(R.string.settings_skip_sleep_if_awake),
-                trailing = {
-                    MaaSwitch(
-                        checked = state.skipAutoSleepIfAwake,
-                        onCheckedChange = { onIntent(SessionIntent.SetSkipAutoSleepIfAwake(it)) },
-                    )
-                },
-            )
-        }
-        MaaLabeledControlRow(
-            label = stringResource(R.string.settings_close_app_after_run),
-            trailing = {
-                MaaSwitch(
-                    checked = state.closeAppAfterRun,
-                    onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterRun(it)) },
-                )
-            },
-        )
     }
 }
 

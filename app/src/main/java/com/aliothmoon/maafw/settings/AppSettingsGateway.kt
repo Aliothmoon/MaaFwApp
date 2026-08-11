@@ -30,7 +30,7 @@ interface AppSettingsGateway {
     val themeStyle: StateFlow<ThemeStyle>
     suspend fun setThemeStyle(style: ThemeStyle)
 
-    // ── 运行环境（挂载物读它，engage 时读到的即冻结值）──
+    // ── 定时任务解锁；逐条规则的那几项在 ScheduleStrategy 上，不在这 ──
 
     val wakeUnlockEnabled: StateFlow<Boolean>
     suspend fun setWakeUnlockEnabled(enabled: Boolean)
@@ -39,12 +39,4 @@ interface AppSettingsGateway {
     val wakeCredential: StateFlow<String>
     suspend fun setWakeCredential(credential: String)
 
-    val autoSleepAfterRun: StateFlow<Boolean>
-    suspend fun setAutoSleepAfterRun(enabled: Boolean)
-
-    val skipAutoSleepIfAwake: StateFlow<Boolean>
-    suspend fun setSkipAutoSleepIfAwake(enabled: Boolean)
-
-    val closeAppAfterRun: StateFlow<Boolean>
-    suspend fun setCloseAppAfterRun(enabled: Boolean)
 }

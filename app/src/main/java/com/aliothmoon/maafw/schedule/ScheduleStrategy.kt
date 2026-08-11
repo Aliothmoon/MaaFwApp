@@ -67,6 +67,12 @@ data class ScheduleStrategy(
     val forceStart: Boolean = false,
     /** 投递前倒计时秒数；0 = 不倒计时，直接开跑 */
     val countdownSeconds: Int = 0,
+    /** 任务结束后自动熄屏 */
+    val autoSleepAfterTask: Boolean = false,
+    /** 启动时已亮屏则不熄屏——视为用户正在用手机 */
+    val skipAutoSleepIfAwake: Boolean = true,
+    /** 任务结束后关闭目标应用；仅后台模式生效，手动停止不关 */
+    val closeAppAfterTask: Boolean = false,
     /** [ScheduleType.FIXED_TIME]：命中的星期 */
     val daysOfWeek: Set<@Serializable(with = DayOfWeekSerializer::class) DayOfWeek> = emptySet(),
     /** [ScheduleType.FIXED_TIME]：每天的触发时刻，已排序 */

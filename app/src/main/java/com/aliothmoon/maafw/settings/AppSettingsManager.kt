@@ -89,18 +89,6 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         .map { it.wakeCredential }
         .stateIn(scope, SharingStarted.Eagerly, initialSettings.wakeCredential)
 
-    override val autoSleepAfterRun: StateFlow<Boolean> = settings
-        .map { it.autoSleepAfterRun.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.autoSleepAfterRun.toBoolean())
-
-    override val skipAutoSleepIfAwake: StateFlow<Boolean> = settings
-        .map { it.skipAutoSleepIfAwake.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.skipAutoSleepIfAwake.toBoolean())
-
-    override val closeAppAfterRun: StateFlow<Boolean> = settings
-        .map { it.closeAppAfterRun.toBoolean() }
-        .stateIn(scope, SharingStarted.Eagerly, initialSettings.closeAppAfterRun.toBoolean())
-
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
         context.dataStore.edit { it[startupBackend] = backend.name }
     }
@@ -149,18 +137,6 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     override suspend fun setWakeCredential(credential: String): Unit = with(AppSettingsSchema) {
         val digits = credential.filter(Char::isDigit)
         context.dataStore.edit { it[wakeCredential] = digits }
-    }
-
-    override suspend fun setAutoSleepAfterRun(enabled: Boolean): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[autoSleepAfterRun] = enabled.toString() }
-    }
-
-    override suspend fun setSkipAutoSleepIfAwake(enabled: Boolean): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[skipAutoSleepIfAwake] = enabled.toString() }
-    }
-
-    override suspend fun setCloseAppAfterRun(enabled: Boolean): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[closeAppAfterRun] = enabled.toString() }
     }
 
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */

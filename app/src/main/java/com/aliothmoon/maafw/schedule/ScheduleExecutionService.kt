@@ -19,6 +19,7 @@ import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDU
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunProgress
+import com.aliothmoon.maafw.runner.ScheduleRunOptions
 import com.aliothmoon.maafw.runner.RunRequestId
 import com.aliothmoon.maafw.runner.RunSignals
 import com.aliothmoon.maafw.runner.RunStepSink
@@ -132,7 +133,15 @@ class ScheduleExecutionService : Service() {
 
         val launchResult = try {
             runLauncher.launch(
-                trigger = RunTrigger.Schedule(strategy.id, strategy.countdownSeconds),
+                trigger = RunTrigger.Schedule(
+                    strategy.id,
+                    ScheduleRunOptions(
+                        countdownSeconds = strategy.countdownSeconds,
+                        autoSleepAfterTask = strategy.autoSleepAfterTask,
+                        skipAutoSleepIfAwake = strategy.skipAutoSleepIfAwake,
+                        closeAppAfterTask = strategy.closeAppAfterTask,
+                    ),
+                ),
                 configurationId = strategy.runConfigurationId?.let(::RunConfigurationId),
                 // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
                 requestId = RunRequestId("${'$'}{strategy.id}@${'$'}scheduledTimeMs"),
