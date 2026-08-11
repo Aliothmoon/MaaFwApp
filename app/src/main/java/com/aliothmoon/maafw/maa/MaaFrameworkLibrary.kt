@@ -83,6 +83,27 @@ interface MaaFrameworkLibrary : Library {
 
     fun MaaStringBufferGet(handle: Pointer?): String?
 
+    // ── ImageBuffer ──
+    // focus 模板的 {image} 占位符取的是 controller 手里那张缓存帧
+
+    fun MaaImageBufferCreate(): Pointer?
+
+    fun MaaImageBufferDestroy(handle: Pointer?)
+
+    fun MaaImageBufferIsEmpty(handle: Pointer?): Byte
+
+    /** 拿的是编码后（PNG）的字节，不是裸位图；长度另取 [MaaImageBufferGetEncodedSize] */
+    fun MaaImageBufferGetEncoded(handle: Pointer?): Pointer?
+
+    fun MaaImageBufferGetEncodedSize(handle: Pointer?): Long
+
+    /**
+     * 取 controller 的缓存截图
+     *
+     * 尺寸按 controller 的 screenshot target size 缩放过，与设备物理分辨率未必一致
+     */
+    fun MaaControllerCachedImage(ctrl: Pointer?, buffer: Pointer?): Byte
+
     /**
      * 对应 `MaaEventCallback`：`void(void* handle, const char* message, const char* details_json, void* trans_arg)`
      * 由 native 线程回调，实现里不得阻塞，也不得抛异常穿回 native

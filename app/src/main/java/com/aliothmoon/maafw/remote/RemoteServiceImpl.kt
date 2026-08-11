@@ -252,6 +252,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun isRunning(): Boolean = runner.isRunning()
 
+    override fun saveCachedImage(path: String?): Boolean =
+        !path.isNullOrBlank() && runner.saveCachedImage(path)
+
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
 
     /**

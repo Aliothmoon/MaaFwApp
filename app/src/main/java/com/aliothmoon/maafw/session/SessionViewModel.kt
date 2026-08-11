@@ -25,6 +25,9 @@ import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.FocusChannel
+import com.aliothmoon.maafw.runner.FocusContentResolver
+import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.focusContentNeedsIo
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
@@ -95,6 +98,8 @@ class SessionViewModel(
     private val permissionGateway: PermissionGateway,
     private val appSettings: AppSettingsGateway,
     private val localeController: LocaleController,
+    /** focus 模板正文里 `{image}` 与文件路径形态的补完；不挂生产默认值，由 Koin 注入 */
+    private val focusContentResolver: FocusContentResolver,
     /**
      * resolve 那步的落点；生产是 Dispatchers.Default
      *
@@ -200,13 +205,40 @@ class SessionViewModel(
      */
     private fun dispatchRunnerEvent(event: RunnerEvent) {
         val context = runLogContext()
-        if (event is RunnerEvent.Focus) {
-            if (FocusChannel.Toast in event.focus.channels) {
-                val resolved = context.resolveI18n(event.focus.content)
-                effectChannel.trySend(SessionEffect.ShowMessage(uiTextFromProject(resolved)))
-            }
-            if (FocusChannel.Log !in event.focus.channels) return
+        if (event !is RunnerEvent.Focus) {
+            composeAndAppend(event, context)
+            return
         }
+        // 顺序对齐协议与 MXU：先替换占位符（FocusParser 已做）→ 再 $i18n 查表 →
+        // 最后才轮到需要 IO 的 {image} 与文件路径形态。查表结果本身可能就是个文件路径
+        val resolved = context.resolveI18n(event.focus.content)
+        if (!focusContentNeedsIo(resolved)) {
+            dispatchFocus(event.focus.copy(content = resolved), context)
+            return
+        }
+        // 这一条会晚于后续事件落进日志；比起为一张图卡住整条回调流，错位可以接受
+        viewModelScope.launch {
+            val completed = focusContentResolver.resolve(resolved)
+            dispatchFocus(event.focus.copy(content = completed), runLogContext())
+        }
+    }
+
+    /**
+     * 按 PI 声明的渠道投递
+     *
+     * Notification 渠道不在这里发：Effect 要 UI 层在场才消费得掉，而那一档的用意正是
+     * 「应用在后台时也收得到」，由执行期一直活着的 RunForegroundService 接
+     */
+    private fun dispatchFocus(focus: FocusMessage, context: RunLogContext) {
+        if (FocusChannel.Toast in focus.channels) {
+            effectChannel.trySend(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
+        }
+        if (FocusChannel.Log in focus.channels) {
+            composeAndAppend(RunnerEvent.Focus(focus), context)
+        }
+    }
+
+    private fun composeAndAppend(event: RunnerEvent, context: RunLogContext) {
         logComposer.compose(
             event = event,
             id = runLogId.incrementAndGet(),

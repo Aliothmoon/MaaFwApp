@@ -46,11 +46,9 @@ class RunLogComposer {
                 uiTextFromFramework("${event.taskName} ${event.completed}/${event.total}"),
             )
 
-            is RunnerEvent.Focus -> Composed(
-                RunLogKind.Focus,
-                // 模板正文里的 $key 到这一步才查得了表：翻译表是 PI 的东西，Runner 拿不到
-                uiTextFromProject(context.resolveI18n(event.focus.content)),
-            )
+            // 正文已由调用方补完（$i18n 查表、{image}、文件路径），这里只负责装进条目：
+            // 那几步有先后依赖也要 IO，塞进合成器会让它既不纯也不同步
+            is RunnerEvent.Focus -> Composed(RunLogKind.Focus, uiTextFromProject(event.focus.content))
 
             is RunnerEvent.AgentOutput -> agentEntry(event.line, atMillis) ?: return null
 

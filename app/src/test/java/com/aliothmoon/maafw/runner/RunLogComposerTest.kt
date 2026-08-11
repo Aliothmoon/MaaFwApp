@@ -84,28 +84,17 @@ class RunLogComposerTest {
         assertEquals(RunLogKind.Verbose, callback("Something.Brand.New")?.kind)
     }
 
+    /**
+     * 正文原样装进条目
+     *
+     * `$i18n` 查表、`{image}`、文件路径这几步有先后依赖、后两步还要 IO，
+     * 都在调用方做完了（见 SessionViewModelTest）；合成器只管装
+     */
     @Test
-    fun `focus content resolves the pi translation table`() {
-        val translated = RunLogComposer().compose(
-            RunnerEvent.Focus(FocusMessage("\$tip_key", setOf(FocusChannel.Log))),
-            1,
-            0,
-            RunLogContext(translations = mapOf("tip_key" to "显影罐不足")),
-        )
-        assertEquals(RunLogKind.Focus, translated?.kind)
-        assertEquals(UiText.Verbatim("显影罐不足"), translated?.text)
-    }
-
-    /** 查无此键回落到键名本身，与加载期的 $i18n 处理一致 */
-    @Test
-    fun `unknown translation key falls back to the key`() {
-        val entry = RunLogComposer().compose(
-            RunnerEvent.Focus(FocusMessage("\$missing", setOf(FocusChannel.Log))),
-            1,
-            0,
-            RunLogContext(),
-        )
-        assertEquals(UiText.Verbatim("missing"), entry?.text)
+    fun `focus content is taken as-is`() {
+        val entry = compose(RunnerEvent.Focus(FocusMessage("显影罐不足", setOf(FocusChannel.Log))))
+        assertEquals(RunLogKind.Focus, entry?.kind)
+        assertEquals(UiText.Verbatim("显影罐不足"), entry?.text)
     }
 
     @Test

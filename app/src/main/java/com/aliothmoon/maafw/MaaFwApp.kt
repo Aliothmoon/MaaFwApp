@@ -35,6 +35,8 @@ import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.project.readPiFingerprint
+import com.aliothmoon.maafw.runner.FocusContentResolver
+import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.AutoSleepHook
 import com.aliothmoon.maafw.runner.CloseTargetAppHook
@@ -166,6 +168,24 @@ val appModule = module {
         )
     }
 
+    single<FocusContentResolver> {
+        val context = androidContext()
+        PrivilegedFocusContentResolver(
+            installer = get(),
+            // 与 maa.log 同一棵目录：特权进程写得进，app 读得到，adb pull 也拿得到
+            imageDir = {
+                File(
+                    checkNotNull(context.getExternalFilesDir(null)) {
+                        "外部私有目录不可用（外部存储未挂载）"
+                    },
+                    "$MAA_LOG_DIR_NAME/focus",
+                )
+            },
+            servicePort = get(),
+            ioDispatcher = Dispatchers.IO,
+        )
+    }
+
     single<PreviewPort> {
         RemotePreviewPort(
             scope = get(named<AppCoroutineScope>()),
@@ -258,6 +278,7 @@ val appModule = module {
             permissionGateway = get(),
             appSettings = get(),
             localeController = AppLocales,
+            focusContentResolver = get(),
             computeDispatcher = Dispatchers.Default,
         )
     }

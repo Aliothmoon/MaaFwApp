@@ -114,4 +114,11 @@ interface RemoteService {
 
     /** 屏幕当前是否亮着；采「本轮开始时手机是不是醒着」用它 */
     boolean isScreenOn() = 74;
+
+    /**
+     * 把 controller 的缓存截图落到 [path]，供 focus 模板的 {image} 用
+     *
+     * 走文件不回传字节：一张 720p PNG 几百 KB，binder 事务缓冲总共才 1MB
+     */
+    boolean saveCachedImage(String path) = 75;
 }

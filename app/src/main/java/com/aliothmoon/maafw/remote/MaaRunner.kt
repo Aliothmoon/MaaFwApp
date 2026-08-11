@@ -23,6 +23,7 @@ import com.sun.jna.Pointer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -90,6 +91,35 @@ class MaaRunner(private val agentHost: AgentHost) {
     /** agent child 的一行输出；由 [AgentHost] 的泵线程调用，app 侧不在时静默丢弃 */
     fun onAgentLine(line: String) {
         notify { onAgentOutput(line) }
+    }
+
+    /**
+     * 把 controller 手里那张缓存帧落到 [path]，供 focus 模板的 `{image}` 用
+     *
+     * 走文件而不是把字节回传：一张 720p PNG 动辄几百 KB，binder 事务缓冲总共才 1MB，
+     * 直接传是在赌。落点由 app 侧给，它挑的是双方都读得到的外部私有目录
+     */
+    fun saveCachedImage(path: String): Boolean {
+        val lib = MaaFrameworkLoader.library ?: return false
+        val ctrl = controller ?: return false
+        val buffer = lib.MaaImageBufferCreate() ?: return false
+        return try {
+            if (lib.MaaControllerCachedImage(ctrl, buffer).toInt() == 0) return false
+            if (lib.MaaImageBufferIsEmpty(buffer).toInt() != 0) return false
+            val size = lib.MaaImageBufferGetEncodedSize(buffer)
+            if (size <= 0) return false
+            val data = lib.MaaImageBufferGetEncoded(buffer) ?: return false
+            val bytes = data.getByteArray(0, size.toInt())
+            val file = File(path)
+            file.parentFile?.mkdirs()
+            file.writeBytes(bytes)
+            true
+        } catch (e: Throwable) {
+            Ln.w("MaaRunner: saveCachedImage failed: ${e.message}")
+            false
+        } finally {
+            lib.MaaImageBufferDestroy(buffer)
+        }
     }
 
     /**
