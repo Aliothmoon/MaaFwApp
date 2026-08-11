@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -42,7 +41,6 @@ import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
-import com.aliothmoon.maafw.ui.components.MaaIconBadge
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import com.aliothmoon.maafw.ui.components.maaClickable
 import sh.calvin.reorderable.ReorderableItem
@@ -205,10 +203,12 @@ internal fun ConfigurationSelectorCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            MaaIconBadge(
-                icon = Icons.Outlined.Layers,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            // 与底栏 Tab 同形态：裸 Icon + tint，不用带底色的 MaaIconBadge
+            Icon(
+                imageVector = Icons.Outlined.Layers,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.md),
             )
             Column(Modifier.weight(1f)) {
                 Text(
@@ -232,12 +232,11 @@ internal fun ConfigurationSelectorCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            MaaIconBadge(
-                icon = Icons.Outlined.UnfoldMore,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                containerSize = MaaDesignTokens.IconContainer.sm,
-                shape = CircleShape,
+            Icon(
+                imageVector = Icons.Outlined.UnfoldMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.md),
             )
         }
     }

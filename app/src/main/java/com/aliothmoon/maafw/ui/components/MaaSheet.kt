@@ -37,6 +37,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 
 private const val SheetEnterMs = 100
 private const val SheetScrimAlpha = 0.4f
@@ -78,16 +79,15 @@ fun MaaModalSheet(
                     .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
             )
             // 抽屉：translationY 读在 graphicsLayer，只重铺层不重组
+            // 顶角走风格 large（DEFAULT 12 / Semi modal 12；不用静态 pill，否则 Semi 主题顶角过圆）
+            val topRadius = MaaTheme.style.radii.large
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .fillMaxHeight(MaaDesignTokens.Sheet.heightFraction)
                     .graphicsLayer { translationY = (1f - progress.value) * sheetHeightPx },
-                shape = RoundedCornerShape(
-                    topStart = MaaDesignTokens.CornerRadius.pill,
-                    topEnd = MaaDesignTokens.CornerRadius.pill,
-                ),
+                shape = RoundedCornerShape(topStart = topRadius, topEnd = topRadius),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 content(
