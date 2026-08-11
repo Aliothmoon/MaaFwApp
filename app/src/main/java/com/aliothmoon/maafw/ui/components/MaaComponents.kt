@@ -1,5 +1,9 @@
 package com.aliothmoon.maafw.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,10 +32,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -41,19 +51,34 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.i18n.asUiText
 
+/**
+ * [collapsible] 要求有 [title]：折叠靠点标题行，没标题就没有可点的表头
+ *
+ * 展开态只活在本次会话（[rememberSaveable]）——收起是临时整理视线，不是配置，不该进 DataStore
+ */
 @Composable
 fun MaaCard(
     modifier: Modifier = Modifier,
     title: String? = null,
     trailing: (@Composable () -> Unit)? = null,
+    collapsible: Boolean = false,
     // 默认参数不能读 CompositionLocal；innerPadding 两风格同值，静态回落安全
     contentPadding: PaddingValues = PaddingValues(MaaDesignTokens.Card.innerPadding),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    var expanded by rememberSaveable { mutableStateOf(true) }
+    val canCollapse = collapsible && title != null
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
+        label = "chevron",
+    )
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -64,19 +89,59 @@ fun MaaCard(
             modifier = Modifier.padding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
+            val chevron: @Composable () -> Unit = {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(MaaDesignTokens.IconSize.sm)
+                        .rotate(chevronRotation),
+                )
+            }
             when {
+                // trailing 已占住表头右侧，此时只有箭头本身可点，避免与开关抢同一片区域
                 trailing != null -> MaaLabeledControlRow(
                     label = title.orEmpty(),
                     labelStyle = MaterialTheme.typography.titleMedium,
-                    trailing = trailing,
+                    trailing = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                        ) {
+                            trailing()
+                            if (canCollapse) {
+                                Box(Modifier.maaClickable { expanded = !expanded }) { chevron() }
+                            }
+                        }
+                    },
                 )
 
-                title != null -> Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                title != null -> MaaLabeledControlRow(
+                    label = title,
+                    labelStyle = MaterialTheme.typography.titleMedium,
+                    modifier = if (canCollapse) {
+                        Modifier.maaClickable { expanded = !expanded }
+                    } else {
+                        Modifier
+                    },
+                    trailing = { if (canCollapse) chevron() },
                 )
             }
-            content()
+            if (canCollapse) {
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically(),
+                    exit = shrinkVertically(),
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                        content = content,
+                    )
+                }
+            } else {
+                content()
+            }
         }
     }
 }

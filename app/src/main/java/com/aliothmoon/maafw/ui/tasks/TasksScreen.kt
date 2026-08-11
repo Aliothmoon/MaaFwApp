@@ -43,6 +43,7 @@ import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
+import com.aliothmoon.maafw.ui.components.MaaEmptyState
 
 /**
  * [previewContent] 由 AppRoot 创建并持有：全屏宿主必须在 pager 之外才能盖住底部 tab 栏，
@@ -190,7 +191,7 @@ private fun TasksContent(
                                 modifier = Modifier.fillMaxSize(),
                             )
 
-                            active == null -> EmptyState(
+                            active == null -> MaaEmptyState(
                                 icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
                                 title = stringResource(R.string.tasks_empty_config_title),
                                 hint = stringResource(R.string.tasks_empty_config_hint),

@@ -37,6 +37,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
+import com.aliothmoon.maafw.ui.components.MaaEmptyState
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
@@ -192,27 +193,10 @@ private fun NextTriggerLine(row: ScheduleRow) {
 
 @Composable
 private fun ScheduleEmptyState() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = MaaDesignTokens.Spacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Schedule,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(MaaDesignTokens.IconSize.xl),
-        )
-        Text(
-            text = stringResource(R.string.schedule_empty),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = stringResource(R.string.schedule_empty_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    MaaEmptyState(
+        icon = Icons.Outlined.Schedule,
+        title = stringResource(R.string.schedule_empty),
+        hint = stringResource(R.string.schedule_empty_hint),
+        modifier = Modifier.padding(vertical = MaaDesignTokens.Spacing.xl),
+    )
 }

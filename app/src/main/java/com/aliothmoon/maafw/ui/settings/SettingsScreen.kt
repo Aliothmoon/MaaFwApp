@@ -106,7 +106,7 @@ fun SettingsScreen(
 
 @Composable
 private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_appearance)) {
+    MaaCard(title = stringResource(R.string.settings_appearance), collapsible = true) {
         val modes = listOf(
             ThemeMode.System to stringResource(R.string.settings_follow_system),
             ThemeMode.Light to stringResource(R.string.settings_theme_light),
@@ -132,7 +132,7 @@ private fun AppearanceCard(state: SessionUiState, onIntent: (SessionIntent) -> U
 
 @Composable
 private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_language)) {
+    MaaCard(title = stringResource(R.string.settings_language), collapsible = true) {
         // 事实来源在平台侧 per-app locale（AppLocales），不进 UserConfiguration；
         // 切换后 Activity 重建，本处在新组合中重新读取，无需观察流
         // 语言名按惯例保持本族语原文，不随界面语言翻译
@@ -181,7 +181,7 @@ private fun LanguageCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
  */
 @Composable
 private fun ScheduleUnlockCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_schedule_unlock)) {
+    MaaCard(title = stringResource(R.string.settings_schedule_unlock), collapsible = true) {
         MaaLabeledControlRow(
             label = stringResource(R.string.settings_wake_unlock),
             trailing = {
@@ -218,7 +218,7 @@ private fun LogCard(
     onOpenAppLog: () -> Unit,
     onExportLogs: () -> Unit,
 ) {
-    MaaCard(title = stringResource(R.string.settings_section_log)) {
+    MaaCard(title = stringResource(R.string.settings_section_log), collapsible = true) {
         MaaNavigationRow(
             label = stringResource(R.string.log_archive_title),
             description = stringResource(R.string.settings_log_archive_desc),
@@ -246,7 +246,7 @@ private fun LogCard(
 @Composable
 private fun PiCard(onIntent: (SessionIntent) -> Unit) {
     var showConfirm by remember { mutableStateOf(false) }
-    MaaCard(title = stringResource(R.string.settings_section_pi)) {
+    MaaCard(title = stringResource(R.string.settings_section_pi), collapsible = true) {
         MaaNavigationRow(
             label = stringResource(R.string.pi_reinstall_title),
             description = stringResource(R.string.pi_reinstall_desc),
@@ -328,7 +328,7 @@ private fun BackendCard(
     onSettingsIntent: (SettingsIntent) -> Unit,
 ) {
     val access = settingsState.remoteAccess
-    MaaCard(title = stringResource(R.string.permission_backend)) {
+    MaaCard(title = stringResource(R.string.permission_backend), collapsible = true) {
         MaaSingleChoiceFlow(
             // 对齐 MaaMeow：只列后端名，不展示「可用/不可用」——选哪个都行，可用性交给连接流程判
             options = RemoteBackend.entries.map { it to it.display },
@@ -344,7 +344,7 @@ private fun BackendCard(
  */
 @Composable
 private fun ResolutionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_resolution)) {
+    MaaCard(title = stringResource(R.string.settings_resolution), collapsible = true) {
         MaaSingleChoiceFlow(
             options = listOf(
                 ResolutionPreference.P720 to stringResource(R.string.settings_resolution_720p),
@@ -359,7 +359,7 @@ private fun ResolutionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
 
 @Composable
 private fun AboutCard() {
-    MaaCard(title = stringResource(R.string.settings_about)) {
+    MaaCard(title = stringResource(R.string.settings_about), collapsible = true) {
         MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
         MaaInfoRow(stringResource(R.string.settings_build), BuildConfig.VERSION_CODE.toString())
     }

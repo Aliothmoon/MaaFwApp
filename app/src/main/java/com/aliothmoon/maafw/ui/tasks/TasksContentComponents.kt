@@ -3,7 +3,6 @@ package com.aliothmoon.maafw.ui.tasks
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,7 +42,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
@@ -57,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.ui.components.MaaEmptyState
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -75,7 +74,7 @@ internal fun TaskList(
     var renamingTask by remember { mutableStateOf<ResolvedConfiguredTask?>(null) }
 
     if (active.tasks.isEmpty()) {
-        EmptyState(
+        MaaEmptyState(
             icon = Icons.Outlined.AddTask,
             title = stringResource(R.string.tasks_empty_task_title),
             hint = stringResource(R.string.tasks_empty_task_hint),
@@ -333,37 +332,3 @@ private fun ConfigurationSelectorCard(
     }
 }
 
-@Composable
-internal fun EmptyState(
-    icon: ImageVector,
-    title: String,
-    hint: String,
-    modifier: Modifier = Modifier,
-    action: (@Composable () -> Unit)? = null,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = MaaDesignTokens.Alpha.disabled),
-            modifier = Modifier.size(MaaDesignTokens.IconSize.xl),
-        )
-        Spacer(Modifier.size(MaaDesignTokens.Spacing.md))
-        Text(text = title, style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.size(MaaDesignTokens.Spacing.xs))
-        Text(
-            text = hint,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        action?.let {
-            Spacer(Modifier.size(MaaDesignTokens.Spacing.lg))
-            it()
-        }
-    }
-}
