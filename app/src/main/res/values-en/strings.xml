@@ -251,6 +251,10 @@
     <string name="msg_no_executable_tasks">No tasks available to run</string>
     <string name="msg_template_not_found">Template \"%1$s\" does not exist</string>
     <string name="msg_cannot_start">Cannot start: %1$s</string>
+    <string name="msg_launch_in_progress">Launch already in progress</string>
+    <string name="msg_precheck_ignored_confirmation">A start check ignored the confirmation; aborted</string>
+    <string name="msg_hook_timeout">Run environment setup timed out: %1$s</string>
+    <string name="msg_hook_failed">Run environment setup failed: %1$s</string>
     <string name="msg_cannot_stop">Cannot stop: %1$s</string>
 
     <!-- Server switching & run options -->

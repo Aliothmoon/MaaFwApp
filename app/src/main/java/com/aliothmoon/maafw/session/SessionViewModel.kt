@@ -30,6 +30,7 @@ import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.runner.RunTrigger
 import com.aliothmoon.maafw.runner.toLogKind
 import com.aliothmoon.maafw.runner.toLogText
 import com.aliothmoon.maafw.runner.RunnerCommandResult
@@ -496,15 +497,14 @@ class SessionViewModel(
         effectChannel.send(SessionEffect.ShowMessage(message))
     }
 
-    /** 发起本身在 [RunLauncher]（进程级，定时触发共用同一条）；这里只把结局翻成 UI 消息 */
+    /**
+     * 发起本身在 [RunLauncher]（进程级，定时触发共用同一条）；这里只把结局翻成 UI 消息
+     *
+     * 前台模式的拦截已下沉成 [com.aliothmoon.maafw.runner.ForegroundModePrecheck]：
+     * 留在这里只压得住任务页一个入口，定时触发那条路绕得过去
+     */
     private suspend fun start() {
-        // 前台模式不从任务页启动（对齐 MaaMeow）：按钮灰显但仍可点，点了给这条提示
-        // 只压这个入口，不下沉进 RunLauncher：定时触发不经任务页，那条路仍按配置直发
-        if (appSettings.runMode.value == RunMode.FOREGROUND) {
-            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
-            return
-        }
-        when (val result = runLauncher.launch()) {
+        when (val result = runLauncher.launch(RunTrigger.Manual)) {
             RunLaunchResult.Started -> Unit
 
             RunLaunchResult.ProjectNotReady ->
@@ -518,6 +518,14 @@ class SessionViewModel(
 
             is RunLaunchResult.Rejected ->
                 effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_start, result.reason)))
+
+            is RunLaunchResult.Blocked ->
+                effectChannel.send(SessionEffect.ShowMessage(result.reason))
+
+            // 确认框等第一道会问的检查落地时再补；现在没有检查产生这个分支，
+            // 先原样把问题呈出来，不做无人生产的 UI
+            is RunLaunchResult.NeedsConfirmation ->
+                effectChannel.send(SessionEffect.ShowMessage(result.prompt))
         }
     }
 

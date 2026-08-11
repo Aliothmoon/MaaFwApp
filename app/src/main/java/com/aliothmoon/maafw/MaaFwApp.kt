@@ -35,6 +35,8 @@ import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.project.readPiFingerprint
+import com.aliothmoon.maafw.runner.ForegroundModePrecheck
+import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.RemotePreviewPort
@@ -172,7 +174,11 @@ val appModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            keepAlive = get(),
+            // 两份都写成显式有序列表而不是 getAll()：顺序即语义，得在一处看得见
+            prechecks = listOf(ForegroundModePrecheck),
+            hooks = listOf(KeepAliveHook(get())),
+            runMode = get<AppSettingsManager>().runMode::value,
+            scope = get(named<AppCoroutineScope>()),
         )
     }
 

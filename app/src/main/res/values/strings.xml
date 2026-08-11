@@ -242,6 +242,10 @@
     <string name="msg_no_executable_tasks">没有可用的任务</string>
     <string name="msg_template_not_found">模板“%1$s”不存在</string>
     <string name="msg_cannot_start">无法开始：%1$s</string>
+    <string name="msg_launch_in_progress">正在启动中，请稍候</string>
+    <string name="msg_precheck_ignored_confirmation">启动检查未消费用户确认，已中止</string>
+    <string name="msg_hook_timeout">运行环境准备超时：%1$s</string>
+    <string name="msg_hook_failed">运行环境准备失败：%1$s</string>
     <string name="msg_cannot_stop">无法停止：%1$s</string>
 
     <!-- 资源切换与运行选项 -->

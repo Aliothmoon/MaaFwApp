@@ -21,6 +21,8 @@ import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
+import com.aliothmoon.maafw.runner.ForegroundModePrecheck
+import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunLauncher
@@ -34,6 +36,7 @@ import com.aliothmoon.maafw.runner.isBusy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -99,7 +102,26 @@ class SessionViewModelTest {
         ),
     )
 
-    private fun createVm(
+    /**
+     * 带上真实的前台模式检查与保活挂载物：VM 侧要验的「前台模式点不动」如今由
+     * ForegroundModePrecheck 产生，emptyList 会让那条用例空转通过
+     */
+    private fun TestScope.launcherFor(
+        project: FakeProjectRepository,
+        store: InMemoryUserConfigurationStore,
+        runner: RunnerPort,
+        settings: FakeAppSettingsGateway,
+    ) = RunLauncher(
+        projectRepository = project,
+        configurationStore = store,
+        runnerPort = runner,
+        prechecks = listOf(ForegroundModePrecheck),
+        hooks = listOf(KeepAliveHook(RecordingRunKeepAlive())),
+        runMode = { settings.runMode.value },
+        scope = backgroundScope,
+    )
+
+    private fun TestScope.createVm(
         store: InMemoryUserConfigurationStore = readyStore(),
         project: FakeProjectRepository = FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
         runner: StubRunnerPort = StubRunnerPort(
@@ -114,7 +136,7 @@ class SessionViewModelTest {
             projectRepository = project,
             configurationStore = store,
             runnerPort = runner,
-            runLauncher = RunLauncher(project, store, runner, RecordingRunKeepAlive()),
+            runLauncher = launcherFor(project, store, runner, settings),
             previewPort = RecordingPreviewPort(),
             permissionGateway = permissions,
             appSettings = settings,
@@ -125,17 +147,18 @@ class SessionViewModelTest {
     }
 
     /** 只换 RunnerPort 的构造点；createVm 的返回三元组绑死了 StubRunnerPort */
-    private fun createVmWithRunner(runner: RunnerPort): SessionViewModel {
+    private fun TestScope.createVmWithRunner(runner: RunnerPort): SessionViewModel {
         val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
         val store = readyStore()
+        val settings = FakeAppSettingsGateway()
         return SessionViewModel(
             projectRepository = project,
             configurationStore = store,
             runnerPort = runner,
-            runLauncher = RunLauncher(project, store, runner, RecordingRunKeepAlive()),
+            runLauncher = launcherFor(project, store, runner, settings),
             previewPort = RecordingPreviewPort(),
             permissionGateway = FakePermissionGateway(),
-            appSettings = FakeAppSettingsGateway(),
+            appSettings = settings,
             localeController = {},
             computeDispatcher = mainDispatcher,
         )
