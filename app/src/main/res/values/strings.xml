@@ -22,6 +22,7 @@
     <string name="tasks_empty_task_hint">从任务目录选择要执行的任务</string>
     <string name="tasks_add_task">添加任务</string>
     <string name="tasks_run_order">任务列表</string>
+    <string name="tasks_list_summary">%1$d 个任务 · %2$d 个有效</string>
     <string name="tasks_live_preview">实时预览</string>
     <string name="tasks_preview_waiting_surface">等待画面</string>
     <string name="tasks_preview_exit_fullscreen">退出全屏</string>

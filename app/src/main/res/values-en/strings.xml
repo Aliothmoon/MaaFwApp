@@ -22,6 +22,7 @@
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
     <string name="tasks_run_order">Task list</string>
+    <string name="tasks_list_summary">%1$d tasks · %2$d enabled</string>
     <!-- "active" is an adjective and does not inflect with quantity. -->
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_preview_waiting_surface">Waiting for frames</string>
