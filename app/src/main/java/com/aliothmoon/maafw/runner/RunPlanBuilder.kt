@@ -51,6 +51,20 @@ object RunPlanBuilder {
             ?: return RunPlanResult.NoExecutableTasks
         if (runConfiguration.tasks.isEmpty()) return RunPlanResult.NoExecutableTasks
 
+        // 只编译一次：放进任务循环会让诊断按启用任务数重复
+        // 诊断单收一份，是否计入见下面 runtimeTasks 那处
+        val globalPatches = mutableListOf<JsonObject>()
+        val globalDiagnostics = mutableListOf<Diagnostic>()
+        compileOptions(
+            definition = definition,
+            optionNames = definition.globalOptionNames,
+            values = config.globalOptionValues,
+            scopeLabel = "global_option",
+            resourceName = resource.name,
+            patches = globalPatches,
+            diagnostics = globalDiagnostics,
+        )
+
         val runtimeTasks = mutableListOf<RuntimeTask>()
         for (configured in runConfiguration.tasks) {
             val task = definition.task(configured.taskName)
@@ -69,18 +83,23 @@ object RunPlanBuilder {
 
             val patches = mutableListOf<JsonObject>()
             if (task.pipelineOverride.isNotEmpty()) patches += task.pipelineOverride
-            // 顺序：task 基础 → global → resource → controller → task option
-            // 当前尚未建模 global/controller/resource 作用域 option
+            // 协议「Option 覆盖顺序」：task 基础 → global →（resource、controller 未建模）→ task option
+            patches += globalPatches
             compileOptions(
                 definition = definition,
                 optionNames = task.optionNames,
                 values = configured.optionValues,
                 scopeLabel = "task:${task.name}",
+                resourceName = resource.name,
                 patches = patches,
                 diagnostics = diagnostics,
             )
             runtimeTasks += RuntimeTask(task.name, task.entry, patches)
         }
+
+        // 有可执行任务才让全局诊断参与判定：任务全禁用的配置该报 NoExecutableTasks，
+        // 不该因为一个跑不到的全局 option 缺 default_case 变成 Invalid
+        if (runtimeTasks.isNotEmpty()) diagnostics += globalDiagnostics
 
         if (diagnostics.any { it.severity == DiagnosticSeverity.Error }) {
             return RunPlanResult.Invalid(diagnostics)
@@ -106,6 +125,7 @@ object RunPlanBuilder {
         optionNames: List<String>,
         values: Map<String, OptionValue>,
         scopeLabel: String,
+        resourceName: String,
         patches: MutableList<JsonObject>,
         diagnostics: MutableList<Diagnostic>,
     ) {
@@ -118,6 +138,8 @@ object RunPlanBuilder {
                 diagnostics += runtimeError(scopeLabel, DiagnosticMessages.missingReference("option", name))
                 return
             }
+            // 见 OptionApplicability：不满足即整个跳过，且不记诊断
+            if (!option.applicability.matches(definition.controller.name, resourceName)) return
             when (option) {
                 is OptionDefinition.Choice -> {
                     val value = values[name] as? OptionValue.SingleCase

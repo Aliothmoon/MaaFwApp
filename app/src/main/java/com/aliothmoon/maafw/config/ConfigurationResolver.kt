@@ -73,6 +73,12 @@ object ConfigurationResolver {
             configurationList = configurationList,
             activeConfiguration = activeConfiguration,
             taskCatalog = buildTaskCatalog(definition, resourceName),
+            globalOptions = buildOptionEditors(
+                definition = definition,
+                optionNames = definition.globalOptionNames,
+                values = config.globalOptionValues,
+                resourceName = resourceName,
+            ),
             environment = environment,
             diagnostics = diagnostics,
         )
@@ -154,6 +160,7 @@ object ConfigurationResolver {
                         definition = definition,
                         optionNames = taskDefinition.optionNames,
                         values = configured.optionValues,
+                        resourceName = resourceName,
                     ),
                 )
             }
@@ -212,6 +219,7 @@ object ConfigurationResolver {
         definition: ProjectDefinition,
         optionNames: List<String>,
         values: Map<String, OptionValue>,
+        resourceName: String?,
         depth: Int = 0,
         visited: Set<String> = emptySet(),
     ): List<OptionEditorState> {
@@ -219,7 +227,10 @@ object ConfigurationResolver {
         return optionNames.mapNotNull { name ->
             if (name in visited) return@mapNotNull null
             val option = definition.options[name] ?: return@mapNotNull null
-            buildOptionEditor(definition, option, values, depth, visited + name)
+            if (!option.applicability.matches(definition.controller.name, resourceName)) {
+                return@mapNotNull null
+            }
+            buildOptionEditor(definition, option, values, resourceName, depth, visited + name)
         }
     }
 
@@ -227,6 +238,7 @@ object ConfigurationResolver {
         definition: ProjectDefinition,
         option: OptionDefinition,
         values: Map<String, OptionValue>,
+        resourceName: String?,
         depth: Int,
         visited: Set<String>,
     ): OptionEditorState {
@@ -244,7 +256,7 @@ object ConfigurationResolver {
                     kind = if (option is OptionDefinition.Select) OptionKind.Select else OptionKind.Switch,
                     depth = depth,
                     value = value,
-                    cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, depth, visited),
+                    cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, resourceName, depth, visited),
                     inputs = emptyList(),
                 )
             }
@@ -259,7 +271,7 @@ object ConfigurationResolver {
                     kind = OptionKind.Checkbox,
                     depth = depth,
                     value = value,
-                    cases = buildCaseStates(definition, option.cases, selected.toSet(), values, depth, visited),
+                    cases = buildCaseStates(definition, option.cases, selected.toSet(), values, resourceName, depth, visited),
                     inputs = emptyList(),
                 )
             }
@@ -297,6 +309,7 @@ object ConfigurationResolver {
         cases: List<OptionCaseDefinition>,
         selected: Set<String>,
         values: Map<String, OptionValue>,
+        resourceName: String?,
         depth: Int,
         visited: Set<String>,
     ): List<OptionCaseState> = cases.map { case ->
@@ -307,7 +320,7 @@ object ConfigurationResolver {
             description = case.description,
             active = active,
             children = if (active) {
-                buildOptionEditors(definition, case.childOptionNames, values, depth + 1, visited)
+                buildOptionEditors(definition, case.childOptionNames, values, resourceName, depth + 1, visited)
             } else {
                 emptyList()
             },

@@ -9,6 +9,8 @@ data class ResolvedProjectSession(
     val configurationList: List<ResolvedRunConfiguration>,
     val activeConfiguration: ResolvedRunConfiguration?,
     val taskCatalog: List<TaskCatalogGroup>,
+    /** PI `global_option[]` 的编辑投影，按声明顺序；不随运行配置走 */
+    val globalOptions: List<OptionEditorState>,
     val environment: ResolvedEnvironment,
     val diagnostics: List<Diagnostic>,
 )

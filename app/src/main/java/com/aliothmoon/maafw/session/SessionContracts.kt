@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.session
 import android.view.Surface
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
+import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
@@ -37,6 +38,8 @@ data class SessionUiState(
     val configurationList: List<ResolvedRunConfiguration> = emptyList(),
     val activeConfiguration: ResolvedRunConfiguration? = null,
     val taskCatalog: List<TaskCatalogGroup> = emptyList(),
+    /** 空 = PI 没声明 global_option，设置页据此决定要不要出这张卡 */
+    val globalOptions: List<OptionEditorState> = emptyList(),
     val environment: ResolvedEnvironment? = null,
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),
@@ -204,6 +207,9 @@ sealed interface SessionIntent {
         val optionName: String,
         val value: OptionValue,
     ) : SessionIntent
+
+    /** 不属于任何运行配置：改一次对所有配置的所有任务生效 */
+    data class SetGlobalOption(val optionName: String, val value: OptionValue) : SessionIntent
 
     data class SelectResource(val resourceName: String) : SessionIntent
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent

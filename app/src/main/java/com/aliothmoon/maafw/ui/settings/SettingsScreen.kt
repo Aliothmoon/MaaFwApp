@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.height
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.session.SessionIntent
+import com.aliothmoon.maafw.ui.options.OptionEditorList
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsUiState
@@ -95,6 +96,7 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
         ) {
+            GlobalOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
             NotificationCard(onOpenNotificationSettings)
@@ -103,6 +105,23 @@ fun SettingsScreen(
             OtherCard(state, settingsState, onIntent, onSettingsIntent)
             AboutCard()
         }
+    }
+}
+
+/**
+ * 落在设置页而不是任务页：`global_option` 对所有运行配置生效
+ *
+ * 卡名取「任务设置」而非「全局选项」：对齐 MXU 同名分区，且「全局」在用户侧不指称什么
+ */
+@Composable
+private fun GlobalOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    if (state.globalOptions.isEmpty()) return
+    MaaCard(title = stringResource(R.string.settings_section_global_option), collapsible = true) {
+        OptionEditorList(
+            options = state.globalOptions,
+            locked = state.configurationLocked,
+            onSetOption = { name, value -> onIntent(SessionIntent.SetGlobalOption(name, value)) },
+        )
     }
 }
 

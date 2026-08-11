@@ -39,6 +39,7 @@ class ProjectLoader(
         val options = linkedMapOf<String, OptionDefinition>()
         val templates = mutableListOf<ConfigurationTemplate>()
         val declaredGroups = mutableListOf<TaskGroupDefinition>()
+        val globalOptionNames = mutableListOf<String>()
     }
 
     fun load(): ProjectLoadResult {
@@ -92,7 +93,7 @@ class ProjectLoader(
             diagnostics += warning(interfacePath, DiagnosticMessages.projectHasNoTasks())
         }
 
-        validateOptionReferences(state.tasks, state.options, diagnostics)
+        validateOptionReferences(state.tasks, state.globalOptionNames, state.options, diagnostics)
         detectOptionCycles(state.options, diagnostics)
         validateTemplates(state.templates, state.tasks, diagnostics)
 
@@ -117,6 +118,8 @@ class ProjectLoader(
             tasks = normalizedTasks,
             groups = groups,
             options = state.options,
+            // 引用不存在的项已在上面报 Error；这里过滤掉，免得 builder 再报一遍同一件事
+            globalOptionNames = state.globalOptionNames.filter { it in state.options },
             templates = templates,
             agents = projectInterface.agents,
             translations = translations,
@@ -180,6 +183,11 @@ class ProjectLoader(
             } else {
                 state.templates += template
             }
+        }
+        // global_option 与 task/option 不同，重名不是冲突而是同一项被多个分片重复声明：
+        // 按声明顺序追加、去重即可（对齐 MXU 的 import 合并）
+        for (name in parsed.globalOptionNames) {
+            if (name !in state.globalOptionNames) state.globalOptionNames += name
         }
         for (group in parsed.groups) {
             if (state.declaredGroups.any { it.name == group.name }) {
@@ -287,9 +295,15 @@ class ProjectLoader(
 
     private fun validateOptionReferences(
         tasks: List<TaskDefinition>,
+        globalOptionNames: List<String>,
         options: Map<String, OptionDefinition>,
         diagnostics: MutableList<Diagnostic>,
     ) {
+        for (ref in globalOptionNames) {
+            if (ref !in options) {
+                diagnostics += error("global_option", DiagnosticMessages.missingReference("option", ref))
+            }
+        }
         for (task in tasks) {
             for (ref in task.optionNames) {
                 if (ref !in options) {

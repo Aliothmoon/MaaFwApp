@@ -28,17 +28,9 @@ class CurrentProjectI18nTest {
         allowTrailingComma = true
     }
 
-    /** syncPiAssets 的落点；单元测试工作目录是 app/ */
-    private val piRoot = File("build/generated/piAssets/pi")
-
-    private fun sourceOrSkip(): ProjectSource {
-        assumeTrue("未同步 PI（未配置 pi.sourceDir）", File(piRoot, "interface.json").isFile)
-        return DirectoryProjectSource(piRoot)
-    }
-
     @Test
     fun `打包 PI 的每种声明语言覆盖全部 i18n 引用`() {
-        val source = sourceOrSkip()
+        val source = syncedPiOrSkip()
         val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
         assertTrue(
             "合法的 language path 不应产生诊断: ${projectInterface.diagnostics}",
@@ -64,7 +56,7 @@ class CurrentProjectI18nTest {
 
     @Test
     fun `打包 PI 的各语言加载时无 i18n 诊断`() {
-        val source = sourceOrSkip()
+        val source = syncedPiOrSkip()
         val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
         assumeTrue("该 PI 未声明 languages", projectInterface.languages.isNotEmpty())
 
@@ -93,4 +85,13 @@ class CurrentProjectI18nTest {
             ?.let { listOf(it.substring(1)) }
             .orEmpty()
     }
+}
+
+/** syncPiAssets 的落点；单元测试工作目录是 app/ */
+private val piRoot = File("build/generated/piAssets/pi")
+
+/** 未配置 pi.sourceDir 时跳过：外壳不绑定任何具体项目 */
+internal fun syncedPiOrSkip(): ProjectSource {
+    assumeTrue("未同步 PI（未配置 pi.sourceDir）", File(piRoot, "interface.json").isFile)
+    return DirectoryProjectSource(piRoot)
 }

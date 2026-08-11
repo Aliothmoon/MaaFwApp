@@ -11,6 +11,8 @@ data class ProjectDefinition(
     val tasks: List<TaskDefinition>,
     val groups: List<TaskGroupDefinition>,
     val options: Map<String, OptionDefinition>,
+    /** PI v2.3.0 `global_option[]`：参与每个任务的 override，优先级最低，且不依赖任何选择 */
+    val globalOptionNames: List<String> = emptyList(),
     val templates: List<ConfigurationTemplate>,
     /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
     val agents: List<AgentDefinition> = emptyList(),
@@ -86,10 +88,31 @@ data class TaskGroupDefinition(
     val isUngrouped: Boolean = false,
 )
 
+/**
+ * option 的适用范围（PI v2.3.0 的 `controller` / `resource`）；空列表 = 不限
+ *
+ * v2.3.1 起这是硬约束而不只是展示提示：不满足时该 option **连同其子 option** 都不产生
+ * pipeline_override；协议允许客户端隐藏或灰显，本项目选隐藏（docs/domain-model.md §6.3），
+ * Resolver 与 Builder 各判一次同一条件；已保存的值不删，环境切回来就重新露面
+ */
+data class OptionApplicability(
+    val controllers: List<String> = emptyList(),
+    val resources: List<String> = emptyList(),
+) {
+    fun matches(controllerName: String, resourceName: String?): Boolean =
+        (controllers.isEmpty() || controllerName in controllers) &&
+            (resources.isEmpty() || resourceName in resources)
+
+    companion object {
+        val Unrestricted = OptionApplicability()
+    }
+}
+
 sealed interface OptionDefinition {
     val name: String
     val label: String
     val description: String?
+    val applicability: OptionApplicability
 
     /** Select/Switch 共享 cases + defaultCase */
     sealed interface Choice : OptionDefinition {
@@ -103,6 +126,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         override val cases: List<OptionCaseDefinition>,
         override val defaultCase: String?,
+        override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : Choice
 
     data class Switch(
@@ -111,6 +135,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         override val cases: List<OptionCaseDefinition>,
         override val defaultCase: String?,
+        override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : Choice
 
     data class Checkbox(
@@ -119,6 +144,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         val cases: List<OptionCaseDefinition>,
         val defaultCases: List<String>,
+        override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : OptionDefinition
 
     data class Input(
@@ -127,6 +153,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         val fields: List<InputFieldDefinition>,
         val pipelineOverride: JsonObject,
+        override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : OptionDefinition
 }
 

@@ -268,6 +268,7 @@ class SessionViewModel(
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
+            globalOptions = session.globalOptions,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
             previewResolution = settings.resolutionPreference.resolution,
@@ -383,6 +384,12 @@ class SessionViewModel(
             is SessionIntent.SetTaskOption -> guarded {
                 mutateTask(intent.configurationId, intent.taskInstanceId) { task ->
                     task.copy(optionValues = task.optionValues + (intent.optionName to intent.value))
+                }
+            }
+
+            is SessionIntent.SetGlobalOption -> guarded {
+                configurationStore.update {
+                    it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to intent.value))
                 }
             }
 

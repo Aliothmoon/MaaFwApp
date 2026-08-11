@@ -114,8 +114,8 @@ class ProjectLoaderTest {
     }
 }
 
-/** 内存 ProjectSource：按路径前缀模拟目录结构，供分组/解析规则的合成用例使用 */
-private class MapProjectSource(private val files: Map<String, String>) : ProjectSource {
+/** 内存 ProjectSource：按路径前缀模拟目录结构，供本包各合成用例共用 */
+internal class MapProjectSource(private val files: Map<String, String>) : ProjectSource {
     override val projectName: String = "synthetic"
 
     override fun list(path: String): List<String> {

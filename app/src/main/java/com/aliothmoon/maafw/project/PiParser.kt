@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
+import com.aliothmoon.maafw.domain.OptionApplicability
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
@@ -23,10 +24,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
-/** 单个 PI 分片文件（task[] / option{} / preset[] / group[]）的解析结果 */
+/** 单个 PI 分片文件（task[] / option{} / global_option[] / preset[] / group[]）的解析结果 */
 data class PiFileContent(
     val tasks: List<TaskDefinition> = emptyList(),
     val options: Map<String, OptionDefinition> = emptyMap(),
+    /** 只是 option 键名，定义仍在 [options] 里；引用完整性由 ProjectLoader 校验 */
+    val globalOptionNames: List<String> = emptyList(),
     val templates: List<ConfigurationTemplate> = emptyList(),
     val groups: List<TaskGroupDefinition> = emptyList(),
     val diagnostics: List<Diagnostic> = emptyList(),
@@ -250,7 +253,14 @@ object PiParser {
             parsePreset(source, element, diagnostics, text)
         }
         val groups = parseGroups(source, root, diagnostics, text)
-        return PiFileContent(tasks, options, templates, groups, diagnostics)
+        return PiFileContent(
+            tasks = tasks,
+            options = options,
+            globalOptionNames = root.stringList("global_option"),
+            templates = templates,
+            groups = groups,
+            diagnostics = diagnostics,
+        )
     }
 
     /** v2.4.0 顶层 group[] 声明：根 interface.json 与 import 分片均可出现 */
@@ -330,6 +340,11 @@ object PiParser {
             }
         val label = text.label(obj.string("label")) ?: name
         val description = text.description(obj.string("description"))
+        // controller 名在 Android 上只可能是 PI 声明的那一个 Adb 项
+        val applicability = OptionApplicability(
+            controllers = obj.stringList("controller"),
+            resources = obj.stringList("resource"),
+        )
         return when (val type = obj.string("type")) {
             "select", "switch" -> {
                 val cases = parseCases(source, name, obj, diagnostics, text)
@@ -339,9 +354,9 @@ object PiParser {
                     }
                 }?.takeIf { d -> cases.any { it.name == d } }
                 if (type == "select") {
-                    OptionDefinition.Select(name, label, description, cases, defaultCase)
+                    OptionDefinition.Select(name, label, description, cases, defaultCase, applicability)
                 } else {
-                    OptionDefinition.Switch(name, label, description, cases, defaultCase)
+                    OptionDefinition.Switch(name, label, description, cases, defaultCase, applicability)
                 }
             }
 
@@ -359,7 +374,7 @@ object PiParser {
                         }
                     }
                 }
-                OptionDefinition.Checkbox(name, label, description, cases, defaults)
+                OptionDefinition.Checkbox(name, label, description, cases, defaults, applicability)
             }
 
             "input" -> {
@@ -369,7 +384,14 @@ object PiParser {
                 if (fields.isEmpty()) {
                     diagnostics += warning(source, DiagnosticMessages.inputHasNoFields(name))
                 }
-                OptionDefinition.Input(name, label, description, fields, obj.objectOrEmpty("pipeline_override"))
+                OptionDefinition.Input(
+                    name,
+                    label,
+                    description,
+                    fields,
+                    obj.objectOrEmpty("pipeline_override"),
+                    applicability,
+                )
             }
 
             // 协议允许的类型，但热键是桌面端语义，Android 端跳过不投影
