@@ -14,6 +14,8 @@ import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.runner.FocusChannel
+import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
@@ -47,6 +49,9 @@ class RunForegroundService : Service() {
 
     /** 通知刷新节流的上次落点；MaaFramework 的进度回调能一秒来好几条 */
     private var lastUpdateAt = 0L
+
+    private var focusChannelReady = false
+    private var focusNotificationSeq = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -84,19 +89,65 @@ class RunForegroundService : Service() {
     private fun observe() {
         if (observeJob?.isActive == true) return
         observeJob = serviceScope.launch {
-            runnerPort.state
-                .collect { state ->
-                    if (!state.phase.isBusy) {
-                        stopNow()
-                        return@collect
+            launch {
+                runnerPort.state
+                    .collect { state ->
+                        if (!state.phase.isBusy) {
+                            stopNow()
+                            return@collect
+                        }
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastUpdateAt < MIN_UPDATE_INTERVAL_MS) return@collect
+                        lastUpdateAt = now
+                        notify(buildNotification(state))
                     }
-                    val now = SystemClock.elapsedRealtime()
-                    if (now - lastUpdateAt < MIN_UPDATE_INTERVAL_MS) return@collect
-                    lastUpdateAt = now
-                    notify(buildNotification(state))
-                }
+            }
+            launch { observeFocusNotifications() }
         }
     }
+
+    /**
+     * PI 声明 `display: notification` 的模板消息走系统通知
+     *
+     * 接在这里而不是 UI 层：那一档的用意就是「应用在后台时也收得到」，
+     * 而 SessionEffect 要 Activity 在场才消费得掉。本服务在整轮执行期都活着，正好覆盖
+     */
+    private suspend fun observeFocusNotifications() {
+        runnerPort.events.collect { event ->
+            if (event !is RunnerEvent.Focus) return@collect
+            if (FocusChannel.Notification !in event.focus.channels) return@collect
+            ensureFocusChannel()
+            val notification = NotificationCompat.Builder(this, FOCUS_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(getString(R.string.notification_focus_title))
+                .setContentText(event.focus.content)
+                // 模板正文可以很长，折叠成一行就没意义了
+                .setStyle(NotificationCompat.BigTextStyle().bigText(event.focus.content))
+                .setContentIntent(contentIntent())
+                .setAutoCancel(true)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .build()
+            // 逐条独立 id：这些是各自成立的消息，后一条不该顶掉前一条
+            runCatching { notificationManager.notify(nextFocusNotificationId(), notification) }
+                .onFailure { Timber.w(it, "Failed to post focus notification") }
+        }
+    }
+
+    /** 用完才建：不带 notification 模板的 PI 不该在系统设置里多出一个空频道 */
+    private fun ensureFocusChannel() {
+        if (focusChannelReady) return
+        val channel = NotificationChannel(
+            FOCUS_CHANNEL_ID,
+            getString(R.string.notification_channel_focus),
+            // 与常驻通知相反，这一档是 PI 作者明确要求推给用户的，得出声
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply { description = getString(R.string.notification_channel_focus_desc) }
+        notificationManager.createNotificationChannel(channel)
+        focusChannelReady = true
+    }
+
+    private fun nextFocusNotificationId(): Int =
+        FOCUS_NOTIFICATION_ID_BASE + (focusNotificationSeq++ % FOCUS_NOTIFICATION_ID_SLOTS)
 
     private fun stopNow() {
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -181,6 +232,12 @@ class RunForegroundService : Service() {
         private const val CHANNEL_ID = "run_execution"
         private const val NOTIFICATION_ID = 1001
         private const val MIN_UPDATE_INTERVAL_MS = 1_000L
+
+        private const val FOCUS_CHANNEL_ID = "run_focus"
+
+        /** 与 [NOTIFICATION_ID] 隔开一段，循环取用；一轮里堆几十条通知本身就是 PI 配错了 */
+        private const val FOCUS_NOTIFICATION_ID_BASE = 1100
+        private const val FOCUS_NOTIFICATION_ID_SLOTS = 20
 
         fun start(context: Context) {
             runCatching {

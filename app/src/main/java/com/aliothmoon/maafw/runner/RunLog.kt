@@ -13,13 +13,18 @@ data class RunLogEntry(
     val text: String,
 )
 
-/** 只用于着色与过滤；文本一律保持 MaaFramework 原样，不翻译也不清洗 */
+/**
+ * 只用于着色与过滤；文本一律保持 MaaFramework 原样，不翻译也不清洗
+ *
+ * [Focus] 是唯一例外：那是 PI 作者写给用户的正文，按 Markdown 渲染而不是等宽转储
+ */
 enum class RunLogKind {
     Log,
     Progress,
     Observation,
     Unknown,
     Malformed,
+    Focus,
 }
 
 /** 超过就丢最老的：一次长跑能积上万条，全留住会吃光内存也拖慢列表 */
@@ -31,6 +36,7 @@ fun RunnerEvent.toLogKind(): RunLogKind = when (this) {
     is RunnerEvent.TaskObservation -> RunLogKind.Observation
     is RunnerEvent.Unknown -> RunLogKind.Unknown
     is RunnerEvent.MalformedCallback -> RunLogKind.Malformed
+    is RunnerEvent.Focus -> RunLogKind.Focus
 }
 
 fun RunnerEvent.toLogText(): String = when (this) {
@@ -39,4 +45,5 @@ fun RunnerEvent.toLogText(): String = when (this) {
     is RunnerEvent.TaskObservation -> "$taskName $message"
     is RunnerEvent.Unknown -> raw
     is RunnerEvent.MalformedCallback -> raw
+    is RunnerEvent.Focus -> focus.content
 }

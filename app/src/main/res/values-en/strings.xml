@@ -144,6 +144,9 @@
     <!-- Notifications -->
     <string name="notification_channel_run">Task execution</string>
     <string name="notification_channel_run_desc">Stays up while a run is in progress so the system does not reclaim the process</string>
+    <string name="notification_channel_focus">Project messages</string>
+    <string name="notification_channel_focus_desc">Alerts the PI project asks to push to you during a run</string>
+    <string name="notification_focus_title">Project message</string>
     <string name="notification_run_preparing">Preparing</string>
     <string name="notification_run_running">Running</string>
     <string name="notification_run_stopping">Stopping</string>

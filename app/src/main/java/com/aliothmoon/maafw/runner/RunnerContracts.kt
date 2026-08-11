@@ -64,6 +64,9 @@ sealed interface RunnerEvent {
     data class TaskObservation(val taskName: String, val message: String) : RunnerEvent
     data class Unknown(val raw: String) : RunnerEvent
     data class MalformedCallback(val raw: String) : RunnerEvent
+
+    /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */
+    data class Focus(val focus: FocusMessage) : RunnerEvent
 }
 
 sealed interface RunnerCommandResult {

@@ -24,6 +24,7 @@ import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
+import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
@@ -34,11 +35,13 @@ import com.aliothmoon.maafw.runner.RunTrigger
 import com.aliothmoon.maafw.runner.toLogKind
 import com.aliothmoon.maafw.runner.toLogText
 import com.aliothmoon.maafw.runner.RunnerCommandResult
+import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.CoroutineDispatcher
@@ -167,16 +170,7 @@ class SessionViewModel(
             for (intent in intents) handle(intent)
         }
         viewModelScope.launch {
-            runnerPort.events.collect { event ->
-                appendLog(
-                    RunLogEntry(
-                        id = runLogId.incrementAndGet(),
-                        atMillis = System.currentTimeMillis(),
-                        kind = event.toLogKind(),
-                        text = event.toLogText(),
-                    ),
-                )
-            }
+            runnerPort.events.collect { event -> dispatchRunnerEvent(event) }
         }
         viewModelScope.launch {
             combine(projectRepository.state, configurationStore.data) { p, c -> p to c }
@@ -193,6 +187,29 @@ class SessionViewModel(
 
     fun onIntent(intent: SessionIntent) {
         intents.trySend(intent)
+    }
+
+    /**
+     * PI 模板消息按声明的渠道投递，其余事件一律进日志
+     *
+     * Notification 渠道不在这里发：Effect 要 UI 层在场才消费得掉，而那一档的用意正是
+     * 「应用在后台时也收得到」，由执行期一直活着的 RunForegroundService 接
+     */
+    private fun dispatchRunnerEvent(event: RunnerEvent) {
+        if (event is RunnerEvent.Focus) {
+            if (FocusChannel.Toast in event.focus.channels) {
+                effectChannel.trySend(SessionEffect.ShowMessage(uiTextFromProject(event.focus.content)))
+            }
+            if (FocusChannel.Log !in event.focus.channels) return
+        }
+        appendLog(
+            RunLogEntry(
+                id = runLogId.incrementAndGet(),
+                atMillis = System.currentTimeMillis(),
+                kind = event.toLogKind(),
+                text = event.toLogText(),
+            ),
+        )
     }
 
     private fun appendLog(entry: RunLogEntry) {

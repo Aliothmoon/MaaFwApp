@@ -25,6 +25,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import java.text.SimpleDateFormat
@@ -114,13 +115,23 @@ private fun RunLogRow(entry: RunLogEntry, time: String) {
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            text = entry.text,
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            color = entry.kind.color(),
-            modifier = Modifier.weight(1f),
-        )
+        // PI 模板正文按协议支持 Markdown 与 HTML 子集，等宽直出会把标签露给用户
+        if (entry.kind == RunLogKind.Focus) {
+            MaaMarkdown(
+                text = entry.text,
+                style = MaterialTheme.typography.labelSmall,
+                color = entry.kind.color(),
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            Text(
+                text = entry.text,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = entry.kind.color(),
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -132,4 +143,6 @@ private fun RunLogKind.color(): Color = when (this) {
     RunLogKind.Malformed -> MaterialTheme.colorScheme.error
     RunLogKind.Unknown -> MaterialTheme.colorScheme.onSurfaceVariant
     RunLogKind.Log -> MaterialTheme.colorScheme.onSurfaceVariant
+    // 唯一一条写给用户看的，颜色要压得住满屏灰字
+    RunLogKind.Focus -> MaterialTheme.colorScheme.onSurface
 }

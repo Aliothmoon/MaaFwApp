@@ -11,6 +11,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.project.PiInstaller
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
@@ -20,7 +21,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -65,16 +69,49 @@ class MaaFrameworkRunnerPort(
         // binder，远端仍握着我们的 callback stub，那一轮还在跑、结果照样会回来
         scope.launch {
             servicePort.serviceState.collect { serviceState ->
-                if (serviceState == PrivilegedServiceState.Died) abortOnServiceDeath()
+                if (serviceState == PrivilegedServiceState.Died) {
+                    abortRun("特权进程已退出", "特权进程在执行期间死亡，强制收回执行态")
+                }
+            }
+        }
+        scope.launch { reconcileWhileRunning() }
+    }
+
+    /**
+     * 定期反问特权进程「还在跑吗」，答否就收回执行态
+     *
+     * 状态全靠回调推进，`onFinished` 丢一次 phase 就永久卡在 Running。死亡通知只兜得住
+     * 进程没了这一种丢法，binder 拥塞丢包、远端异常没走到 finally 都兜不住，这里是通用的
+     * 那条兜底（桌面端 MXU 干脆全程只认 `MaaTaskerRunning` 的现查结果）
+     *
+     * 只在 Running 期问：Preparing 时 startRun 还没发出去，那边本来就没在跑
+     */
+    private suspend fun reconcileWhileRunning() {
+        _state.map { it.phase }.distinctUntilChanged().collectLatest { phase ->
+            if (phase != RunnerPhase.Running) return@collectLatest
+            while (true) {
+                delay(RECONCILE_INTERVAL_MS)
+                if (remoteRunning() != false) continue
+                delay(RECONCILE_GRACE_MS)
+                // onFinished 在宽限期内落地了，一切正常
+                if (!_state.value.phase.isBusy) return@collectLatest
+                if (remoteRunning() != false) continue
+                abortRun("特权进程报告本轮已结束", "对账发现执行早已结束但结果没回来，强制收回执行态")
+                return@collectLatest
             }
         }
     }
 
+    /** null = 问不出来（没连上或调用失败），不能据此判定，只有明确的 false 才算数 */
+    private suspend fun remoteRunning(): Boolean? = withContext(ioDispatcher) {
+        runCatching { servicePort.serviceOrNull()?.isRunning() }.getOrNull()
+    }
+
     /**
-     * 用 getAndUpdate 原子判并换：onFinished 可能刚好抢在死亡通知前落地，
+     * 用 getAndUpdate 原子判并换：真正的 onFinished 可能刚好抢在前头落地，
      * 那一份结果比这里编的准，不能覆盖
      */
-    private fun abortOnServiceDeath() {
+    private fun abortRun(resultReason: String, logMessage: String) {
         val previous = _state.getAndUpdate { current ->
             if (!current.phase.isBusy) {
                 current
@@ -82,15 +119,13 @@ class MaaFrameworkRunnerPort(
                 RunnerState(
                     phase = RunnerPhase.Idle,
                     latestResult = ExecutionResult.Failed(
-                        "特权进程已退出",
+                        resultReason,
                         current.activeExecution?.taskResults.orEmpty(),
                     ),
                 )
             }
         }
-        if (previous.phase.isBusy) {
-            Timber.w("特权进程在执行期间死亡，强制收回执行态")
-        }
+        if (previous.phase.isBusy) Timber.w(logMessage)
     }
 
     private val callback = object : IMaaRunnerCallback.Stub() {
@@ -270,15 +305,22 @@ class MaaFrameworkRunnerPort(
         return RunnerCommandResult.Rejected(reason)
     }
 
-    /** MaaFramework 的通知只做粗分派；节点级细节留在 details_json 里由日志消费 */
-    private fun toRunnerEvent(message: String, detailsJson: String): RunnerEvent = when {
-        message.isEmpty() -> RunnerEvent.MalformedCallback(detailsJson)
-        message.startsWith(NODE_PREFIX) -> RunnerEvent.TaskObservation(message, detailsJson)
-        message.startsWith(TASKER_PREFIX) ||
-            message.startsWith(RESOURCE_PREFIX) ||
-            message.startsWith(CONTROLLER_PREFIX) -> RunnerEvent.Log("$message $detailsJson")
+    /**
+     * MaaFramework 的通知只做粗分派；节点级细节留在 details_json 里由日志消费
+     *
+     * PI 声明了模板就只投递模板：那句话是作者写给用户的，同一个节点再刷一条原始转储只是噪音
+     */
+    private fun toRunnerEvent(message: String, detailsJson: String): RunnerEvent {
+        if (message.isEmpty()) return RunnerEvent.MalformedCallback(detailsJson)
+        FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it) }
+        return when {
+            message.startsWith(NODE_PREFIX) -> RunnerEvent.TaskObservation(message, detailsJson)
+            message.startsWith(TASKER_PREFIX) ||
+                message.startsWith(RESOURCE_PREFIX) ||
+                message.startsWith(CONTROLLER_PREFIX) -> RunnerEvent.Log("$message $detailsJson")
 
-        else -> RunnerEvent.Unknown("$message $detailsJson")
+            else -> RunnerEvent.Unknown("$message $detailsJson")
+        }
     }
 
     private companion object {
@@ -286,5 +328,16 @@ class MaaFrameworkRunnerPort(
         const val TASKER_PREFIX = "Tasker."
         const val RESOURCE_PREFIX = "Resource."
         const val CONTROLLER_PREFIX = "Controller."
+
+        /** 对账间隔：只在 Running 期问，问一次是一次 binder 往返，不必更密 */
+        const val RECONCILE_INTERVAL_MS = 5_000L
+
+        /**
+         * 一次否定读数之后的宽限
+         *
+         * 特权进程收尾时先 `running.set(false)` 再发 onFinished，中间那一瞬问到的就是
+         * 「没在跑」。onFinished 是 oneway 调用，微秒级就该落地，等这么久足够分辨
+         */
+        const val RECONCILE_GRACE_MS = 2_000L
     }
 }
