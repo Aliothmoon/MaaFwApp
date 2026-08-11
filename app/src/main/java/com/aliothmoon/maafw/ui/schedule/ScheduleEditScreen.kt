@@ -38,7 +38,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleIntent
+import com.aliothmoon.maafw.schedule.ScheduleFieldError
 import com.aliothmoon.maafw.schedule.ScheduleStrategy
+import com.aliothmoon.maafw.schedule.validationErrors
 import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -84,6 +86,7 @@ fun ScheduleEditScreen(
 
     // initial 只作首帧种子：打开后归草稿管，外部再变也不覆盖用户正在改的
     var draft by remember(initial.id) { mutableStateOf(initial) }
+    val errors = draft.validationErrors
     var intervalText by remember(initial.id) {
         mutableStateOf(initial.intervalMinutes?.toString().orEmpty())
     }
@@ -133,6 +136,12 @@ fun ScheduleEditScreen(
                 label = { Text(stringResource(R.string.schedule_edit_name)) },
                 placeholder = { Text(stringResource(R.string.schedule_edit_name_placeholder)) },
                 singleLine = true,
+                isError = ScheduleFieldError.NAME in errors,
+                supportingText = {
+                    if (ScheduleFieldError.NAME in errors) {
+                        Text(stringResource(R.string.schedule_edit_error_name))
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -150,6 +159,7 @@ fun ScheduleEditScreen(
             when (draft.scheduleType) {
                 ScheduleType.FIXED_TIME -> FixedTimeSection(
                     draft = draft,
+                    errors = errors,
                     onToggleDay = { day ->
                         val next = if (day in draft.daysOfWeek) draft.daysOfWeek - day else draft.daysOfWeek + day
                         draft = draft.copy(daysOfWeek = next)
@@ -164,6 +174,7 @@ fun ScheduleEditScreen(
 
                 ScheduleType.INTERVAL -> IntervalSection(
                     draft = draft,
+                    errors = errors,
                     intervalText = intervalText,
                     onIntervalTextChange = { text ->
                         intervalText = text.filter { it.isDigit() }.take(MAX_INTERVAL_DIGITS)
@@ -183,14 +194,6 @@ fun ScheduleEditScreen(
                             onCheckedChange = { draft = draft.copy(enabled = it) },
                         )
                     },
-                )
-            }
-
-            if (!draft.isComplete) {
-                Text(
-                    text = stringResource(R.string.schedule_edit_incomplete),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
                 )
             }
 
@@ -214,6 +217,7 @@ fun ScheduleEditScreen(
                         viewModel.onIntent(ScheduleIntent.Save(draft.normalized()))
                         onBack()
                     },
+                    enabled = errors.isEmpty(),
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(stringResource(R.string.schedule_edit_save))
@@ -265,6 +269,7 @@ fun ScheduleEditScreen(
 @Composable
 private fun FixedTimeSection(
     draft: ScheduleStrategy,
+    errors: Set<ScheduleFieldError>,
     onToggleDay: (DayOfWeek) -> Unit,
     onEditTime: (Int) -> Unit,
     onRemoveTime: (Int) -> Unit,
@@ -275,13 +280,20 @@ private fun FixedTimeSection(
             selected = draft.daysOfWeek,
             onToggle = onToggleDay,
         )
+        if (ScheduleFieldError.DAYS in errors) {
+            Text(
+                text = stringResource(R.string.schedule_edit_error_days),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
     MaaCard(title = stringResource(R.string.schedule_edit_times)) {
         if (draft.executionTimes.isEmpty()) {
             Text(
                 text = stringResource(R.string.schedule_edit_no_times),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (ScheduleFieldError.TIMES in errors) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             draft.executionTimes.forEachIndexed { index, time ->
@@ -317,6 +329,7 @@ private fun FixedTimeSection(
 @Composable
 private fun IntervalSection(
     draft: ScheduleStrategy,
+    errors: Set<ScheduleFieldError>,
     intervalText: String,
     onIntervalTextChange: (String) -> Unit,
     onPickStartDate: () -> Unit,
@@ -334,12 +347,25 @@ private fun IntervalSection(
                 Text(draft.startZoned()?.toLocalTime()?.toString() ?: LocalTime.of(DEFAULT_HOUR, 0).toString())
             }
         }
+        if (ScheduleFieldError.START in errors) {
+            Text(
+                text = stringResource(R.string.schedule_edit_error_start),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
     MaaCard(title = stringResource(R.string.schedule_edit_interval)) {
         OutlinedTextField(
             value = intervalText,
             onValueChange = onIntervalTextChange,
             singleLine = true,
+            isError = ScheduleFieldError.INTERVAL in errors,
+            supportingText = {
+                if (ScheduleFieldError.INTERVAL in errors) {
+                    Text(stringResource(R.string.schedule_edit_error_interval))
+                }
+            },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )

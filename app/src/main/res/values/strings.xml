@@ -199,6 +199,11 @@
     <string name="schedule_edit_save">保存</string>
     <string name="schedule_edit_delete">删除</string>
     <string name="schedule_edit_incomplete">规则不完整，保存后不会触发</string>
+    <string name="schedule_edit_error_name">名称不能为空</string>
+    <string name="schedule_edit_error_days">至少选择一天</string>
+    <string name="schedule_edit_error_times">至少添加一个触发时刻</string>
+    <string name="schedule_edit_error_start">请选择起始时间</string>
+    <string name="schedule_edit_error_interval">间隔须大于 0 分钟</string>
 
     <string name="schedule_interval_minutes">每 %1$d 分钟</string>
     <string name="schedule_interval_hours">每 %1$d 小时</string>

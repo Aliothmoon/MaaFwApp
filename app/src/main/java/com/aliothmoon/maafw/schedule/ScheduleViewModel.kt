@@ -71,6 +71,8 @@ class ScheduleViewModel(
     private suspend fun handle(intent: ScheduleIntent) {
         when (intent) {
             is ScheduleIntent.Save -> {
+                // 兜底：UI 已按 isValid 门禁保存钮，这里再挡一道，不让残规则落盘
+                if (!intent.strategy.isValid) return
                 val existing = store.findById(intent.strategy.id)
                 if (existing == null) store.add(intent.strategy) else store.update(intent.strategy)
                 // 规则变了旧闹钟就不作数了，先撤后立

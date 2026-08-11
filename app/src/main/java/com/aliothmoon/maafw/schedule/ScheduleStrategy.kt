@@ -83,3 +83,23 @@ enum class TriggerResult {
     /** 前台服务起不来，闹钟链靠 receiver 兜底续上 */
     FAILED_SERVICE_START,
 }
+/** 编辑期字段级校验；空集 = 可保存 */
+enum class ScheduleFieldError { NAME, DAYS, TIMES, START, INTERVAL }
+
+val ScheduleStrategy.validationErrors: Set<ScheduleFieldError>
+    get() = buildSet {
+        if (name.trim().isBlank()) add(ScheduleFieldError.NAME)
+        when (scheduleType) {
+            ScheduleType.FIXED_TIME -> {
+                if (daysOfWeek.isEmpty()) add(ScheduleFieldError.DAYS)
+                if (executionTimes.isEmpty()) add(ScheduleFieldError.TIMES)
+            }
+            ScheduleType.INTERVAL -> {
+                if (startTimeMs == null) add(ScheduleFieldError.START)
+                if ((intervalMinutes ?: 0) <= 0) add(ScheduleFieldError.INTERVAL)
+            }
+        }
+    }
+
+/** 是否可保存（无字段错误）。UI 门禁保存钮 + VM 兜底都用它 */
+val ScheduleStrategy.isValid: Boolean get() = validationErrors.isEmpty()
