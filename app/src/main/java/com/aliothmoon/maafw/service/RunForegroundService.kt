@@ -15,7 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.runner.FocusChannel
-import com.aliothmoon.maafw.runner.RunnerEvent
+import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
@@ -43,6 +43,7 @@ import timber.log.Timber
 class RunForegroundService : Service() {
 
     private val runnerPort: RunnerPort by inject()
+    private val focusDispatcher: FocusDispatcher by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var observeJob: Job? = null
@@ -111,18 +112,20 @@ class RunForegroundService : Service() {
      *
      * 接在这里而不是 UI 层：那一档的用意就是「应用在后台时也收得到」，
      * 而 SessionEffect 要 Activity 在场才消费得掉。本服务在整轮执行期都活着，正好覆盖
+     *
+     * 收的是 [FocusDispatcher] 补完之后的正文，不是原始事件——`$key`、文件路径、
+     * `{name}` 这些形态得先补完，否则推给用户的是没处理过的模板
      */
     private suspend fun observeFocusNotifications() {
-        runnerPort.events.collect { event ->
-            if (event !is RunnerEvent.Focus) return@collect
-            if (FocusChannel.Notification !in event.focus.channels) return@collect
+        focusDispatcher.resolved.collect { focus ->
+            if (FocusChannel.Notification !in focus.channels) return@collect
             ensureFocusChannel()
             val notification = NotificationCompat.Builder(this, FOCUS_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(getString(R.string.notification_focus_title))
-                .setContentText(event.focus.content)
+                .setContentText(focus.content)
                 // 模板正文可以很长，折叠成一行就没意义了
-                .setStyle(NotificationCompat.BigTextStyle().bigText(event.focus.content))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(focus.content))
                 .setContentIntent(contentIntent())
                 .setAutoCancel(true)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)

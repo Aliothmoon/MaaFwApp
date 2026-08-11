@@ -12,21 +12,41 @@ import kotlinx.serialization.json.JsonPrimitive
  * （MaaFramework `docs/zh_cn/3.3-ProjectInterfaceV2协议.md`「消息模板机制」）
  *
  * 与 [RunnerEvent] 其余成员的分工：那些是 MaaFramework 的原始转储，给排障看；
- * 这条是 PI 作者写给终端用户的话，外壳负责替换占位符再按 [channels] 投递
+ * 这条是 PI 作者写给终端用户的话，外壳负责补完再按 [channels] 投递
+ *
+ * [content] 此刻**还没替换占位符**：协议的 Client 处理流程把替换放在最后一步，而 `$i18n`
+ * 译文与文件形态的正文本身可能带着 `{name}`。替换要用的那份数据随 [placeholders] 一起走，
+ * 因为到替换那一刻原始 details 早已不在手上
  */
 data class FocusMessage(
     val content: String,
     val channels: Set<FocusChannel>,
+    /** 同一条回调 details 里的标量字段；非标量取不出可比的文本，不收 */
+    val placeholders: Map<String, String> = emptyMap(),
 )
 
 /**
  * 协议的 `display` 有五档，Android 外壳只落地三档
  *
  * `dialog` / `modal` 一并归到 [Log]：modal 的语义是「弹出后任务暂停等待用户确认」，
- * 而回调是 oneway 单向通知，没有让外壳把 pipeline 卡住再放行的通道；桌面端 MXU 同样
- * 把这两档当日志处理。认不出的档也落 [Log]——协议加档时少显示一处，好过整条丢掉
+ * 而回调是 oneway 单向通知，没有让外壳把 pipeline 卡住再放行的通道。dialog 协议上是
+ * 非阻塞的，本可以做成弹窗，只是外壳还没有这一档展示面，先跟着降级（见 pi-compatibility.md）
+ * 认不出的档也落 [Log]——协议加档时少显示一处，好过整条丢掉
  */
 enum class FocusChannel { Log, Toast, Notification }
+
+/**
+ * 把 `{key}` 换成 [placeholders] 里的值
+ *
+ * 放在补完的**最后一步**（协议 3.3「Client 处理流程」第 5 步）：查表译文与读进来的文件
+ * 正文都可能带着占位符，先替换就轮不到它们
+ *
+ * 未命中的原样透传，与 RunPlanBuilder 一致：`{…}` 不全是要替换的东西
+ */
+fun substituteFocusPlaceholders(content: String, placeholders: Map<String, String>): String =
+    FocusParser.PLACEHOLDER.replace(content) { match ->
+        placeholders[match.groupValues[1]] ?: match.value
+    }
 
 /**
  * 从回调的 `details_json` 里取出本条消息对应的模板
@@ -47,7 +67,7 @@ object FocusParser {
     private const val DISPLAY_KEY = "display"
 
     /** 闭括号必须转义：Android 的 ICU 正则不接受孤立的 `}`（与 RunPlanBuilder 同款坑） */
-    private val PLACEHOLDER = Regex("""\{([^{}]+)\}""")
+    internal val PLACEHOLDER = Regex("""\{([^{}]+)\}""")
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -75,7 +95,14 @@ object FocusParser {
         // content 缺省是合法的：那种条目只用来配 trace，没有要展示的东西
         if (rawContent.isNullOrBlank()) return null
 
-        return FocusMessage(substitute(rawContent, details), channels)
+        return FocusMessage(rawContent, channels, scalarFields(details))
+    }
+
+    /** `focus` 自己是对象，不会混进来；其余非标量同样取不出可比的文本 */
+    private fun scalarFields(details: JsonObject): Map<String, String> = buildMap {
+        details.forEach { (key, value) ->
+            (value as? JsonPrimitive)?.contentOrNullIfNotString()?.let { put(key, it) }
+        }
     }
 
     private fun parseChannels(display: JsonElement?): Set<FocusChannel> {
@@ -95,12 +122,6 @@ object FocusParser {
             }
         }
     }
-
-    /** 未命中的占位符原样透传，与 RunPlanBuilder 一致：`{…}` 不全是要替换的东西 */
-    private fun substitute(template: String, details: JsonObject): String =
-        PLACEHOLDER.replace(template) { match ->
-            (details[match.groupValues[1]] as? JsonPrimitive)?.content ?: match.value
-        }
 
     /** JSON 的 `null` 字面量也是 JsonPrimitive，直接取 content 会拿到字符串 "null" */
     private fun JsonPrimitive.contentOrNullIfNotString(): String? =

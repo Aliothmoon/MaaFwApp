@@ -25,7 +25,10 @@ class FocusParserTest {
     fun `string shorthand defaults to the log channel`() {
         val details = """{"name":"NodeA","focus":{"Node.Action.Starting":"{name} 开始执行"}}"""
         val focus = FocusParser.parse("Node.Action.Starting", details)
-        assertEquals(FocusMessage("NodeA 开始执行", setOf(FocusChannel.Log)), focus)
+        // 正文原样留着，占位符要等补完的最后一步才替换
+        assertEquals("{name} 开始执行", focus?.content)
+        assertEquals(setOf(FocusChannel.Log), focus?.channels)
+        assertEquals(mapOf("name" to "NodeA"), focus?.placeholders)
     }
 
     @Test
@@ -43,13 +46,9 @@ class FocusParserTest {
             }
         """.trimIndent()
         val focus = FocusParser.parse("Node.Action.Starting", details)
-        assertEquals(
-            FocusMessage(
-                "NodeA 开始执行，任务 ID: 12345",
-                setOf(FocusChannel.Log, FocusChannel.Toast),
-            ),
-            focus,
-        )
+        assertEquals("{name} 开始执行，任务 ID: {task_id}", focus?.content)
+        assertEquals(setOf(FocusChannel.Log, FocusChannel.Toast), focus?.channels)
+        assertEquals(mapOf("task_id" to "12345", "name" to "NodeA"), focus?.placeholders)
     }
 
     @Test
@@ -87,14 +86,27 @@ class FocusParserTest {
     @Test
     fun `unmatched placeholder is passed through verbatim`() {
         val details = """{"name":"NodeA","focus":{"M":"{name} 在 {nowhere} 上"}}"""
-        assertEquals("NodeA 在 {nowhere} 上", FocusParser.parse("M", details)?.content)
+        val focus = FocusParser.parse("M", details)!!
+        assertEquals(
+            "NodeA 在 {nowhere} 上",
+            substituteFocusPlaceholders(focus.content, focus.placeholders),
+        )
     }
 
-    /** 嵌套对象取不出标量，原样留着比塞个 JSON 片段强 */
+    /** 嵌套对象取不出标量，不收进替换表，正文里那处原样留着 */
     @Test
     fun `non-primitive placeholder is passed through verbatim`() {
         val details = """{"reco":{"box":[1,2]},"focus":{"M":"命中 {reco}"}}"""
-        assertEquals("命中 {reco}", FocusParser.parse("M", details)?.content)
+        val focus = FocusParser.parse("M", details)!!
+        assertEquals(emptyMap<String, String>(), focus.placeholders)
+        assertEquals("命中 {reco}", substituteFocusPlaceholders(focus.content, focus.placeholders))
+    }
+
+    /** focus 自己是对象，不该混进替换表 */
+    @Test
+    fun `the focus dictionary itself never becomes a placeholder`() {
+        val details = """{"name":"NodeA","focus":{"M":"x"}}"""
+        assertEquals(mapOf("name" to "NodeA"), FocusParser.parse("M", details)?.placeholders)
     }
 
     @Test

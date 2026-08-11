@@ -29,6 +29,7 @@ import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusContentResolver
+import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
 import com.aliothmoon.maafw.runner.PassthroughFocusContentResolver
 import com.aliothmoon.maafw.runner.RecordingFocusContentResolver
@@ -149,7 +150,7 @@ class SessionViewModelTest {
             permissionGateway = permissions,
             appSettings = settings,
             localeController = locale,
-            focusContentResolver = PassthroughFocusContentResolver,
+            focusDispatcher = idleFocusDispatcher(),
             computeDispatcher = mainDispatcher,
         )
         return Triple(vm, store, runner)
@@ -158,7 +159,7 @@ class SessionViewModelTest {
     /** 只换 RunnerPort 的构造点；createVm 的返回三元组绑死了 StubRunnerPort */
     private fun TestScope.createVmWithRunner(
         runner: RunnerPort,
-        focus: FocusContentResolver = PassthroughFocusContentResolver,
+        focusDispatcher: FocusDispatcher = idleFocusDispatcher(),
     ): SessionViewModel {
         val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
         val store = readyStore()
@@ -172,10 +173,21 @@ class SessionViewModelTest {
             permissionGateway = FakePermissionGateway(),
             appSettings = settings,
             localeController = {},
-            focusContentResolver = focus,
+            focusDispatcher = focusDispatcher,
             computeDispatcher = mainDispatcher,
         )
     }
+
+    /** 不接任何 RunnerPort 的 dispatcher：focus 的补完另有 FocusDispatcherTest 覆盖 */
+    private fun TestScope.idleFocusDispatcher(
+        resolver: FocusContentResolver = PassthroughFocusContentResolver,
+        runner: RunnerPort = RecordingEventRunnerPort(),
+    ) = FocusDispatcher(
+        projectRepository = FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
+        resolver = resolver,
+        runnerPort = runner,
+        scope = backgroundScope,
+    )
 
     @Test
     fun `run log keeps only the latest entries and clears on intent`() = runTest(mainDispatcher) {
@@ -211,75 +223,31 @@ class SessionViewModelTest {
         assertEquals("""{"name":"NodeA"}""", vm.runLog.value[1].detail)
     }
 
-    /** `$key` 查 PI 的翻译表；这一步必须在判文件路径之前，查出来的结果本身可能就是路径 */
+    /**
+     * 补完之后按渠道分流；补完本身的规则见 FocusDispatcherTest
+     *
+     * dispatcher 与 VM 共用同一个 RunnerPort，事件才走得通那条补完流
+     */
     @Test
-    fun `focus template resolves the pi translation table`() = runTest(mainDispatcher) {
+    fun `focus with the log channel reaches the run log`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
-        val vm = createVmWithRunner(runner)
+        val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
 
-        runner.emit(RunnerEvent.Focus(FocusMessage("\$tip.canister", setOf(FocusChannel.Log))))
+        runner.emit(RunnerEvent.Focus(FocusMessage("显影罐不足", setOf(FocusChannel.Log))))
+        advanceUntilIdle()
 
+        assertEquals(RunLogKind.Focus, vm.runLog.value.single().kind)
         assertEquals(UiText.Verbatim("显影罐不足"), vm.runLog.value.single().text)
-    }
-
-    /** 查无此键回落到键名本身，与加载期的 $i18n 处理一致 */
-    @Test
-    fun `unknown translation key falls back to the key`() = runTest(mainDispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val vm = createVmWithRunner(runner)
-
-        runner.emit(RunnerEvent.Focus(FocusMessage("\$missing", setOf(FocusChannel.Log))))
-
-        assertEquals(UiText.Verbatim("missing"), vm.runLog.value.single().text)
-    }
-
-    @Test
-    fun `focus image placeholder goes through the resolver`() = runTest(mainDispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val resolver = RecordingFocusContentResolver()
-        val vm = createVmWithRunner(runner, resolver)
-
-        runner.emit(RunnerEvent.Focus(FocusMessage("命中截图 ![]({image})", setOf(FocusChannel.Log))))
-        advanceUntilIdle()
-
-        assertEquals(listOf("命中截图 ![]({image})"), resolver.requests)
-        assertEquals(UiText.Verbatim("命中截图 ![](file:///tmp/shot.png)"), vm.runLog.value.single().text)
-    }
-
-    /** 文件路径形态的正文读成文本再展示 */
-    @Test
-    fun `focus file path body goes through the resolver`() = runTest(mainDispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val resolver = RecordingFocusContentResolver()
-        val vm = createVmWithRunner(runner, resolver)
-
-        runner.emit(RunnerEvent.Focus(FocusMessage("./docs/tip.md", setOf(FocusChannel.Log))))
-        advanceUntilIdle()
-
-        assertEquals(listOf("./docs/tip.md"), resolver.requests)
-        assertEquals(UiText.Verbatim("文件正文"), vm.runLog.value.single().text)
-    }
-
-    /** 直接文本不该为它起协程，更不该经过 resolver */
-    @Test
-    fun `plain focus text skips the resolver entirely`() = runTest(mainDispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val resolver = RecordingFocusContentResolver()
-        val vm = createVmWithRunner(runner, resolver)
-
-        runner.emit(RunnerEvent.Focus(FocusMessage("显影罐不足，请补充", setOf(FocusChannel.Log))))
-
-        assertTrue(resolver.requests.isEmpty())
-        assertEquals(UiText.Verbatim("显影罐不足，请补充"), vm.runLog.value.single().text)
     }
 
     /** 只声明 toast 的模板不进日志 */
     @Test
     fun `toast only focus does not reach the log`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
-        val vm = createVmWithRunner(runner)
+        val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
 
         runner.emit(RunnerEvent.Focus(FocusMessage("弹一下", setOf(FocusChannel.Toast))))
+        advanceUntilIdle()
 
         assertTrue(vm.runLog.value.isEmpty())
     }

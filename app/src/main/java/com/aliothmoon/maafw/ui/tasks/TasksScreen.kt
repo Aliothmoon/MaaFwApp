@@ -166,7 +166,7 @@ private fun TasksContent(
                             // 齐头并进时任务卡片会一片片盖住下面的日志文字，盖住的当场消失、
                             // 缝隙里的还在，看着就是闪
                             //
-                            // 但也不能完全错开——交接那一帧两边都是全透明，空一帧同样像闪。
+                            // 但也不能完全错开——交接那一帧两边都是全透明，空一帧同样像闪
                             // 让淡入早于淡出结束一点点，重叠区间落在两边都很淡的地方
                             val enter = fadeIn(
                                 tween(FadeInMillis, FadeInDelayMillis, MaaMotion.EmphasizedDecelerate),

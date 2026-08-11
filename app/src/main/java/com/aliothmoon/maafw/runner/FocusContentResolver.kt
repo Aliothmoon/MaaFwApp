@@ -11,7 +11,13 @@ import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
-/** focus 模板正文里的 `{image}` 占位符（协议见 3.3 的「消息模板机制」） */
+/**
+ * focus 模板正文里的 `{image}` 占位符
+ *
+ * **不是 PI 协议的东西**：`3.3-ProjectInterfaceV2协议.md` 与 `2.3-回调协议.md` 都没有它，
+ * 任何一种 `details_json` 也不带 `image` 字段。这是照桌面端 MXU 的同名扩展做的，
+ * PI 里写了它才有意义，换个客户端不保证认
+ */
 const val FOCUS_IMAGE_PLACEHOLDER = "{image}"
 
 /**

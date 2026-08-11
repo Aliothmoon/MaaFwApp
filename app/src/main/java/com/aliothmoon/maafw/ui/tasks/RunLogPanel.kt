@@ -48,7 +48,7 @@ import java.util.Locale
 /**
  * 运行日志，就地占掉任务列表那块，不再是盖住整屏的 sheet
  *
- * 内嵌而非弹层：看日志时多半同时要看任务进度与那颗启停按钮，全屏弹层把两者都挡了。
+ * 内嵌而非弹层：看日志时多半同时要看任务进度与那颗启停按钮，全屏弹层把两者都挡了
  * 开关在配置行右侧，本组件不自带关闭钮
  *
  * 「关键」档是 `RunLogComposer` 合成过的人话；「全部」档另外露出没被合成的原始回调，
@@ -120,7 +120,7 @@ internal fun RunLogPanel(
                 last == null || last.index >= listState.layoutInfo.totalItemsCount - 2
             }
         }
-        // 只在用户本来就贴着底时才跟；否则他往上翻着看，新行一来就被拽回去。
+        // 只在用户本来就贴着底时才跟；否则他往上翻着看，新行一来就被拽回去；
         // 不用 animateScrollToItem：高频事件下动画会排队打架
         LaunchedEffect(visible.lastOrNull()?.id) {
             if (pinnedToBottom) listState.scrollToItem(visible.lastIndex)

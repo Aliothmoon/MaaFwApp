@@ -36,6 +36,7 @@ import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.project.readPiFingerprint
 import com.aliothmoon.maafw.runner.FocusContentResolver
+import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.AutoSleepHook
@@ -186,6 +187,16 @@ val appModule = module {
         )
     }
 
+    // 进程级：notification 那一档要在 Activity 销毁后仍然响
+    single {
+        FocusDispatcher(
+            projectRepository = get(),
+            resolver = get(),
+            runnerPort = get(),
+            scope = get(named<AppCoroutineScope>()),
+        )
+    }
+
     single<PreviewPort> {
         RemotePreviewPort(
             scope = get(named<AppCoroutineScope>()),
@@ -278,7 +289,7 @@ val appModule = module {
             permissionGateway = get(),
             appSettings = get(),
             localeController = AppLocales,
-            focusContentResolver = get(),
+            focusDispatcher = get(),
             computeDispatcher = Dispatchers.Default,
         )
     }

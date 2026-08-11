@@ -181,15 +181,7 @@ class RunLogComposer {
 data class RunLogContext(
     val currentTaskName: String? = null,
     val resourceLabel: String? = null,
-    /** PI 的 `languages` 查表，供模板正文的 `$key` 用 */
-    val translations: Map<String, String> = emptyMap(),
 ) {
-    fun resolveI18n(text: String): String {
-        if (!text.startsWith("$")) return text
-        val key = text.substring(1)
-        return translations[key] ?: key
-    }
-
     /** 拿不到当前任务名就退回 PI 的 entry：宁可显示内部名，也不显示空 */
     fun taskLabel(details: JsonObject?): String =
         currentTaskName?.takeIf { it.isNotBlank() }
