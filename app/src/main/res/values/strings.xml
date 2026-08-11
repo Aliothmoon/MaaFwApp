@@ -480,7 +480,7 @@
     <string name="foreground_resolution_too_small">屏幕 %1$s 太小，放不下 16:9 的画面</string>
     <string name="foreground_resolution_required">当前屏幕比例不是 16:9，请先点「修改分辨率」</string>
     <string name="foreground_service_required">请先连接 Shizuku 或 Root 后端</string>
-    <string name="foreground_overlay_unsupported">前台模式的操作面板还没做好，暂时不能用</string>
+    <string name="foreground_overlay_unsupported">操作面板暂不可用</string>
 
     <!-- 设置页「通知」分组入口 -->
     <string name="settings_section_notification">通知</string>

@@ -1,8 +1,10 @@
 package com.aliothmoon.maafw.util
 
 import android.content.Context
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.util.DisplayMetrics
+import android.view.Display
 import android.view.WindowManager
 import kotlin.math.abs
 
@@ -11,6 +13,9 @@ import kotlin.math.abs
  *
  * 与后台虚拟屏那套（`ResolutionPreference` / `DisplayResolution`）无关：那边是自己建的屏，
  * 尺寸由外壳指定；这里读的是物理主屏，前台模式在上面直接采集与注入
+ *
+ * 调用方是进程级组件（`DisplaySizeController`），手上只有 Application context，
+ * 所以取屏幕的方式受限——见 [physical] 上的说明
  */
 object ScreenSize {
 
@@ -27,7 +32,7 @@ object ScreenSize {
     /**
      * 当前**生效**的主屏尺寸，含 `setForcedDisplaySize` 改过之后的值
      *
-     * 不能用 `context.resources.displayMetrics`：Application context 的那份不反映强改后的尺寸
+     * 不能用 `context.resources.displayMetrics`：Application 那份不反映强改后的尺寸
      * （实测 Android 9 上一直返回物理分辨率减系统栏），校验会永远判错
      */
     fun current(context: Context): Pair<Int, Int> {
@@ -44,19 +49,24 @@ object ScreenSize {
     }
 
     /**
-     * 出厂物理尺寸，**不受** `setForcedDisplaySize` 影响
+     * 出厂物理尺寸，**不受** `setForcedDisplaySize` 影响——它是硬件 mode 的分辨率
      *
      * 算 16:9 目标值要用它：拿改过的当前尺寸去算，连点两次「修改分辨率」会一路缩下去
+     *
+     * 经 [DisplayManager] 取 [Display] 而不是 `context.display`：后者会校验调用方是不是
+     * visual context（Activity 或 `createWindowContext` 造的），拿 Application context
+     * 调直接抛 `UnsupportedOperationException: Tried to obtain display from a Context not
+     * associated with one`。MaaMeow 那边用 `context.display` 是因为它从 UI 把 Activity
+     * context 传了下来，而这里的调用方在进程级，不该持有 Activity
+     *
+     * 取不到屏幕时返回 0×0，由 [fit16x9] 判成「换算无意义」
      */
     fun physical(context: Context): Pair<Int, Int> {
-        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            context.display
-        } else {
-            @Suppress("DEPRECATION")
-            (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay
-        }
-        val mode = display?.mode
-        return (mode?.physicalWidth ?: 0) to (mode?.physicalHeight ?: 0)
+        val mode = context.getSystemService(DisplayManager::class.java)
+            ?.getDisplay(Display.DEFAULT_DISPLAY)
+            ?.mode
+            ?: return 0 to 0
+        return mode.physicalWidth to mode.physicalHeight
     }
 
     /** 按长短边比判，与横竖屏无关 */

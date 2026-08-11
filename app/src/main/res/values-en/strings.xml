@@ -486,7 +486,7 @@
     <string name="foreground_resolution_too_small">The screen %1$s is too small to fit a 16:9 picture</string>
     <string name="foreground_resolution_required">The screen is not 16:9 yet — tap Change resolution first</string>
     <string name="foreground_service_required">Connect the Shizuku or Root backend first</string>
-    <string name="foreground_overlay_unsupported">The foreground control panel is not ready yet</string>
+    <string name="foreground_overlay_unsupported">The control panel is unavailable for now</string>
 
     <!-- Settings "Notifications" group entry -->
     <string name="settings_section_notification">Notifications</string>
