@@ -6,6 +6,8 @@ import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.duplicateTask
+import com.aliothmoon.maafw.domain.renameTask
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -308,6 +310,17 @@ class SessionViewModel(
                     configuration.copy(
                         tasks = configuration.tasks.filterNot { it.instanceId == intent.taskInstanceId },
                     )
+                }
+            }
+            is SessionIntent.DuplicateTask -> guarded {
+                mutateConfiguration(intent.configurationId) {
+                    it.duplicateTask(intent.taskInstanceId, intent.customLabel)
+                }
+            }
+
+            is SessionIntent.RenameTask -> guarded {
+                mutateConfiguration(intent.configurationId) {
+                    it.renameTask(intent.taskInstanceId, intent.customLabel)
                 }
             }
 

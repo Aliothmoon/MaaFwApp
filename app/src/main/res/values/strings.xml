@@ -31,6 +31,11 @@
     <string name="tasks_preview_idle">未在运行</string>
     <string name="tasks_remove">移除</string>
     <string name="tasks_drag_reorder">拖动排序</string>
+    <string name="tasks_rename">重命名</string>
+    <string name="tasks_duplicate">复制</string>
+    <string name="tasks_rename_dialog_title">重命名任务</string>
+    <string name="tasks_rename_label">名称</string>
+    <string name="tasks_copy_suffix"> (副本)</string>
     <string name="tasks_description_title">任务说明</string>
 
     <!-- 运行开关 -->

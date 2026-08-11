@@ -28,7 +28,10 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,11 +42,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
+import com.aliothmoon.maafw.domain.uniqueCopyLabel
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
@@ -61,6 +68,9 @@ internal fun TaskList(
     onEditTask: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val copySuffix = stringResource(R.string.tasks_copy_suffix)
+    var renamingTask by remember { mutableStateOf<ResolvedConfiguredTask?>(null) }
+
     if (active.tasks.isEmpty()) {
         EmptyState(
             icon = Icons.Outlined.AddTask,
@@ -134,6 +144,11 @@ internal fun TaskList(
                     onRemove = {
                         onIntent(SessionIntent.RemoveTask(active.id, task.instanceId))
                     },
+                    onDuplicate = {
+                        val copyName = uniqueCopyLabel(task.label, copySuffix, active.tasks.map { it.label })
+                        onIntent(SessionIntent.DuplicateTask(active.id, task.instanceId, copyName))
+                    },
+                    onRename = { renamingTask = task },
                     onClick = {
                         if (task.hasOptions) onEditTask(task.instanceId)
                     },
@@ -141,6 +156,34 @@ internal fun TaskList(
                 )
             }
         }
+    }
+    renamingTask?.let { task ->
+        var name by remember(task.instanceId) {
+            mutableStateOf(TextFieldValue(task.label, TextRange(0, task.label.length)))
+        }
+        AlertDialog(
+            onDismissRequest = { renamingTask = null },
+            title = { Text(stringResource(R.string.tasks_rename_dialog_title)) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.tasks_rename_label)) },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onIntent(SessionIntent.RenameTask(active.id, task.instanceId, name.text.trim()))
+                    renamingTask = null
+                }) { Text(stringResource(R.string.common_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { renamingTask = null }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
     }
 }
 

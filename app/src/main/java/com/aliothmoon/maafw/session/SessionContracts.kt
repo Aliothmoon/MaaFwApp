@@ -162,6 +162,20 @@ sealed interface SessionIntent {
         val taskInstanceId: String,
     ) : SessionIntent
 
+    /** 克隆任务（新 instanceId，继承 taskName/启用/选项）；customLabel 由调用方算好「展示名 (副本)」传入 */
+    data class DuplicateTask(
+        val configurationId: RunConfigurationId,
+        val taskInstanceId: String,
+        val customLabel: String,
+    ) : SessionIntent
+
+    /** 改显示别名；null/空白 = 清除别名回退定义 label（规范 taskName 不动，pipeline 不受影响） */
+    data class RenameTask(
+        val configurationId: RunConfigurationId,
+        val taskInstanceId: String,
+        val customLabel: String?,
+    ) : SessionIntent
+
     data class ToggleTask(
         val configurationId: RunConfigurationId,
         val taskInstanceId: String,

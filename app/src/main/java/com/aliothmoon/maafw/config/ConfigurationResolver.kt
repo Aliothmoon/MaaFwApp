@@ -131,7 +131,7 @@ object ConfigurationResolver {
                 ResolvedConfiguredTask(
                     instanceId = configured.instanceId,
                     taskName = configured.taskName,
-                    label = configured.taskName,
+                    label = configured.customLabel ?: configured.taskName,
                     description = null,
                     enabled = configured.enabled,
                     applicable = false,
@@ -144,7 +144,7 @@ object ConfigurationResolver {
                 ResolvedConfiguredTask(
                     instanceId = configured.instanceId,
                     taskName = configured.taskName,
-                    label = taskDefinition.label,
+                    label = configured.customLabel ?: taskDefinition.label,
                     description = taskDefinition.description,
                     enabled = configured.enabled,
                     applicable = applicability == null,

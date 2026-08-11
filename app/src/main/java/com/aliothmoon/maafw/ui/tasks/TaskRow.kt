@@ -2,7 +2,10 @@ package com.aliothmoon.maafw.ui.tasks
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -23,7 +28,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
@@ -40,6 +47,34 @@ import com.aliothmoon.maafw.ui.components.maaClickable
 /** 未勾选任务的文案区淡化程度；Checkbox 与删除钮不跟着淡，否则点不准 */
 private const val DisabledTaskAlpha = 0.55f
 
+/**
+ * 紧凑动作图标：36dp 触控区 + 16dp 图标，比 IconButton 的 48dp 省一档，
+ * 任务行里塞 rename/copy/delete 三个时不挤标题
+ */
+@Composable
+private fun CompactActionIcon(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val tint = MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint.copy(alpha = if (enabled) 1f else MaaDesignTokens.Alpha.disabledContent),
+            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+        )
+    }
+}
+
 @Composable
 internal fun TaskRow(
     task: ResolvedConfiguredTask,
@@ -48,6 +83,8 @@ internal fun TaskRow(
     dragHandleModifier: Modifier,
     onToggle: (Boolean) -> Unit,
     onRemove: () -> Unit,
+    onDuplicate: () -> Unit,
+    onRename: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -115,14 +152,24 @@ internal fun TaskRow(
                         .alpha(contentAlpha),
                 )
             }
-            IconButton(onClick = onRemove, enabled = !locked) {
-                Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = stringResource(R.string.tasks_remove),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-                )
-            }
+            CompactActionIcon(
+                icon = Icons.Outlined.Edit,
+                contentDescription = stringResource(R.string.tasks_rename),
+                enabled = !locked,
+                onClick = onRename,
+            )
+            CompactActionIcon(
+                icon = Icons.Outlined.ContentCopy,
+                contentDescription = stringResource(R.string.tasks_duplicate),
+                enabled = !locked,
+                onClick = onDuplicate,
+            )
+            CompactActionIcon(
+                icon = Icons.Outlined.DeleteOutline,
+                contentDescription = stringResource(R.string.tasks_remove),
+                enabled = !locked,
+                onClick = onRemove,
+            )
             IconButton(onClick = {}, modifier = dragHandleModifier, enabled = !locked) {
                 Icon(
                     imageVector = Icons.Outlined.DragIndicator,

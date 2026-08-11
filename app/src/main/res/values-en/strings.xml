@@ -32,6 +32,11 @@
     <string name="tasks_preview_idle">Not running</string>
     <string name="tasks_remove">Remove</string>
     <string name="tasks_drag_reorder">Drag to reorder</string>
+    <string name="tasks_rename">Rename</string>
+    <string name="tasks_duplicate">Duplicate</string>
+    <string name="tasks_rename_dialog_title">Rename task</string>
+    <string name="tasks_rename_label">Name</string>
+    <string name="tasks_copy_suffix"> (Copy)</string>
     <string name="tasks_description_title">Task description</string>
 
     <!-- Runner toggle -->
