@@ -397,10 +397,21 @@ private fun IntervalSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            OutlinedButton(onClick = onPickStartDate, modifier = Modifier.weight(1f)) {
+            // 这两个是「点开选值」的表单项，不是动作按钮；M3 的 Button 恒为 CornerFull
+            // （CircleShape，不读主题圆角），默认形状会在一排输入框中间突兀成胶囊
+            val fieldShape = MaterialTheme.shapes.extraSmall
+            OutlinedButton(
+                onClick = onPickStartDate,
+                shape = fieldShape,
+                modifier = Modifier.weight(1f),
+            ) {
                 Text(draft.startZoned()?.toLocalDate()?.toString() ?: LocalDate.now().toString())
             }
-            OutlinedButton(onClick = onPickStartTime, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = onPickStartTime,
+                shape = fieldShape,
+                modifier = Modifier.weight(1f),
+            ) {
                 Text(draft.startZoned()?.toLocalTime()?.toString() ?: LocalTime.of(DEFAULT_HOUR, 0).toString())
             }
         }

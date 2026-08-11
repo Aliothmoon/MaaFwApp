@@ -231,6 +231,7 @@ val appModule = module {
             permissionGateway = get(),
             appSettings = get(),
             localeController = AppLocales,
+            computeDispatcher = Dispatchers.Default,
         )
     }
 

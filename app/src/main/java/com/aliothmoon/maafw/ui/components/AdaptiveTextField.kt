@@ -19,6 +19,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.LocalFloatingWindowContext
 import com.aliothmoon.maafw.ui.LocalInputFocusManager
 
@@ -70,7 +71,9 @@ fun ITextField(
     placeholder: String = "",
     singleLine: Boolean = true,
     enabled: Boolean = true,
-    shape: RoundedCornerShape = RoundedCornerShape(8.dp),
+    // radii.inner 就是 shapes.extraSmall 的来源，即 OutlinedTextFieldDefaults.shape 那一档；
+    // 原先写死 8dp，同屏的 ITextFieldWithFocus 走主题档，换 Semi 主题后两者对不上
+    shape: RoundedCornerShape = RoundedCornerShape(MaaTheme.style.radii.inner),
     supportingText: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
     outlineColor: Color? = null,

@@ -30,7 +30,6 @@ object MaaDesignTokens {
     object CornerRadius {
         val card: Dp = DefaultStyleTokens.radii.card
         val button: Dp = DefaultStyleTokens.radii.button
-        val pill: Dp = DefaultStyleTokens.radii.pill
         val inner: Dp = DefaultStyleTokens.radii.inner
         val segment: Dp = DefaultStyleTokens.radii.segment
     }
@@ -116,17 +115,19 @@ object MaaDesignTokens {
 
 /**
  * 随 [ThemeStyle] 变化的圆角档；间距/触控节奏不进此结构
- * Semi 档位对应官方 token：small→button/inner，medium→card，large→large，full→pill
+ * Semi 档位对应官方 token：small→button/inner，medium→card，large→large
+ *
+ * 没有胶囊档：M3 的胶囊走 `CornerFull` → `CircleShape`，不读主题圆角，
+ * 这里放一个大数只会经 `Shapes.extraLarge` 漏进对话框把它压成椭圆
  */
 @Immutable
 data class MaaRadii(
     val card: Dp,
     val button: Dp,
-    val pill: Dp,
     val inner: Dp,
     /** 分段按钮相邻侧；比 [inner] 更收 */
     val segment: Dp,
-    /** 大容器（sheet / 大面板）；Semi 的 border-radius-large */
+    /** 大容器（sheet / 对话框 / 大面板）；Semi 的 border-radius-large */
     val large: Dp = card,
 )
 
@@ -134,7 +135,7 @@ data class MaaRadii(
  * 随 [ThemeStyle] 变化的表面度量
  *
  * - DEFAULT：略圆 + 卡片 1dp 轻投影
- * - SEMI_DESIGN：圆角对齐 Semi Design token（small 3 / medium 6 / large 12 / full 胶囊），
+ * - SEMI_DESIGN：圆角对齐 Semi Design token（small 3 / medium 6 / large 12），
  *   卡片 elevation 0，靠描边分层
  * 拖拽抬升与内边距两风格共用，不做成第二套密度
  */
@@ -150,7 +151,6 @@ val DefaultStyleTokens = MaaStyleTokens(
     radii = MaaRadii(
         card = 12.dp,
         button = 10.dp,
-        pill = 20.dp,
         inner = 8.dp,
         segment = 4.dp,
         large = 12.dp,
@@ -160,14 +160,13 @@ val DefaultStyleTokens = MaaStyleTokens(
 
 /**
  * Semi Design 默认主题圆角（@douyinfe/semi-theme-default global.scss）
- * small=3 控件/chip；medium=6 菜单与卡片面；large=12 大容器；full 胶囊
+ * small=3 控件/chip；medium=6 菜单与卡片面；large=12 大容器
  * elevation 0 = 平面优先，层级靠 outline + surface 底色
  */
 val SemiStyleTokens = MaaStyleTokens(
     radii = MaaRadii(
         card = 6.dp,
         button = 3.dp,
-        pill = 9999.dp,
         inner = 3.dp,
         segment = 2.dp,
         large = 12.dp,

@@ -262,12 +262,19 @@ object MaaTheme {
         get() = LocalThemeStyle.current
 }
 
+/**
+ * M3 的 [Shapes] 五档全是**容器**圆角，没有一档表示胶囊——胶囊在 M3 里走 `CornerFull`，
+ * 直接解析成 `CircleShape`，不经过这个对象
+ *
+ * 所以 extraLarge 只能给大容器档：它是 DatePickerDialog / TimePickerDialog / ModalBottomSheet
+ * 的默认容器形状，喂胶囊半径进去，对话框会缩成椭圆并把自己的标题与按钮裁掉
+ */
 private fun shapesOf(tokens: MaaStyleTokens): Shapes = Shapes(
     extraSmall = RoundedCornerShape(tokens.radii.inner),
     small = RoundedCornerShape(tokens.radii.button),
     medium = RoundedCornerShape(tokens.radii.card),
     large = RoundedCornerShape(tokens.radii.large),
-    extraLarge = RoundedCornerShape(tokens.radii.pill),
+    extraLarge = RoundedCornerShape(tokens.radii.large),
 )
 
 private fun colorSchemeOf(style: ThemeStyle, dark: Boolean): ColorScheme = when (style) {

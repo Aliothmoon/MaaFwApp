@@ -33,7 +33,6 @@ import com.aliothmoon.maafw.runner.StubRunnerScenario
 import com.aliothmoon.maafw.runner.isBusy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -120,6 +119,7 @@ class SessionViewModelTest {
             permissionGateway = permissions,
             appSettings = settings,
             localeController = locale,
+            computeDispatcher = mainDispatcher,
         )
         return Triple(vm, store, runner)
     }
@@ -137,6 +137,7 @@ class SessionViewModelTest {
             permissionGateway = FakePermissionGateway(),
             appSettings = FakeAppSettingsGateway(),
             localeController = {},
+            computeDispatcher = mainDispatcher,
         )
     }
 
@@ -265,34 +266,21 @@ class SessionViewModelTest {
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
     }
 
-    /**
-     * 虚拟屏尺寸改由用户选之后，这条是它进 UiState 的唯一通路
-     *
-     * 两处写法都不是随手挑的：
-     * 收集器整场挂在 backgroundScope 上，订阅数不许中途归零——一归零 WhileSubscribed 就往
-     * viewModelScope 上排一个 5s 超时，测试结束 resetMain 之后它无处可去，会以
-     * UncaughtExceptionsBeforeTest 砸到下一个用例头上；
-     * 等值用 first 而不是 advanceUntilIdle——buildUiState 挂在 flowOn(Dispatchers.Default) 上，
-     * 投影不走测试调度器的虚拟时间，推进虚拟时钟等不到它
-     */
+    /** 虚拟屏尺寸改由用户选之后，这条是它进 UiState 的唯一通路 */
     @Test
     fun `preview resolution follows the resolution preference`() = runTest(mainDispatcher) {
         val settings = FakeAppSettingsGateway()
         val (vm, _, _) = createVm(settings = settings)
+        // stateIn(WhileSubscribed) 需要活跃收集器才会投影
         backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
 
-        assertEquals(
-            ResolutionPreference.P720.resolution,
-            vm.uiState.first { it.previewResolution != null }.previewResolution,
-        )
+        assertEquals(ResolutionPreference.P720.resolution, vm.uiState.value.previewResolution)
 
         settings.resolutionPreference.value = ResolutionPreference.P1080
+        advanceUntilIdle()
 
-        assertEquals(
-            ResolutionPreference.P1080.resolution,
-            vm.uiState.first { it.previewResolution == ResolutionPreference.P1080.resolution }
-                .previewResolution,
-        )
+        assertEquals(ResolutionPreference.P1080.resolution, vm.uiState.value.previewResolution)
     }
 
     @Test
