@@ -8,7 +8,7 @@ import java.io.File
  *
  * [init] 在 Application.onCreate 一口气解析所有目录并定值；不保留 Context 引用
  *
- * 外部存储不可用时 [externalFilesRoot] 在 init 抛出 → app 启动即失败：PI/run/日志全依赖
+ * 外部存储不可用时 init 抛出 → app 启动即失败：PI/run/日志全依赖
  * 外部私有目录，不可用就没法降级，崩在启动比 UI 进去后处处报错更直接
  *
  * 与 RemoteBootTrace / ServiceBootLogger 同属进程级全局，不进 Koin：路径解析早于 DI 就绪
