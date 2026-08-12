@@ -295,6 +295,7 @@ class MaaFrameworkRunnerPort(
             agents = plan.agents.map { AgentPayload(it.childExec, it.childArgs) },
             apkPath = apkPath,
             nativeLibraryDir = nativeLibraryDir,
+            piEnv = plan.piEnv,
         )
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return uiTextOf(R.string.msg_reject_service_rejected)

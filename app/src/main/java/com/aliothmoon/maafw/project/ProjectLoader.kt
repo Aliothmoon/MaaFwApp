@@ -112,7 +112,7 @@ class ProjectLoader(
             version = projectInterface.version,
             controller = resolveController(interfacePath, projectInterface, diagnostics),
             resources = projectInterface.resources
-                .map { ResourceDefinition(it.name, it.paths, text.label(it.label) ?: it.name) }
+                .map { ResourceDefinition(it.name, it.paths, text.label(it.label) ?: it.name, it.raw) }
                 .takeIf { it.isNotEmpty() }
                 ?: deriveResources(diagnostics),
             tasks = normalizedTasks,
@@ -149,6 +149,7 @@ class ProjectLoader(
             displayShortSide = adb.displayShortSide,
             displayLongSide = adb.displayLongSide,
             displayRaw = adb.displayRaw,
+            raw = adb.raw,
         )
     }
 

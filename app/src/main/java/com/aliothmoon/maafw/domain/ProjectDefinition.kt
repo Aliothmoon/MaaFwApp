@@ -40,6 +40,11 @@ data class ControllerDefinition(
     val displayShortSide: Int? = null,
     val displayLongSide: Int? = null,
     val displayRaw: Boolean = false,
+    /**
+     * PI 里这一条的原样对象，供 `PI_CONTROLLER` 整条透传（见 PiAgentEnv）
+     * 投影只留外壳用得上的字段，而协议要求交给 agent 的是完整条目；空对象表示该条不是 PI 声明的
+     */
+    val raw: JsonObject = JsonObject(emptyMap()),
 )
 
 data class ResourceDefinition(
@@ -47,6 +52,8 @@ data class ResourceDefinition(
     val paths: List<String>,
     /** $i18n 已物化；匹配/持久化仍用 [name] */
     val label: String = name,
+    /** 同 [ControllerDefinition.raw]，供 `PI_RESOURCE` 透传 */
+    val raw: JsonObject = JsonObject(emptyMap()),
 )
 
 /**

@@ -33,10 +33,16 @@ object RunPlanBuilder {
     private val PLACEHOLDER = Regex("""\{([^{}]+)\}""")
 
     /** [configurationId] 为 null 时跑当前激活的那份；定时规则可以指定别的 */
+    /**
+     * [clientVersion] / [clientLanguage] 只为拼 agent 的 `PI_*`，默认空表示「不声明」
+     * 取值在 app 侧（BuildConfig 与 per-app locale），此处不反查环境，保持纯函数
+     */
     fun build(
         definition: ProjectDefinition,
         config: UserConfiguration,
         configurationId: RunConfigurationId? = null,
+        clientVersion: String? = null,
+        clientLanguage: String? = null,
     ): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
@@ -115,6 +121,18 @@ object RunPlanBuilder {
                 runConfigurationId = runConfiguration.id,
                 tasks = runtimeTasks,
                 agents = definition.agents,
+                piEnv = if (definition.agents.isEmpty()) {
+                    emptyMap()
+                } else {
+                    PiAgentEnv.build(
+                        projectVersion = definition.version,
+                        controller = definition.controller,
+                        resource = resource,
+                        translations = definition.translations,
+                        clientVersion = clientVersion,
+                        clientLanguage = clientLanguage,
+                    )
+                },
             ),
         )
     }

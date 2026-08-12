@@ -28,6 +28,11 @@ data class RunPlanPayload(
     val apkPath: String = "",
     /** agent child 的 LD_LIBRARY_PATH 与 MAAFW_BINARY_PATH 落点 */
     val nativeLibraryDir: String = "",
+    /**
+     * 注入每个 agent child 的 `PI_*`（见 [PiAgentEnv]）；对本轮所有 agent 相同，故放顶层
+     * 特权进程侧还会补 `PI_CLIENT_MAAFW_VERSION`
+     */
+    val piEnv: Map<String, String> = emptyMap(),
 )
 
 @Serializable

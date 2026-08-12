@@ -1,10 +1,12 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.project.ProjectRepository
@@ -128,7 +130,14 @@ class RunLauncher(
             if (configurationId != null && config.configuration(configurationId) == null) {
                 return RunLaunchResult.ConfigurationMissing
             }
-            val plan = when (val built = RunPlanBuilder.build(project.definition, config, configurationId)) {
+            val built = RunPlanBuilder.build(
+                project.definition,
+                config,
+                configurationId,
+                clientVersion = BuildConfig.VERSION_NAME,
+                clientLanguage = AppLocales.currentProjectTag(),
+            )
+            val plan = when (built) {
                 RunPlanResult.NoExecutableTasks -> return RunLaunchResult.NoExecutableTasks
                 is RunPlanResult.Invalid -> return RunLaunchResult.Invalid(built.diagnostics)
                 is RunPlanResult.Success -> built.plan

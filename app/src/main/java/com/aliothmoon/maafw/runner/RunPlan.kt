@@ -16,6 +16,8 @@ data class RunPlan(
     val tasks: List<RuntimeTask>,
     /** PI 声明的 agent，按声明顺序；Runner 逐个建 client 并拉起 child */
     val agents: List<AgentDefinition> = emptyList(),
+    /** 注入 agent 子进程的 `PI_*`，见 [PiAgentEnv]；无 agent 的 PI 用不上 */
+    val piEnv: Map<String, String> = emptyMap(),
 )
 
 data class RuntimeTask(

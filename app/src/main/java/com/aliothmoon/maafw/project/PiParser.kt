@@ -40,6 +40,8 @@ data class PiResourceContent(
     val name: String,
     val paths: List<String>,
     val label: String?,
+    /** 原样条目，PI_RESOURCE 要整条 */
+    val raw: JsonObject = JsonObject(emptyMap()),
 )
 
 /**
@@ -53,6 +55,8 @@ data class PiControllerContent(
     val displayShortSide: Int? = null,
     val displayLongSide: Int? = null,
     val displayRaw: Boolean = false,
+    /** 原样条目，PI_CONTROLLER 要整条 */
+    val raw: JsonObject = JsonObject(emptyMap()),
 )
 
 /** PI 根 interface.json 中当前领域模型需要的项目元数据 */
@@ -139,7 +143,7 @@ object PiParser {
                 diagnostics += error(source, DiagnosticMessages.resourcePathMissing(name))
                 null
             } else {
-                PiResourceContent(name, paths, obj.string("label"))
+                PiResourceContent(name, paths, obj.string("label"), obj)
             }
         }
 
@@ -169,6 +173,7 @@ object PiParser {
                 displayShortSide = obj.int("display_short_side"),
                 displayLongSide = obj.int("display_long_side"),
                 displayRaw = obj.boolean("display_raw") ?: false,
+                raw = obj,
             )
         }
 

@@ -371,6 +371,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                         apkPath = payload.apkPath,
                         nativeLibraryDir = payload.nativeLibraryDir,
                         workingDir = workingDir,
+                        piEnv = payload.piEnv,
                     ),
                 )
             } catch (e: AgentLaunchException) {

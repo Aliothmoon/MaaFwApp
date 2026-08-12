@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.remote
 
+import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.third.Ln
 import java.io.File
 import java.util.concurrent.Executors
@@ -58,6 +59,10 @@ class ExecAgentHost(
         // 不合流：合了就分不出 agent 自己 print 的与加载器写的，两条各起一个泵
         val builder = ProcessBuilder(command)
             .directory(File(request.workingDir))
+        // PI_* 先落地：MaaFramework 版本只有这一侧问得到，app 侧算不出来，在这里补齐最后一项
+        request.piEnv.forEach { (key, value) -> builder.environment()[key] = value }
+        maaFrameworkVersion()?.let { builder.environment()["PI_CLIENT_MAAFW_VERSION"] = it }
+        // 运行时描述后落地：那份是构建期人工写的，同名时按它来，留作本地调试的逃生舱
         entry.env.forEach { (key, value) ->
             builder.environment()[key] = value.resolveAgentPlaceholders(bundleDir, request.nativeLibraryDir)
         }
@@ -67,6 +72,11 @@ class ExecAgentHost(
             .getOrElse { throw AgentLaunchException("agent 启动失败：${it.message}", it) }
         return ProcessAgentSession(process, onOutput)
     }
+
+    /** 对齐 MXU：统一补 `v` 前缀，MaaVersion() 本身带不带都有可能 */
+    private fun maaFrameworkVersion(): String? =
+        MaaFrameworkLoader.library?.MaaVersion()?.takeIf(String::isNotBlank)
+            ?.let { if (it.startsWith("v")) it else "v$it" }
 
     private fun readDescriptor(apkPath: String): AgentRuntimeDescriptor? = runCatching {
         ZipFile(apkPath).use { zip ->
@@ -78,6 +88,19 @@ class ExecAgentHost(
         Ln.e("ExecAgentHost: bad ${AgentRuntimeDescriptor.ASSET_PATH}: ${it.message}")
     }.getOrThrow()
 }
+
+/**
+ * CSI 转义序列（含 SGR 配色）
+ * `\u001B` 由 Kotlin 在编译期解成字符，正则引擎拿到的是 ESC 本身，不依赖 ICU 对 `\uXXXX` 的支持
+ */
+private val ANSI_ESCAPE = Regex("\u001B\\[[0-9;?]*[a-zA-Z]")
+
+/**
+ * logcat 渲染不了颜色，转义符落在那儿只是噪音
+ * 交给 onOutput 的那份**不剥**：agent 靠配色区分级别，UI 侧解析成文本样式
+ */
+private fun String.stripAnsiEscapes(): String =
+    if (contains('\u001B')) replace(ANSI_ESCAPE, "") else this
 
 /**
  * child 的两条流各起一个泵，同时转进 logcat 与 [onOutput]
@@ -115,8 +138,9 @@ private class ProcessAgentSession(
         return Thread({
             runCatching {
                 stream.bufferedReader().forEachLine { line ->
+                    // 只有 logcat 这一份剥色，下游那份保留转义交给 UI 渲染
                     // logcat 那份逐行不批：它本来就是流水账，攒起来反而不好对时间
-                    Ln.i("$tag $line")
+                    Ln.i("$tag ${line.stripAnsiEscapes()}")
                     batcher.add(line)
                 }
             }

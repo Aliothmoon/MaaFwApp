@@ -15,6 +15,8 @@ data class AgentLaunchRequest(
     val nativeLibraryDir: String,
     /** 对齐上游 MaaPiCli 的 `agent.cwd = resource_dir_` */
     val workingDir: String,
+    /** app 侧算好的 `PI_*`；运行时描述里的 env 后注入，同名时以那份为准 */
+    val piEnv: Map<String, String> = emptyMap(),
 )
 
 /** child 的句柄；[close] 之后进程必须已终止 */
