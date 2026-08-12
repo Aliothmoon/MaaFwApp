@@ -8,7 +8,9 @@
 #include <thread>
 
 #if defined(__ARM_NEON)
+
 #include <arm_neon.h>
+
 #endif
 
 static FrameBuffer g_buffers[FRAME_BUFFER_COUNT] = {};
@@ -182,6 +184,8 @@ static void UnlockFrame(const FrameBuffer *frame) {
     }
 }
 
+static constexpr int64_t SEEDED_FRAME_COUNT = -1;
+
 void InitFrameBuffers(int width, int height) {
     if (g_frame_buffers_initialized.load(std::memory_order_acquire)) {
         ReleaseFrameBuffers();
@@ -212,10 +216,14 @@ void InitFrameBuffers(int width, int height) {
         g_reader_counts[i].store(0, std::memory_order_release);
     }
 
-    g_read_buffer.store(nullptr, std::memory_order_release);
+
+    FrameBuffer &seed = g_buffers[0];
+    memset(seed.bgr_data, 0, seed.bgr_size);
+    seed.frame_count = SEEDED_FRAME_COUNT;
+    g_read_buffer.store(&seed, std::memory_order_release);
     g_frame_count.store(0, std::memory_order_release);
     g_frame_buffers_initialized.store(true, std::memory_order_release);
-    LOGI("InitFrameBuffers: Success %dx%d", width, height);
+    LOGI("InitFrameBuffers: Success %dx%d, seeded a blank frame", width, height);
 }
 
 void ReleaseFrameBuffers() {

@@ -5,6 +5,8 @@ import com.aliothmoon.maafw.remote.internal.ActivityUtils;
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager;
 import com.aliothmoon.maafw.third.Ln;
 
+import java.util.Locale;
+
 import timber.log.Timber;
 
 /**
@@ -20,6 +22,7 @@ public final class DriverClass {
     }
 
     public static boolean startApp(String packageName, int displayId, boolean forceStop) {
+        Ln.i(TAG + String.format(Locale.US, "%s %d %b", packageName, displayId, forceStop));
         if (displayId == PrimaryDisplayManager.DISPLAY_ID) {
             return ActivityUtils.startApp(packageName, displayId, forceStop);
         }
@@ -62,22 +65,37 @@ public final class DriverClass {
      * 失败结果原样回传给 native，由上层判定。 */
 
     public static boolean touchDown(int x, int y, int displayId) {
-        return InputControlUtils.down(x, y, displayId);
+        Ln.i(TAG + ": touchDown(" + x + ", " + y + ", displayId=" + displayId + ")");
+        boolean result = InputControlUtils.down(x, y, displayId);
+        Ln.i(TAG + ": touchDown result=" + result);
+        return result;
     }
 
     public static boolean touchMove(int x, int y, int displayId) {
-        return InputControlUtils.move(x, y, displayId);
+        Ln.i(TAG + ": touchMove(" + x + ", " + y + ", displayId=" + displayId + ")");
+        boolean result = InputControlUtils.move(x, y, displayId);
+        Ln.i(TAG + ": touchMove result=" + result);
+        return result;
     }
 
     public static boolean touchUp(int x, int y, int displayId) {
-        return InputControlUtils.up(x, y, displayId);
+        Ln.i(TAG + ": touchUp(" + x + ", " + y + ", displayId=" + displayId + ")");
+        boolean result = InputControlUtils.up(x, y, displayId);
+        Ln.i(TAG + ": touchUp result=" + result);
+        return result;
     }
 
     public static boolean keyDown(int keyCode, int displayId) {
-        return InputControlUtils.keyDown(keyCode, displayId);
+        Ln.i(TAG + ": keyDown(keyCode=" + keyCode + ", displayId=" + displayId + ")");
+        boolean result = InputControlUtils.keyDown(keyCode, displayId);
+        Ln.i(TAG + ": keyDown result=" + result);
+        return result;
     }
 
     public static boolean keyUp(int keyCode, int displayId) {
-        return InputControlUtils.keyUp(keyCode, displayId);
+        Ln.i(TAG + ": keyUp(keyCode=" + keyCode + ", displayId=" + displayId + ")");
+        boolean result = InputControlUtils.keyUp(keyCode, displayId);
+        Ln.i(TAG + ": keyUp result=" + result);
+        return result;
     }
 }
