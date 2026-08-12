@@ -16,7 +16,7 @@ import android.view.WindowInsets
 import android.view.animation.LinearInterpolator
 
 /**
- * 沿屏幕边缘画一圈流动的渐变，表示「现在是自动化在操作，不是你」
+ * 沿屏幕边缘画一圈流动的渐变
  *
  * 前台模式下目标应用占满屏幕，除了这圈边框没有别的迹象能区分手动与自动
  */

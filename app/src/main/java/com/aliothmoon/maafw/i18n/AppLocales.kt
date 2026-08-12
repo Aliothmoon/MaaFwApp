@@ -4,7 +4,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import java.util.Locale
 
-/** 外壳仅 en/zh-CN；PI 同步此范围，避免外壳与项目语言混用 */
+/** 外壳仅 en/zh-CN；PI 同步此范围 */
 object AppLanguagePolicy {
     fun projectLocaleTag(appLocaleTag: String?, systemLocaleTag: String): String {
         val requested = appLocaleTag?.takeIf { it.isNotBlank() } ?: systemLocaleTag
@@ -13,7 +13,6 @@ object AppLanguagePolicy {
     }
 }
 
-/** 便于 ViewModel 单测注入 */
 fun interface LocaleController {
     fun apply(tag: String?)
 }

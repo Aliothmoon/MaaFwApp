@@ -4,7 +4,9 @@ import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.Serializer
 import com.aliothmoon.maafw.domain.UserConfiguration
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -66,6 +68,8 @@ object UserConfigurationSerializer : Serializer<UserConfiguration> {
 
     override suspend fun writeTo(t: UserConfiguration, output: OutputStream) {
         val text = json.encodeToString(PersistedUserConfiguration(SCHEMA_VERSION, t))
-        output.write(text.encodeToByteArray())
+        withContext(Dispatchers.IO) {
+            output.write(text.encodeToByteArray())
+        }
     }
 }

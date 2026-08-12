@@ -33,9 +33,8 @@ class RunEventNotifier(
 
     private var channelsReady = false
 
-    /** 整轮结局；[isError] 只改配色与分类，发不发由档位决定 */
     fun notifyRunFinished(title: String, text: String, isError: Boolean) {
-        send(title, text, ID_RUN_RESULT, isError)
+        send(title, text, ID_RUN, isError)
     }
 
     fun notifyTest(title: String, text: String) {
@@ -95,7 +94,8 @@ class RunEventNotifier(
                     appContext.getString(R.string.notification_event_channel_silent_name),
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = appContext.getString(R.string.notification_event_channel_silent_desc)
+                    description =
+                        appContext.getString(R.string.notification_event_channel_silent_desc)
                     setSound(null, null)
                     enableVibration(false)
                 },
@@ -104,7 +104,8 @@ class RunEventNotifier(
                     appContext.getString(R.string.notification_event_channel_popup_name),
                     NotificationManager.IMPORTANCE_HIGH,
                 ).apply {
-                    description = appContext.getString(R.string.notification_event_channel_popup_desc)
+                    description =
+                        appContext.getString(R.string.notification_event_channel_popup_desc)
                 },
             ),
         )
@@ -117,5 +118,6 @@ class RunEventNotifier(
 
         /** 整轮结局共用一个 id：后一轮的结果顶掉上一轮的，通知栏里只留最新那条 */
         const val ID_RUN_RESULT = 9001
+        const val ID_RUN = 9002
     }
 }

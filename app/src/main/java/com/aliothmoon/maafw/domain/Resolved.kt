@@ -32,10 +32,7 @@ data class ResolvedRunConfiguration(
     val name: String,
     val isActive: Boolean,
     val tasks: List<ResolvedConfiguredTask>,
-) {
-    val enabledTaskCount: Int get() = tasks.count { it.enabled }
-    val effectiveTaskCount: Int get() = tasks.count { it.effectiveEnabled }
-}
+)
 
 /**
  * 任务不适用的原因文案
@@ -111,8 +108,7 @@ data class OptionCaseState(
     val children: List<OptionEditorState>,
 )
 
-// 官方推荐 Yes/No（含 Y/y）；on/true/开 等为本项目宽容超集
-private val SWITCH_ON_NAMES = setOf("yes", "y", "on", "true", "enable", "开", "开启", "启用")
+private val SWITCH_ON_NAMES = setOf("yes", "y", "on", "true", "enable")
 
 /** 标准两态 (on, off)；非标准返回 null，UI 回落 chip 平铺 */
 fun OptionEditorState.standardSwitchCases(): Pair<OptionCaseState, OptionCaseState>? {
@@ -131,9 +127,7 @@ data class InputFieldState(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
-) {
-    val isValid: Boolean get() = validateInputCandidate(pipelineType, verify, value)
-}
+)
 
 /** UI 即时校验与 Builder 复验共用（docs/domain-model.md §6.6） */
 fun validateInputCandidate(type: PipelineType, verify: Regex?, candidate: String): Boolean {

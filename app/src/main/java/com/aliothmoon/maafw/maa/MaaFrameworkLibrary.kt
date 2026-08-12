@@ -109,7 +109,7 @@ interface MaaFrameworkLibrary : Library {
      * 由 native 线程回调，实现里不得阻塞，也不得抛异常穿回 native
      */
     fun interface MaaEventCallback : Callback {
-        operator fun invoke(handle: Pointer?, message: String?, detailsJson: String?, transArg: Pointer?)
+        operator fun invoke(handle: Pointer?, message: String?, details: String?, transArg: Pointer?)
     }
 }
 

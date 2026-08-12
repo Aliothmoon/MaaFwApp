@@ -12,14 +12,7 @@ import androidx.compose.ui.platform.LocalContext
  * 延迟到展示那一刻才解析的文本
  *
  * 领域层、Resolver、Builder、ViewModel 都拿不到 Context，产出文案的唯一办法就是携带
- * 资源 id 与参数，等 UI 解析。切语言后 Activity 重建，同一个 [UiText] 自然出新语言的文案；
- * 若在产出处就 `getString`，那一刻的语言会被永久冻进值里
- *
- * **凡是被当作值传递的文案（函数返回值、data class 字段、Intent/Effect 载荷）都必须是
- * UiText**；就地渲染无参字面量仍直接用 `stringResource`，那是读法不是载体
- *
- * **不可持久化**：`resId` 是构建期生成的 int，跨版本会变。要落盘的东西存稳定枚举或原文，
- * 读回来再包成 UiText
+ * 资源 id 与参数，等 UI 解析。切语言后 Activity 重建
  */
 @Immutable
 sealed interface UiText {
@@ -64,21 +57,15 @@ fun uiTextOf(@StringRes resId: Int, vararg args: Any?): UiText =
 fun uiTextPlural(@PluralsRes resId: Int, count: Int, vararg args: Any?): UiText =
     UiText.Plural(resId = resId, count = count, args = args.toList())
 
-/** PI 作者写的文案：task / option 的 label 与 description，外壳无权翻译 */
+/** PI 作者写的文案：task / option 的 label 与 description */
 fun uiTextFromProject(label: String?): UiText = verbatimOrEmpty(label)
 
-/** MaaFramework 抛回的原文：错误信息、节点名；翻译了就对不上官方文档与源码 */
+/** MaaFramework 抛回的原文：错误信息、节点名  */
 fun uiTextFromFramework(raw: String?): UiText = verbatimOrEmpty(raw)
 
 /** java.time 或数值格式化的产物，本身已随 locale 变化，不需要再查资源 */
 fun uiTextFormatted(value: String?): UiText = verbatimOrEmpty(value)
 
-/**
- * 拼接时先滤掉 [UiText.Empty]，否则分隔符会在两端多出来
- *
- * [separator] 收 String 而非 UiText：分隔符基本是标点或空白，这样调用点不必为它造一个
- * Verbatim。真需要随 locale 变的分隔符（中文顿号 vs 英文逗号）就直接构造 [UiText.Joined]
- */
 fun uiTextJoin(vararg parts: UiText, separator: String = ""): UiText =
     UiText.Joined(
         parts = parts.filterNot { it is UiText.Empty },
@@ -96,12 +83,6 @@ fun UiText?.resolve(context: Context): String = when (this) {
     is UiText.Joined -> parts.joinToString(separator.resolve(context)) { it.resolve(context) }
 }
 
-/**
- * 读一次 [LocalConfiguration] 建立依赖
- *
- * 当前 MainActivity 的 configChanges 不含 locale，切语言必然重建 Activity，这一步其实
- * 用不上；留着是防将来往 configChanges 里加东西时静默失效
- */
 @Composable
 fun UiText?.asString(): String {
     LocalConfiguration.current

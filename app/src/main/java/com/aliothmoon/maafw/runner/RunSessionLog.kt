@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
-import kotlinx.coroutines.CoroutineDispatcher
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.constant.AppPaths
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -83,22 +84,11 @@ data class RunSessionLogFile(
     val taskCount: Int,
 )
 
-/**
- * 会话文件的读写
- *
- * 目录与 maa.log、触发日志同在外部私有目录下的 `log/`，一次 `adb pull` 全带走
- *
- * [ioDispatcher] 必须可换：`RunLogRecorder` 的事件收集与这里的开关文件是同一条时间线上的事，
- * 这边跑在真实线程池上的话，单测里两者的先后就不确定了
- */
-class RunSessionLogStore(
-    private val logDir: () -> File,
-    private val ioDispatcher: CoroutineDispatcher,
-) {
+class RunSessionLogStore {
 
     /** 打开一个新会话；返回 null 表示建不出文件，调用方照常跑，只是这轮没有历史记录 */
     suspend fun open(startedAt: Long, tasks: List<String>): RunSessionWriter? =
-        withContext(ioDispatcher) {
+        withContext(MaaDispatchers.IO) {
             runCatching {
                 val stamp = Instant.ofEpochMilli(startedAt)
                     .atZone(ZoneId.systemDefault())
@@ -110,7 +100,7 @@ class RunSessionLogStore(
             }.onFailure { Timber.w(it, "开会话日志文件失败") }.getOrNull()
         }
 
-    suspend fun list(): List<RunSessionLogFile> = withContext(ioDispatcher) {
+    suspend fun list(): List<RunSessionLogFile> = withContext(MaaDispatchers.IO) {
         runCatching {
             sessionDir().listFiles()
                 ?.filter { it.isFile && it.name.startsWith(PREFIX) && it.name.endsWith(SUFFIX) }
@@ -124,7 +114,7 @@ class RunSessionLogStore(
     }
 
     /** 解不出的行跳过而不是整份作废：被杀进程留下的半行不该毁掉前面几百条 */
-    suspend fun read(fileName: String): List<RunSessionRecord> = withContext(ioDispatcher) {
+    suspend fun read(fileName: String): List<RunSessionRecord> = withContext(MaaDispatchers.IO) {
         val file = File(sessionDir(), fileName)
         if (!file.exists()) return@withContext emptyList()
         runCatching {
@@ -139,12 +129,12 @@ class RunSessionLogStore(
         }
     }
 
-    suspend fun delete(fileName: String): Boolean = withContext(ioDispatcher) {
+    suspend fun delete(fileName: String): Boolean = withContext(MaaDispatchers.IO) {
         runCatching { File(sessionDir(), fileName).delete() }.getOrDefault(false)
     }
 
     /** 返回删掉的份数 */
-    suspend fun cleanup(keepDays: Int = KEEP_DAYS): Int = withContext(ioDispatcher) {
+    suspend fun cleanup(keepDays: Int = KEEP_DAYS): Int = withContext(MaaDispatchers.IO) {
         val cutoff = System.currentTimeMillis() - keepDays * MS_PER_DAY
         list().count { it.startedAt < cutoff && delete(it.fileName) }
     }
@@ -170,7 +160,7 @@ class RunSessionLogStore(
         )
     }
 
-    private fun sessionDir(): File = File(logDir(), DIR_NAME).apply { mkdirs() }
+    private fun sessionDir(): File = File(AppPaths.LOG_DIR, DIR_NAME).apply { mkdirs() }
 
     private companion object {
         const val DIR_NAME = "run"
@@ -180,7 +170,8 @@ class RunSessionLogStore(
         const val KEEP_DAYS = 30
         const val MS_PER_DAY = 24L * 60 * 60 * 1000
 
-        val FILE_STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd${SEPARATOR}HHmmss")
+        val FILE_STAMP: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("yyyyMMdd${SEPARATOR}HHmmss")
         val JSON = Json { ignoreUnknownKeys = true }
     }
 }

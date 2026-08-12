@@ -56,14 +56,6 @@ data class ResourceDefinition(
     val raw: JsonObject = JsonObject(emptyMap()),
 )
 
-/**
- * PI 顶层 agent 声明；单对象与数组两种形态在解析期都归一成列表
- *
- * [childExec] 在 Android 上不解释也不执行：设备上 PATH 里没有解释器，PI 解包目录又是 noexec
- * 实际拉起哪个可执行体由构建期的 agent 运行时描述决定，这里只留作诊断与计数
- * PI 的 `identifier` 不投影——上游 MaaPiCli 解析进 RuntimeParam 之后同样没有消费者
- * （`Runner.cpp` 恒以 nullptr 建 client），见 docs/pi-compatibility.md
- */
 data class AgentDefinition(
     val childExec: String,
     val childArgs: List<String>,
@@ -108,7 +100,7 @@ data class OptionApplicability(
 ) {
     fun matches(controllerName: String, resourceName: String?): Boolean =
         (controllers.isEmpty() || controllerName in controllers) &&
-            (resources.isEmpty() || resourceName in resources)
+                (resources.isEmpty() || resourceName in resources)
 
     companion object {
         val Unrestricted = OptionApplicability()

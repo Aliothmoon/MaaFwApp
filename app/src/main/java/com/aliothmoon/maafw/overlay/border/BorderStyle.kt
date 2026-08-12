@@ -10,15 +10,14 @@ data class BorderStyle(
     /** 转一圈的时长 */
     val animationDurationMs: Long = 3000L,
 ) {
-    // IntArray 的 equals 是引用比较，data class 自动生成的判等会把两个内容相同的样式判成不等，
-    // 于是 BorderOverlayManager 每次 show 都以为样式变了而重建视图
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
         other as BorderStyle
         return widthDp == other.widthDp &&
-            colors.contentEquals(other.colors) &&
-            animationDurationMs == other.animationDurationMs
+                colors.contentEquals(other.colors) &&
+                animationDurationMs == other.animationDurationMs
     }
 
     override fun hashCode(): Int {

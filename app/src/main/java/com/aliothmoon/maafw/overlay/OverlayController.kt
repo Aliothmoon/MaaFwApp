@@ -43,12 +43,6 @@ import timber.log.Timber
 
 /**
  * 前台模式的控制层
- *
- * 前台模式把屏幕让给了目标应用，app 界面被完全盖住——没有这一层就没有任何办法停任务。
- * 后台虚拟屏模式下整层不存在（`setup` 里跟着 `runMode` 装卸）
- *
- * 与 [com.aliothmoon.maafw.session.SessionViewModel] 平级而不是它的下游：悬浮窗跨 Activity
- * 存活，拿不到 Activity 作用域的 VM，所以直接吃 [RunnerPort]
  */
 class OverlayController(
     private val context: Application,
@@ -341,9 +335,10 @@ class OverlayController(
     /** 横屏时高度吃满一点：可用高度本来就少，按竖屏那个比例会挤成一条 */
     private fun calculatePanelLayout(config: Configuration): Pair<Int, Int> {
         val density = context.resources.displayMetrics.density
-        val heightRatio = if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) 0.85f else 0.6f
+        val heightRatio =
+            if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) 0.85f else 0.6f
         return (config.screenWidthDp * density * 0.85f).toInt() to
-            (config.screenHeightDp * density * heightRatio).toInt()
+                (config.screenHeightDp * density * heightRatio).toInt()
     }
 
     private fun applyPanelLayout(config: Configuration, layout: Pair<Int, Int>) {
@@ -352,7 +347,10 @@ class OverlayController(
         val (width, height) = layout
         val wasShowing = control.isShow()
         if (wasShowing) control.hide()
-        control.move((config.screenWidthDp * density - width) / 2, (config.screenHeightDp * density - height) / 2)
+        control.move(
+            (config.screenWidthDp * density - width) / 2,
+            (config.screenHeightDp * density - height) / 2
+        )
         // 尺寸变了必须换视图：FloatingX 不会因为 layoutParams 改了就重新测量已挂载的那份
         control.updateView(createPanelView())
         if (wasShowing) control.show()

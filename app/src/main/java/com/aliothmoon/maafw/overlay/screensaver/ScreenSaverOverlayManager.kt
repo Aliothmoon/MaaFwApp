@@ -34,13 +34,6 @@ import timber.log.Timber
 /**
  * 后台模式的运行期屏保
  *
- * 后台模式把任务放到虚拟屏上跑，真实屏幕整轮都闲着——亮着既费电又有烧屏风险，
- * 放着不管还会被误触。盖一层近乎全黑的窗口，只留时钟、电量与最新一条运行日志
- *
- * 前台模式下整个功能不存在：那时目标应用就在真实屏幕上，盖住它等于让采集器拍到屏保
- *
- * 与 [com.aliothmoon.maafw.overlay.OverlayController] 同级，同样直接吃 [RunnerPort]——
- * 窗口挂在 WindowManager 上、不属于任何 Activity，拿不到 Activity 作用域的 VM
  */
 class ScreenSaverOverlayManager(
     private val context: Context,
@@ -169,7 +162,8 @@ class ScreenSaverOverlayManager(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
                 val excluded = (v.resources.displayMetrics.density * GESTURE_EXCLUSION_DP).toInt()
-                v.systemGestureExclusionRects = listOf(Rect(0, v.height - excluded, v.width, v.height))
+                v.systemGestureExclusionRects =
+                    listOf(Rect(0, v.height - excluded, v.width, v.height))
             }
         }
     }
@@ -177,15 +171,14 @@ class ScreenSaverOverlayManager(
     /**
      * 不可聚焦：返回键与音量键要原样落给系统，屏保不该改变它们的行为
      * KEEP_SCREEN_ON + screenBrightness 压到最低是这层的核心——真息屏会让
-     * 特权进程的保活与虚拟屏采集一起变得不可预期，所以只把屏幕压黑而不真关
      */
     private fun createLayoutParams(): WindowManager.LayoutParams {
         @Suppress("DEPRECATION")
         val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -195,7 +188,8 @@ class ScreenSaverOverlayManager(
         ).apply {
             gravity = Gravity.CENTER
             screenBrightness = MIN_BRIGHTNESS
-            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
     }
 

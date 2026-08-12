@@ -12,8 +12,6 @@ import kotlinx.coroutines.launch
 
 /**
  * 历史运行日志的文件列表
- *
- * 不依赖 PI，也不参与运行锁定：这些是已经写完的诊断产物，跑不跑都能翻
  */
 data class RunLogArchiveUiState(
     val files: List<RunSessionLogFile> = emptyList(),

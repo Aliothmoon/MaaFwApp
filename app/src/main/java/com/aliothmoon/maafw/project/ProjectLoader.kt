@@ -12,9 +12,12 @@ import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.casesOrEmpty
+import com.aliothmoon.maafw.i18n.AppLocales
 
 sealed interface ProjectLoadResult {
-    data class Ready(val definition: ProjectDefinition, val diagnostics: List<Diagnostic>) : ProjectLoadResult
+    data class Ready(val definition: ProjectDefinition, val diagnostics: List<Diagnostic>) :
+        ProjectLoadResult
+
     data class Failure(val diagnostics: List<Diagnostic>) : ProjectLoadResult
 }
 
@@ -26,12 +29,9 @@ sealed interface ProjectLoadResult {
  * 文本物化：$i18n 按 languages 声明查表（查无回落 key），
  * description 级字段的文件路径形态在加载期读入；URL 形态原样保留给 UI 懒加载
  *
- * @param localeProvider 每次 load 时查询期望语言 tag（如 zh-CN）；null 表示跟随系统默认
- *   用 provider 而非固定值：loader 是单例，语言切换后 reload 需要拿到新 locale
  */
 class ProjectLoader(
     private val source: ProjectSource,
-    private val localeProvider: () -> String? = { null },
 ) {
 
     private class MergeState {
@@ -45,24 +45,23 @@ class ProjectLoader(
     fun load(): ProjectLoadResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
-        val interfacePath = "interface.json"
         val interfaceContent = try {
-            source.read(interfacePath)
+            source.read(INTERFACE_JSON)
         } catch (e: Exception) {
             diagnostics += error(
-                interfacePath,
+                INTERFACE_JSON,
                 DiagnosticMessages.interfaceReadFailed(e.message.orEmpty()),
             )
             return ProjectLoadResult.Failure(diagnostics)
         }
-        val projectInterface = PiParser.parseInterface(interfacePath, interfaceContent)
-        diagnostics += projectInterface.diagnostics
+        val pi = PiParser.parseInterface(INTERFACE_JSON, interfaceContent)
+        diagnostics += pi.diagnostics
 
         // PI V2：interface_version 必须为 2，否则拒绝加载
-        if (projectInterface.interfaceVersion != 2L) {
+        if (pi.interfaceVersion != 2L) {
             diagnostics += error(
-                interfacePath,
-                when (val v = projectInterface.interfaceVersion) {
+                INTERFACE_JSON,
+                when (val v = pi.interfaceVersion) {
                     null -> DiagnosticMessages.missingInterfaceVersion()
                     else -> DiagnosticMessages.unsupportedInterfaceVersion(v)
                 },
@@ -70,49 +69,72 @@ class ProjectLoader(
             return ProjectLoadResult.Failure(diagnostics)
         }
 
-        val translations = loadTranslations(projectInterface, diagnostics)
+        val translations = loadTranslations(pi, diagnostics)
         val text = buildTextResolver(translations, diagnostics)
 
         // 根文件自身作为首个分片（task/option/preset/group），import 分片按声明顺序追加；
         // 重名一律先定义优先；缺失分片降级为 warning 跳过
         // 根 JSON 复用 parseInterface 的解析结果（version 校验通过则 root 必非 null）
         val state = MergeState()
-        projectInterface.root?.let {
-            mergeContent(state, PiParser.parseFile(interfacePath, it, text), interfacePath, diagnostics)
+        pi.root?.let {
+            mergeContent(
+                state,
+                PiParser.parseFile(INTERFACE_JSON, it, text),
+                INTERFACE_JSON,
+                diagnostics
+            )
         }
-        for (path in projectInterface.imports) {
+        for (path in pi.imports) {
             val content = try {
                 source.read(path)
             } catch (e: Exception) {
-                diagnostics += warning(path, DiagnosticMessages.importReadFailed(e.message.orEmpty()))
+                diagnostics += warning(
+                    path,
+                    DiagnosticMessages.importReadFailed(e.message.orEmpty())
+                )
                 continue
             }
             mergeContent(state, PiParser.parseFile(path, content, text), path, diagnostics)
         }
         if (state.tasks.isEmpty()) {
-            diagnostics += warning(interfacePath, DiagnosticMessages.projectHasNoTasks())
+            diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.projectHasNoTasks())
         }
 
         validateOptionReferences(state.tasks, state.globalOptionNames, state.options, diagnostics)
         detectOptionCycles(state.options, diagnostics)
         validateTemplates(state.templates, state.tasks, diagnostics)
 
-        val (normalizedTasks, groups) = resolveGroups(state.declaredGroups, state.tasks, diagnostics)
+        val (normalizedTasks, groups) = resolveGroups(
+            state.declaredGroups,
+            state.tasks,
+            diagnostics
+        )
 
         // 模板任务展示名在此物化：preset 只声明 taskName，label 在任务定义上
         val taskLabels = normalizedTasks.associate { it.name to it.label }
         val templates = state.templates.map { template ->
             template.copy(
-                tasks = template.tasks.map { it.copy(label = taskLabels[it.taskName] ?: it.taskName) },
+                tasks = template.tasks.map {
+                    it.copy(
+                        label = taskLabels[it.taskName] ?: it.taskName
+                    )
+                },
             )
         }
 
         val definition = ProjectDefinition(
-            name = projectInterface.name ?: source.projectName,
-            version = projectInterface.version,
-            controller = resolveController(interfacePath, projectInterface, diagnostics),
-            resources = projectInterface.resources
-                .map { ResourceDefinition(it.name, it.paths, text.label(it.label) ?: it.name, it.raw) }
+            name = pi.name ?: source.projectName,
+            version = pi.version,
+            controller = resolveController(pi, diagnostics),
+            resources = pi.resources
+                .map {
+                    ResourceDefinition(
+                        it.name,
+                        it.paths,
+                        text.label(it.label) ?: it.name,
+                        it.raw
+                    )
+                }
                 .takeIf { it.isNotEmpty() }
                 ?: deriveResources(diagnostics),
             tasks = normalizedTasks,
@@ -121,7 +143,7 @@ class ProjectLoader(
             // 引用不存在的项已在上面报 Error；这里过滤掉，免得 builder 再报一遍同一件事
             globalOptionNames = state.globalOptionNames.filter { it in state.options },
             templates = templates,
-            agents = projectInterface.agents,
+            agents = pi.agents,
             translations = translations,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
@@ -133,14 +155,14 @@ class ProjectLoader(
      * 未声明 Adb 说明该 PI 不面向 Android：记 warning 并回落默认，不阻断加载
      */
     private fun resolveController(
-        source: String,
-        projectInterface: PiInterfaceContent,
+        pi: PiInterfaceContent,
         diagnostics: MutableList<Diagnostic>,
     ): ControllerDefinition {
-        val adb = projectInterface.controllers
+        val adb = pi.controllers
             .firstOrNull { it.type.equals(ADB_CONTROLLER_TYPE, ignoreCase = true) }
+
         if (adb == null) {
-            diagnostics += warning(source, DiagnosticMessages.noAdbController())
+            diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.noAdbController())
             return ControllerDefinition()
         }
         return ControllerDefinition(
@@ -163,7 +185,10 @@ class ProjectLoader(
         diagnostics += parsed.diagnostics
         for (task in parsed.tasks) {
             if (state.tasks.any { it.name == task.name }) {
-                diagnostics += error(file, DiagnosticMessages.duplicateDeclaration("task", task.name))
+                diagnostics += error(
+                    file,
+                    DiagnosticMessages.duplicateDeclaration("task", task.name)
+                )
             } else {
                 state.tasks += task
             }
@@ -214,7 +239,8 @@ class ProjectLoader(
         if (languages.isEmpty()) return emptyMap()
 
         fun norm(tag: String) = tag.lowercase().replace('_', '-')
-        val desired = norm(localeProvider() ?: java.util.Locale.getDefault().toLanguageTag())
+        val tag = AppLocales.currentProjectTag()
+        val desired = norm(tag)
         val lang = languages.keys.firstOrNull { norm(it) == desired }
             ?: languages.keys.firstOrNull {
                 norm(it).substringBefore('-') == desired.substringBefore('-')
@@ -225,7 +251,10 @@ class ProjectLoader(
         val content = try {
             source.read(path)
         } catch (e: Exception) {
-            diagnostics += warning(path, DiagnosticMessages.translationReadFailed(e.message.orEmpty()))
+            diagnostics += warning(
+                path,
+                DiagnosticMessages.translationReadFailed(e.message.orEmpty())
+            )
             return emptyMap()
         }
         return PiParser.parseTranslations(path, content) { diagnostics += it }
@@ -252,7 +281,10 @@ class ProjectLoader(
             return try {
                 source.read(path)
             } catch (e: Exception) {
-                diagnostics += warning(path, DiagnosticMessages.descriptionReadFailed(e.message.orEmpty()))
+                diagnostics += warning(
+                    path,
+                    DiagnosticMessages.descriptionReadFailed(e.message.orEmpty())
+                )
                 resolved
             }
         }
@@ -270,7 +302,8 @@ class ProjectLoader(
         diagnostics: MutableList<Diagnostic>,
     ): Pair<List<TaskDefinition>, List<TaskGroupDefinition>> {
         if (declared.isEmpty()) {
-            val flattened = tasks.map { if (it.groups.isEmpty()) it else it.copy(groups = emptyList()) }
+            val flattened =
+                tasks.map { if (it.groups.isEmpty()) it else it.copy(groups = emptyList()) }
             val groups = if (flattened.isEmpty()) emptyList() else listOf(ungroupedGroup())
             return flattened to groups
         }
@@ -302,7 +335,10 @@ class ProjectLoader(
     ) {
         for (ref in globalOptionNames) {
             if (ref !in options) {
-                diagnostics += error("global_option", DiagnosticMessages.missingReference("option", ref))
+                diagnostics += error(
+                    "global_option",
+                    DiagnosticMessages.missingReference("option", ref)
+                )
             }
         }
         for (task in tasks) {
@@ -392,7 +428,8 @@ class ProjectLoader(
             result += ResourceDefinition("base", listOf("resource/base"))
         }
         for (dir in variants) {
-            val paths = if (hasBase) listOf("resource/base", "resource/$dir") else listOf("resource/$dir")
+            val paths =
+                if (hasBase) listOf("resource/base", "resource/$dir") else listOf("resource/$dir")
             result += ResourceDefinition(dir, paths)
         }
         return result
@@ -404,5 +441,6 @@ class ProjectLoader(
 
         /** PI 协议里 Adb controller 的 type 字面量 */
         private const val ADB_CONTROLLER_TYPE = "Adb"
+        private const val INTERFACE_JSON = "interface.json"
     }
 }

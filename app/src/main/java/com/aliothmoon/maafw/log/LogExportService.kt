@@ -5,7 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
-import kotlinx.coroutines.CoroutineDispatcher
+import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.BufferedOutputStream
@@ -32,11 +32,10 @@ class LogExportService(
     private val roots: () -> List<File>,
     /** 调试模式下额外附一份 `getprop`：ROM 差异是排障时最先要问的 */
     private val debugMode: () -> Boolean,
-    private val ioDispatcher: CoroutineDispatcher,
 ) {
 
     /** 返回 null = 没有可导出的日志，或打包失败 */
-    suspend fun exportZip(): File? = withContext(ioDispatcher) {
+    suspend fun exportZip(): File? = withContext(MaaDispatchers.IO) {
         val files = LogExportCollector.collect(roots(), System.currentTimeMillis())
         if (files.isEmpty()) {
             Timber.w("没有可导出的日志")
@@ -56,7 +55,7 @@ class LogExportService(
     suspend fun shareIntent(): Intent? = exportZip()?.let(::createShareIntent)
 
     /** 写进用户经 SAF 选的位置；成功返回显示名 */
-    suspend fun exportTo(target: Uri): String? = withContext(ioDispatcher) {
+    suspend fun exportTo(target: Uri): String? = withContext(MaaDispatchers.IO) {
         val zip = exportZip() ?: return@withContext null
         runCatching {
             context.contentResolver.openOutputStream(target)?.use { out ->

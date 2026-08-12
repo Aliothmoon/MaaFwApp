@@ -16,8 +16,6 @@ import kotlinx.coroutines.launch
 /**
  * 通知设置页的 ViewModel
  *
- * 写入不做防抖：每个 [NotificationSettings] 字段都是文本框，逐字符落盘看着吓人，
- * 但 `@PrefSchema` 生成的 update 只写真正变了的键，且这一页不在运行热路径上
  */
 class NotificationSettingsViewModel(
     private val settingsManager: NotificationSettingsManager,
@@ -52,7 +50,13 @@ class NotificationSettingsViewModel(
             }
         }
         viewModelScope.launch {
-            externalService.feedbackMessages.collect { _effects.tryEmit(NotificationEffect.ShowMessage(it)) }
+            externalService.feedbackMessages.collect {
+                _effects.tryEmit(
+                    NotificationEffect.ShowMessage(
+                        it
+                    )
+                )
+            }
         }
     }
 

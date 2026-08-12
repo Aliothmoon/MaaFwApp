@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.UiText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -39,7 +40,6 @@ class RunLogRecorder(
     /** 只有调试模式才把 details_json 一起落盘：它占掉文件的绝大部分体积 */
     private val includeDetails: () -> Boolean,
     private val scope: CoroutineScope,
-    private val ioDispatcher: CoroutineDispatcher,
 ) : RunJournal {
 
     private val _runLog = MutableStateFlow<List<RunLogEntry>>(emptyList())
@@ -105,9 +105,8 @@ class RunLogRecorder(
         composer.reset()
         val writer = store.open(System.currentTimeMillis(), plan.tasks.map { it.taskName })
         fileLock.withLock { session.getAndSet(writer)?.close() }
-        // 开不出文件就不必起冲洗循环：每 75ms 空转一次，白烧
         if (writer == null) return
-        flushLoop = scope.launch(ioDispatcher) {
+        flushLoop = scope.launch(MaaDispatchers.IO) {
             while (isActive) {
                 delay(FLUSH_INTERVAL_MS)
                 flushPending()
@@ -169,7 +168,7 @@ class RunLogRecorder(
     /** 攒批落盘；整批只 flush 一次 */
     private suspend fun flushPending() {
         if (pending.isEmpty()) return
-        withContext(ioDispatcher) {
+        withContext(MaaDispatchers.IO) {
             fileLock.withLock {
                 val writer = session.get() ?: return@withLock
                 // poll 到空而不是 toList()+clear()：后者会和并发入队抢，中间那几条直接丢

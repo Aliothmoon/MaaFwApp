@@ -1,12 +1,12 @@
 package com.aliothmoon.maafw.notification
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextJoin
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.provider.NotificationProvider
 import com.aliothmoon.maafw.notification.provider.NotificationSendResult
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,17 +17,11 @@ import timber.log.Timber
 /**
  * 把一条消息投给全部已启用的推送渠道
  *
- * **发送不阻塞调用方**：整轮收尾（`RunEnvHook.Release`）有 10s 上限，而十个渠道逐个走网络
- * 能轻松超过；投递因此 launch 在进程级 scope 上，收尾照常往下走
- *
- * [feedbackMessages] 只在用户主动测试时有内容：自动推送失败了弹一串提示，
- * 用户既没在看也无从处理
  */
 class ExternalNotificationService(
     private val settingsManager: NotificationSettingsManager,
     providerList: List<NotificationProvider>,
     private val scope: CoroutineScope,
-    private val ioDispatcher: CoroutineDispatcher,
 ) {
 
     private val providers = providerList.associateBy(NotificationProvider::id)
@@ -36,11 +30,11 @@ class ExternalNotificationService(
     val feedbackMessages: SharedFlow<UiText> = _feedbackMessages.asSharedFlow()
 
     fun send(title: String, content: String) {
-        scope.launch(ioDispatcher) { dispatch(title, content, isTest = false) }
+        scope.launch(MaaDispatchers.IO) { dispatch(title, content, isTest = false) }
     }
 
     fun sendTest(title: String, content: String) {
-        scope.launch(ioDispatcher) { dispatch(title, content, isTest = true) }
+        scope.launch(MaaDispatchers.IO) { dispatch(title, content, isTest = true) }
     }
 
     private suspend fun dispatch(title: String, content: String, isTest: Boolean) {

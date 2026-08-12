@@ -36,9 +36,6 @@ import com.aliothmoon.maafw.ui.i18n.asUiText
 
 /**
  * 悬浮控制面板
- *
- * 前台模式下这是唯一能停任务的地方——app 界面被目标应用盖住了，回不去。
- * 内容刻意压到最少：状态、进度、停止、回 app。要改配置就点「回 app」，别在浮窗里重做一套
  */
 @Composable
 fun OverlayPanel(
@@ -112,7 +109,11 @@ fun OverlayPanel(
                     onClick = onBackToApp,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Icon(Icons.Outlined.Home, contentDescription = null, Modifier.size(MaaDesignTokens.IconSize.sm))
+                    Icon(
+                        Icons.Outlined.Home,
+                        contentDescription = null,
+                        Modifier.size(MaaDesignTokens.IconSize.sm)
+                    )
                     Text(
                         text = stringResource(R.string.overlay_back_to_app),
                         modifier = Modifier.padding(start = MaaDesignTokens.Spacing.xs),

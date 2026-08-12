@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.log
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +24,6 @@ data class AppLogDetailUiState(
  */
 class AppLogDetailViewModel(
     private val writer: AppLogWriter,
-    private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppLogDetailUiState())
@@ -31,7 +31,7 @@ class AppLogDetailViewModel(
 
     fun load(fileName: String) {
         viewModelScope.launch {
-            val lines = withContext(ioDispatcher) {
+            val lines = withContext(MaaDispatchers.IO) {
                 val file = writer.listFiles().firstOrNull { it.name == fileName }
                     ?: return@withContext emptyList()
                 runCatching { file.readLines() }.getOrElse {

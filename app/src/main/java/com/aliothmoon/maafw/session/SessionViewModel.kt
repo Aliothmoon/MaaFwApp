@@ -14,7 +14,6 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
-import com.aliothmoon.maafw.i18n.LocaleController
 import com.aliothmoon.maafw.privileged.DisplaySizeGateway
 import com.aliothmoon.maafw.privileged.DisplaySizeResult
 import com.aliothmoon.maafw.privileged.PermissionGateway
@@ -49,6 +48,7 @@ import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.i18n.AppLocales
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -107,7 +107,6 @@ class SessionViewModel(
     /** 主屏分辨率的改与撤；前台模式的前置条件都由它判 */
     private val displaySize: DisplaySizeGateway,
     private val appSettings: AppSettingsGateway,
-    private val localeController: LocaleController,
     /** 已补完的 focus 模板；补完在进程级做，见 [FocusDispatcher] */
     private val focusDispatcher: FocusDispatcher,
     /** 运行日志的产地；VM 只转发它的流并转达「清空」 */
@@ -457,7 +456,7 @@ class SessionViewModel(
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {
-                localeController.apply(intent.localeTag)
+                AppLocales.apply(intent.localeTag)
             }
 
             SessionIntent.ReloadProject -> guarded {

@@ -16,11 +16,6 @@ import org.koin.core.component.KoinComponent
 /**
  * 给悬浮窗里的 `ComposeView` 供三个 Owner
  *
- * 悬浮窗挂在 WindowManager 上、不属于任何 Activity，而 Compose 要求视图树上能找到
- * Lifecycle / ViewModelStore / SavedStateRegistry 三者，否则 `setContent` 直接抛
- *
- * 生命周期由 [start] / [stop] 手动推：面板显示时 RESUMED、隐藏时回 CREATED，
- * 这样 `collectAsStateWithLifecycle` 在隐藏期间不会空转
  */
 class OverlayViewModelOwner : ViewModelStoreOwner,
     LifecycleOwner,
@@ -46,7 +41,8 @@ class OverlayViewModelOwner : ViewModelStoreOwner,
     /** 悬浮窗里取不到 Activity 的 VM，一律从 Koin 拿 */
     override val defaultViewModelProviderFactory by lazy {
         object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = getKoin().get(modelClass.kotlin)
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                getKoin().get(modelClass.kotlin)
         }
     }
 

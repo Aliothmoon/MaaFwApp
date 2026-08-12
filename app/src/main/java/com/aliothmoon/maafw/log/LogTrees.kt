@@ -32,7 +32,6 @@ class ShortTagDebugTree : Timber.DebugTree() {
     }
 
     private companion object {
-        // API 26 起其实没有这个限制了，但短 tag 在 logcat 里本来就更好读
         const val MAX_TAG_LENGTH = 23
     }
 }
@@ -75,20 +74,18 @@ class FileLogTree(
     }
 }
 
-/**
- * 种树的唯一入口
- *
- * [verbose] 收取值函数而不是布尔：设置是异步读出来的，种树那一刻只拿得到默认值
- */
 class LogTreeHolder(
     private val writer: AppLogWriter,
     private val verbose: () -> Boolean,
 ) {
 
-    /** 重复调用无副作用：Timber 自己不去重，所以先清一次 */
     fun setup() {
         Timber.uprootAll()
-        Timber.plant(if (BuildConfig.DEBUG) ShortTagDebugTree() else ReleaseTree())
-        Timber.plant(FileLogTree(writer, verbose))
+        Timber.plant(
+            *arrayOf(
+                if (BuildConfig.DEBUG) ShortTagDebugTree() else ReleaseTree(),
+                FileLogTree(writer, verbose)
+            )
+        )
     }
 }

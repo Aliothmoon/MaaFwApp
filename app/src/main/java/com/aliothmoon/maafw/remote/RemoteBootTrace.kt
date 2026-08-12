@@ -13,15 +13,15 @@ import java.io.File
  *
  * 卡死发生在 [RemoteServiceImpl] 构造阶段（init 块里同步加载 libMaaCore.so），早于 setup(userDir)，
  * 此时进程既没有 Context 也拿不到 App 传来的外部路径。FakeContext.getExternalFilesDir() 解析的是
- * com.android.shell 的目录而非本应用，不可用。
+ * com.android.shell 的目录而非本应用，不可用
  *
  * 因此这里用 Environment.getExternalStorageDirectory() + BuildConfig.APPLICATION_ID 自行推导出与
  * App 侧 getExternalFilesDir(null) 相同的路径：
  *   /storage/emulated/0/Android/data/{pkg}/files/debug/service_boot_debug.log
  * shell uid 对该目录可写（LogcatCaptureServiceImpl 已实测写 {userDir}/debug/...），文件与
- * root_launch_debug.log 同目录、可被 App 直接读取，无需 /data/local/tmp、无需跨进程拷贝。
+ * root_launch_debug.log 同目录、可被 App 直接读取，无需 /data/local/tmp、无需跨进程拷贝
  *
- * 全程 runCatching 兜底：推导/写入失败也不影响主流程（App 侧 service_bind_debug.log + logcat 仍可定位）。
+ * 全程 runCatching 兜底：推导/写入失败也不影响主流程（App 侧 service_bind_debug.log + logcat 仍可定位）
  */
 object RemoteBootTrace {
 
@@ -52,8 +52,12 @@ object RemoteBootTrace {
                     file.parentFile?.mkdirs()
                     file.appendText(
                         "==== service boot pid=${Process.myPid()} ${Build.MANUFACTURER} ${Build.MODEL} " +
-                            "api=${Build.VERSION.SDK_INT} abi=${Build.SUPPORTED_ABIS.joinToString(",")} " +
-                            "t=${System.currentTimeMillis()} ====\n"
+                                "api=${Build.VERSION.SDK_INT} abi=${
+                                    Build.SUPPORTED_ABIS.joinToString(
+                                        ","
+                                    )
+                                } " +
+                                "t=${System.currentTimeMillis()} ====\n"
                     )
                     headerWritten = true
                 }
