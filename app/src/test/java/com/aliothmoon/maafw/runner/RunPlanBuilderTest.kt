@@ -129,25 +129,19 @@ class RunPlanBuilderTest {
     }
 
     @Test
-    fun `未设置且无默认值的 select 返回 Invalid`() {
+    fun `未设置的 select 回落首个 case`() {
         val result = RunPlanBuilder.build(
             definition,
             configWith(
                 ConfiguredTask(
                     taskName = "常规作战",
                     enabled = true,
-                    // 自定义作战关卡为 switch 无 default_case，保持 Unset
+                    // 自定义作战关卡为 switch 无 default_case，cases 首项是 No
                     optionValues = emptyMap(),
                 ),
             ),
         )
-        assertTrue("Unset 无默认值应 Invalid: $result", result is RunPlanResult.Invalid)
-        val diagnostics = (result as RunPlanResult.Invalid).diagnostics
-        assertTrue(
-            diagnostics.any {
-                it.message.isResource(R.string.diagnostic_option_unset_without_default, "自定义作战关卡")
-            },
-        )
+        assertTrue("无 default_case 应回落首个 case 而非拦下: $result", result is RunPlanResult.Success)
     }
 
     @Test
@@ -168,14 +162,18 @@ class RunPlanBuilderTest {
 
     @Test
     fun `resolver 与 builder 对同一 Unset 语义一致`() {
-        // Resolver 对 Unset 无默认值的 select 不隐式选第一项
-        val session = ConfigurationResolver.resolve(
-            definition,
-            configWith(ConfiguredTask("常规作战", enabled = true)),
-        )
+        // 两边都走 effectiveDefaultCase：Resolver 亮出来的活动 case 必须与 Builder 编译进 plan 的是同一个
+        val config = configWith(ConfiguredTask("常规作战", enabled = true))
+        val session = ConfigurationResolver.resolve(definition, config)
         val task = session.activeConfiguration!!.tasks.single()
         val switch = task.options.first { it.name == "自定义作战关卡" }
-        assertTrue("Unset 无默认值不应有活动 case", switch.activeCases.isEmpty())
+        val option = definition.options.getValue("自定义作战关卡") as OptionDefinition.Choice
+
+        assertEquals(
+            listOf(option.cases.first().name),
+            switch.activeCases.map { it.name },
+        )
+        assertTrue("Builder 侧应同样回落而非拦下", RunPlanBuilder.build(definition, config) is RunPlanResult.Success)
     }
 
     /** 自定义关卡 3-9 的常规作战任务；其余 option 选定避免级联出 Unset 诊断 */

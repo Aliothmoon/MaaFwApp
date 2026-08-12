@@ -58,11 +58,22 @@ class GlobalOptionTest {
         }
     """.trimIndent()
 
-    /** 全局 option 缺 default_case：编译时必然报「未设值且无默认」 */
+    /** 全局 option 缺 default_case：应回落首个 case（甲） */
     private fun withoutDefaultCase(): String =
         pi(globalOption = """"global_option":["无默认"],""").replace(
             """"难度": {""",
-            """"无默认": {"type": "select", "cases": [{"name": "甲"}, {"name": "乙"}]},
+            """"无默认": {"type": "select", "cases": [
+              {"name": "甲", "pipeline_override": {"Fight": {"pick": "first"}}},
+              {"name": "乙", "pipeline_override": {"Fight": {"pick": "second"}}}
+            ]},
+            "难度": {""",
+        )
+
+    /** cases 为空：回落也没有落点，编译时必然报「未设值且无默认」 */
+    private fun withoutUsableDefault(): String =
+        pi(globalOption = """"global_option":["无落点"],""").replace(
+            """"难度": {""",
+            """"无落点": {"type": "select", "cases": []},
             "难度": {""",
         )
 
@@ -149,10 +160,19 @@ class GlobalOptionTest {
         )
     }
 
+    /** 生态里绝大多数 option 不写 default_case，回落首个 case 而不是把整轮拦下 */
+    @Test
+    fun `无 default_case 时回落首个 case`() {
+        val definition = load(withoutDefaultCase()).definition
+        val patches = plan(definition, configWith()).plan.tasks.single().pipelineOverrides
+        val pick = patches.firstNotNullOf { it["Fight"]?.jsonObject?.get("pick") }
+        assertEquals("first", pick.jsonPrimitive.content)
+    }
+
     /** 全局 option 与任务无关，诊断不该按启用任务数翻倍 */
     @Test
-    fun `未设值且无 default_case 时只报一条诊断`() {
-        val definition = load(withoutDefaultCase()).definition
+    fun `cases 为空时只报一条诊断`() {
+        val definition = load(withoutUsableDefault()).definition
         val id = RunConfigurationId("c1")
         val config = UserConfiguration(
             initialized = true,
@@ -174,7 +194,7 @@ class GlobalOptionTest {
     /** 跑不到的全局 option 不该把「没有可执行任务」盖成 Invalid */
     @Test
     fun `任务全禁用时仍报 NoExecutableTasks`() {
-        val definition = load(withoutDefaultCase()).definition
+        val definition = load(withoutUsableDefault()).definition
         val id = RunConfigurationId("c1")
         val config = UserConfiguration(
             initialized = true,

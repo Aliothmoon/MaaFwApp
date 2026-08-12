@@ -143,7 +143,8 @@ object RunPlanBuilder {
             when (option) {
                 is OptionDefinition.Choice -> {
                     val value = values[name] as? OptionValue.SingleCase
-                    val selectedName = value?.case ?: option.defaultCase
+                    // 回落与 Resolver 同源，见 OptionDefinition.Choice.effectiveDefaultCase
+                    val selectedName = value?.case ?: option.effectiveDefaultCase
                     if (selectedName == null) {
                         diagnostics += runtimeError(
                             scopeLabel,

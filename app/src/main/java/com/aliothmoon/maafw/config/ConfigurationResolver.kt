@@ -245,10 +245,9 @@ object ConfigurationResolver {
         val value = values[option.name]
         return when (option) {
             is OptionDefinition.Choice -> {
-                // Unset 且无 defaultCase 时不隐式选第一项
                 val selected = (value as? OptionValue.SingleCase)?.case
                     ?.takeIf { s -> option.cases.any { it.name == s } }
-                    ?: option.defaultCase
+                    ?: option.effectiveDefaultCase
                 OptionEditorState(
                     name = option.name,
                     label = option.label,

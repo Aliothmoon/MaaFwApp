@@ -154,7 +154,7 @@ class ConfigurationResolverTest {
     }
 
     @Test
-    fun `select option keeps unset without default`() {
+    fun `select option without default falls back to first case`() {
         val option = OptionDefinition.Select(
             name = "mode",
             label = "模式",
@@ -186,8 +186,9 @@ class ConfigurationResolverTest {
         )
         val editor = session.activeConfiguration!!.tasks.single().options.single()
         assertEquals(OptionKind.Select, editor.kind)
+        // 用户没设值，value 仍是 null；选中态来自 effectiveDefaultCase 的回落
         assertNull(editor.value)
-        assertTrue(editor.cases.none { it.active })
+        assertEquals(listOf("a"), editor.cases.filter { it.active }.map { it.name })
     }
 
     @Test

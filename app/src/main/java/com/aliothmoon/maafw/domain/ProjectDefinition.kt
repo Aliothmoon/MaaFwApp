@@ -118,6 +118,14 @@ sealed interface OptionDefinition {
     sealed interface Choice : OptionDefinition {
         val cases: List<OptionCaseDefinition>
         val defaultCase: String?
+
+        /**
+         * 未设值时的落点：PI 的 `default_case`，缺了退到首个 case
+         * 生态里绝大多数 option 不写 `default_case`，逼用户逐个选不现实；与 MXU 的 `default_case || cases[0]` 同语义
+         * 只有 cases 为空才是 null——那是 PI 自己写坏，留给编译期报诊断
+         * Resolver 与 RunPlanBuilder 必须共用这一处：两边算法不同就会「显示的」与「跑的」分叉
+         */
+        val effectiveDefaultCase: String? get() = defaultCase ?: cases.firstOrNull()?.name
     }
 
     data class Select(
