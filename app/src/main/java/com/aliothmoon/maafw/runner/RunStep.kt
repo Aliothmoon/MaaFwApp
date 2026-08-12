@@ -8,7 +8,7 @@ enum class HookOutcome {
     /** 本轮不适用（开关没开、模式不对），什么都没做 */
     SKIPPED,
 
-    /** engage 抛了或超时；gating 的会连带中止整轮 */
+    /** engage 失败或超时；gating 的会连带中止整轮 */
     FAILED,
 }
 

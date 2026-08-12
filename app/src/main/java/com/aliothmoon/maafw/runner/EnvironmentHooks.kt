@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.WakeUnlockResult
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.settings.AppSettingsGateway
@@ -72,30 +73,28 @@ class WakeUnlockHook(
     override val order: Int = HookOrder.WAKE_UNLOCK
     override val gating: Boolean = true
 
-    override suspend fun engage(ctx: RunContext): Release? {
+    override suspend fun engage(ctx: RunContext): EngageResult {
         // 只对定时触发生效（对齐 MaaMeow 的「定时任务解锁方式」）：手动 Start 时
         // 用户正对着亮屏解锁的手机按按钮，解一次是空操作
-        if (ctx.trigger !is RunTrigger.Schedule) return null
-        if (!settings.wakeUnlockEnabled.value) return null
+        if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
+        if (!settings.wakeUnlockEnabled.value) return EngageResult.Skipped()
 
         val credential = settings.wakeCredential.value
         val code = servicePort.callOrDefault("unlock", WakeUnlockResult.IPC_FAILED) {
             it.unlock(credential)
         }
-        when (code) {
-            WakeUnlockResult.OK, WakeUnlockResult.NO_KEYGUARD -> Unit
-            else -> error(wakeFailureText(code))
+        return when (code) {
+            WakeUnlockResult.OK, WakeUnlockResult.NO_KEYGUARD -> EngageResult.Skipped()
+            else -> EngageResult.Failed(wakeFailureText(code))
         }
-        // 解锁没有对称的撤销动作：要熄屏是 AutoSleepHook 的事，两者可以各自开关
-        return null
     }
 
-    private fun wakeFailureText(code: Int): String = when (code) {
-        WakeUnlockResult.CREDENTIAL_REQUIRED -> "需要 PIN 才能解锁，去设置里填"
-        WakeUnlockResult.CREDENTIAL_REJECTED -> "PIN 不对，或该 ROM 的锁屏不吃注入按键"
-        WakeUnlockResult.WAKE_FAILED -> "屏幕没亮起来"
-        WakeUnlockResult.UNSUPPORTED -> "该 ROM 上的亮屏解锁不可用"
-        else -> "亮屏解锁失败（code=$code）"
+    private fun wakeFailureText(code: Int): UiText = when (code) {
+        WakeUnlockResult.CREDENTIAL_REQUIRED -> uiTextOf(R.string.wake_unlock_need_pin)
+        WakeUnlockResult.CREDENTIAL_REJECTED -> uiTextOf(R.string.wake_unlock_pin_rejected)
+        WakeUnlockResult.WAKE_FAILED -> uiTextOf(R.string.wake_unlock_screen_off)
+        WakeUnlockResult.UNSUPPORTED -> uiTextOf(R.string.wake_unlock_unsupported)
+        else -> uiTextOf(R.string.wake_unlock_failed, code)
     }
 }
 
@@ -114,16 +113,16 @@ class ScreenSaverHook(
     override val order: Int = HookOrder.SCREEN_SAVER
     override val gating: Boolean = false
 
-    override suspend fun engage(ctx: RunContext): Release? {
-        if (ctx.runMode != RunMode.BACKGROUND) return null
-        if (!settings.screenSaverEnabled.value) return null
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
+        if (!settings.screenSaverEnabled.value) return EngageResult.Skipped()
 
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
         if (!screenSaver.show()) {
-            Timber.w("screen saver not shown, nothing to undo")
-            return null
+            ctx.journal.warn(uiTextOf(R.string.run_log_screen_saver_skipped))
+            return EngageResult.Skipped()
         }
-        return Release { screenSaver.hide() }
+        return EngageResult.Engaged(Release { screenSaver.hide() })
     }
 }
 
@@ -143,18 +142,18 @@ class CloseTargetAppHook(
     override val order: Int = HookOrder.CLOSE_APP
     override val gating: Boolean = false
 
-    override suspend fun engage(ctx: RunContext): Release? {
+    override suspend fun engage(ctx: RunContext): EngageResult {
         // 前台模式没有虚拟屏，看门狗从不起来，特权侧也就没有目标包名可关
-        if (ctx.runMode != RunMode.BACKGROUND) return null
+        if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
         val perRule = (ctx.trigger as? RunTrigger.Schedule)?.options?.closeAppAfterTask == true
-        if (!settings.closeAppAfterTask.value && !perRule) return null
+        if (!settings.closeAppAfterTask.value && !perRule) return EngageResult.Skipped()
 
-        return Release { reason ->
+        return EngageResult.Engaged(Release { reason ->
             // 只认自然跑完：投递被拒或用户手动停时把人家的应用关掉，太粗暴
             if (reason is RunEndReason.Ran && reason.result !is ExecutionResult.Cancelled) {
                 servicePort.callOrDefault("stopTargetApp", false) { it.stopTargetApp() }
             }
-        }
+        })
     }
 }
 
@@ -171,26 +170,26 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
     override val order: Int = HookOrder.AUTO_SLEEP
     override val gating: Boolean = false
 
-    override suspend fun engage(ctx: RunContext): Release? {
-        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return null
-        if (!options.autoSleepAfterTask) return null
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
+        if (!options.autoSleepAfterTask) return EngageResult.Skipped()
 
         val tookOverIdleDevice = !servicePort.callOrDefault("isScreenOn", true) { it.isScreenOn() }
         val skipIfAwake = options.skipAutoSleepIfAwake
         // 两个采样值都在这里捕进闭包：收尾时再去读，读到的是那时的屏幕状态与开关，不是本轮开始时的
-        return Release { reason ->
+        return EngageResult.Engaged(Release { reason ->
             when {
                 reason !is RunEndReason.Ran ->
-                    Timber.i("run did not complete, skipping sleep")
+                    ctx.journal.info(uiTextOf(R.string.run_log_auto_sleep_skipped_not_run))
 
                 skipIfAwake && !tookOverIdleDevice ->
-                    Timber.i("device was awake at run start, skipping sleep")
+                    ctx.journal.info(uiTextOf(R.string.run_log_auto_sleep_skipped_awake))
 
                 else -> servicePort.callOrDefault("lockAndSleep", WakeUnlockResult.IPC_FAILED) {
                     it.lockAndSleep()
                 }
             }
-        }
+        })
     }
 }
 
@@ -212,22 +211,30 @@ object CountdownHook : RunEnvHook {
     override val order: Int = HookOrder.COUNTDOWN
     override val gating: Boolean = true
 
-    override suspend fun engage(ctx: RunContext): Release? {
-        if (ctx.trigger !is RunTrigger.Schedule) return null
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
 
         for (remaining in COUNTDOWN_SECONDS downTo 1) {
             // 先看「立即开始」：两个都置位时以它为准（同 MaaMeow），
             // 两个布尔分不出先后，而「点了取消又点开始」比反过来常见得多
             if (ctx.signals.startNowRequested) break
-            if (ctx.signals.cancelRequested) error("用户取消了这次触发")
+            if (ctx.signals.cancelRequested) {
+                return EngageResult.Failed(
+                    uiTextOf(R.string.run_countdown_cancelled),
+                    NotRunCause.Cancelled,
+                )
+            }
             ctx.progress.report(id, uiTextOf(R.string.run_countdown_remaining, remaining))
             delay(1_000)
         }
         // 最后再看一眼：整个等待期间用户都可能点取消，包括最后一秒
         if (ctx.signals.cancelRequested && !ctx.signals.startNowRequested) {
-            error("用户取消了这次触发")
+            return EngageResult.Failed(
+                uiTextOf(R.string.run_countdown_cancelled),
+                NotRunCause.Cancelled,
+            )
         }
-        return null
+        return EngageResult.Skipped()
     }
 }
 

@@ -16,8 +16,8 @@ class KeepAliveHook(private val keepAlive: RunKeepAlive) : RunEnvHook {
     override val order: Int = 0
     override val gating: Boolean = false
 
-    override suspend fun engage(ctx: RunContext): Release? {
+    override suspend fun engage(ctx: RunContext): EngageResult {
         keepAlive.start()
-        return null
+        return EngageResult.Skipped()
     }
 }

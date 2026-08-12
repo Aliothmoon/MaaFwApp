@@ -20,6 +20,12 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class EnvironmentHooksTest {
 
+    private fun EngageResult.releaseOrNull(): Release? = when (this) {
+        is EngageResult.Engaged -> release
+        is EngageResult.Skipped -> release
+        is EngageResult.Failed -> null
+    }
+
     private val plan = RunPlan(
         projectName = "demo",
         projectVersion = "1",
@@ -30,7 +36,7 @@ class EnvironmentHooksTest {
     )
 
     private fun context(runMode: RunMode = RunMode.BACKGROUND) =
-        RunContext(RunTrigger.Manual, runMode, plan)
+        RunContext(RunTrigger.Manual, runMode, plan, journal = DiscardingRunJournal)
 
     private class RecordingScreenSaver(private val showSucceeds: Boolean = true) : RunScreenSaver {
         var shown = 0
@@ -53,7 +59,7 @@ class EnvironmentHooksTest {
         val settings = FakeAppSettingsGateway()
         val hook = WakeUnlockHook(FakePrivilegedServicePort(service), settings)
 
-        assertNull(hook.engage(scheduleContext()))
+        assertTrue(hook.engage(scheduleContext()) is EngageResult.Skipped)
         assertTrue(service.unlockCalls.isEmpty())
     }
 
@@ -66,7 +72,10 @@ class EnvironmentHooksTest {
             wakeCredential.value = "1234"
         }
 
-        assertNull(WakeUnlockHook(FakePrivilegedServicePort(service), settings).engage(context()))
+        assertTrue(
+            WakeUnlockHook(FakePrivilegedServicePort(service), settings).engage(context())
+                is EngageResult.Skipped,
+        )
         assertTrue(service.unlockCalls.isEmpty())
     }
 
@@ -107,7 +116,7 @@ class EnvironmentHooksTest {
         val hook = WakeUnlockHook(FakePrivilegedServicePort(service), settings)
 
         assertTrue(hook.gating)
-        runCatching { hook.engage(scheduleContext()) }.also { assertTrue(it.isFailure) }
+        assertTrue(hook.engage(scheduleContext()) is EngageResult.Failed)
     }
 
     // ── 屏保 ────────────────────────────────────────────────────────
@@ -117,7 +126,7 @@ class EnvironmentHooksTest {
         val saver = RecordingScreenSaver()
         val settings = FakeAppSettingsGateway().apply { screenSaverEnabled.value = true }
 
-        assertNull(ScreenSaverHook(settings, saver).engage(context(RunMode.FOREGROUND)))
+        assertTrue(ScreenSaverHook(settings, saver).engage(context(RunMode.FOREGROUND)) is EngageResult.Skipped)
         assertEquals(0, saver.shown)
     }
 
@@ -127,7 +136,7 @@ class EnvironmentHooksTest {
         val saver = RecordingScreenSaver(showSucceeds = false)
         val settings = FakeAppSettingsGateway().apply { screenSaverEnabled.value = true }
 
-        assertNull(ScreenSaverHook(settings, saver).engage(context()))
+        assertNull(ScreenSaverHook(settings, saver).engage(context()).releaseOrNull())
         assertEquals(0, saver.hidden)
     }
 
@@ -136,7 +145,7 @@ class EnvironmentHooksTest {
         val saver = RecordingScreenSaver()
         val settings = FakeAppSettingsGateway().apply { screenSaverEnabled.value = true }
 
-        val release = ScreenSaverHook(settings, saver).engage(context())
+        val release = ScreenSaverHook(settings, saver).engage(context()).releaseOrNull()
         assertNotNull(release)
         release!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
@@ -153,7 +162,7 @@ class EnvironmentHooksTest {
 
         val release = hook.engage(
             scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true)),
-        )
+        ).releaseOrNull()
         // 采样之后屏幕状态怎么变都不影响判断——值已经在闭包里了
         service.screenOn = false
         release!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
@@ -168,7 +177,7 @@ class EnvironmentHooksTest {
 
         hook.engage(
             scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true)),
-        )!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        ).releaseOrNull()!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
         assertEquals(1, service.lockAndSleepCount)
     }
@@ -179,7 +188,7 @@ class EnvironmentHooksTest {
         val service = FakePrivilegedService().apply { screenOn = false }
         val hook = AutoSleepHook(FakePrivilegedServicePort(service))
 
-        hook.engage(scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true)))!!(
+        hook.engage(scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true))).releaseOrNull()!!(
             RunEndReason.NotRun(NotRunCause.Rejected),
         )
 
@@ -197,12 +206,13 @@ class EnvironmentHooksTest {
         runMode = runMode,
         plan = plan,
         signals = signals,
+        journal = DiscardingRunJournal,
     )
 
     /** 手动 Start 不该被拖住：trigger 不是 Schedule 就没有倒计时 */
     @Test
     fun `manual trigger has no countdown`() = runTest {
-        assertNull(CountdownHook.engage(context()))
+        assertTrue(CountdownHook.engage(context()) is EngageResult.Skipped)
     }
 
     /** 秒数不开放配置，定时触发一律等这么久 */
@@ -214,6 +224,7 @@ class EnvironmentHooksTest {
             runMode = RunMode.BACKGROUND,
             plan = plan,
             progress = RunProgress { hookId, _ -> ticks += hookId },
+            journal = DiscardingRunJournal,
         )
 
         CountdownHook.engage(ctx)
@@ -237,7 +248,7 @@ class EnvironmentHooksTest {
         val signals = RunSignals().apply { requestCancel() }
 
         assertTrue(CountdownHook.gating)
-        assertTrue(runCatching { CountdownHook.engage(scheduleContext(signals = signals)) }.isFailure)
+        assertTrue(CountdownHook.engage(scheduleContext(signals = signals)) is EngageResult.Failed)
     }
 
     /** 两个都点过说明用户改了主意，以「立即开始」为准 */
@@ -248,7 +259,7 @@ class EnvironmentHooksTest {
             requestStartNow()
         }
 
-        assertNull(CountdownHook.engage(scheduleContext(signals = signals)))
+        assertTrue(CountdownHook.engage(scheduleContext(signals = signals)) is EngageResult.Skipped)
     }
 
     // ── 关目标应用 ──────────────────────────────────────────────────
@@ -258,7 +269,7 @@ class EnvironmentHooksTest {
         val service = FakePrivilegedService()
         val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
 
-        hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true)))!!(
+        hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))).releaseOrNull()!!(
             RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
         )
 
@@ -271,7 +282,7 @@ class EnvironmentHooksTest {
         val service = FakePrivilegedService()
         val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
 
-        hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true)))!!(
+        hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))).releaseOrNull()!!(
             RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())),
         )
 
@@ -285,7 +296,7 @@ class EnvironmentHooksTest {
 
         CloseTargetAppHook(port, FakeAppSettingsGateway()).engage(
             scheduleContext(ScheduleRunOptions(closeAppAfterTask = true)),
-        )!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        ).releaseOrNull()!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
     }
 
     /** 全局开关管每一轮，手动 Start 那轮压根没有 ScheduleRunOptions 可看 */
@@ -295,7 +306,7 @@ class EnvironmentHooksTest {
         val settings = FakeAppSettingsGateway().apply { closeAppAfterTask.value = true }
         val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), settings)
 
-        hook.engage(context())!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        hook.engage(context()).releaseOrNull()!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
         assertEquals(1, service.stopTargetAppCount)
     }
@@ -304,9 +315,10 @@ class EnvironmentHooksTest {
     fun `both switches off leaves the target app alone`() = runTest {
         val port = FakePrivilegedServicePort(FakePrivilegedService())
 
-        assertNull(
+        assertTrue(
             CloseTargetAppHook(port, FakeAppSettingsGateway())
-                .engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = false))),
+                .engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = false)))
+                is EngageResult.Skipped,
         )
     }
 
@@ -316,6 +328,9 @@ class EnvironmentHooksTest {
         val port = FakePrivilegedServicePort(FakePrivilegedService())
         val settings = FakeAppSettingsGateway().apply { closeAppAfterTask.value = true }
 
-        assertNull(CloseTargetAppHook(port, settings).engage(context(RunMode.FOREGROUND)))
+        assertTrue(
+            CloseTargetAppHook(port, settings).engage(context(RunMode.FOREGROUND))
+                is EngageResult.Skipped,
+        )
     }
 }

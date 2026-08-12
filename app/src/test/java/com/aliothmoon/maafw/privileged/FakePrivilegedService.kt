@@ -32,6 +32,14 @@ open class FakePrivilegedService : RemoteService {
     var stopTargetAppCount: Int = 0
         private set
 
+    var runnerCallback: IMaaRunnerCallback? = null
+        private set
+    var running: Boolean = false
+    var setupResult: Boolean = true
+    var startRunResult: Boolean = true
+    var stopRunCount: Int = 0
+        private set
+
     override fun asBinder(): IBinder? = null
 
     // ── 本测试关心的 ──
@@ -60,7 +68,7 @@ open class FakePrivilegedService : RemoteService {
     override fun version(): String = "fake"
     override fun pid(): Int = 0
     override fun heartbeat(appPid: Int) = Unit
-    override fun setup(piRoot: String?, logDir: String?, isDebug: Boolean): Boolean = true
+    override fun setup(piRoot: String?, logDir: String?, isDebug: Boolean): Boolean = setupResult
     override fun setVirtualDisplayMode(mode: Int): Boolean = true
     override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) = Unit
     override fun startVirtualDisplay(): Int = 1
@@ -78,10 +86,19 @@ open class FakePrivilegedService : RemoteService {
     override fun touchUp(x: Int, y: Int) = Unit
     override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int = permissions
     override fun isPackageInstalled(packageName: String?): Boolean = true
-    override fun setRunnerCallback(callback: IMaaRunnerCallback?) = Unit
-    override fun startRun(runPlanJson: String?): Boolean = true
-    override fun stopRun(): Boolean = true
-    override fun isRunning(): Boolean = false
+    override fun setRunnerCallback(callback: IMaaRunnerCallback?) {
+        runnerCallback = callback
+    }
+    override fun startRun(runPlanJson: String?): Boolean {
+        if (!startRunResult) return false
+        running = true
+        return true
+    }
+    override fun stopRun(): Boolean {
+        stopRunCount++
+        return true
+    }
+    override fun isRunning(): Boolean = running
     override fun maaVersion(): String = "fake"
     override fun testUnlock(credential: String?): Int = unlockResult
     override fun watchdogState(): Int = 0
@@ -98,6 +115,10 @@ class FakePrivilegedServicePort(
     private val _state = MutableStateFlow(PrivilegedServiceState.Connected)
     override val serviceState: StateFlow<PrivilegedServiceState> = _state.asStateFlow()
 
+    fun emit(state: PrivilegedServiceState) {
+        _state.value = state
+    }
+
     override val currentBackend: RemoteBackend? = RemoteBackend.SHIZUKU
 
     override fun bind() = Unit
@@ -105,6 +126,11 @@ class FakePrivilegedServicePort(
 
     override fun serviceOrNull(): RemoteService? = service
 
-    override suspend fun <R> useService(action: suspend (RemoteService) -> R): R =
-        action(checkNotNull(service) { "fake service unavailable" })
+    /** 非 null 时 [useService] 先挂在这上面，测 Preparing 窗口 */
+    var holdUseService: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
+    override suspend fun <R> useService(action: suspend (RemoteService) -> R): R {
+        holdUseService?.await()
+        return action(checkNotNull(service) { "fake service unavailable" })
+    }
 }

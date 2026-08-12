@@ -18,6 +18,6 @@ class NotificationHook(private val center: NotificationCenter) : RunEnvHook {
     override val order: Int = HookOrder.NOTIFICATION
     override val gating: Boolean = false
 
-    override suspend fun engage(ctx: RunContext): Release =
-        Release { reason -> center.onRunFinished(reason) }
+    override suspend fun engage(ctx: RunContext): EngageResult =
+        EngageResult.Engaged { reason -> center.onRunFinished(reason) }
 }

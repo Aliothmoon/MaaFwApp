@@ -21,8 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 执行期间把 app 进程钉住的手段
@@ -83,6 +83,7 @@ class RunLauncher(
     private val runMode: () -> RunMode,
     /** 收尾要守着整轮，活得比 launch 的调用方久 */
     private val scope: CoroutineScope,
+    private val journal: RunJournal,
 ) {
 
     /** 只护投递这一段，不护整轮；运行中的第二次 Start 由 RunnerPort 拒 */
@@ -92,7 +93,7 @@ class RunLauncher(
     private val handled = ArrayDeque<RunRequestId>()
 
     /** 抢占时要撤掉上一轮的收尾登记，否则旧的自动熄屏会落到新一轮头上 */
-    private val settling = java.util.concurrent.atomic.AtomicReference<Job?>(null)
+    private val settling = AtomicReference<Job?>(null)
 
     /**
      * @param configurationId null 跑当前激活的那份；定时规则可以指定别的
@@ -143,12 +144,15 @@ class RunLauncher(
                 is RunPlanResult.Success -> built.plan
             }
 
-            val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress)
+            val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal)
             runPrechecks(ctx)?.let { return it }
 
             if (force) preemptRunning()
 
-            engage(Anchor.BeforeDispatch, ctx, engaged, steps)
+            engage(Anchor.BeforeDispatch, ctx, engaged, steps)?.let { halt ->
+                finalize(engaged, halt.cause)
+                return RunLaunchResult.Blocked(halt.reason)
+            }
 
             when (val command = runnerPort.start(plan)) {
                 RunnerCommandResult.Accepted -> Unit
@@ -159,7 +163,10 @@ class RunLauncher(
             }
             requestId?.let(::remember)
 
-            engage(Anchor.AfterAccepted, ctx, engaged, steps)
+            engage(Anchor.AfterAccepted, ctx, engaged, steps)?.let { halt ->
+                finalize(engaged, halt.cause)
+                return RunLaunchResult.Blocked(halt.reason)
+            }
 
             // 交棒给守着整轮的协程。此刻 phase 一定是 busy——两个 RunnerPort 实现都在
             // 返回 Accepted 之前就置了 Preparing，屏障不会当场看到 Idle 就退
@@ -167,9 +174,6 @@ class RunLauncher(
             engaged.clear()
             settling.set(scope.launch { awaitSettledThenFinalize(pending) })
             return RunLaunchResult.Started
-        } catch (failure: GatingHookFailure) {
-            finalize(engaged, RunEndReason.NotRun(NotRunCause.HookFailed))
-            return RunLaunchResult.Blocked(failure.reason)
         } catch (cancellation: CancellationException) {
             finalize(engaged, RunEndReason.NotRun(NotRunCause.Cancelled))
             throw cancellation
@@ -193,10 +197,7 @@ class RunLauncher(
         if (!runnerPort.state.value.phase.isBusy) return
         Timber.i("preempt: aborting the running round")
         runnerPort.stop()
-        val previous = settling.getAndSet(null)
-        if (previous != null && withTimeoutOrNull(PREEMPT_JOIN_TIMEOUT_MS) { previous.join() } == null) {
-            Timber.w("preempt: previous round did not settle within %dms, proceeding", PREEMPT_JOIN_TIMEOUT_MS)
-        }
+        settling.getAndSet(null)?.join()
     }
 
     /**
@@ -228,60 +229,59 @@ class RunLauncher(
         return null
     }
 
+    /** 非 null = gating 失败，调用方撤栈并 [RunLaunchResult.Blocked] */
     private suspend fun engage(
         anchor: Anchor,
         ctx: RunContext,
         engaged: ArrayDeque<Release>,
         steps: RunStepSink?,
-    ) {
-        hooks.asSequence()
-            .filter { it.anchor == anchor }
-            .sortedBy { it.order }
-            .forEach { hook ->
-                var failed = false
-                val release = try {
-                    withTimeout(ENGAGE_TIMEOUT_MS) { hook.engage(ctx) }
-                } catch (timeout: TimeoutCancellationException) {
-                    failed = true
-                    onEngageFailure(hook, timeout, uiTextOf(R.string.msg_hook_timeout, hook.id))
-                } catch (cancellation: CancellationException) {
-                    throw cancellation
-                } catch (t: Throwable) {
-                    failed = true
-                    onEngageFailure(hook, t, uiTextOf(R.string.msg_hook_failed, hook.id))
-                }
-                // 每个挂载物**只记一次**；gating 失败时 onEngageFailure 已经抛出去了，走不到这
-                // 返回 null 有两种（本轮不适用 / 做了但不必撤），框架分不出来，归同一档
-                steps?.record(
-                    RunStep(
-                        hook.id,
-                        when {
-                            failed -> HookOutcome.FAILED
-                            release != null -> HookOutcome.ENGAGED
-                            else -> HookOutcome.SKIPPED
-                        },
-                    ),
-                )
-                if (release != null) engaged.addLast(release)
+    ): Halt? {
+        for (hook in hooks.asSequence().filter { it.anchor == anchor }.sortedBy { it.order }) {
+            // Accepted 之后再拦会留下远端在跑、编排报 Blocked 的孤儿轮
+            check(!(anchor == Anchor.AfterAccepted && hook.gating)) {
+                "gating hook ${hook.id} cannot use AfterAccepted"
             }
-    }
-
-    /** gating 的抛出去中止整轮，其余记一笔继续——静音没静上不该拦住整晚的任务 */
-    private fun onEngageFailure(hook: RunEnvHook, cause: Throwable, reason: UiText): Release? {
-        if (hook.gating) throw GatingHookFailure(reason, cause)
-        Timber.w(cause, "env hook %s engage failed, skipping", hook.id)
+            val result = try {
+                withTimeout(ENGAGE_TIMEOUT_MS) { hook.engage(ctx) }
+            } catch (timeout: TimeoutCancellationException) {
+                EngageResult.Failed(uiTextOf(R.string.msg_hook_timeout, hook.id))
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (t: Throwable) {
+                Timber.w(t, "env hook %s engage crashed", hook.id)
+                EngageResult.Failed(uiTextOf(R.string.msg_hook_failed, hook.id))
+            }
+            val release = when (result) {
+                is EngageResult.Engaged -> result.release
+                is EngageResult.Skipped -> result.release
+                is EngageResult.Failed -> null
+            }
+            val outcome = when (result) {
+                is EngageResult.Engaged -> HookOutcome.ENGAGED
+                is EngageResult.Skipped ->
+                    if (release != null) HookOutcome.ENGAGED else HookOutcome.SKIPPED
+                is EngageResult.Failed -> HookOutcome.FAILED
+            }
+            steps?.record(RunStep(hook.id, outcome))
+            if (release != null) engaged.addLast(release)
+            if (result is EngageResult.Failed && hook.gating) {
+                return Halt(result.reason, RunEndReason.NotRun(result.notRun))
+            }
+        }
         return null
     }
 
+    private class Halt(val reason: UiText, val cause: RunEndReason)
+
+    /**
+     * 等待任务结束直到
+     */
     private suspend fun awaitSettledThenFinalize(pending: List<Release>) {
-        // Fw 的 stop 是耗时操作：最坏要等当前节点跑完，而 PI 单节点 timeout 默认 20s。
-        // 等 phase 真的落回非 busy 再撤，否则屏保会在任务还没停的时候被掀掉
-        val settled = withTimeoutOrNull(SETTLE_TIMEOUT_MS) {
-            runnerPort.state.first { !it.phase.isBusy }
+        val settled = runnerPort.state.first { !it.phase.isBusy }
+        val result = settled.latestResult ?: run {
+            Timber.e("runner became idle without a result, synthesizing Failed")
+            ExecutionResult.Failed(uiTextOf(R.string.msg_fail_default))
         }
-        if (settled == null) Timber.w("timed out waiting for run to settle, forcing teardown")
-        val result = (settled ?: runnerPort.state.value).latestResult
-            ?: ExecutionResult.Failed(uiTextOf(R.string.msg_fail_wait_settle_timeout))
         finalize(ArrayDeque(pending), RunEndReason.Ran(result))
     }
 
@@ -300,17 +300,11 @@ class RunLauncher(
         }
     }
 
-    private class GatingHookFailure(val reason: UiText, cause: Throwable) : Exception(cause)
-
     private companion object {
         const val ENGAGE_TIMEOUT_MS = 30_000L
         const val RELEASE_TIMEOUT_MS = 10_000L
-        const val PREEMPT_JOIN_TIMEOUT_MS = 15_000L
 
         /** 闹钟重投的间隔是秒级，记这么多足够，也不至于无限长 */
         const val HANDLED_HISTORY = 32
-
-        /** PI 单节点 timeout 默认 20s，stop 最坏等一个节点跑完，留一档余量 */
-        const val SETTLE_TIMEOUT_MS = 30_000L
     }
 }

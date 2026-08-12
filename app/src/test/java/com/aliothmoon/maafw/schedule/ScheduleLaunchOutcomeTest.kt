@@ -27,7 +27,7 @@ class ScheduleLaunchOutcomeTest {
             RunLaunchResult.NoExecutableTasks to TriggerFailureReason.NO_EXECUTABLE_TASKS,
             RunLaunchResult.Invalid(emptyList()) to TriggerFailureReason.INVALID_PLAN,
             RunLaunchResult.Rejected(uiTextFromFramework("busy")) to TriggerFailureReason.REJECTED,
-            RunLaunchResult.Blocked(uiTextOf(R.string.msg_no_executable_tasks)) to
+            RunLaunchResult.Blocked(uiTextOf(R.string.run_countdown_cancelled)) to
                 TriggerFailureReason.BLOCKED,
         )
 

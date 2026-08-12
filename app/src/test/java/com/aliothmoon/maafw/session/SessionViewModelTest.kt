@@ -33,6 +33,7 @@ import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.DiscardingRunJournal
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunSessionLogStore
@@ -158,6 +159,7 @@ class SessionViewModelTest {
         hooks = listOf(KeepAliveHook(RecordingRunKeepAlive())),
         runMode = { settings.runMode.value },
         scope = backgroundScope,
+        journal = DiscardingRunJournal,
     )
 
     private fun TestScope.createVm(

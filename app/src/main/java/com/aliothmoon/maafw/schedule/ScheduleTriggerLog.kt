@@ -14,9 +14,8 @@ import java.io.File
  * 与 `ExecutionResult` 不同，这个必须落盘：闹钟触发时 app 多半没在前台，用户回头查
  * 「昨晚那条到底响没响」只能靠它。文件在外部私有目录，adb pull 拿得到
  *
- * **只存稳定语义**：[result] 是枚举，文案由 UI 现场解析。这里若存已解析的字符串，
- * 写入那一刻的语言会被冻进文件，之后切语言旧记录还是旧语言；`UiText` 也不能存，
- * 它带的 resId 跨版本会变
+ * [result] / [failureReason] 仍是稳定枚举；[detail] 是写入那一刻解析好的成品文本
+ * （当时语言冻进文件）。`UiText` 本身不落盘——resId 跨版本会变
  */
 @Serializable
 data class TriggerLogEntry(
@@ -29,6 +28,8 @@ data class TriggerLogEntry(
     val result: TriggerResult,
     /** 仅 [TriggerResult.FAILED_START] 有值；老记录为 null */
     val failureReason: TriggerFailureReason? = null,
+    /** 写入时由 UiText 解析冻住；老记录为 null，展示回落到 [failureReason] */
+    val detail: String? = null,
     /**
      * 发起过程里每个环境挂载物的落点，按 engage 顺序
      *

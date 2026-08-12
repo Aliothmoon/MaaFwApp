@@ -1,11 +1,14 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.runner.RunLaunchResult
 
 /** 一次定时发起的记账结果 */
 data class ScheduleLaunchOutcome(
     val result: TriggerResult,
     val failureReason: TriggerFailureReason? = null,
+    /** 写入触发日志时冻成当时语言；来自 Blocked/Rejected 的 UiText */
+    val detail: UiText? = null,
 )
 
 /**
@@ -38,11 +41,13 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.INVALID_PLAN)
 
     is RunLaunchResult.Rejected ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED)
+        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason)
 
-    is RunLaunchResult.Blocked,
-    is RunLaunchResult.NeedsConfirmation,
-    -> ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED)
+    is RunLaunchResult.Blocked ->
+        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, reason)
+
+    is RunLaunchResult.NeedsConfirmation ->
+        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt)
 }
 
 /** 框架侧的落点枚举翻成落盘的那一份；两边分开，schema 不跟着框架改 */

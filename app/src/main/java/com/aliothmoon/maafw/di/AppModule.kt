@@ -71,6 +71,7 @@ import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
 import com.aliothmoon.maafw.runner.RemotePreviewPort
 import com.aliothmoon.maafw.runner.RunKeepAlive
 import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.runner.RunJournal
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunScreenSaver
@@ -192,6 +193,7 @@ val appModule = module {
             ioDispatcher = MaaDispatchers.IO,
         )
     }
+    single<RunJournal> { get<RunLogRecorder>() }
 
     single<PreviewPort> {
         RemotePreviewPort(
@@ -230,6 +232,7 @@ val appModule = module {
             ),
             runMode = get<AppSettingsManager>().runMode::value,
             scope = get(named<AppCoroutineScope>()),
+            journal = get(),
         )
     }
 

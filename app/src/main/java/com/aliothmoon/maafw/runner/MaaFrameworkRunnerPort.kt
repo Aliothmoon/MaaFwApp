@@ -15,6 +15,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.MaaDispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -85,11 +87,12 @@ class MaaFrameworkRunnerPort(
      * 进程没了这一种丢法，binder 拥塞丢包、远端异常没走到 finally 都兜不住，这里是通用的
      * 那条兜底（桌面端 MXU 干脆全程只认 `MaaTaskerRunning` 的现查结果）
      *
-     * 只在 Running 期问：Preparing 时 startRun 还没发出去，那边本来就没在跑
+     * Preparing 时 startRun 还没发出去，那边本来就没在跑，不问。
+     * Stopping 也要问：PostStop 之后 onFinished 丢了，phase 会永远停在 Stopping
      */
     private suspend fun reconcileWhileRunning() {
         _state.map { it.phase }.distinctUntilChanged().collectLatest { phase ->
-            if (phase != RunnerPhase.Running) return@collectLatest
+            if (phase != RunnerPhase.Running && phase != RunnerPhase.Stopping) return@collectLatest
             while (true) {
                 delay(RECONCILE_INTERVAL_MS)
                 if (remoteRunning() != false) continue
@@ -129,7 +132,15 @@ class MaaFrameworkRunnerPort(
         if (previous.phase.isBusy) Timber.w(logMessage)
     }
 
-    private val callback = object : IMaaRunnerCallback.Stub() {
+    /**
+     * JVM 单测里 [IMaaRunnerCallback.Stub] 会调未 mock 的 Binder.attachInterface
+     * 测 start/stop/对账时换成空操作，避免为测 phase 去构造 AIDL Stub
+     */
+    internal var bindRunnerCallback: (RemoteService) -> Unit = { service ->
+        service.setRunnerCallback(callback)
+    }
+
+    private val callback by lazy { object : IMaaRunnerCallback.Stub() {
         override fun onEvent(message: String?, detailsJson: String?) {
             _events.tryEmit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
@@ -176,7 +187,7 @@ class MaaFrameworkRunnerPort(
             }
             _state.value = RunnerState(phase = RunnerPhase.Idle, latestResult = result)
         }
-    }
+    } }
 
     override suspend fun start(plan: RunPlan): RunnerCommandResult {
         if (_state.value.phase.isBusy) {
@@ -196,21 +207,35 @@ class MaaFrameworkRunnerPort(
         )
 
         return withContext(MaaDispatchers.IO) {
-            runCatching { launchOnService(plan) }
-                .fold(
-                    onSuccess = { rejection ->
-                        if (rejection == null) {
-                            _state.update { it.copy(phase = RunnerPhase.Running) }
-                            RunnerCommandResult.Accepted
-                        } else {
-                            failPreparation(rejection)
-                        }
-                    },
-                    onFailure = { throwable ->
-                        Timber.e(throwable, "Failed to start run")
-                        failPreparation(uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName))
-                    },
-                )
+            try {
+                val rejection = launchOnService(plan)
+                if (rejection != null) return@withContext failPreparation(rejection)
+                // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
+                // 无条件写成 Running 会把停止意图丢掉，任务继续跑到结束
+                val accepted = _state.updateAndGet { current ->
+                    if (current.phase == RunnerPhase.Preparing) {
+                        current.copy(phase = RunnerPhase.Running)
+                    } else {
+                        current
+                    }
+                }
+                if (accepted.phase == RunnerPhase.Idle) {
+                    RunnerCommandResult.Rejected(
+                        accepted.latestResult.let { result ->
+                            (result as? ExecutionResult.Failed)?.reason
+                                ?: uiTextOf(R.string.msg_fail_default)
+                        },
+                    )
+                } else {
+                    RunnerCommandResult.Accepted
+                }
+            } catch (cancellation: CancellationException) {
+                failPreparation(uiTextOf(R.string.msg_fail_default))
+                throw cancellation
+            } catch (throwable: Throwable) {
+                Timber.e(throwable, "Failed to start run")
+                failPreparation(uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName))
+            }
         }
     }
 
@@ -278,7 +303,7 @@ class MaaFrameworkRunnerPort(
             return if (mode == RunMode.FOREGROUND) uiTextOf(R.string.msg_reject_primary_capture) else uiTextOf(R.string.msg_reject_virtual_display)
         }
 
-        service.setRunnerCallback(callback)
+        bindRunnerCallback(service)
 
         val payload = RunPlanPayload(
             resourcePaths = plan.resource.paths.map { File(piRoot, it).absolutePath },
@@ -303,12 +328,19 @@ class MaaFrameworkRunnerPort(
         return null
     }
 
+    /**
+     * 准备失败才把 phase 收回 Idle；onFinished / abort 已经写过终态的不要盖掉
+     */
     private fun failPreparation(reason: UiText): RunnerCommandResult {
-        _state.value = RunnerState(
-            phase = RunnerPhase.Idle,
-            latestResult = ExecutionResult.Failed(reason),
-        )
-        return RunnerCommandResult.Rejected(reason)
+        val next = _state.updateAndGet { current ->
+            if (current.phase == RunnerPhase.Preparing) {
+                RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Failed(reason))
+            } else {
+                current
+            }
+        }
+        val rejected = (next.latestResult as? ExecutionResult.Failed)?.reason ?: reason
+        return RunnerCommandResult.Rejected(rejected)
     }
 
     /**
@@ -323,7 +355,7 @@ class MaaFrameworkRunnerPort(
     }
 
     private companion object {
-        /** 对账间隔：只在 Running 期问，问一次是一次 binder 往返，不必更密 */
+        /** 对账间隔：Running / Stopping 期问，问一次是一次 binder 往返，不必更密 */
         const val RECONCILE_INTERVAL_MS = 5_000L
 
         /**

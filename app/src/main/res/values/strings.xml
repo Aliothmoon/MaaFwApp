@@ -224,6 +224,15 @@
     <string name="run_countdown_remaining">%1$d 秒后开始</string>
     <string name="run_countdown_start_now">立即开始</string>
     <string name="run_countdown_cancel">取消本次</string>
+    <string name="run_countdown_cancelled">已取消本次定时触发</string>
+    <string name="run_log_screen_saver_skipped">熄屏挂机未能打开，本轮不自动关闭</string>
+    <string name="run_log_auto_sleep_skipped_not_run">任务未开始，跳过自动熄屏</string>
+    <string name="run_log_auto_sleep_skipped_awake">启动时屏幕已亮，跳过自动熄屏</string>
+    <string name="wake_unlock_need_pin">需要 PIN 才能解锁，请到设置里填写</string>
+    <string name="wake_unlock_pin_rejected">PIN 不对，或该机型锁屏不接受注入按键</string>
+    <string name="wake_unlock_screen_off">屏幕没有亮起来</string>
+    <string name="wake_unlock_unsupported">该机型上的亮屏解锁不可用</string>
+    <string name="wake_unlock_failed">亮屏解锁失败（%1$d）</string>
     <string name="settings_wake_unlock">定时触发时亮屏解锁</string>
     <string name="settings_wake_credential">解锁 PIN</string>
     <string name="settings_wake_credential_hint">只支持纯数字 PIN；明文存在本机，导出配置时会清空</string>
@@ -279,7 +288,6 @@
     <string name="msg_fail_default">执行失败</string>
     <string name="msg_fail_privileged_exited">特权进程已退出</string>
     <string name="msg_fail_privileged_reported_finished">特权进程报告本轮已结束</string>
-    <string name="msg_fail_wait_settle_timeout">等待运行结束超时</string>
     <string name="msg_reject_already_running">已有执行在进行中</string>
     <string name="msg_reject_stop_failed">停止失败</string>
     <string name="msg_reject_setup_failed">特权进程初始化失败</string>

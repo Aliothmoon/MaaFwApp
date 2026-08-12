@@ -11,15 +11,15 @@ package com.aliothmoon.maafw.runner
  *
  * 不 gating：日志文件建不出来只是这轮没有历史记录，不该反过来拦住任务
  */
-class SessionLogHook(private val recorder: RunLogRecorder) : RunEnvHook {
+class SessionLogHook(private val journal: RunJournal) : RunEnvHook {
 
     override val id: String = "session-log"
     override val anchor: Anchor = Anchor.BeforeDispatch
     override val order: Int = HookOrder.SESSION_LOG
     override val gating: Boolean = false
 
-    override suspend fun engage(ctx: RunContext): Release {
-        recorder.beginSession(ctx.plan)
-        return Release { reason -> recorder.endSession(reason) }
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        journal.begin(ctx.plan)
+        return EngageResult.Engaged { reason -> journal.end(reason) }
     }
 }

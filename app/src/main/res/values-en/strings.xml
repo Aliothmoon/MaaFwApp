@@ -230,6 +230,15 @@
     <string name="run_countdown_remaining">Starting in %1$d s</string>
     <string name="run_countdown_start_now">Start now</string>
     <string name="run_countdown_cancel">Skip this run</string>
+    <string name="run_countdown_cancelled">This scheduled run was cancelled</string>
+    <string name="run_log_screen_saver_skipped">Screen-off overlay did not show; it will not be dismissed automatically</string>
+    <string name="run_log_auto_sleep_skipped_not_run">The run did not start; skip auto-sleep</string>
+    <string name="run_log_auto_sleep_skipped_awake">The screen was already on at start; skip auto-sleep</string>
+    <string name="wake_unlock_need_pin">A PIN is required to unlock; add it in Settings</string>
+    <string name="wake_unlock_pin_rejected">Wrong PIN, or this lock screen does not accept injected keys</string>
+    <string name="wake_unlock_screen_off">The screen did not turn on</string>
+    <string name="wake_unlock_unsupported">Wake-and-unlock is not available on this device</string>
+    <string name="wake_unlock_failed">Wake-and-unlock failed (%1$d)</string>
     <string name="settings_wake_unlock">Wake and unlock on scheduled triggers</string>
     <string name="settings_wake_credential">Unlock PIN</string>
     <string name="settings_wake_credential_hint">Numeric PIN only; stored in the clear on this device and cleared on export</string>
@@ -285,7 +294,6 @@
     <string name="msg_fail_default">Run failed</string>
     <string name="msg_fail_privileged_exited">Privileged process exited</string>
     <string name="msg_fail_privileged_reported_finished">Privileged process reported the run already finished</string>
-    <string name="msg_fail_wait_settle_timeout">Timed out waiting for the run to settle</string>
     <string name="msg_reject_already_running">A run is already in progress</string>
     <string name="msg_reject_stop_failed">Failed to stop</string>
     <string name="msg_reject_setup_failed">Privileged process initialization failed</string>

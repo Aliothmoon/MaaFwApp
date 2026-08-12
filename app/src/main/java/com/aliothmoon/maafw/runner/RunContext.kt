@@ -85,4 +85,6 @@ class RunContext(
     val signals: RunSignals = RunSignals(),
     /** 会等待的挂载物用它报进度；默认丢弃 */
     val progress: RunProgress = RunProgress { _, _ -> },
+    /** 本轮运行日志；单测可传 [DiscardingRunJournal] */
+    val journal: RunJournal,
 )

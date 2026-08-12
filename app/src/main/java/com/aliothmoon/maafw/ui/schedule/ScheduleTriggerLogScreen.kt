@@ -151,9 +151,11 @@ private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             // 「昨晚为什么没跑」是查这份日志的头号问题，别只留一个「未能开始」
-            entry.failureReason?.let { reason ->
+            val why = entry.detail?.takeIf { it.isNotBlank() }
+                ?: entry.failureReason?.asUiText()?.asString()
+            why?.let { text ->
                 Text(
-                    text = reason.asUiText().asString(),
+                    text = text,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

@@ -28,7 +28,7 @@ data class RunLogEntry(
  * [Verbose] 是本项目多出来的一档：MXU 把认不出的回调直接丢掉，我们降级留着，
  * 「全部」档可见。排障时对得上官方文档与源码的原文比什么都值钱
  *
- * 按名字进会话日志文件，所以**只能加不能改名**：改了旧文件里那些行会解不出来被跳过
+ * 按名字进会话日志文件。外壳自产行走 [RunNote]，由 [RunLogRecorder] 映到 Info/Warning/Error
  */
 @Serializable
 enum class RunLogKind {

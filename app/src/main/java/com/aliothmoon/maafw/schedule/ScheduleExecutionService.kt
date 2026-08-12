@@ -1,4 +1,5 @@
 package com.aliothmoon.maafw.schedule
+
 import com.aliothmoon.maafw.MaaDispatchers
 
 import android.app.Notification
@@ -35,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.android.ext.android.inject
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -149,9 +151,14 @@ class ScheduleExecutionService : Service() {
                 ),
                 configurationId = strategy.runConfigurationId?.let(::RunConfigurationId),
                 // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
-                requestId = RunRequestId("${'$'}{strategy.id}@${'$'}scheduledTimeMs"),
+                requestId = RunRequestId($$"${strategy.id}@$scheduledTimeMs"),
                 force = strategy.forceStart,
-                steps = RunStepSink { steps += TriggerStep(it.hookId, it.outcome.toTriggerStepOutcome()) },
+                steps = RunStepSink {
+                    steps += TriggerStep(
+                        it.hookId,
+                        it.outcome.toTriggerStepOutcome()
+                    )
+                },
                 signals = signals,
                 progress = RunProgress { _, detail ->
                     updateNotification(detail.resolve(this), strategy.id, interruptible = true)
@@ -172,9 +179,9 @@ class ScheduleExecutionService : Service() {
             return
         }
         if (outcome.result != TriggerResult.STARTED) {
-            // 拦截原因是 UiText，落不进日志；细节只能进 Timber
             Timber.w("Schedule %s did not start: %s", strategy.id, launchResult)
         }
+        val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
 
         triggerLog.append(
             TriggerLogEntry(
@@ -184,10 +191,11 @@ class ScheduleExecutionService : Service() {
                 actualAt = now,
                 result = outcome.result,
                 failureReason = outcome.failureReason,
+                detail = frozen,
                 steps = steps,
             ),
         )
-        store.recordTrigger(strategy.id, outcome.result, triggeredAt = now)
+        store.recordTrigger(strategy.id, outcome.result, message = frozen, triggeredAt = now)
         // 无论跑没跑起来都要续闹钟：断链之后这条规则就永远不会再响了
         alarms.scheduleNext(strategy, scheduledTimeMs)
     }
@@ -215,7 +223,11 @@ class ScheduleExecutionService : Service() {
 
     private fun startAsForeground(notification: Notification) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -223,11 +235,17 @@ class ScheduleExecutionService : Service() {
 
     private fun updateNotification(text: String, strategyId: String, interruptible: Boolean) {
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(text, strategyId.takeIf { interruptible }))
+        manager.notify(
+            NOTIFICATION_ID,
+            buildNotification(text, strategyId.takeIf { interruptible })
+        )
     }
 
     /** [interruptibleStrategyId] 非 null 时挂上「立即开始 / 取消本次」两个动作 */
-    private fun buildNotification(text: String, interruptibleStrategyId: String? = null): Notification {
+    private fun buildNotification(
+        text: String,
+        interruptibleStrategyId: String? = null
+    ): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -278,7 +296,7 @@ class ScheduleExecutionService : Service() {
         const val ACTION_CANCEL_RUN = "com.aliothmoon.maafw.action.SCHEDULE_CANCEL_RUN"
 
         /** 在途触发的打断面，按策略 id 索引；并发触发各按各的 */
-        private val signalsByStrategy = java.util.concurrent.ConcurrentHashMap<String, RunSignals>()
+        private val signalsByStrategy = ConcurrentHashMap<String, RunSignals>()
 
         const val CHANNEL_ID = "schedule_execution"
         const val NOTIFICATION_ID = 1002

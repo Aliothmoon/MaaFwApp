@@ -74,6 +74,23 @@ class RunLogRecorderTest {
     }
 
     @Test
+    fun `journal notes land in memory and the session file`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("清体力"))
+        recorder.warn(com.aliothmoon.maafw.i18n.uiTextFromFramework("内存偏紧"))
+        recorder.end(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+
+        val line = recorder.runLog.value.single()
+        assertEquals(RunLogKind.Warning, line.kind)
+        assertEquals(
+            "内存偏紧",
+            (sessionRecords().filterIsInstance<RunSessionRecord.Line>().single().text),
+        )
+    }
+
+    @Test
     fun `a session writes header lines and footer`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)

@@ -87,6 +87,7 @@ class RunLauncherTest {
         hooks = hooks,
         runMode = { runMode },
         scope = scope,
+        journal = DiscardingRunJournal,
     )
 
     private fun fastStub(scope: CoroutineScope) = StubRunnerPort(
@@ -350,6 +351,55 @@ class RunLauncherTest {
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
     }
 
+    @Test
+    fun `a failed gating result is recorded then blocks`() = runTest(testDispatcher) {
+        val steps = mutableListOf<RunStep>()
+        val hook = object : RunEnvHook {
+            override val id = "countdown"
+            override val anchor = Anchor.BeforeDispatch
+            override val order = 0
+            override val gating = true
+            override suspend fun engage(ctx: RunContext) =
+                EngageResult.Failed(
+                    uiTextOf(R.string.run_countdown_cancelled),
+                    NotRunCause.Cancelled,
+                )
+        }
+        val recorder = RecordingHook("env", Anchor.BeforeDispatch, order = -1)
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            hooks = listOf(recorder, hook),
+        )
+
+        val result = launcher.launch(RunTrigger.Manual, steps = RunStepSink { steps += it })
+
+        assertTrue(result is RunLaunchResult.Blocked)
+        assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.run_countdown_cancelled))
+        assertEquals(RunEndReason.NotRun(NotRunCause.Cancelled), recorder.releaseReason)
+        assertEquals(
+            listOf(
+                RunStep("env", HookOutcome.ENGAGED),
+                RunStep("countdown", HookOutcome.FAILED),
+            ),
+            steps,
+        )
+    }
+
+    @Test
+    fun `a gating hook after accept is rejected as a programming error`() = runTest(testDispatcher) {
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            hooks = listOf(
+                RecordingHook("late", Anchor.AfterAccepted, gating = true),
+            ),
+        )
+
+        val thrown = runCatching { launcher.launch(RunTrigger.Manual) }.exceptionOrNull()
+        assertTrue(thrown is IllegalStateException)
+    }
+
     /** 静音没静上不该拦住整晚的任务 */
     @Test
     fun `non gating hook failure is skipped and the run proceeds`() = runTest(testDispatcher) {
@@ -383,7 +433,8 @@ class RunLauncherTest {
             override val anchor = Anchor.BeforeDispatch
             override val order = 1
             override val gating = false
-            override suspend fun engage(ctx: RunContext) = Release { error("撤不掉") }
+            override suspend fun engage(ctx: RunContext) =
+                EngageResult.Engaged(Release { error("撤不掉") })
         }
         val launcher = launcher(
             scope = backgroundScope,
@@ -458,9 +509,26 @@ class RunLauncherTest {
         assertNull(hook.releaseReason)
     }
 
-    /** 等不到就强撤，否则屏保永远盖着 */
+    /** 自然长跑没有墙钟：phase 还 busy 就不能撤 */
     @Test
-    fun `settle timeout still releases`() = runTest(testDispatcher) {
+    fun `a long running round is not torn down while still busy`() = runTest(testDispatcher) {
+        val hook = RecordingHook("env", Anchor.BeforeDispatch)
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 60_000),
+        )
+        val launcher = launcher(scope = backgroundScope, runner = runner, hooks = listOf(hook))
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+        advanceTimeBy(31_000)
+
+        assertNull(hook.releaseReason)
+        assertTrue(runner.state.value.phase.isBusy)
+    }
+
+    /** Stop 只把 phase 打成 Stopping，收尾仍等 !isBusy，不能靠墙钟提前掀屏保 */
+    @Test
+    fun `stopping does not release until the runner is idle`() = runTest(testDispatcher) {
         val hook = RecordingHook("env", Anchor.BeforeDispatch)
         val runner = StubRunnerPort(
             scope = backgroundScope,
@@ -468,12 +536,12 @@ class RunLauncherTest {
         )
         val launcher = launcher(scope = backgroundScope, runner = runner, hooks = listOf(hook))
 
-        launcher.launch(RunTrigger.Manual)
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+        runner.stop()
         advanceTimeBy(31_000)
 
-        val reason = hook.releaseReason
-        assertTrue(reason is RunEndReason.Ran)
-        assertTrue((reason as RunEndReason.Ran).result is ExecutionResult.Failed)
+        assertNull(hook.releaseReason)
+        assertEquals(RunnerPhase.Stopping, runner.state.value.phase)
     }
 
     private class RecordingHook(
@@ -487,13 +555,13 @@ class RunLauncherTest {
 
         var releaseReason: RunEndReason? = null
 
-        override suspend fun engage(ctx: RunContext): Release {
+        override suspend fun engage(ctx: RunContext): EngageResult {
             failWith?.let { throw it }
             log += "engage:$id"
-            return Release { reason ->
+            return EngageResult.Engaged(Release { reason ->
                 releaseReason = reason
                 log += "release:$id"
-            }
+            })
         }
     }
 }

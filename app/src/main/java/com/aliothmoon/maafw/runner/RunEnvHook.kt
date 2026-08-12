@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.i18n.UiText
+
 /** 挂载锚点；两者之间隔着一次 [RunnerPort.start] */
 enum class Anchor {
     /**
@@ -8,7 +10,10 @@ enum class Anchor {
      */
     BeforeDispatch,
 
-    /** 受理后。保活只能挂这里：前台服务 onCreate 读 RunnerState 判去留 */
+    /**
+     * 受理后。保活只能挂这里：前台服务 onCreate 读 RunnerState 判去留
+     * 禁止 gating：远端已经 Accepted，再拦会留下孤儿轮
+     */
     AfterAccepted,
 }
 
@@ -17,10 +22,27 @@ fun interface Release {
     suspend operator fun invoke(reason: RunEndReason)
 }
 
+/** [RunEnvHook.engage] 的预期结局；意外崩溃仍由编排层 catch */
+sealed interface EngageResult {
+    /** 本轮不适用，或做了但不必撤 */
+    data class Skipped(val release: Release? = null) : EngageResult
+
+    data class Engaged(val release: Release) : EngageResult
+
+    /**
+     * 预期失败；中不中止看 [RunEnvHook.gating]
+     * [notRun] 仅 gating 失败时有意义：倒计时取消用 [NotRunCause.Cancelled]，其余默认 HookFailed
+     */
+    data class Failed(
+        val reason: UiText,
+        val notRun: NotRunCause = NotRunCause.HookFailed,
+    ) : EngageResult
+}
+
 /**
  * 一轮运行期间对设备环境的一处可逆改动
  *
- * [engage] 返回 [Release] 而不是配一对 before/after 回调，是为了让**采样值捕获进闭包**：
+ * [engage] 返回 [EngageResult] 而不是配一对 before/after 回调，是为了让**采样值捕获进闭包**：
  * 「跑完自动熄屏」要知道本轮开始时手机是不是本来就待机，而那个值只能在唤醒**之前**采。
  * 它在自己的 engage 里采完写进闭包，别的挂载物看不见也不关心——否则就得有一个
  * 随挂载物数量膨胀的公共结构来存这些采样
@@ -39,11 +61,10 @@ interface RunEnvHook {
      */
     val order: Int
 
-    /** engage 失败是否中止整轮。解锁失败还硬跑 = 对着锁屏空转到超时 */
+    /** [EngageResult.Failed] 是否中止整轮。解锁失败还硬跑 = 对着锁屏识别到超时 */
     val gating: Boolean
 
-    /** 返回 null = 无需收尾（本轮不适用，或做的事本就不必撤） */
-    suspend fun engage(ctx: RunContext): Release?
+    suspend fun engage(ctx: RunContext): EngageResult
 }
 
 /** 收尾理由；投递之后的结局直接复用 [ExecutionResult]，不另造一套平行分类 */
@@ -56,7 +77,7 @@ sealed interface RunEndReason {
 }
 
 enum class NotRunCause {
-    /** 声明为 gating 的挂载物 engage 失败或超时 */
+    /** 声明为 gating 的挂载物失败或超时 */
     HookFailed,
 
     /** RunnerPort 拒绝了投递 */

@@ -40,7 +40,7 @@ class RunLogRecorder(
     private val includeDetails: () -> Boolean,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher,
-) {
+) : RunJournal {
 
     private val _runLog = MutableStateFlow<List<RunLogEntry>>(emptyList())
     val runLog: StateFlow<List<RunLogEntry>> = _runLog.asStateFlow()
@@ -73,6 +73,25 @@ class RunLogRecorder(
     fun clear() {
         composer.reset()
         _runLog.value = emptyList()
+    }
+
+    override suspend fun begin(plan: RunPlan) = beginSession(plan)
+
+    override suspend fun end(reason: RunEndReason) = endSession(reason)
+
+    /**
+     * 外壳自产的一行：不经过 [RunnerEvent]，不走合成器去重
+     * 连续两句相同的警告多半是两处各自报的，丢掉会少现场
+     */
+    override fun note(level: RunNote, text: UiText) {
+        publish(
+            RunLogEntry(
+                id = nextId.incrementAndGet(),
+                atMillis = System.currentTimeMillis(),
+                kind = level.asRunLogKind(),
+                text = text,
+            ),
+        )
     }
 
     /**
@@ -126,7 +145,10 @@ class RunLogRecorder(
                 resourceLabel = resourceLabel,
             ),
         ) ?: return
+        publish(entry)
+    }
 
+    private fun publish(entry: RunLogEntry) {
         _runLog.update { current ->
             val start = (current.size - RUN_LOG_CAPACITY + 1).coerceAtLeast(0)
             current.subList(start, current.size) + entry
@@ -163,4 +185,10 @@ class RunLogRecorder(
         /** 与 MaaMeow 的 `LOG_FLUSH_INTERVAL_MS` 同值：够把一串突发攒成一次写 */
         const val FLUSH_INTERVAL_MS = 75L
     }
+}
+
+private fun RunNote.asRunLogKind(): RunLogKind = when (this) {
+    RunNote.Info -> RunLogKind.Info
+    RunNote.Warning -> RunLogKind.Warning
+    RunNote.Error -> RunLogKind.Error
 }
