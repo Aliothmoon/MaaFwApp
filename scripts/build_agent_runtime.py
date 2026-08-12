@@ -74,6 +74,124 @@ int main(int argc, char **argv)
 }
 """
 
+# Android 的 CPython 不编译 _multiprocessing，铺进 site-packages 补上（见 write_multiprocessing_shim）
+MULTIPROCESSING_SHIM = '''\
+"""
+Android 上 CPython 不编译 `_multiprocessing`：bionic 没有 POSIX 命名信号量（sem_open），
+而该扩展的 SemLock 正建立在它之上
+
+这份补齐只服务「单进程内用到 multiprocessing API」的场景——Android 上本来也 fork 不出
+multiprocessing.Process，真正的跨进程语义无从谈起。典型用户是 loguru 的 `enqueue=True`：
+它要一个 SimpleQueue，而 SimpleQueue 只要一把锁
+
+`multiprocessing/synchronize.py` 只引用 SemLock 一个符号，`queues.py` 不直接引用，
+`connection.py` 里那几个（recv/send/closesocket）是 Windows 分支，POSIX 走不到
+"""
+
+import threading
+import time
+
+SEM_VALUE_MAX = 2**31 - 1
+
+# 顺序照抄 multiprocessing/synchronize.py 的 `RECURSIVE_MUTEX, SEMAPHORE = list(range(2))`
+# 写反了 RLock 会退化成不可重入锁，第二次 acquire 直接死等
+_RECURSIVE_MUTEX = 0
+_SEMAPHORE = 1
+
+
+class SemLock:
+    """threading 模拟的信号量；接口对齐 CPython 的 C 实现，只覆盖 POSIX 路径用得到的部分"""
+
+    SEM_VALUE_MAX = SEM_VALUE_MAX
+
+    def __init__(self, kind, value, maxvalue, name, unlink):
+        self.kind = kind
+        self.maxvalue = maxvalue
+        self.name = name
+        # 真实实现里是内核对象句柄；这里没有跨进程对象，给个稳定值即可
+        self.handle = id(self)
+        self._cond = threading.Condition(threading.Lock())
+        self._value = value
+        self._owner = None
+        self._depth = 0
+        if unlink:
+            # 命名信号量本就不存在，无所谓「立即 unlink」，留个痕迹让 sem_unlink 幂等
+            self.name = None
+
+    def acquire(self, block=True, timeout=None):
+        me = threading.get_ident()
+        with self._cond:
+            if self.kind == _RECURSIVE_MUTEX and self._owner == me:
+                self._depth += 1
+                return True
+            deadline = None if timeout is None else time.monotonic() + timeout
+            while self._value <= 0:
+                if not block:
+                    return False
+                if deadline is None:
+                    self._cond.wait()
+                    continue
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._cond.wait(remaining)
+                if self._value <= 0 and time.monotonic() >= deadline:
+                    return False
+            self._value -= 1
+            self._owner = me
+            self._depth = 1
+            return True
+
+    def release(self):
+        me = threading.get_ident()
+        with self._cond:
+            if self.kind == _RECURSIVE_MUTEX:
+                if self._owner != me:
+                    raise AssertionError("attempt to release recursive lock not owned by thread")
+                self._depth -= 1
+                if self._depth > 0:
+                    return
+                self._owner = None
+            else:
+                if self._value >= self.maxvalue:
+                    raise ValueError("semaphore or lock released too many times")
+                self._owner = None
+                self._depth = 0
+            self._value += 1
+            self._cond.notify()
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, *args):
+        return self.release()
+
+    def _count(self):
+        return self._depth
+
+    def _is_mine(self):
+        return self._owner == threading.get_ident() and self._depth > 0
+
+    def _get_value(self):
+        return self._value
+
+    def _is_zero(self):
+        return self._value == 0
+
+    def _after_fork(self):
+        # 这里没有真正的 fork 语义；重建条件变量，免得继承到一把处于加锁态的 threading 锁
+        self._cond = threading.Condition(threading.Lock())
+
+    @staticmethod
+    def _rebuild(handle, kind, maxvalue, name):
+        return SemLock(kind, 1, maxvalue, name, False)
+
+
+def sem_unlink(name):
+    """命名信号量不存在，调用方（synchronize.py 的 finalizer）只要不抛就行"""
+    return None
+'''
+
 # stdlib 里设备上用不到的，占地方且拖慢解包
 STDLIB_DROP = ("test", "idlelib", "ensurepip", "turtledemo", "tkinter", "lib2to3", "pydoc_data")
 
@@ -362,6 +480,17 @@ def pack_site_packages(site: Path) -> tuple[int, list[str]]:
     return len(zipped), kept
 
 
+def write_multiprocessing_shim(site: Path) -> None:
+    """
+    Android 的 bionic 没有 POSIX 命名信号量（sem_open），CPython 的 Android 构建因此不编译
+    `_multiprocessing`；凡是碰 multiprocessing 的三方库都会在 import 处直接炸
+
+    典型受害者是 loguru 的 `enqueue=True`：它只要一个 SimpleQueue，而 SimpleQueue 只要一把锁
+    补进去的这份用 threading 模拟，只在单进程内成立——Android 上本来也 fork 不出 Process
+    """
+    (site / "_multiprocessing.py").write_text(MULTIPROCESSING_SHIM, encoding="utf-8")
+
+
 def build_abi(cache: Path, out: Path, abi: str, ndk: Path, extra: list[str]) -> None:
     triple, wheel_abi = ABIS[abi]
     paths = Paths(cache, out / abi / "bundle")
@@ -395,6 +524,7 @@ def build_abi(cache: Path, out: Path, abi: str, ndk: Path, extra: list[str]) -> 
         skip_dirs=("lib-dynload",),
     )
     site_count, native = pack_site_packages(paths.site)
+    write_multiprocessing_shim(paths.site)
 
     files = sum(1 for path in paths.bundle.rglob("*") if path.is_file())
     size = sum(path.stat().st_size for path in paths.bundle.rglob("*") if path.is_file())
