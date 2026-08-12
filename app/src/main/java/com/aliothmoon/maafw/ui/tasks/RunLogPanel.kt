@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.asString
@@ -33,7 +34,9 @@ import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
+import com.aliothmoon.maafw.ui.components.ansiAnnotated
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.components.rememberAnsiColorResolver
 import com.aliothmoon.maafw.ui.components.runLogColor
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -151,6 +154,15 @@ private fun RunLogRow(
 ) {
     val parsed = rememberParsedDetail(entry)
     val body = entry.text.asString()
+    // agent 按「输出到终端」配色，转义符只有它这两类会有；其余 kind 不必白跑一趟解析
+    val ansiColor = rememberAnsiColorResolver()
+    val rendered = remember(body, entry.kind, ansiColor) {
+        if (entry.kind == RunLogKind.Agent || entry.kind == RunLogKind.AgentError) {
+            ansiAnnotated(body, ansiColor)
+        } else {
+            AnnotatedString(body)
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -174,10 +186,11 @@ private fun RunLogRow(
                 return@Column
             }
             Text(
-                text = body,
+                text = rendered,
                 style = MaterialTheme.typography.labelSmall,
                 // 合成过的是人话，按正文排版；原始转储保持等宽，对得上官方文档
                 fontFamily = if (entry.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
+                // ANSI 指定的颜色写在 span 上，压过这里的整行色；没指定的段落仍按 kind 走
                 color = runLogColor(entry.kind),
             )
             // 原始转储旁只露一个主语（节点名 / 任务 entry / 动作名），其余留给折叠区；
