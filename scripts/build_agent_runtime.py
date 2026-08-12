@@ -16,7 +16,10 @@
   - agent 的入口脚本**不由本工具产出**：那是载荷，跟着 PI 走，cwd 就是 PI 根
   - 三方依赖交给 pip 跨平台解析（--only-binary + --platform android_<api>_<abi>），
     pip 只按 wheel 文件名的 tag 过滤、不执行任何构建，所以任意构建机都能解出 Android 轮子
-  - Android 的 wheel 目前主要在 Chaquopy 的 pypi-upstream 索引上，PyPI 本体还没有
+  - Android 的 wheel 目前主要在 Chaquopy 的 pypi-upstream 索引上，PyPI 本体还没有；
+    带 native 代码的常见包（Pillow 等）只在 Chaquopy 自己的 https://chaquo.com/pypi-13.1/ 上，
+    本工具不带那个索引，要装得事后自己再跑一次 pip install --target <bundle>/site-packages
+    （那批包的 native 依赖落在 site-packages/chaquopy/lib，记得进 LD_LIBRARY_PATH）
   - 版本锁 3.13：numpy 的 Android wheel 只有 cp313，而 python.org 只发 3.14/3.15 的 Android 包，
     对得上的解释器在 Maven 上（Chaquopy 发的，cibuildwheel 自己也用这份）
 """
@@ -244,7 +247,7 @@ def install_requirements(paths: Paths, wheel_abi: str, extra: list[str]) -> None
         check=True,
     )
     # pip 生成的入口脚本在设备上没有用处，还带着构建机的 shebang
-    rmtree(site / "bin")
+    rmtree(paths.site / "bin")
 
 
 def resolve_pypi_wheel(name: str, version: str, platform: str, cache: Path) -> str:
