@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
@@ -515,7 +517,12 @@ fun AppRoot(
             AlertDialog(
                 onDismissRequest = { diagnosticsDialog = null },
                 title = { Text(stringResource(R.string.dialog_cannot_start)) },
-                text = { MaaDiagnosticList(diagnostics) },
+                // 诊断条数不设上限，靠滚动兜住：AlertDialog 的 text 槽自己不滚，超高会被直接裁掉
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        MaaDiagnosticList(diagnostics)
+                    }
+                },
                 confirmButton = {
                     TextButton(onClick = { diagnosticsDialog = null }) { Text(stringResource(R.string.dialog_ok)) }
                 },

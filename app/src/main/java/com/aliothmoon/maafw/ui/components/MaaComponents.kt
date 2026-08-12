@@ -353,23 +353,37 @@ fun MaaSwitch(
     )
 }
 
+/**
+ * 同一 source 的多条并成一组：一个任务一次能报四五条，平铺时 source 前缀重复占满整屏，
+ * 反而看不出到底是几个任务出了问题
+ * 自身不滚动，高度受限的容器（AlertDialog 等）由调用方套 verticalScroll
+ */
 @Composable
 fun MaaDiagnosticList(
     diagnostics: List<Diagnostic>,
     showSeverity: Boolean = false,
 ) {
-    Column {
-        diagnostics.forEach {
-            val prefix = if (showSeverity) "[${it.severity.asUiText().asString()}] " else ""
-            Text(
-                text = "$prefix${it.source}: ${it.message.asString()}",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (it.severity == DiagnosticSeverity.Error) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+        diagnostics.groupBy { it.source }.forEach { (source, group) ->
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs)) {
+                Text(
+                    text = source,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                group.forEach {
+                    val prefix = if (showSeverity) "[${it.severity.asUiText().asString()}] " else ""
+                    Text(
+                        text = "$prefix${it.message.asString()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (it.severity == DiagnosticSeverity.Error) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
         }
     }
 }
