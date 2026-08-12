@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.remote.internal
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.ActivityOptions
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -76,6 +77,17 @@ object ActivityUtils {
         }
     }
 
+    /**
+     * PI 的 StartApp 允许把 package 写成 `包名/Activity` 的 component 全名（M9A 的 startup.json 即是），
+     * 官方 adb controller 原样塞进 am start 所以两种都能用；走 PackageManager 与包名比对的地方必须先拆
+     * 拆不出来时原样返回，让调用方按纯包名走既有失败路径
+     */
+    @JvmStatic
+    fun packageNameOf(spec: String): String = componentOf(spec)?.packageName ?: spec
+
+    private fun componentOf(spec: String): ComponentName? =
+        spec.takeIf { it.contains('/') }?.let { ComponentName.unflattenFromString(it) }
+
     @JvmStatic
     @JvmOverloads
     fun startApp(
@@ -86,8 +98,16 @@ object ActivityUtils {
     ): Boolean {
         val pm = FakeContext.get().packageManager
 
-        val intent = pm.getLaunchIntentForPackage(packageName) ?: run {
-            pm.getLeanbackLaunchIntentForPackage(packageName)
+        val component = componentOf(packageName)
+        val targetPackage = component?.packageName ?: packageName
+
+        val intent = if (component != null) {
+            Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER)
+                .setComponent(component)
+        } else {
+            pm.getLaunchIntentForPackage(packageName)
+                ?: pm.getLeanbackLaunchIntentForPackage(packageName)
         }
 
         if (intent == null) {
@@ -102,7 +122,7 @@ object ActivityUtils {
         intent.addFlags(flag)
 
         if (forceStop) {
-            ServiceManager.getActivityManager().forceStopPackage(packageName)
+            ServiceManager.getActivityManager().forceStopPackage(targetPackage)
         }
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
 

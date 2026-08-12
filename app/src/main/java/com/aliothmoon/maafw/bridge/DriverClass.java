@@ -27,9 +27,11 @@ public final class DriverClass {
         if (ret) {
             // 部分 ROM（如 One UI）会把游戏从虚拟屏挪回主屏，启动后校验并尝试拉回；
             // 拉不回则快速失败，避免识别对着虚拟屏空转
-            ret = ActivityUtils.ensureAppOnDisplay(packageName, displayId);
+            // 这里比对的是包名，PI 给的可能是 "包名/Activity"，先拆
+            String target = ActivityUtils.packageNameOf(packageName);
+            ret = ActivityUtils.ensureAppOnDisplay(target, displayId);
             if (!ret) {
-                Ln.e(TAG + ": " + packageName + " could not be pinned on display " + displayId);
+                Ln.e(TAG + ": " + target + " could not be pinned on display " + displayId);
             }
         }
         if (ret) {
