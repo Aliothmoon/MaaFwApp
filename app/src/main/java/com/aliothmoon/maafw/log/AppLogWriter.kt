@@ -30,7 +30,14 @@ class AppLogWriter {
 
     init {
         scope.launch {
-            for (entry in channel) append(entry)
+            for (entry in channel) {
+                append(entry)
+                // 队列排空才落盘：逐条 flush 等于每行一次 write 系统调用，
+                // 下面那个 BufferedOutputStream 就白设了。排空即 flush，
+                // 崩溃丢失的窗口不比原来大——条目本来就先在 channel 里排着
+                while (true) append(channel.tryReceive().getOrNull() ?: break)
+                flush()
+            }
         }
     }
 
@@ -61,13 +68,18 @@ class AppLogWriter {
         runCatching {
             rotateIfNeeded()
             val bytes = entry.toByteArray(Charsets.UTF_8)
-            openStream().apply {
-                write(bytes)
-                flush()
-            }
+            openStream().write(bytes)
             writtenBytes += bytes.size
         }.onFailure {
             Log.w(TAG, "Failed to write app log", it)
+            closeStream()
+        }
+    }
+
+    /** 一批写完落一次盘；轮转会关流，这里对 null 是空操作 */
+    private fun flush() {
+        runCatching { stream?.flush() }.onFailure {
+            Log.w(TAG, "Failed to flush app log", it)
             closeStream()
         }
     }
