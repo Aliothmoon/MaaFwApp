@@ -25,6 +25,11 @@ internal fun Project.configureAndroidCommon(extension: CommonExtension) {
     extension.compileOptions.sourceCompatibility = JAVA_VERSION
     extension.compileOptions.targetCompatibility = JAVA_VERSION
 
+    // Without this an android.os.Trace section anywhere under test blows up with "not mocked".
+    // The alternative is stubbing the platform per test, which buys nothing: the tests that care
+    // about platform behaviour are instrumented ones anyway
+    extension.testOptions.unitTests.isReturnDefaultValues = true
+
     extensions.configure<KotlinAndroidProjectExtension> {
         compilerOptions {
             jvmTarget.set(JVM_TARGET)

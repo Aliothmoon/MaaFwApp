@@ -46,3 +46,6 @@ versioncode.txt
 /.maafw/
 # 出内核用的下载缓存；内核脚本不在本仓库，这条只为本机残留的目录留着
 .agent-runtime-cache/
+
+# Kotlin 2.x 的构建缓存目录
+.kotlin/

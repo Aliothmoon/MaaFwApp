@@ -67,6 +67,8 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.window)
+    // 解包与项目加载各圈一段，Perfetto / macrobenchmark 里才归得了因
+    implementation(libs.androidx.tracing.ktx)
 
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
@@ -98,4 +100,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    // Perfetto 里把 slice 命名到 composable；只进 debug，release 不带
+    debugImplementation(libs.androidx.compose.runtime.tracing)
+    debugImplementation(libs.androidx.tracing.perfetto.binary)
 }

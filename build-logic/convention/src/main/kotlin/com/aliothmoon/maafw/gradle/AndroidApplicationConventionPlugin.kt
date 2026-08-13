@@ -22,8 +22,18 @@ private const val BASE_APPLICATION_ID = "com.aliothmoon.maafw"
  */
 private val APP_ID_PATTERN = Regex("""[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*""")
 
+/**
+ * A separate package on purpose: the benchmarks run `pm clear` to measure a first launch, which
+ * would otherwise wipe the configurations of the build the developer is actually using
+ */
+internal const val BENCHMARK_APP_ID_SUFFIX = ".benchmark"
+
 /** Resource name the profile icon lands under, kept apart from the checked-in ic_launcher */
 private const val PROFILE_ICON_NAME = "ic_profile_launcher"
+
+/** Single source for both :app and :macrobenchmark, which has to name the same package */
+internal fun Project.maafwApplicationId(): String =
+    buildProfile().appId?.let { "$BASE_APPLICATION_ID.${it.requireAppId()}" } ?: BASE_APPLICATION_ID
 
 /** Android decodes neither ico nor svg, a profile pointing at one is a mistake worth failing on */
 private val ICON_EXTENSIONS = setOf("png", "webp")
@@ -45,8 +55,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             val icon = profile.appIcon?.also { configureProfileIcon(it) }
 
             android.defaultConfig {
-                applicationId = profile.appId?.let { "$BASE_APPLICATION_ID.${it.requireAppId()}" }
-                    ?: BASE_APPLICATION_ID
+                applicationId = maafwApplicationId()
                 targetSdk = TARGET_SDK
                 versionCode = gitVersionCode()
                 versionName = gitVersionName()
@@ -105,6 +114,22 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     )
                     if (keystorePath.isNotEmpty()) {
                         signingConfig = releaseSigning
+                    }
+                }
+                // What :macrobenchmark drives: release-shaped for the numbers to mean anything,
+                // profileable so the shell can attach a tracer, debug-signed so it installs
+                // without release keystore material
+                create("benchmark") {
+                    initWith(getByName("release"))
+                    applicationIdSuffix = BENCHMARK_APP_ID_SUFFIX
+                    isDebuggable = false
+                    isProfileable = true
+                    signingConfig = android.signingConfigs.getByName("debug")
+                    matchingFallbacks += "release"
+                    // Only ever runs on the device that is plugged in
+                    ndk {
+                        abiFilters.clear()
+                        abiFilters += debugAbis
                     }
                 }
             }
