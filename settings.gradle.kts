@@ -1,4 +1,6 @@
 pluginManagement {
+    // 构建约定插件（maafw.*）在这个独立构建里，模块脚本只按 id 应用
+    includeBuild("build-logic")
     repositories {
         mavenLocal()
         google {
