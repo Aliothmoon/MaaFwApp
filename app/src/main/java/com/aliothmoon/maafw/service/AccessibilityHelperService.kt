@@ -95,7 +95,8 @@ class AccessibilityHelperService : AccessibilityService() {
          * 写进 `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` 的组件名，代授时要用
          * 必须跟 applicationId 走：写死包名的话，分包出去的包会去启用一个不存在的组件
          */
-        const val SERVICE_ID = BuildConfig.APPLICATION_ID + "/.service.AccessibilityHelperService"
+        val SERVICE_ID: String =
+            BuildConfig.APPLICATION_ID + "/" + AccessibilityHelperService::class.java.name
 
         /** 由 OverlayController 装卸；null 表示当前不需要拦截 */
         val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()
