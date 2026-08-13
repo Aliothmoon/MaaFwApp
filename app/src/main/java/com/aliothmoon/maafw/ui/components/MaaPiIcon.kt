@@ -20,6 +20,8 @@ import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.project.PI_ASSET_ROOT
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 
 /**
@@ -63,11 +65,15 @@ private object PiIconCache {
         override fun sizeOf(key: String, value: ImageBitmap): Int = value.width * value.height * 4
     }
 
+    /** 取不到的也记一笔：PI 写错路径时，列表每滚一次都会重来一遍 open + decode */
+    private val missing = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+
     /** 命中即同步返回，否则一列 chip 每次重组都要先闪一次无图 */
     fun peek(key: String): ImageBitmap? = cache.get(key)
 
     suspend fun load(context: Context, path: String, sizePx: Int, key: String): ImageBitmap? =
         withContext(MaaDispatchers.IO) {
+            if (key in missing) return@withContext null
             val assets = context.applicationContext.assets
             val asset = "$PI_ASSET_ROOT/$path"
             runCatching {
@@ -82,7 +88,10 @@ private object PiIconCache {
             }.onFailure {
                 // PI 写错图标路径或 profile 漏配 include 都落这里；不产诊断，图标缺失不该拦住加载
                 Timber.w("PI icon unavailable: %s (%s)", asset, it.message)
-            }.getOrNull()?.also { cache.put(key, it) }
+            }.getOrNull()?.also { cache.put(key, it) } ?: run {
+                missing += key
+                null
+            }
         }
 
     private fun sampleSize(width: Int, height: Int, targetPx: Int): Int {

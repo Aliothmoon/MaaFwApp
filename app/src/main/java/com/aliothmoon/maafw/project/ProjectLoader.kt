@@ -37,6 +37,9 @@ class ProjectLoader(
 
     private class MergeState {
         val tasks = mutableListOf<TaskDefinition>()
+
+        /** 与 [tasks] 同步维护，只为把重名判定从逐条线性扫降下来；PI 上千任务时才有感 */
+        val taskNames = mutableSetOf<String>()
         val options = linkedMapOf<String, OptionDefinition>()
         val templates = mutableListOf<ConfigurationTemplate>()
         val declaredGroups = mutableListOf<TaskGroupDefinition>()
@@ -188,7 +191,7 @@ class ProjectLoader(
     ) {
         diagnostics += parsed.diagnostics
         for (task in parsed.tasks) {
-            if (state.tasks.any { it.name == task.name }) {
+            if (!state.taskNames.add(task.name)) {
                 diagnostics += error(
                     file,
                     DiagnosticMessages.duplicateDeclaration("task", task.name)
