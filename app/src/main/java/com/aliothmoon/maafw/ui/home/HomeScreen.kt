@@ -80,13 +80,17 @@ fun HomeScreen(
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 项目名作顶栏标题（项目未就绪时回落 app 名），钉在顶部不随内容滚动
+    // 取 app 标签（profile 的 app.label）而非 PI 的 name：后者是 PI 自己的标识符，不是对外呈现的名字
+    val context = LocalContext.current
+    val appLabel = remember(context) {
+        context.applicationInfo.loadLabel(context.packageManager).toString()
+    }
+    // 标题钉在顶部不随内容滚动
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = {
                 Text(
-                    text = (state.projectState as? ProjectState.Ready)?.definition?.name
-                        ?: stringResource(R.string.app_name),
+                    text = appLabel,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
