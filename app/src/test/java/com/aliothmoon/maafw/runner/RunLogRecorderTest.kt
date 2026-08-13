@@ -6,6 +6,11 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.constant.AppPaths
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -29,10 +34,18 @@ class RunLogRecorderTest {
     @Before
     fun setUp() {
         logDir = createTempDirectory("recorder").toFile()
+        // 落点与 IO 线程都是进程级固定值，RunSessionLogStore 内部直读；不打桩会写到真 LOG_DIR，
+        // 且 runTest 等不到 Dispatchers.IO 上的写盘，读文件的断言会变成偶发失败
+        mockkObject(AppPaths)
+        every { AppPaths.LOG_DIR } returns logDir
+        mockkObject(MaaDispatchers)
+        every { MaaDispatchers.IO } returns dispatcher
     }
 
     @After
     fun tearDown() {
+        unmockkObject(AppPaths)
+        unmockkObject(MaaDispatchers)
         logDir.deleteRecursively()
     }
 
@@ -44,12 +57,11 @@ class RunLogRecorderTest {
             runnerPort = runner,
             scope = backgroundScope,
         ),
-        store = RunSessionLogStore(logDir = { logDir }, ioDispatcher = dispatcher),
+        store = RunSessionLogStore(),
         // 生产是查资源；这里只要能看出「落盘的是渲染后的字符串」
         renderText = { text -> (text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value ?: "<res>" },
         includeDetails = { includeDetails },
         scope = backgroundScope,
-        ioDispatcher = dispatcher,
     )
 
     private var includeDetails = false

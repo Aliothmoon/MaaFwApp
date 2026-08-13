@@ -1,5 +1,10 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.constant.AppPaths
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -18,11 +23,19 @@ class RunSessionLogStoreTest {
     @Before
     fun setUp() {
         logDir = createTempDirectory("run-session").toFile()
-        store = RunSessionLogStore(logDir = { logDir }, ioDispatcher = Dispatchers.Unconfined)
+        // 落点与 IO 线程都是进程级固定值，store 内部直读；不打桩会写到真 LOG_DIR，
+        // 且 runBlocking 等不到 Dispatchers.IO 上的写盘
+        mockkObject(AppPaths)
+        every { AppPaths.LOG_DIR } returns logDir
+        mockkObject(MaaDispatchers)
+        every { MaaDispatchers.IO } returns Dispatchers.Unconfined
+        store = RunSessionLogStore()
     }
 
     @After
     fun tearDown() {
+        unmockkObject(AppPaths)
+        unmockkObject(MaaDispatchers)
         logDir.deleteRecursively()
     }
 

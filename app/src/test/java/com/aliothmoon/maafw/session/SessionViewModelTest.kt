@@ -15,6 +15,7 @@ import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
@@ -57,9 +58,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -120,6 +124,10 @@ class SessionViewModelTest {
         // VM init 就会去解包，落点必须先指走：AppPaths 在单测里没 init 过，直读 lateinit 会抛
         mockkObject(AppPaths)
         every { AppPaths.ROOT } returns createTempDirectory("pi-install").toFile()
+        every { AppPaths.LOG_DIR } returns createTempDirectory("run-log").toFile()
+        // SetLanguage 直落 AppLocales，桩掉免得单测碰 AppCompatDelegate
+        mockkObject(AppLocales)
+        every { AppLocales.apply(any()) } just Runs
         Dispatchers.setMain(mainDispatcher)
     }
 
@@ -128,6 +136,7 @@ class SessionViewModelTest {
         Dispatchers.resetMain()
         unmockkObject(MaaDispatchers)
         unmockkObject(AppPaths)
+        unmockkObject(AppLocales)
     }
 
     private fun readyStore(
@@ -169,7 +178,6 @@ class SessionViewModelTest {
             scope = kotlinx.coroutines.CoroutineScope(mainDispatcher),
             scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 0),
         ),
-        locale: (String?) -> Unit = {},
         permissions: FakePermissionGateway = FakePermissionGateway(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
@@ -185,7 +193,6 @@ class SessionViewModelTest {
             servicePort = FakePrivilegedServicePort(),
             displaySize = displaySize,
             appSettings = settings,
-            localeController = locale,
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
             piInstall = emptyPiInstall(),
@@ -211,7 +218,6 @@ class SessionViewModelTest {
             servicePort = FakePrivilegedServicePort(),
             displaySize = FakeDisplaySizeGateway(),
             appSettings = settings,
-            localeController = {},
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
             piInstall = emptyPiInstall(),
@@ -230,14 +236,10 @@ class SessionViewModelTest {
     ) = RunLogRecorder(
         runnerPort = runner,
         focusDispatcher = focusDispatcher,
-        store = RunSessionLogStore(
-            logDir = { createTempDirectory("run-log").toFile() },
-            ioDispatcher = mainDispatcher,
-        ),
+        store = RunSessionLogStore(),
         renderText = { it.toString() },
         includeDetails = { false },
         scope = backgroundScope,
-        ioDispatcher = mainDispatcher,
     )
 
     /**
@@ -568,12 +570,11 @@ class SessionViewModelTest {
 
     @Test
     fun `set language delegates to locale controller when idle`() = runTest(mainDispatcher) {
-        var applied: String? = "unset"
-        val (vm, _, _) = createVm(locale = { applied = it })
+        val (vm, _, _) = createVm()
         advanceUntilIdle()
         vm.onIntent(SessionIntent.SetLanguage("en"))
         advanceUntilIdle()
-        assertEquals("en", applied)
+        verify { AppLocales.apply("en") }
     }
 
     @Test

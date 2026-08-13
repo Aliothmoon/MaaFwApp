@@ -2,7 +2,11 @@ package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -10,6 +14,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -18,7 +23,7 @@ import java.io.File
 /**
  * 构建期同步进来的 PI 的发布契约：声明了 languages 就必须覆盖全部 $key
  * 契约只约束「声明了就要完整」，不要求每个 PI 都做 i18n；
- * 未配置 pi.sourceDir 或该 PI 不做 i18n 时跳过，外壳不绑定任何具体项目
+ * 未配置 pi.profile 或该 PI 不做 i18n 时跳过，外壳不绑定任何具体项目
  */
 @OptIn(ExperimentalSerializationApi::class)
 class CurrentProjectI18nTest {
@@ -26,6 +31,12 @@ class CurrentProjectI18nTest {
     private val piJson = Json {
         allowComments = true
         allowTrailingComma = true
+    }
+
+    /** 只有逐语言那条用例打桩，没打过也可以解除 */
+    @After
+    fun releaseLocale() {
+        unmockkObject(AppLocales)
     }
 
     @Test
@@ -60,8 +71,13 @@ class CurrentProjectI18nTest {
         val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
         assumeTrue("该 PI 未声明 languages", projectInterface.languages.isNotEmpty())
 
+        // ProjectLoader 内部直读 AppLocales，要逐语言加载只能逐轮改桩
+        // 桩打在 currentProjectTag 而非 currentTag：AppLanguagePolicy 会把非 en 的一切压成
+        // zh-CN，打在下层就走不到 PI 声明的其余语言
+        mockkObject(AppLocales)
         projectInterface.languages.keys.forEach { language ->
-            val ready = ProjectLoader(source) { language }.load() as ProjectLoadResult.Ready
+            every { AppLocales.currentProjectTag() } returns language
+            val ready = ProjectLoader(source).load() as ProjectLoadResult.Ready
             val i18nDiagnostics = ready.diagnostics.filter { diagnostic ->
                 I18N_DIAGNOSTIC_RES.any { diagnostic.message.isResource(it) }
             }
@@ -90,8 +106,8 @@ class CurrentProjectI18nTest {
 /** syncPiAssets 的落点；单元测试工作目录是 app/ */
 private val piRoot = File("build/generated/piAssets/pi")
 
-/** 未配置 pi.sourceDir 时跳过：外壳不绑定任何具体项目 */
+/** 未配置 pi.profile 时跳过：外壳不绑定任何具体项目 */
 internal fun syncedPiOrSkip(): ProjectSource {
-    assumeTrue("未同步 PI（未配置 pi.sourceDir）", File(piRoot, "interface.json").isFile)
+    assumeTrue("未同步 PI（未配置 pi.profile）", File(piRoot, "interface.json").isFile)
     return DirectoryProjectSource(piRoot)
 }

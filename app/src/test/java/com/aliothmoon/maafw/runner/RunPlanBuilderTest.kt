@@ -32,10 +32,9 @@ class RunPlanBuilderTest {
         @JvmStatic
         @BeforeClass
         fun loadProject() {
-            // 夹具固定在 test/fixtures，不随打包资源更换而变；locale 显式固定，不依赖运行机默认语言
+            // 夹具固定在 test/fixtures，不随打包资源更换而变；它没声明 languages，翻译链整条不启动
             val result = ProjectLoader(
                 DirectoryProjectSource(File("src/test/fixtures/PI/M9A")),
-                localeProvider = { "zh-CN" },
             ).load()
             definition = (result as ProjectLoadResult.Ready).definition
         }
