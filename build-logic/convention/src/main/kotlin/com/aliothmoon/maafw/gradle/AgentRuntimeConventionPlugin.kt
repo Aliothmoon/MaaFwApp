@@ -8,10 +8,12 @@ import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.register
+import java.io.File
 import java.security.MessageDigest
 
 /**
- * The chain that packs the external agent runtime (agent.sourceDir); apply after maafw.android.application
+ * The chain that packs the external agent runtime; apply after maafw.android.application
+ * Its source directory comes from the build profile, see [BuildProfile]
  * Leaving it unset means no agent runtime in the package: a PI that declares an agent then fails
  * in prepare(), the build itself does not stop
  * Full wiring steps live in docs/agent-integration.md
@@ -19,8 +21,9 @@ import java.security.MessageDigest
 class AgentRuntimeConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
-            val agentSourceDir = pathSetting("agent.sourceDir", "AGENT_SOURCE_DIR")
-            val agentAbiPatterns = listSetting("agent.abi").ifEmpty { listOf("*") }
+            val profile = buildProfile()
+            val agentSourceDir = profile.agentSourceDir
+            val agentAbiPatterns = profile.agentAbi
 
             val agentAssetsDir = layout.buildDirectory.dir("generated/agentAssets")
             val agentJniLibsDir = layout.buildDirectory.dir("generated/agentJniLibs")
@@ -30,7 +33,7 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
 
             val packAgentBundles = tasks.register<Zip>("packAgentBundles") {
                 group = "build"
-                description = "Pack the bundles under agent.sourceDir per ABI into assets/agent"
+                description = "Pack the configured agent bundles per ABI into assets/agent"
                 destinationDirectory.set(agentAssetsDir.map { it.dir("agent") })
                 archiveFileName.set("bundle.zip")
                 if (agentSourceDir != null) {
@@ -46,29 +49,42 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
                 }
             }
 
+            val descriptorDir = layout.buildDirectory.dir("generated/agentDescriptor")
+            val descriptor = profile.agentRuntimes.takeIf { it.isNotEmpty() }?.toDescriptorJson()
+
+            val writeAgentDescriptor = tasks.register("writeAgentDescriptor") {
+                group = "build"
+                description = "Write the agent runtime descriptor declared by the profile"
+                // The descriptor is the input here, not a file on disk: it is assembled from the
+                // profile, so editing the profile has to invalidate this task
+                inputs.property("descriptor", descriptor.orEmpty())
+                outputs.dir(descriptorDir)
+                doLast {
+                    val dir = descriptorDir.get().asFile
+                    dir.deleteRecursively()
+                    dir.mkdirs()
+                    if (descriptor != null) File(dir, "agent-runtime.json").writeText(descriptor)
+                }
+            }
+
             val syncAgentAssets = tasks.register<Sync>("syncAgentAssets") {
                 group = "build"
-                description = "Sync the agent runtime descriptor from agent.sourceDir into assets/agent"
+                description = "Lay the generated agent runtime descriptor into assets/agent"
                 dependsOn(packAgentBundles)
                 // The index file has to live outside this level: Sync wipes whatever in the target
                 // does not come from the source
                 into(agentAssetsDir.map { it.dir("agent") })
                 // packAgentBundles writes bundle.zip into the same directory, Sync must not treat it as leftover
                 preserve { include("bundle.zip") }
-                if (agentSourceDir != null) {
-                    from(agentSourceDir) { include("agent-runtime.json") }
-                } else {
-                    // Hand it an empty source rather than nothing: with no source at all Sync reports
-                    // NO-SOURCE and skips, so a runtime left by an earlier agent.sourceDir would stay
-                    // in the generated directory and leak into later packages
-                    from(emptyAgentSource)
-                    doFirst { logger.info("agent.sourceDir is not set, the build output will not contain an agent runtime") }
-                }
+                // Always a real source, even when empty: with no source at all Sync reports NO-SOURCE
+                // and skips, so a descriptor left by an earlier profile would stay in the generated
+                // directory and leak into later packages
+                from(writeAgentDescriptor)
             }
 
             val syncAgentJniLibs = tasks.register<Sync>("syncAgentJniLibs") {
                 group = "build"
-                description = "Sync the single-file executables from agent.sourceDir into jniLibs"
+                description = "Sync the configured single-file executables into jniLibs"
                 into(agentJniLibsDir)
                 if (agentSourceDir != null) {
                     from(agentSourceDir) {
@@ -87,7 +103,7 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
                 dependsOn(syncAgentAssets)
                 val bundleZip = agentAssetsDir.map { it.file("agent/bundle.zip") }
                 val fingerprintFile = agentAssetsDir.map { it.file("agent.fingerprint") }
-                // inputs.files rather than inputs.file: without agent.sourceDir the archive may not
+                // inputs.files rather than inputs.file: with no agent configured the archive may not
                 // exist and inputs.file would fail validation outright
                 inputs.files(bundleZip).withPathSensitivity(PathSensitivity.RELATIVE)
                 outputs.file(fingerprintFile)

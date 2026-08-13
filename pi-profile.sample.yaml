@@ -1,0 +1,53 @@
+# PI 打包配方样例
+# 拷一份改成自己的放仓库外，再在 local.properties 里写 pi.profile=<绝对路径>（或设 PI_PROFILE）
+# 相对路径相对本文件；字符串支持 ${VAR} / ${VAR:-回落}（含 ${} 的值在 YAML 里要加引号）
+# 字段语义见 build-logic 的 BuildProfile.kt
+
+# 含 interface.json 那一层
+assets: D:/path/to/your-pi
+
+# 进包白名单，省略则用内置默认值；写了就是整体替换
+include:
+  - interface.json
+  - tasks/**
+  - resource/**
+  - resource_*/**
+  - data/**
+  - locales/**
+  - CONTACT
+  - LICENSE
+
+# 压在 include 之上，用来挖掉大而用不上的资源
+exclude: []
+
+# 整段可省略 = 不带 agent 运行时
+agent:
+  # 布局：<abi>/jniLibs/**（单文件可执行体）与 <abi>/bundle/**（要解包的目录树）
+  sourceDir: D:/path/to/agent-dist
+  abi: [arm64-v8a]
+
+  # 按序对上 PI 的 agent[]，条数必须相同
+  # 实际命令 = executable + args + identifier，PI 的 child_exec / child_args 不参与
+  runtimes:
+    # 单 ELF，随 APK 装进 nativeLibraryDir；文件名须是 lib*.so
+    - location: nativeLibs
+      executable: libyouragent.so
+      # 值里可用 {nativeLibs} 与 {bundle}
+      env:
+        LD_LIBRARY_PATH: "{nativeLibs}"
+
+    # 目录树，首启解包到可执行目录
+    - location: bundle
+      executable: bin/python3
+      args: [-u, agent/main.py]
+      env:
+        PYTHONHOME: "{bundle}/prefix"
+        LD_LIBRARY_PATH: "{bundle}/prefix/lib:{nativeLibs}"
+
+# 整段可省略 = 用本仓库自己的包名与图标
+app:
+  # 包名后缀，拼成 com.aliothmoon.maafw.yourpi；只收小写包段
+  id: yourpi
+  label: Your PI
+  # 只收 png / webp
+  icon: D:/path/to/your-pi/logo.png

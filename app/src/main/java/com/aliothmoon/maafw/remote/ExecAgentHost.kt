@@ -15,8 +15,13 @@ import java.util.zip.ZipFile
  * child 与特权进程同 uid、同进程树，所以 env 直接继承、`TMPDIR` 天然一致，
  * AgentClient 与 AgentServer 算出同一个 socket 路径，传输与上游 MaaPiCli 逐字一致
  *
- * PI 的 `child_exec` 在这里不解释也不执行：设备 PATH 上没有解释器，PI 解包目录又是 noexec；
- * 真正拉起哪个可执行体由构建期的 `agent-runtime.json` 决定（docs/pi-compatibility.md）
+ * PI 的 `child_exec` / `child_args` 在这里都不参与拼命令：那两个字段是上游按桌面端整条命令行写的
+ * （`uv run python x.py` 这种），设备上没有那个可执行体、PATH 上也没有解释器、PI 解包目录还是 noexec。
+ * 只取前一半再接到别的解释器后面，拼出什么全看 PI 作者的桌面端习惯，所以整条命令由构建期的
+ * `agent-runtime.json` 说了算（docs/pi-compatibility.md）
+ *
+ * PI 的 `agent[]` 只剩两个作用：声明有几个 agent（MaaFramework 按它建 client），
+ * 以及错误消息里那个人看得懂的名字
  */
 class ExecAgentHost(
     /** child 的每一行输出与它来自哪条流；默认丢弃，只有接了运行日志的调用点才传 */
@@ -45,15 +50,13 @@ class ExecAgentHost(
             throw AgentLaunchException("agent 可执行体不可执行：${executable.absolutePath}")
         }
 
-        // 顺序对齐上游 Runner.cpp：child_args 之后追加 identifier，identifier 恒在末位
-        // argsPrefix 是构建期自己写的，认占位符；child_args 来自 PI，一律原样透传——
-        // PI 作者可能就是要把花括号原样交给 agent，外壳不该替他解释
+        // identifier 恒在末位，对齐上游 Runner.cpp；它之前的部分全部来自 agent-runtime.json
+        // PI 那边真正需要的参数由适配方一并写进 args——入口脚本本来就写在那儿了
         val command = buildList {
             add(executable.absolutePath)
-            entry.argsPrefix.mapTo(this) {
+            entry.args.mapTo(this) {
                 it.resolveAgentPlaceholders(bundleDir, request.nativeLibraryDir)
             }
-            addAll(request.agent.childArgs)
             add(request.identifier)
         }
         // 不合流：合了就分不出 agent 自己 print 的与加载器写的，两条各起一个泵

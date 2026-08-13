@@ -11,8 +11,6 @@ android {
     namespace = "com.aliothmoon.maafw"
 
     defaultConfig {
-        applicationId = "com.aliothmoon.maafw"
-
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=c++_shared"

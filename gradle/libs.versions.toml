@@ -3,6 +3,7 @@ agp = "9.2.1"
 kotlin = "2.3.21"
 ksp = "2.3.9"
 kotlinpoet = "2.3.0"
+snakeyamlEngine = "2.9"
 floatingX = "2.3.7"
 
 coreKtx = "1.19.0"
@@ -95,6 +96,7 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 # build-logic 里引 AGP / KGP 的 DSL 类型用；插件实现本体由根 build.gradle.kts 的 apply false 带上 classpath
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "agp" }
 kotlin-gradlePlugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+snakeyaml-engine = { group = "org.snakeyaml", name = "snakeyaml-engine", version.ref = "snakeyamlEngine" }
 
 kotlinpoet = { module = "com.squareup:kotlinpoet", version.ref = "kotlinpoet" }
 kotlinpoet-ksp = { module = "com.squareup:kotlinpoet-ksp", version.ref = "kotlinpoet" }

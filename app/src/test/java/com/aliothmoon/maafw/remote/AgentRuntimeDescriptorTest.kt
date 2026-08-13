@@ -17,7 +17,7 @@ class AgentRuntimeDescriptorTest {
                 {
                   "location": "bundle",
                   "executable": "bin/python3",
-                  "argsPrefix": ["-u"],
+                  "args": ["-u"],
                   "env": { "PYTHONHOME": "{bundle}/prefix" }
                 }
               ]
@@ -27,7 +27,7 @@ class AgentRuntimeDescriptorTest {
         val entry = descriptor.runtimes.single()
         assertEquals(AgentRuntimeLocation.BUNDLE, entry.location)
         assertEquals("bin/python3", entry.executable)
-        assertEquals(listOf("-u"), entry.argsPrefix)
+        assertEquals(listOf("-u"), entry.args)
         assertEquals("{bundle}/prefix", entry.env.getValue("PYTHONHOME"))
     }
 
@@ -38,7 +38,7 @@ class AgentRuntimeDescriptorTest {
         )
         val entry = descriptor.runtimes.single()
         assertEquals(AgentRuntimeLocation.NATIVE_LIBS, entry.location)
-        assertTrue(entry.argsPrefix.isEmpty())
+        assertTrue(entry.args.isEmpty())
         assertTrue(entry.env.isEmpty())
     }
 
@@ -64,16 +64,16 @@ class AgentRuntimeDescriptorTest {
     }
 
     @Test
-    fun `argsPrefix 也认占位符，PI 的 child_args 不认`() {
-        // argsPrefix 是构建期自己写的配置，child_args 来自 PI——
-        // PI 作者可能就是要把花括号原样交给 agent，外壳不替他解释
+    fun `args 认占位符`() {
+        // args 全部来自构建期的配方，所以占位符由外壳解释；
+        // PI 的 child_args 根本不参与拼命令，见 ExecAgentHost
         val entry = AgentRuntimeDescriptor.parse(
             """{"runtimes":[{"location":"bundle","executable":"bin/python3",
-               "argsPrefix":["-u","{bundle}/tools/wrapper.py"]}]}""",
+               "args":["-u","{bundle}/tools/wrapper.py"]}]}""",
         ).runtimes.single()
         assertEquals(
             listOf("-u", "/tmp/rt/tools/wrapper.py"),
-            entry.argsPrefix.map { it.resolveAgentPlaceholders("/tmp/rt", "/libs") },
+            entry.args.map { it.resolveAgentPlaceholders("/tmp/rt", "/libs") },
         )
     }
 

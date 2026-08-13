@@ -21,8 +21,11 @@ data class AgentRuntimeEntry(
     val location: AgentRuntimeLocation,
     /** 相对 [location] 所指的根 */
     val executable: String,
-    /** 插在 PI 的 child_args 之前，例如解释器的 `-u` */
-    val argsPrefix: List<String> = emptyList(),
+    /**
+     * identifier 之前的全部参数：解释器开关、入口脚本、以及 PI 那边需要的参数
+     * PI 的 `child_args` 不参与拼命令，原因见 [ExecAgentHost]
+     */
+    val args: List<String> = emptyList(),
     /** 值里可用 {bundle} 与 {nativeLibs} 两个占位符，别的一律原样 */
     val env: Map<String, String> = emptyMap(),
 )

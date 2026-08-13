@@ -1,16 +1,37 @@
 package com.aliothmoon.maafw.gradle
 
 import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.tasks.Copy
+import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.register
 
 /** ABIs that ship; a debug build can narrow to one via build.debugAbi to save build time */
 private val SHIPPED_ABIS = listOf("arm64-v8a", "x86_64")
 
+/** The package every build sits under; a profile only appends to it, it never replaces it */
+private const val BASE_APPLICATION_ID = "com.aliothmoon.maafw"
+
+/**
+ * A profile's app.id becomes package segments, so it takes package rules rather than free text
+ * Rejecting the rest here beats finding out from a manifest merger error or, worse, an installed
+ * package under a name nobody meant to publish
+ */
+private val APP_ID_PATTERN = Regex("""[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*""")
+
+/** Resource name the profile icon lands under, kept apart from the checked-in ic_launcher */
+private const val PROFILE_ICON_NAME = "ic_profile_launcher"
+
+/** Android decodes neither ico nor svg, a profile pointing at one is a mistake worth failing on */
+private val ICON_EXTENSIONS = setOf("png", "webp")
+
 /**
  * The whole shell around the app module: SDK baseline, git version, packaging, signing, build types
- * The module script keeps only what this app is: namespace, applicationId, native, buildFeatures
+ * The module script keeps only what this app is: namespace, native, buildFeatures
+ * Identity (applicationId, launcher label and icon) comes from the build profile, see [BuildProfile]
  */
 class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
@@ -20,11 +41,24 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             val android = extensions.getByType<ApplicationExtension>()
             configureAndroidCommon(android)
 
+            val profile = buildProfile()
+            val icon = profile.appIcon?.also { configureProfileIcon(it) }
+
             android.defaultConfig {
+                applicationId = profile.appId?.let { "$BASE_APPLICATION_ID.${it.requireAppId()}" }
+                    ?: BASE_APPLICATION_ID
                 targetSdk = TARGET_SDK
                 versionCode = gitVersionCode()
                 versionName = gitVersionName()
-                println("Build version: versionCode=$versionCode, versionName=$versionName")
+                println("Build version: applicationId=$applicationId, versionCode=$versionCode, versionName=$versionName")
+
+                // Placeholders rather than resValue: with no profile the value stays a resource
+                // reference and the checked-in label and icon keep working untouched
+                manifestPlaceholders["appLabel"] = profile.appLabel ?: "@string/app_name"
+                manifestPlaceholders["appIcon"] =
+                    if (icon != null) "@mipmap/$PROFILE_ICON_NAME" else "@mipmap/ic_launcher"
+                manifestPlaceholders["appRoundIcon"] =
+                    if (icon != null) "@mipmap/$PROFILE_ICON_NAME" else "@mipmap/ic_launcher_round"
 
                 testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
             }
@@ -74,6 +108,44 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     }
                 }
             }
+        }
+    }
+}
+
+private fun String.requireAppId(): String {
+    require(APP_ID_PATTERN.matches(this)) {
+        "app.id must be lowercase package segments such as m9a or maa.end, got \"$this\""
+    }
+    return this
+}
+
+/**
+ * Drops the profile icon into a generated res tree as a single xxxhdpi bitmap
+ * One density only, so launchers on API 26+ show the bitmap unmasked instead of an adaptive icon;
+ * shipping a full adaptive set would mean the profile carrying foreground, background and densities
+ */
+private fun Project.configureProfileIcon(icon: java.io.File) {
+    require(icon.isFile) { "app.icon points at a missing file: ${icon.absolutePath}" }
+    val extension = icon.extension.lowercase()
+    require(extension in ICON_EXTENSIONS) {
+        "app.icon must be one of $ICON_EXTENSIONS, got .$extension (${icon.absolutePath})"
+    }
+
+    val profileResDir = layout.buildDirectory.dir("generated/profileRes")
+    val syncProfileIcon = tasks.register<Copy>("syncProfileIcon") {
+        group = "build"
+        description = "Copy the profile launcher icon into the generated resources"
+        from(icon) { rename { "$PROFILE_ICON_NAME.$extension" } }
+        into(profileResDir.map { it.dir("mipmap-xxxhdpi") })
+    }
+
+    tasks.named("preBuild") {
+        dependsOn(syncProfileIcon)
+    }
+
+    extensions.configure<ApplicationAndroidComponentsExtension> {
+        onVariants { variant ->
+            variant.sources.res?.addStaticSourceDirectory(profileResDir.get().asFile.absolutePath)
         }
     }
 }

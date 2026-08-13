@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.service
 import android.accessibilityservice.AccessibilityService
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import com.aliothmoon.maafw.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,8 +91,11 @@ class AccessibilityHelperService : AccessibilityService() {
     companion object {
         private const val SIMULTANEOUS_PRESS_THRESHOLD_MS = 300L
 
-        /** 写进 `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` 的组件名，代授时要用 */
-        const val SERVICE_ID = "com.aliothmoon.maafw/.service.AccessibilityHelperService"
+        /**
+         * 写进 `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` 的组件名，代授时要用
+         * 必须跟 applicationId 走：写死包名的话，分包出去的包会去启用一个不存在的组件
+         */
+        const val SERVICE_ID = BuildConfig.APPLICATION_ID + "/.service.AccessibilityHelperService"
 
         /** 由 OverlayController 装卸；null 表示当前不需要拦截 */
         val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()

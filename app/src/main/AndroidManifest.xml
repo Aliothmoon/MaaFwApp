@@ -47,9 +47,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="${appIcon}"
+        android:label="${appLabel}"
+        android:roundIcon="${appRoundIcon}"
         android:supportsRtl="true"
         android:theme="@style/Theme.MaaFwApp"
         android:localeConfig="@xml/locales_config"
@@ -61,7 +61,7 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout"
             android:exported="true"
-            android:label="@string/app_name"
+            android:label="${appLabel}"
             android:launchMode="singleTop"
             android:theme="@style/Theme.MaaFwApp.Starting"
             android:windowSoftInputMode="adjustResize">
@@ -113,7 +113,7 @@
             android:name=".schedule.ScheduleReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.aliothmoon.maafw.SCHEDULE_TRIGGER" />
+                <action android:name="${applicationId}.SCHEDULE_TRIGGER" />
             </intent-filter>
         </receiver>
 

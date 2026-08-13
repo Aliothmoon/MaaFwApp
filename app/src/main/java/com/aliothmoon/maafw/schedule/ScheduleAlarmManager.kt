@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.MainActivity
 import timber.log.Timber
 import java.time.ZonedDateTime
@@ -97,7 +98,8 @@ class ScheduleAlarmManager(private val context: Context) {
     private fun requestCode(strategyId: String): Int = strategyId.hashCode() and 0x7FFFFFFF
 
     companion object {
-        const val ACTION_SCHEDULE_TRIGGER = "com.aliothmoon.maafw.SCHEDULE_TRIGGER"
+        /** 跟 applicationId 走：分包出去的两个包装同一台设备时，同名 action 会让闹钟广播串到对方 */
+        const val ACTION_SCHEDULE_TRIGGER = BuildConfig.APPLICATION_ID + ".SCHEDULE_TRIGGER"
         const val EXTRA_STRATEGY_ID = "strategy_id"
         const val EXTRA_SCHEDULED_TIME = "scheduled_time"
     }
