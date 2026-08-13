@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 /** PI 解包的可观测状态；除 [Unpacking] 外几档都是一闪而过，留着是为了状态机完整 */
 sealed interface PiInstallState {
@@ -59,8 +60,16 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
         _state.value = PiInstallState.Checking
         try {
             withContext(MaaDispatchers.IO) {
+                // 逐条目写状态，几千项的 PI 就是几千次 SessionUiState 重建，
+                // 而这几秒恰好是首屏最挤的时候。百分比没变就不写，上千次压到 100 次以内
+                // 解包线程池并发调这里，用 CAS 让只跨过档位的那一次过
+                val lastPercent = AtomicInteger(-1)
                 val onProgress: PiUnpackProgress = { done, total, path ->
-                    _state.value = PiInstallState.Unpacking(done, total, path)
+                    val percent = if (total > 0) done * 100 / total else 0
+                    val previous = lastPercent.get()
+                    if (percent > previous && lastPercent.compareAndSet(previous, percent)) {
+                        _state.value = PiInstallState.Unpacking(done, total, path)
+                    }
                 }
                 if (force) installer.reinstall(onProgress) else installer.ensureInstalled(onProgress)
             }
