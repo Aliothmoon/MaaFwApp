@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.gradle
 
+import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import org.gradle.api.Plugin
@@ -96,6 +97,21 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 }
             }
 
+            extensions.configure<ApplicationAndroidComponentsExtension> {
+                onVariants { variant ->
+                    val name = variant.name.replaceFirstChar(Char::uppercaseChar)
+                    val verify = tasks.register<VerifyR8KeepsTask>("verify${name}R8Keeps") {
+                        mapping.set(
+                            variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE),
+                        )
+                        criticalClasses.set(R8_CRITICAL_CLASSES)
+                    }
+                    // Non-minified variants produce no mapping, so the task simply has no input
+                    tasks.matching { it.name == "assemble$name" }
+                        .configureEach { finalizedBy(verify) }
+                }
+            }
+
             val debugAbis = listSetting("build.debugAbi").ifEmpty { SHIPPED_ABIS }
             android.buildTypes {
                 getByName("debug") {
@@ -107,7 +123,9 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     ndk {
                         abiFilters += SHIPPED_ABIS
                     }
-                    isMinifyEnabled = false
+                    // Resource shrinking stays off: it is a separate lever with its own
+                    // failure mode, and nothing here has measured it yet
+                    isMinifyEnabled = true
                     proguardFiles(
                         android.getDefaultProguardFile("proguard-android-optimize.txt"),
                         "proguard-rules.pro",
