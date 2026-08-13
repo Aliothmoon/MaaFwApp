@@ -59,6 +59,7 @@ class ScheduleViewModel(
             },
             configurations = configs,
             exactAlarmAllowed = exact,
+            exactAlarmConfigurable = alarms.hasExactAlarmToggle(),
             triggerLog = log,
         )
     }.stateIn(

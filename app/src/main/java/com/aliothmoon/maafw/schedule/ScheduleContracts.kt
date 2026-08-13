@@ -19,6 +19,8 @@ data class ScheduleUiState(
     val configurations: List<ScheduleConfigurationOption> = emptyList(),
     /** 系统是否允许精确闹钟；否则退到 setAlarmClock，状态栏会多个闹钟图标 */
     val exactAlarmAllowed: Boolean = true,
+    /** 系统有没有精确闹钟开关页（API 31+）；没有就别摆那个入口 */
+    val exactAlarmConfigurable: Boolean = false,
     val triggerLog: List<TriggerLogEntry> = emptyList(),
 )
 

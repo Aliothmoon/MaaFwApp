@@ -200,6 +200,7 @@
     <string name="schedule_exact_alarm_blocked">Exact alarms are not allowed</string>
     <string name="schedule_exact_alarm_hint">Schedules still fire on time, but the status bar shows an alarm icon</string>
     <string name="schedule_exact_alarm_grant">Allow</string>
+    <string name="schedule_exact_alarm_settings">Exact alarm settings</string>
 
     <string name="schedule_edit_new">New rule</string>
     <string name="schedule_edit_existing">Edit rule</string>
