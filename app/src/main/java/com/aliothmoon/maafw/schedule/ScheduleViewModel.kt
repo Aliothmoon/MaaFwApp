@@ -24,6 +24,12 @@ import kotlinx.coroutines.launch
  * 读 [UserConfigurationStore] 只为列出「跑哪份配置」的候选（id + 名字），
  * 不解析 PI、不做 resolve
  */
+/** 配置列表与当前激活项一起取；分两条流会让 combine 多一元且两者本就同源 */
+private data class ConfigurationSnapshot(
+    val options: List<ScheduleConfigurationOption>,
+    val activeId: String?,
+)
+
 class ScheduleViewModel(
     private val store: ScheduleStrategyStore,
     private val alarms: ScheduleAlarmManager,
@@ -34,9 +40,12 @@ class ScheduleViewModel(
     private val exactAlarmAllowed = MutableStateFlow(alarms.canScheduleExact())
     private val loadedLog = MutableStateFlow<List<TriggerLogEntry>>(emptyList())
 
-    private val configurations: Flow<List<ScheduleConfigurationOption>> = configurationStore.data
+    private val configurations: Flow<ConfigurationSnapshot> = configurationStore.data
         .map { config ->
-            config.configurations.map { ScheduleConfigurationOption(it.id.value, it.name) }
+            ConfigurationSnapshot(
+                options = config.configurations.map { ScheduleConfigurationOption(it.id.value, it.name) },
+                activeId = config.activeConfigurationId?.value,
+            )
         }
         .distinctUntilChanged()
 
@@ -48,16 +57,19 @@ class ScheduleViewModel(
     ) { strategies, exact, log, configs ->
         ScheduleUiState(
             rows = strategies.map { strategy ->
+                val missing = configs.options.none { it.id == strategy.runConfigurationId }
                 ScheduleRow(
                     strategy = strategy,
-                    nextTriggerAt = if (!strategy.enabled) {
+                    nextTriggerAt = if (!strategy.enabled || missing) {
                         null
                     } else {
                         alarms.computeNextTrigger(strategy)?.toInstant()?.toEpochMilli()
                     },
+                    configurationMissing = missing,
                 )
             },
-            configurations = configs,
+            configurations = configs.options,
+            activeConfigurationId = configs.activeId,
             exactAlarmAllowed = exact,
             exactAlarmConfigurable = alarms.hasExactAlarmToggle(),
             triggerLog = log,

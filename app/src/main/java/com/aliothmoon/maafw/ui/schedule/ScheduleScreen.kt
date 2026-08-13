@@ -36,6 +36,7 @@ import com.aliothmoon.maafw.schedule.ScheduleUiState
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaEmptyState
@@ -189,6 +190,16 @@ private fun ScheduleRowCard(
 @Composable
 private fun NextTriggerLine(row: ScheduleRow) {
     when {
+        // 排在停用之前：配置没了是要用户动手的状态，比「已停用」更该先看见
+        row.configurationMissing -> MaaToneBadge(
+            text = stringResource(R.string.schedule_configuration_missing),
+            // 与任务行的「不适用」同款：MaaPalette 没有 error 档，就地取 colorScheme
+            tone = MaaTone(
+                MaterialTheme.colorScheme.error,
+                MaterialTheme.colorScheme.errorContainer,
+            ),
+        )
+
         !row.strategy.enabled -> MaaToneBadge(
             text = stringResource(R.string.schedule_disabled),
             tone = MaaTheme.palette.neutral,

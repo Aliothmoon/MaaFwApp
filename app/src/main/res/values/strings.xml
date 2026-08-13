@@ -259,7 +259,8 @@
     <string name="schedule_reason_blocked">启动前检查未通过</string>
     <string name="schedule_reason_rejected">已有执行在进行中</string>
     <string name="schedule_edit_configuration">运行配置</string>
-    <string name="schedule_edit_configuration_active">跟随当前选中</string>
+    <string name="schedule_edit_configuration_required">请选择这条规则要跑的配置</string>
+    <string name="schedule_configuration_missing">绑定的配置已删除</string>
     <string name="schedule_edit_configuration_none">还没有运行配置，请先在任务页创建</string>
     <string name="schedule_result_failed_validation">规则缺失</string>
     <string name="schedule_result_failed_service">服务启动失败</string>

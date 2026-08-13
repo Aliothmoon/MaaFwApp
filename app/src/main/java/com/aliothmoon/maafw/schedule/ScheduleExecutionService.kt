@@ -150,7 +150,7 @@ class ScheduleExecutionService : Service() {
                         closeAppAfterTask = strategy.closeAppAfterTask,
                     ),
                 ),
-                configurationId = strategy.runConfigurationId?.let(::RunConfigurationId),
+                configurationId = RunConfigurationId(strategy.runConfigurationId),
                 // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
                 requestId = RunRequestId($$"${strategy.id}@$scheduledTimeMs"),
                 force = strategy.forceStart,
