@@ -22,9 +22,11 @@
 # Native.load(name, X::class.java) 拿 Java 方法名当 C 符号名去 dlsym，
 # 整包保留而不是逐个接口：MaaEventCallback 这类回调是嵌套类型，-keep interface 盖不到
 -keep class com.aliothmoon.maafw.maa.** { *; }
--keep class com.sun.jna.** { *; }
--keepclassmembers class * extends com.sun.jna.Structure { *; }
--keepclassmembers class * implements com.sun.jna.Callback { *; }
+# libjnidispatch 按字面名 FindClass 的那些都在顶层包（Pointer / Memory / Function /
+# CallbackReference …），子包（ptr / internal / win32）没有 native 反查，交给 R8 裁
+-keep class com.sun.jna.* { *; }
+-keepclassmembers class * extends com.sun.jna.Structure { <fields>; }
+-keepclassmembers class * implements com.sun.jna.Callback { <methods>; }
 -dontwarn java.awt.**
 
 # ── 3. 特权进程的入口 ──
@@ -70,10 +72,16 @@
 -dontwarn pl.droidsonroids.gif.**
 
 # ── SMTP 推送渠道 ──
-# jakarta.mail 靠 META-INF/services 与反射挑实现，裁掉表现为运行时 NoSuchProviderException
--keep class org.eclipse.angus.** { *; }
--keep class jakarta.mail.** { *; }
--keep class jakarta.activation.** { *; }
+# 反射目标不用猜，就是包里那几份元数据点名的类：META-INF/services/jakarta.mail.Provider、
+# META-INF/javamail.default.providers、META-INF/mailcap。ServiceLoader 迭代时少一个就抛
+# ServiceConfigurationError，所以 imap / pop3 也得留着——虽然本应用只发 smtp
+# jakarta.mail / jakarta.activation 的 API 类由上面这些静态引用带到，不必整包保留
+-keep class org.eclipse.angus.mail.smtp.** { *; }
+-keep class org.eclipse.angus.mail.imap.** { *; }
+-keep class org.eclipse.angus.mail.pop3.** { *; }
+-keep class org.eclipse.angus.mail.handlers.** { *; }
+-keep class org.eclipse.angus.mail.util.MailStreamProvider { *; }
+-keep class org.eclipse.angus.activation.*RegistryProviderImpl { *; }
 -dontwarn org.eclipse.angus.**
 -dontwarn jakarta.**
 -dontwarn javax.**

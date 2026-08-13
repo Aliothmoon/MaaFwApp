@@ -37,6 +37,9 @@ class StartupBenchmark {
     /**
      * 装完第一次启动：解包与首次加载都在首帧之后异步跑，[StartupTimingMetric] 够不着，
      * 各自单列成 trace section。段名与产地对不上时这里出 0 而不是报错
+     *
+     * 别给 `.benchmark` 这个包授 Shizuku：授了它一连上特权进程就自动启用自己的无障碍服务，
+     * 系统随即常驻拉起它的进程，`must not be running prior to cold start` 就再也过不去
      */
     @OptIn(ExperimentalMetricApi::class)
     @Test
