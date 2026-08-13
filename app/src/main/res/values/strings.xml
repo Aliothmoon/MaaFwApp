@@ -194,6 +194,7 @@
     <string name="schedule_exact_alarm_blocked">系统未允许精确闹钟</string>
     <string name="schedule_exact_alarm_hint">仍会按时触发，但状态栏会多一个闹钟图标</string>
     <string name="schedule_exact_alarm_grant">去允许</string>
+    <string name="schedule_exact_alarm_settings">精确闹钟设置</string>
 
     <string name="schedule_edit_new">新建规则</string>
     <string name="schedule_edit_existing">编辑规则</string>

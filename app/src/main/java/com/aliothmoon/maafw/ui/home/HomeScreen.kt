@@ -213,7 +213,8 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
         ExpandToggle(expanded = expanded, onToggle = { expanded = !expanded })
 
         AnimatedVisibility(visible = expanded) {
-            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+            // 行间不再另加间距：每行已经定高 32dp，再叠 8dp 会把五行拉得比卡片其余部分都松
+            Column {
                 PermissionRow(
                     label = stringResource(R.string.permission_overlay),
                     granted = state.systemPermissions.overlay,
@@ -261,6 +262,7 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                     text = stringResource(R.string.permission_keepalive_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = MaaDesignTokens.Spacing.sm),
                 )
             }
         }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
@@ -67,6 +68,20 @@ fun ScheduleScreen(
                 )
             },
             actions = {
+                // 与「系统未允许精确闹钟」卡片上那个按钮同一条路；那张卡片只在被关掉时出现，
+                // 允许之后就没别的地方能回到系统开关页了
+                if (state.exactAlarmConfigurable) {
+                    IconButton(
+                        onClick = { onIntent(ScheduleIntent.RequestExactAlarmPermission) },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Alarm,
+                            contentDescription = stringResource(
+                                R.string.schedule_exact_alarm_settings,
+                            ),
+                        )
+                    }
+                }
                 IconButton(onClick = onOpenLog) {
                     Icon(
                         imageVector = Icons.Outlined.History,

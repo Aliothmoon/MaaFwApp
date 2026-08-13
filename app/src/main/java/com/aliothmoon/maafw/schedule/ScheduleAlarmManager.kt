@@ -50,6 +50,9 @@ class ScheduleAlarmManager(private val context: Context) {
     fun canScheduleExact(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
 
+    /** 31 以下没有那个系统开关页，入口要藏掉，否则点了什么也不会发生 */
+    fun hasExactAlarmToggle(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
     fun cancel(strategyId: String) {
         val pendingIntent = buildTriggerIntent(strategyId, 0L)
         alarmManager.cancel(pendingIntent)
