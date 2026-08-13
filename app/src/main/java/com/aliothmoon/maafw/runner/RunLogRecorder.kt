@@ -58,15 +58,12 @@ class RunLogRecorder(
     private var flushLoop: Job? = null
 
     /**
-     * 屏上那份的环形缓冲
+     * 屏上那份的环形缓冲；[note] 与合成协程两边都写，靠 [uiLock] 串起来
      *
-     * [note] 从发起方的线程进来、事件从合成协程进来，两边都写，用 [uiLock] 串起来。
-     * 不直接改 [_runLog]：那要按条复制整份 500 元素列表，识别期一秒几十条就是在刷垃圾
+     * 不逐条改 [_runLog]：那要按条复制整份 500 元素列表，识别期一秒几十条就是在刷垃圾
      */
     private val uiBuffer = ArrayDeque<RunLogEntry>(RUN_LOG_CAPACITY)
     private val uiLock = Any()
-
-    /** 攒批的信号，CONFLATED：一拍之内来多少条都只唤醒一次 */
     private val uiDirty = Channel<Unit>(Channel.CONFLATED)
 
     init {
@@ -79,8 +76,7 @@ class RunLogRecorder(
                     .map { RunnerEvent.Focus(it) },
             ).collect(::record)
         }
-        // 先发后等：第一条即时可见，随后那串按 FLUSH_INTERVAL_MS 攒成一次，
-        // 与落盘同拍。等待期间来的条目由 CONFLATED 留到下一轮，不会漏
+        // 先发后等：第一条即时可见，随后那串攒成一次。等待期间来的由 CONFLATED 留到下一轮
         scope.launch {
             while (true) {
                 uiDirty.receive()
@@ -188,7 +184,6 @@ class RunLogRecorder(
         )
     }
 
-    /** 把缓冲整份交给屏上那条流；一批只出一个新列表 */
     private fun publishBuffered() {
         _runLog.value = synchronized(uiLock) { uiBuffer.toList() }
     }

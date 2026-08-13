@@ -102,8 +102,7 @@ class RunLogComposer {
      * 排障时对得上官方文档与源码的原文比什么都值钱
      */
     private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed {
-        // 惰性：认得出的那几档才看 details，而落到 else 的 Node.* 是识别期最密的一档，
-        // 无条件解一遍就是拿识别频率在跑 JSON 解析。compose 只在一条协程上跑，不必上锁
+        // 落到 else 的 Node.* 是识别期最密的一档，它不看 details；compose 单协程，不必上锁
         val details by lazy(LazyThreadSafetyMode.NONE) { parseDetails(event.details) }
         val verbose = Composed(RunLogKind.Verbose, uiTextFromFramework(event.message), event.details)
 
