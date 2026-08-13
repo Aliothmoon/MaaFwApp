@@ -19,11 +19,18 @@ import kotlinx.serialization.json.JsonPrimitive
  * 因为到替换那一刻原始 details 早已不在手上
  */
 data class FocusMessage(
+    /** 回调事件名，也是 focus 字典里的键 */
+    val message: String,
+    /** 空 = 只配了 trace 的条目，没有要展示的东西 */
     val content: String,
     val channels: Set<FocusChannel>,
+    /** v2.9.1 `trace`：这条节点结果要不要上报遥测 */
+    val trace: Boolean,
     /** 同一条回调 details 里的标量字段；非标量取不出可比的文本，不收 */
     val placeholders: Map<String, String> = emptyMap(),
-)
+) {
+    val displayable: Boolean get() = content.isNotBlank()
+}
 
 /**
  * 协议的 `display` 有五档，Android 外壳只落地三档
@@ -71,6 +78,10 @@ object FocusParser {
     private const val FOCUS_KEY = "focus"
     private const val CONTENT_KEY = "content"
     private const val DISPLAY_KEY = "display"
+    private const val TRACE_KEY = "trace"
+
+    /** `trace` 缺省时唯一按 true 算的事件（协议 v2.9.1） */
+    private const val TRACED_BY_DEFAULT = "Node.PipelineNode.Failed"
 
     /** 闭括号必须转义：Android 的 ICU 正则不接受孤立的 `}`（与 RunPlanBuilder 同款坑） */
     internal val PLACEHOLDER = Regex("""\{([^{}]+)\}""")
@@ -89,20 +100,33 @@ object FocusParser {
             ?: return null
         val entry = (details[FOCUS_KEY] as? JsonObject)?.get(message) ?: return null
 
-        val (rawContent, channels) = when (entry) {
+        val (rawContent, channels, trace) = when (entry) {
             // 简写：等价于 display: "log"
-            is JsonPrimitive -> entry.contentOrNullIfNotString() to setOf(FocusChannel.Log)
-            is JsonObject -> {
-                val content = (entry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString()
-                content to parseChannels(entry[DISPLAY_KEY])
-            }
+            is JsonPrimitive -> Triple(
+                entry.contentOrNullIfNotString(),
+                setOf(FocusChannel.Log),
+                message == TRACED_BY_DEFAULT,
+            )
+
+            is JsonObject -> Triple(
+                (entry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString(),
+                parseChannels(entry[DISPLAY_KEY]),
+                (entry[TRACE_KEY] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+                    ?: (message == TRACED_BY_DEFAULT),
+            )
 
             else -> return null
         }
-        // content 缺省是合法的：那种条目只用来配 trace，没有要展示的东西
-        if (rawContent.isNullOrBlank()) return null
+        // content 缺省而 trace 为假的条目什么都不做，不必往下游发
+        if (rawContent.isNullOrBlank() && !trace) return null
 
-        return FocusMessage(rawContent, channels, scalarFields(details))
+        return FocusMessage(
+            message = message,
+            content = rawContent.orEmpty(),
+            channels = channels,
+            trace = trace,
+            placeholders = scalarFields(details),
+        )
     }
 
     /** `focus` 自己是对象，不会混进来；其余非标量同样取不出可比的文本 */

@@ -76,11 +76,13 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.markwon.core)
+    implementation(libs.markwon.ext.tables)
     implementation(libs.markwon.html)
     implementation(libs.markwon.image)
     implementation(libs.markwon.linkify)
     implementation(libs.markwon.strikethrough)
     implementation(libs.okhttp)
+    implementation(libs.sentry.android.core)
     // Android 没有自带的 mail 实现，三个一起才跑得起 Transport.send
     implementation(libs.angus.mail)
     implementation(libs.angus.activation)

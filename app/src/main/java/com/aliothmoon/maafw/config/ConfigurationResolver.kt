@@ -57,8 +57,10 @@ object ConfigurationResolver {
         val environment = ResolvedEnvironment(
             controllerName = definition.controller.name,
             resource = definition.resources.firstOrNull { it.name == resourceName }
-                ?.let { ResolvedResource(it.name, it.label) },
-            resourceCandidates = definition.resources.map { ResolvedResource(it.name, it.label) },
+                ?.let { ResolvedResource(it.name, it.label, it.icon) },
+            resourceCandidates = definition.resources.map {
+                ResolvedResource(it.name, it.label, it.icon)
+            },
         )
 
         val configurationList = config.configurations.map { runConfiguration ->
@@ -162,6 +164,7 @@ object ConfigurationResolver {
                         values = configured.optionValues,
                         resourceName = resourceName,
                     ),
+                    icon = taskDefinition.icon,
                 )
             }
         }
@@ -208,9 +211,16 @@ object ConfigurationResolver {
                     applicable = reason == null,
                     unavailableReason = reason,
                     defaultChecked = task.defaultCheck,
+                    icon = task.icon,
                 )
             }
-            TaskCatalogGroup(group.name, group.label, tasks, isUngrouped = group.isUngrouped)
+            TaskCatalogGroup(
+                group.name,
+                group.label,
+                tasks,
+                icon = group.icon,
+                isUngrouped = group.isUngrouped,
+            )
         }.filter { it.tasks.isNotEmpty() }
     }
 
@@ -257,6 +267,7 @@ object ConfigurationResolver {
                     value = value,
                     cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, resourceName, depth, visited),
                     inputs = emptyList(),
+                    icon = option.icon,
                 )
             }
 
@@ -272,6 +283,7 @@ object ConfigurationResolver {
                     value = value,
                     cases = buildCaseStates(definition, option.cases, selected.toSet(), values, resourceName, depth, visited),
                     inputs = emptyList(),
+                    icon = option.icon,
                 )
             }
 
@@ -297,6 +309,7 @@ object ConfigurationResolver {
                             description = field.description,
                         )
                     },
+                    icon = option.icon,
                 )
             }
         }
@@ -317,6 +330,7 @@ object ConfigurationResolver {
             name = case.name,
             label = case.label,
             description = case.description,
+            icon = case.icon,
             active = active,
             children = if (active) {
                 buildOptionEditors(definition, case.childOptionNames, values, resourceName, depth + 1, visited)

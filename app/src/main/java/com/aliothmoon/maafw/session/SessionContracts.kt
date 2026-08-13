@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.OverlayControlMode
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.WatchdogState
@@ -40,6 +41,14 @@ data class SessionUiState(
     val taskCatalog: List<TaskCatalogGroup> = emptyList(),
     /** 空 = PI 没声明 global_option，设置页据此决定要不要出这张卡 */
     val globalOptions: List<OptionEditorState> = emptyList(),
+    val projectMetadata: ProjectMetadata = ProjectMetadata(),
+    /** PI 声明了 telemetry；没声明时设置页不出这一行 */
+    val telemetryDeclared: Boolean = false,
+    /** PI 版本是开发态：开关按住关，说明文案跟着换 */
+    val telemetryLockedByVersion: Boolean = false,
+    val telemetryEnabled: Boolean = false,
+    /** 非 null = 这份 welcome 还没给用户看过 */
+    val welcomePrompt: String? = null,
     val environment: ResolvedEnvironment? = null,
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),
@@ -236,6 +245,8 @@ sealed interface SessionIntent {
     /** 预览上是否画注入的触点 */
     data class SetTouchPreviewEnabled(val enabled: Boolean) : SessionIntent
 
+    data class SetTelemetryEnabled(val enabled: Boolean) : SessionIntent
+
     /** 立刻关掉目标应用：停虚拟屏，屏上的应用跟着一起没 */
     data object CloseTargetApp : SessionIntent
 
@@ -264,6 +275,8 @@ sealed interface SessionIntent {
     /** 不等运行开始，立刻盖上屏保；同样要 Application 上下文 */
     data object ShowScreenSaver : SessionIntent
     data object ReloadProject : SessionIntent
+
+    data object DismissWelcome : SessionIntent
 
     /** 无条件重解 PI 再重载；失败弹窗的重试与设置页的手动重来是同一个动作 */
     data object ReinstallPi : SessionIntent

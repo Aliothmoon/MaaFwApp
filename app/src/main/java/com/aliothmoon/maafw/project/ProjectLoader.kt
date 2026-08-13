@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
@@ -132,7 +133,8 @@ class ProjectLoader(
                         it.name,
                         it.paths,
                         text.label(it.label) ?: it.name,
-                        it.raw
+                        it.raw,
+                        it.icon,
                     )
                 }
                 .takeIf { it.isNotEmpty() }
@@ -144,6 +146,8 @@ class ProjectLoader(
             globalOptionNames = state.globalOptionNames.filter { it in state.options },
             templates = templates,
             agents = pi.agents,
+            metadata = pi.root?.let { PiParser.parseMetadata(it, text) } ?: ProjectMetadata(),
+            telemetry = pi.root?.let(PiParser::parseTelemetry),
             translations = translations,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)

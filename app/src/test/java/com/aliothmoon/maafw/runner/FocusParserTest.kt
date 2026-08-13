@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -89,8 +90,10 @@ class FocusParserTest {
 
     /** 只配 trace 不配 content 的条目没有要展示的东西 */
     @Test
-    fun `entry without content is not a message`() {
-        assertNull(FocusParser.parse("M", """{"focus":{"M":{"trace":true}}}"""))
+    fun `entry without content is not displayable`() {
+        // 只配 trace 的条目仍要产出：上报走它，展示侧靠 displayable 过滤
+        val traceOnly = FocusParser.parse("M", """{"focus":{"M":{"trace":true}}}""")!!
+        assertFalse(traceOnly.displayable)
         assertNull(FocusParser.parse("M", """{"focus":{"M":{"content":"  "}}}"""))
     }
 

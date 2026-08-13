@@ -7,6 +7,7 @@
 assets: D:/path/to/your-pi
 
 # 进包白名单，省略则用内置默认值；写了就是整体替换
+# PI 各级声明的 icon 也要落在这份白名单里，否则图标文件不进包，运行时静默不显示
 include:
   - interface.json
   - tasks/**

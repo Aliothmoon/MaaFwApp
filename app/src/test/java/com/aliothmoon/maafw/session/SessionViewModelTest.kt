@@ -303,7 +303,12 @@ class SessionViewModelTest {
         val runner = RecordingEventRunnerPort()
         val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
 
-        runner.emit(RunnerEvent.Focus(FocusMessage("显影罐不足", setOf(FocusChannel.Log))))
+        runner.emit(RunnerEvent.Focus(FocusMessage(
+                message = "Node.PipelineNode.Succeeded",
+                content = "显影罐不足",
+                channels = setOf(FocusChannel.Log),
+                trace = false,
+            )))
         advanceUntilIdle()
 
         assertEquals(RunLogKind.Focus, vm.runLog.value.single().kind)
@@ -316,7 +321,12 @@ class SessionViewModelTest {
         val runner = RecordingEventRunnerPort()
         val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
 
-        runner.emit(RunnerEvent.Focus(FocusMessage("弹一下", setOf(FocusChannel.Toast))))
+        runner.emit(RunnerEvent.Focus(FocusMessage(
+                message = "Node.PipelineNode.Succeeded",
+                content = "弹一下",
+                channels = setOf(FocusChannel.Toast),
+                trace = false,
+            )))
         advanceUntilIdle()
 
         assertTrue(vm.runLog.value.isEmpty())

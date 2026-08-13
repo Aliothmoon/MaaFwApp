@@ -85,6 +85,7 @@ private val CardCollapse = shrinkVertically(
 fun MaaCard(
     modifier: Modifier = Modifier,
     title: String? = null,
+    leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     collapsible: Boolean = false,
     // 默认参数不能读 CompositionLocal；innerPadding 两风格同值，静态回落安全
@@ -127,6 +128,7 @@ fun MaaCard(
                 trailing != null -> MaaLabeledControlRow(
                     label = title.orEmpty(),
                     labelStyle = MaterialTheme.typography.titleMedium,
+                    leading = leading,
                     trailing = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -145,6 +147,7 @@ fun MaaCard(
                 title != null -> MaaLabeledControlRow(
                     label = title,
                     labelStyle = MaterialTheme.typography.titleMedium,
+                    leading = leading,
                     modifier = if (canCollapse) {
                         Modifier.maaClickable(indication = false) { expanded = !expanded }
                     } else {
@@ -174,6 +177,7 @@ fun MaaLabeledControlRow(
     modifier: Modifier = Modifier,
     labelStyle: TextStyle = MaterialTheme.typography.bodyLarge,
     labelColor: Color = Color.Unspecified,
+    leading: (@Composable () -> Unit)? = null,
     trailing: @Composable () -> Unit,
 ) {
     Row(
@@ -181,6 +185,7 @@ fun MaaLabeledControlRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
     ) {
+        leading?.invoke()
         Text(
             text = label,
             style = labelStyle,

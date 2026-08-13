@@ -24,11 +24,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
+import androidx.core.net.toUri
+import android.content.Intent
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -42,10 +46,13 @@ import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaFieldLabel
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
+import com.aliothmoon.maafw.ui.components.MaaMarkdown
+import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitchRow
@@ -53,6 +60,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaSwitch
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +115,7 @@ fun SettingsScreen(
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
             OtherCard(state, settingsState, onIntent, onSettingsIntent)
-            AboutCard()
+            AboutCard(state)
         }
     }
 }
@@ -391,13 +399,81 @@ private fun OtherCard(
             enabled = !locked,
             onSelect = { onIntent(SessionIntent.SetResolutionPreference(it)) },
         )
+        if (state.telemetryDeclared) {
+            Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
+            MaaSwitchRow(
+                label = stringResource(R.string.settings_telemetry),
+                checked = state.telemetryEnabled && !state.telemetryLockedByVersion,
+                enabled = !state.telemetryLockedByVersion,
+                onCheckedChange = { onIntent(SessionIntent.SetTelemetryEnabled(it)) },
+            )
+            Text(
+                text = if (state.telemetryLockedByVersion) {
+                    stringResource(R.string.settings_telemetry_dev_desc)
+                } else {
+                    stringResource(R.string.settings_telemetry_desc)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
+private data class AboutSheet(val titleRes: Int, val body: String)
+
 @Composable
-private fun AboutCard() {
+private fun AboutCard(state: SessionUiState) {
+    val context = LocalContext.current
+    val metadata = state.projectMetadata
+    val definition = (state.projectState as? ProjectState.Ready)?.definition
+    var sheet by remember { mutableStateOf<AboutSheet?>(null) }
+
     MaaCard(title = stringResource(R.string.settings_about), collapsible = true) {
+        definition?.let {
+            MaaInfoRow(stringResource(R.string.settings_project), it.name)
+            it.version?.let { version ->
+                MaaInfoRow(stringResource(R.string.settings_project_version), version)
+            }
+        }
         MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
         MaaInfoRow(stringResource(R.string.settings_build), BuildConfig.VERSION_CODE.toString())
+
+        metadata.description?.let {
+            MaaDescriptionPanel {
+                MaaMarkdown(text = it, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+        }
+        metadata.contact?.let { body ->
+            MaaNavigationRow(
+                label = stringResource(R.string.settings_about_contact),
+                onClick = { sheet = AboutSheet(R.string.settings_about_contact, body) },
+            )
+        }
+        metadata.license?.let { body ->
+            MaaNavigationRow(
+                label = stringResource(R.string.settings_about_license),
+                onClick = { sheet = AboutSheet(R.string.settings_about_license, body) },
+            )
+        }
+        metadata.github?.let { url ->
+            MaaNavigationRow(
+                label = stringResource(R.string.settings_about_repository),
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(intent) }
+                        .onFailure { Timber.w(it, "No activity handles the project repository link") }
+                },
+            )
+        }
+    }
+
+    sheet?.let {
+        MaaMarkdownSheet(
+            title = stringResource(it.titleRes),
+            body = it.body,
+            onDismiss = { sheet = null },
+        )
     }
 }

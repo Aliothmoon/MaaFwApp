@@ -14,7 +14,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -31,12 +30,6 @@ class CurrentProjectI18nTest {
     private val piJson = Json {
         allowComments = true
         allowTrailingComma = true
-    }
-
-    /** 只有逐语言那条用例打桩，没打过也可以解除 */
-    @After
-    fun releaseLocale() {
-        unmockkObject(AppLocales)
     }
 
     @Test
@@ -71,17 +64,21 @@ class CurrentProjectI18nTest {
         val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
         assumeTrue("该 PI 未声明 languages", projectInterface.languages.isNotEmpty())
 
-        // ProjectLoader 内部直读 AppLocales，要逐语言加载只能逐轮改桩
+        // 语言取自进程级的 AppLocales，逐条替换它的返回值来跑遍各语言
         // 桩打在 currentProjectTag 而非 currentTag：AppLanguagePolicy 会把非 en 的一切压成
         // zh-CN，打在下层就走不到 PI 声明的其余语言
         mockkObject(AppLocales)
-        projectInterface.languages.keys.forEach { language ->
-            every { AppLocales.currentProjectTag() } returns language
-            val ready = ProjectLoader(source).load() as ProjectLoadResult.Ready
-            val i18nDiagnostics = ready.diagnostics.filter { diagnostic ->
-                I18N_DIAGNOSTIC_RES.any { diagnostic.message.isResource(it) }
+        try {
+            projectInterface.languages.keys.forEach { language ->
+                every { AppLocales.currentProjectTag() } returns language
+                val ready = ProjectLoader(source).load() as ProjectLoadResult.Ready
+                val i18nDiagnostics = ready.diagnostics.filter { diagnostic ->
+                    I18N_DIAGNOSTIC_RES.any { diagnostic.message.isResource(it) }
+                }
+                assertTrue("$language 不应产生 i18n 诊断: $i18nDiagnostics", i18nDiagnostics.isEmpty())
             }
-            assertTrue("$language 不应产生 i18n 诊断: $i18nDiagnostics", i18nDiagnostics.isEmpty())
+        } finally {
+            unmockkObject(AppLocales)
         }
     }
 

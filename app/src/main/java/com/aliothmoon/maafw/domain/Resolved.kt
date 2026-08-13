@@ -25,6 +25,7 @@ data class ResolvedEnvironment(
 data class ResolvedResource(
     val name: String,
     val label: String,
+    val icon: String? = null,
 )
 
 data class ResolvedRunConfiguration(
@@ -58,6 +59,7 @@ data class ResolvedConfiguredTask(
     val missingDefinition: Boolean,
     val unavailableReason: UiText?,
     val options: List<OptionEditorState>,
+    val icon: String? = null,
 ) {
     /** 派生态，不写回；环境恢复后 enabled 意图自动生效 */
     val effectiveEnabled: Boolean get() = enabled && applicable && !missingDefinition
@@ -68,6 +70,7 @@ data class TaskCatalogGroup(
     val groupName: String,
     val label: String,
     val tasks: List<TaskCatalogItem>,
+    val icon: String? = null,
     /** 未分组兜底；UI 用资源显示组名，不展示 label 原文 */
     val isUngrouped: Boolean = false,
 )
@@ -79,6 +82,7 @@ data class TaskCatalogItem(
     val applicable: Boolean,
     val unavailableReason: UiText?,
     val defaultChecked: Boolean,
+    val icon: String? = null,
 )
 
 enum class OptionKind { Select, Switch, Checkbox, Input }
@@ -94,6 +98,7 @@ data class OptionEditorState(
     val value: OptionValue?,
     val cases: List<OptionCaseState>,
     val inputs: List<InputFieldState>,
+    val icon: String? = null,
 ) {
     /** 含默认回退；Select/Switch 至多一个，Checkbox 按声明序 */
     val activeCases: List<OptionCaseState> get() = cases.filter { it.active }
@@ -103,6 +108,7 @@ data class OptionCaseState(
     val name: String,
     val label: String,
     val description: String?,
+    val icon: String? = null,
     val active: Boolean,
     /** 仅 active branch 物化子树；dormant 值留在持久层 */
     val children: List<OptionEditorState>,

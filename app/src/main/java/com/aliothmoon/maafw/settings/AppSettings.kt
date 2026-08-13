@@ -91,4 +91,13 @@ data class AppSettings(
     @PrefKey(default = "")
     val wakeCredential: String = "",
 
+    /**
+     * PI 声明了 `telemetry.sentry` 时才有意义；默认关
+     *
+     * 与 MXU 的默认开相反：DSN 是 PI 作者的，外壳这一侧没有隐私说明的位置，
+     * 上报与否交给用户先点头
+     */
+    @PrefKey(default = "false")
+    val telemetryEnabled: String = "false",
+
 )

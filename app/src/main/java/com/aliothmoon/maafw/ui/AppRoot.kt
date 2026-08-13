@@ -97,6 +97,7 @@ import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
+import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.PiInstallDialog
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
 import com.aliothmoon.maafw.ui.home.HomeScreen
@@ -287,6 +288,12 @@ fun AppRoot(
         PiInstallDialog(
             state = state.piInstallState,
             onRetry = { viewModel.onIntent(SessionIntent.ReinstallPi) },
+        )
+
+        MaaMarkdownSheet(
+            title = stringResource(R.string.welcome_title),
+            body = state.welcomePrompt,
+            onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
         )
 
         // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂

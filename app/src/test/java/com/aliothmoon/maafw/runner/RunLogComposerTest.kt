@@ -95,7 +95,12 @@ class RunLogComposerTest {
      */
     @Test
     fun `focus content is taken as-is`() {
-        val entry = compose(RunnerEvent.Focus(FocusMessage("显影罐不足", setOf(FocusChannel.Log))))
+        val entry = compose(RunnerEvent.Focus(FocusMessage(
+                message = "Node.PipelineNode.Succeeded",
+                content = "显影罐不足",
+                channels = setOf(FocusChannel.Log),
+                trace = false,
+            )))
         assertEquals(RunLogKind.Focus, entry?.kind)
         assertEquals(UiText.Verbatim("显影罐不足"), entry?.text)
     }

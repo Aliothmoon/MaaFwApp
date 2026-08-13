@@ -16,6 +16,9 @@ data class ProjectDefinition(
     val templates: List<ConfigurationTemplate>,
     /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
     val agents: List<AgentDefinition> = emptyList(),
+    val metadata: ProjectMetadata = ProjectMetadata(),
+    /** null = PI 没声明 telemetry，或声明了但 dsn 为空 */
+    val telemetry: TelemetryDefinition? = null,
     /**
      * 当前语言的 `$key` 查表原样保留一份
      *
@@ -28,6 +31,26 @@ data class ProjectDefinition(
 
     private val taskIndex: Map<String, TaskDefinition> by lazy { tasks.associateBy { it.name } }
 }
+
+/** PI v2.9.0 `telemetry.sentry`；[dsn] 由 PI 提供，外壳自己没有上报去处 */
+data class TelemetryDefinition(
+    val dsn: String,
+    val tracing: Boolean = true,
+    val tracesSampleRate: Double = 1.0,
+    val environment: String? = null,
+)
+
+/**
+ * [welcomeFingerprint] 算在物化前的原始声明上：算在正文上的话，切一次语言换了译文就会重弹
+ */
+data class ProjectMetadata(
+    val welcome: String? = null,
+    val welcomeFingerprint: String? = null,
+    val description: String? = null,
+    val contact: String? = null,
+    val license: String? = null,
+    val github: String? = null,
+)
 
 /**
  * PI 声明的 controller 投影
@@ -54,6 +77,7 @@ data class ResourceDefinition(
     val label: String = name,
     /** 同 [ControllerDefinition.raw]，供 `PI_RESOURCE` 透传 */
     val raw: JsonObject = JsonObject(emptyMap()),
+    val icon: String? = null,
 )
 
 data class AgentDefinition(
@@ -74,6 +98,7 @@ data class TaskDefinition(
     val controllers: List<String>,
     val resources: List<String>,
     val defaultCheck: Boolean,
+    val icon: String? = null,
 )
 
 /** PI v2.4.0 顶层 group[]；label 缺省回落 name */
@@ -111,6 +136,7 @@ sealed interface OptionDefinition {
     val name: String
     val label: String
     val description: String?
+    val icon: String?
     val applicability: OptionApplicability
 
     /** Select/Switch 共享 cases + defaultCase */
@@ -133,6 +159,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         override val cases: List<OptionCaseDefinition>,
         override val defaultCase: String?,
+        override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : Choice
 
@@ -142,6 +169,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         override val cases: List<OptionCaseDefinition>,
         override val defaultCase: String?,
+        override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : Choice
 
@@ -151,6 +179,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         val cases: List<OptionCaseDefinition>,
         val defaultCases: List<String>,
+        override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : OptionDefinition
 
@@ -160,6 +189,7 @@ sealed interface OptionDefinition {
         override val description: String?,
         val fields: List<InputFieldDefinition>,
         val pipelineOverride: JsonObject,
+        override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
     ) : OptionDefinition
 }
@@ -177,6 +207,7 @@ data class OptionCaseDefinition(
     val description: String?,
     val pipelineOverride: JsonObject,
     val childOptionNames: List<String>,
+    val icon: String? = null,
 )
 
 enum class PipelineType { StringType, IntType, BoolType }
@@ -199,6 +230,7 @@ data class ConfigurationTemplate(
     val label: String,
     val description: String?,
     val tasks: List<TemplateTask>,
+    val icon: String? = null,
 ) {
     /** 同名任务保留先声明的一条；resolver 与 UI 必须一致 */
     val distinctTasks: List<TemplateTask> get() = tasks.distinctBy { it.taskName }

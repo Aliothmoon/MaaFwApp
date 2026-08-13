@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -40,6 +41,7 @@ import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 
@@ -126,6 +128,14 @@ internal fun TaskRow(
                 checked = task.enabled,
                 onCheckedChange = onToggle,
                 enabled = !locked && !task.missingDefinition,
+            )
+            MaaPiIcon(
+                path = task.icon,
+                size = MaaDesignTokens.IconSize.md,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(end = MaaDesignTokens.Spacing.sm)
+                    .alpha(contentAlpha),
             )
             Column(
                 modifier = Modifier
