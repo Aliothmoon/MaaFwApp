@@ -35,6 +35,9 @@ xxPermissions = "28.0"
 jna = "5.18.1"
 okhttp = "5.1.0"
 
+# PI 声明 telemetry.sentry 时才起作用；DSN 由 PI 提供，外壳自己不上报
+sentry = "8.0.0"
+
 # SMTP 推送渠道；angus 是 jakarta.mail 的参考实现，activation-api 是它的编译期依赖
 angusMail = "2.0.5"
 angusActivation = "2.0.3"
@@ -77,11 +80,13 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 
 markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+markwon-ext-tables = { group = "io.noties.markwon", name = "ext-tables", version.ref = "markwon" }
 markwon-html = { group = "io.noties.markwon", name = "html", version.ref = "markwon" }
 markwon-image = { group = "io.noties.markwon", name = "image", version.ref = "markwon" }
 markwon-linkify = { group = "io.noties.markwon", name = "linkify", version.ref = "markwon" }
 markwon-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+sentry-android-core = { group = "io.sentry", name = "sentry-android-core", version.ref = "sentry" }
 angus-mail = { group = "org.eclipse.angus", name = "jakarta.mail", version.ref = "angusMail" }
 angus-activation = { group = "org.eclipse.angus", name = "angus-activation", version.ref = "angusActivation" }
 jakarta-activation-api = { group = "jakarta.activation", name = "jakarta.activation-api", version.ref = "jakartaActivationApi" }

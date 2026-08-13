@@ -20,6 +20,7 @@ import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.telemetry.TelemetryController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -72,5 +73,6 @@ class MaaFwApp : Application() {
         RemoteServiceManager.initialize(this, provider)
         koin.get<OverlayController>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
+        koin.get<TelemetryController>().setup()
     }
 }

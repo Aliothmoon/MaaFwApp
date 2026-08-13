@@ -71,7 +71,15 @@ class FocusDispatcherTest {
     }
 
     private fun focus(content: String, placeholders: Map<String, String> = emptyMap()) =
-        RunnerEvent.Focus(FocusMessage(content, setOf(FocusChannel.Log), placeholders))
+        RunnerEvent.Focus(
+            FocusMessage(
+                message = "Node.PipelineNode.Succeeded",
+                content = content,
+                channels = setOf(FocusChannel.Log),
+                trace = false,
+                placeholders = placeholders,
+            ),
+        )
 
     @Test
     fun `plain text passes through untouched`() = runTest(UnconfinedTestDispatcher()) {
@@ -144,7 +152,14 @@ class FocusDispatcherTest {
     fun `channels survive completion`() = runTest(UnconfinedTestDispatcher()) {
         val runner = RecordingEventRunnerPort()
         val channels = setOf(FocusChannel.Toast, FocusChannel.Notification)
-        val event = RunnerEvent.Focus(FocusMessage("x", channels))
+        val event = RunnerEvent.Focus(
+            FocusMessage(
+                message = "Node.PipelineNode.Succeeded",
+                content = "x",
+                channels = channels,
+                trace = false,
+            ),
+        )
         assertEquals(channels, completed(runner, dispatcherWith(runner), event).channels)
     }
 }

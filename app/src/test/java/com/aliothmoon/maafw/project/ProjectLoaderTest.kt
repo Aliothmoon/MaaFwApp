@@ -28,10 +28,7 @@ class ProjectLoaderTest {
         @BeforeClass
         fun loadProject() {
             // locale 显式固定，不依赖运行机默认语言
-            val result = ProjectLoader(
-                DirectoryProjectSource(File("src/test/fixtures/PI/M9A")),
-                localeProvider = { "zh-CN" },
-            ).load()
+            val result = loadWithLocale("zh-CN", DirectoryProjectSource(File("src/test/fixtures/PI/M9A")))
             assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
             ready = result as ProjectLoadResult.Ready
         }
@@ -236,7 +233,7 @@ class ProjectLoaderGroupTest {
 
     @Test
     fun `languages 按 locale 匹配并物化 i18n key`() {
-        val ready = ProjectLoader(
+        val ready = loadWithLocale("zh-TW",
             MapProjectSource(
                 mapOf(
                     "interface.json" to """
@@ -263,8 +260,7 @@ class ProjectLoaderGroupTest {
                 ),
             ),
             // 前缀匹配：zh-TW 未声明，应命中 zh-CN
-            localeProvider = { "zh-TW" },
-        ).load() as ProjectLoadResult.Ready
+        ) as ProjectLoadResult.Ready
 
         val definition = ready.definition
         assertEquals("任务一", definition.tasks.single().label)
@@ -296,7 +292,7 @@ class ProjectLoaderGroupTest {
 
     @Test
     fun `languages 下划线风格 tag 可与 BCP-47 locale 匹配`() {
-        val ready = ProjectLoader(
+        val ready = loadWithLocale("zh-CN",
             MapProjectSource(
                 mapOf(
                     "interface.json" to """
@@ -313,15 +309,14 @@ class ProjectLoaderGroupTest {
                 ),
             ),
             // zh_cn 与 zh-CN 归一化后应精确命中，而不是回落首个声明的 en_us
-            localeProvider = { "zh-CN" },
-        ).load() as ProjectLoadResult.Ready
+        ) as ProjectLoadResult.Ready
 
         assertEquals("任务一", ready.definition.tasks.single().label)
     }
 
     @Test
     fun `未声明的语言回落首个声明`() {
-        val ready = ProjectLoader(
+        val ready = loadWithLocale("ja-JP",
             MapProjectSource(
                 mapOf(
                     "interface.json" to """
@@ -338,8 +333,7 @@ class ProjectLoaderGroupTest {
                 ),
             ),
             // ja-JP 精确与前缀都不命中，回落声明序首位 zh_cn
-            localeProvider = { "ja-JP" },
-        ).load() as ProjectLoadResult.Ready
+        ) as ProjectLoadResult.Ready
 
         assertEquals("任务一", ready.definition.tasks.single().label)
     }
@@ -370,7 +364,7 @@ class ProjectLoaderGroupTest {
     @Test
     fun `以文档扩展名结尾的本地化说明仍作为正文`() {
         val description = "筛选结束后保存到工作目录下的 EssencePlan.html"
-        val ready = ProjectLoader(
+        val ready = loadWithLocale("zh-CN",
             source = MapProjectSource(
                 mapOf(
                     "interface.json" to """
@@ -384,8 +378,7 @@ class ProjectLoaderGroupTest {
                     "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1","description":"${'$'}task.description"}]}""",
                 ),
             ),
-            localeProvider = { "zh-CN" },
-        ).load() as ProjectLoadResult.Ready
+        ) as ProjectLoadResult.Ready
 
         assertEquals(description, ready.definition.tasks.single().description)
         assertTrue(ready.diagnostics.none { it.message.isResource(R.string.diagnostic_description_read_failed) })

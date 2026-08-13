@@ -48,6 +48,7 @@ import com.aliothmoon.maafw.i18n.uiTextFormatted
 import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.settings.AppSettingsGateway
+import com.aliothmoon.maafw.telemetry.isDebugProjectVersion
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.AppLocales
 import kotlinx.coroutines.CoroutineDispatcher
@@ -85,6 +86,7 @@ private data class EnvSnapshot(
 private data class QuickSnapshot(
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
+    val telemetryEnabled: Boolean = false,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -139,7 +141,12 @@ class SessionViewModel(
         combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
     ) { snapshot, env -> snapshot.copy(env = env) }
         .combine(
-            combine(appSettings.closeAppAfterTask, appSettings.touchPreviewEnabled, ::QuickSnapshot),
+            combine(
+                appSettings.closeAppAfterTask,
+                appSettings.touchPreviewEnabled,
+                appSettings.telemetryEnabled,
+                ::QuickSnapshot,
+            ),
         ) { snapshot, quick -> snapshot.copy(quick = quick) }
 
 
@@ -253,6 +260,7 @@ class SessionViewModel(
             screenSaverEnabled = settings.screenSaverEnabled,
             closeAppAfterTask = settings.quick.closeAppAfterTask,
             touchPreviewEnabled = settings.quick.touchPreviewEnabled,
+            telemetryEnabled = settings.quick.telemetryEnabled,
             wakeUnlockEnabled = settings.env.wakeUnlockEnabled,
             wakeCredential = settings.env.wakeCredential,
             resolutionPreference = settings.resolutionPreference,
@@ -264,7 +272,13 @@ class SessionViewModel(
         )
         if (project !is ProjectState.Ready) return base
         val session = resolveCached(project, config)
+        val metadata = project.definition.metadata
         return base.copy(
+            projectMetadata = metadata,
+            telemetryDeclared = project.definition.telemetry != null,
+            telemetryLockedByVersion = isDebugProjectVersion(project.definition.version),
+            welcomePrompt = metadata.welcome
+                ?.takeIf { metadata.welcomeFingerprint != config.welcomeFingerprint },
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
@@ -441,6 +455,9 @@ class SessionViewModel(
             is SessionIntent.SetCloseAppAfterTask ->
                 appSettings.setCloseAppAfterTask(intent.enabled)
 
+            is SessionIntent.SetTelemetryEnabled ->
+                appSettings.setTelemetryEnabled(intent.enabled)
+
             is SessionIntent.SetTouchPreviewEnabled ->
                 appSettings.setTouchPreviewEnabled(intent.enabled)
 
@@ -462,6 +479,14 @@ class SessionViewModel(
 
             SessionIntent.ReloadProject -> guarded {
                 projectRepository.reload()
+            }
+
+            SessionIntent.DismissWelcome -> {
+                val fingerprint = (projectRepository.state.value as? ProjectState.Ready)
+                    ?.definition?.metadata?.welcomeFingerprint
+                if (fingerprint != null) {
+                    configurationStore.update { it.copy(welcomeFingerprint = fingerprint) }
+                }
             }
 
             SessionIntent.ReinstallPi -> guarded {

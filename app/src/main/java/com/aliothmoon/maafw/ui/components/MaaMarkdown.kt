@@ -8,6 +8,7 @@ import android.text.style.AbsoluteSizeSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.widget.TextView
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +34,8 @@ import io.noties.markwon.MarkwonVisitor
 import io.noties.markwon.SpannableBuilder
 import io.noties.markwon.core.MarkwonTheme
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
+import io.noties.markwon.ext.tables.TableAwareMovementMethod
+import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.CssInlineStyleParser
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.html.HtmlTag
@@ -52,6 +55,7 @@ import java.io.File
 /**
  * PI description 富文本渲染：Markdown 为主、HTML 子集透传（与桌面端 MXU 展示习惯同构）
  *
+ * - 表格走 `ext-tables`：core 不带表格，PI 的 CONTACT 这类正文正是表格写的；
  * - `<span style>` 的 color/font-size/font-weight 由自定义 TagHandler 解析；
  *   黑白灰系颜色映射主题（深浅色都可读），彩色原样保留；
  * - 相对路径图片映射到 PI assets 目录，网络图直连；
@@ -93,7 +97,9 @@ fun MaaMarkdown(
     val fontSizeSp = if (style.fontSize.isSpecified) style.fontSize.value else 12f
 
     AndroidView(
-        modifier = modifier,
+        // 必须占满宽：表格的列宽取自 TextView 自身宽度（SpanUtils.width），而 TableRowSpan
+        // 首次测量时报 0，wrap_content 下宽度就塌成一条竖线，之后再也涨不回来
+        modifier = modifier.fillMaxWidth(),
         factory = { ctx ->
             TextView(ctx).apply {
                 setTextIsSelectable(false)
@@ -106,7 +112,10 @@ fun MaaMarkdown(
             view.maxLines = maxLines
             view.ellipsize = if (maxLines == Int.MAX_VALUE) null else TextUtils.TruncateAt.END
             markwon.setParsedMarkdown(view, spanned)
-            if (!linksClickable) {
+            if (linksClickable) {
+                // 表格单元格里的链接落在 TableRowSpan 内，LinkMovementMethod 命中不了
+                view.movementMethod = TableAwareMovementMethod.create()
+            } else {
                 view.movementMethod = null
                 view.isClickable = false
                 view.isFocusable = false
@@ -135,6 +144,10 @@ private fun buildMarkwon(
     .usePlugin(ImagesPlugin.create { plugin ->
         // file:///android_asset/… 支持（相对路径图片经 rewriteRelativeImages 映射至此）
         plugin.addSchemeHandler(FileSchemeHandler.createWithAssets(context))
+    })
+    .usePlugin(TablePlugin.create { builder ->
+        builder.tableBorderColor(onSurfaceVariant)
+            .tableBorderWidth(1)
     })
     .usePlugin(LinkifyPlugin.create())
     .usePlugin(StrikethroughPlugin.create())

@@ -2,7 +2,11 @@ package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -60,12 +64,19 @@ class CurrentProjectI18nTest {
         val projectInterface = PiParser.parseInterface("interface.json", source.read("interface.json"))
         assumeTrue("该 PI 未声明 languages", projectInterface.languages.isNotEmpty())
 
-        projectInterface.languages.keys.forEach { language ->
-            val ready = ProjectLoader(source) { language }.load() as ProjectLoadResult.Ready
-            val i18nDiagnostics = ready.diagnostics.filter { diagnostic ->
-                I18N_DIAGNOSTIC_RES.any { diagnostic.message.isResource(it) }
+        // 语言取自进程级的 AppLocales，逐条替换它的返回值来跑遍各语言
+        mockkObject(AppLocales)
+        try {
+            projectInterface.languages.keys.forEach { language ->
+                every { AppLocales.currentProjectTag() } returns language
+                val ready = ProjectLoader(source).load() as ProjectLoadResult.Ready
+                val i18nDiagnostics = ready.diagnostics.filter { diagnostic ->
+                    I18N_DIAGNOSTIC_RES.any { diagnostic.message.isResource(it) }
+                }
+                assertTrue("$language 不应产生 i18n 诊断: $i18nDiagnostics", i18nDiagnostics.isEmpty())
             }
-            assertTrue("$language 不应产生 i18n 诊断: $i18nDiagnostics", i18nDiagnostics.isEmpty())
+        } finally {
+            unmockkObject(AppLocales)
         }
     }
 

@@ -14,7 +14,7 @@ class CurrentProjectLoadTest {
 
     @Test
     fun `打包 PI 加载不产生 Error 诊断`() {
-        val result = ProjectLoader(syncedPiOrSkip(), localeProvider = { "zh-CN" }).load()
+        val result = ProjectLoader(syncedPiOrSkip()).load()
         assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
         val errors = (result as ProjectLoadResult.Ready).diagnostics
             .filter { it.severity == DiagnosticSeverity.Error }

@@ -12,7 +12,9 @@ import com.aliothmoon.maafw.domain.OptionApplicability
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.TaskDefinition
+import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.TemplateTask
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -23,6 +25,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import java.security.MessageDigest
 
 /** 单个 PI 分片文件（task[] / option{} / global_option[] / preset[] / group[]）的解析结果 */
 data class PiFileContent(
@@ -40,6 +43,7 @@ data class PiResourceContent(
     val name: String,
     val paths: List<String>,
     val label: String?,
+    val icon: String? = null,
     /** 原样条目，PI_RESOURCE 要整条 */
     val raw: JsonObject = JsonObject(emptyMap()),
 )
@@ -143,7 +147,7 @@ object PiParser {
                 diagnostics += error(source, DiagnosticMessages.resourcePathMissing(name))
                 null
             } else {
-                PiResourceContent(name, paths, obj.string("label"), obj)
+                PiResourceContent(name, paths, obj.string("label"), obj.iconPath(), obj)
             }
         }
 
@@ -232,6 +236,36 @@ object PiParser {
         }
     }
 
+    /** 与 [parseInterface] 分开是因为物化要等翻译表，那一步在 loader 里读完 languages 才有 */
+    fun parseMetadata(root: JsonObject, text: PiTextResolver): ProjectMetadata {
+        val welcomeRaw = root.string("welcome")
+        return ProjectMetadata(
+            welcome = text.description(welcomeRaw),
+            welcomeFingerprint = welcomeRaw?.let { welcomeFingerprint(it, root.string("version")) },
+            description = text.description(root.string("description")),
+            contact = text.description(root.string("contact")),
+            license = text.description(root.string("license")),
+            github = text.label(root.string("github"))?.takeIf(::isRemoteUrl),
+        )
+    }
+
+    fun parseTelemetry(root: JsonObject): TelemetryDefinition? {
+        val sentry = (root["telemetry"] as? JsonObject)?.get("sentry") as? JsonObject ?: return null
+        val dsn = sentry.string("dsn")?.takeIf(String::isNotBlank) ?: return null
+        return TelemetryDefinition(
+            dsn = dsn,
+            tracing = sentry.boolean("tracing") ?: true,
+            tracesSampleRate = sentry.string("traces_sample_rate")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 1.0,
+            environment = sentry.string("environment")?.takeIf(String::isNotBlank),
+        )
+    }
+
+    private fun welcomeFingerprint(raw: String, version: String?): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest("$raw@${version.orEmpty()}".toByteArray())
+            .take(8)
+            .joinToString("") { "%02x".format(it) }
+
     fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {
         val root = try {
             json.parseToJsonElement(content).jsonObject
@@ -291,7 +325,7 @@ object PiParser {
                 name = name,
                 label = text.label(obj.string("label")) ?: name,
                 description = text.description(obj.string("description")),
-                icon = obj.string("icon"),
+                icon = obj.iconPath(),
                 defaultExpand = obj.boolean("default_expand") ?: true,
             )
         }
@@ -329,6 +363,7 @@ object PiParser {
             resources = obj.stringList("resource"),
             // 规范键 default_check 优先，静默兼容早期数据的 check
             defaultCheck = obj.boolean("default_check") ?: obj.boolean("check") ?: false,
+            icon = obj.iconPath(),
         )
     }
 
@@ -345,6 +380,7 @@ object PiParser {
             }
         val label = text.label(obj.string("label")) ?: name
         val description = text.description(obj.string("description"))
+        val icon = obj.iconPath()
         // controller 名在 Android 上只可能是 PI 声明的那一个 Adb 项
         val applicability = OptionApplicability(
             controllers = obj.stringList("controller"),
@@ -359,9 +395,9 @@ object PiParser {
                     }
                 }?.takeIf { d -> cases.any { it.name == d } }
                 if (type == "select") {
-                    OptionDefinition.Select(name, label, description, cases, defaultCase, applicability)
+                    OptionDefinition.Select(name, label, description, cases, defaultCase, icon, applicability)
                 } else {
-                    OptionDefinition.Switch(name, label, description, cases, defaultCase, applicability)
+                    OptionDefinition.Switch(name, label, description, cases, defaultCase, icon, applicability)
                 }
             }
 
@@ -379,7 +415,7 @@ object PiParser {
                         }
                     }
                 }
-                OptionDefinition.Checkbox(name, label, description, cases, defaults, applicability)
+                OptionDefinition.Checkbox(name, label, description, cases, defaults, icon, applicability)
             }
 
             "input" -> {
@@ -395,6 +431,7 @@ object PiParser {
                     description,
                     fields,
                     obj.objectOrEmpty("pipeline_override"),
+                    icon,
                     applicability,
                 )
             }
@@ -437,6 +474,7 @@ object PiParser {
                 description = text.description(case.string("description")),
                 pipelineOverride = case.objectOrEmpty("pipeline_override"),
                 childOptionNames = case.stringList("option"),
+                icon = case.iconPath(),
             )
         }
 
@@ -539,6 +577,7 @@ object PiParser {
             label = text.label(obj.string("label")) ?: name,
             description = text.description(obj.string("description")),
             tasks = tasks,
+            icon = obj.iconPath(),
         )
     }
 
@@ -566,6 +605,9 @@ object PiParser {
             }
         }
     }
+
+    /** icon 是路径不是文案，不过 [PiTextResolver]：$ 开头的路径会被当成 i18n key 查表 */
+    private fun JsonObject.iconPath(): String? = string("icon")?.let(::normalizeProjectPath)
 
     private fun JsonObject.string(key: String): String? =
         (this[key] as? JsonPrimitive)?.contentOrNull

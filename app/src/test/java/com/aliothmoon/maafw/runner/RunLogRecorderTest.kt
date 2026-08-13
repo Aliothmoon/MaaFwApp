@@ -1,5 +1,15 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.MaaDispatchers
+
+import io.mockk.unmockkObject
+
+import io.mockk.mockkObject
+
+import io.mockk.every
+
+import com.aliothmoon.maafw.constant.AppPaths
+
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -29,10 +39,16 @@ class RunLogRecorderTest {
     @Before
     fun setUp() {
         logDir = createTempDirectory("recorder").toFile()
+        mockkObject(AppPaths)
+        mockkObject(MaaDispatchers)
+        every { MaaDispatchers.IO } returns dispatcher
+        every { AppPaths.LOG_DIR } returns logDir
     }
 
     @After
     fun tearDown() {
+        unmockkObject(AppPaths)
+        unmockkObject(MaaDispatchers)
         logDir.deleteRecursively()
     }
 
@@ -44,12 +60,11 @@ class RunLogRecorderTest {
             runnerPort = runner,
             scope = backgroundScope,
         ),
-        store = RunSessionLogStore(logDir = { logDir }, ioDispatcher = dispatcher),
+        store = RunSessionLogStore(),
         // 生产是查资源；这里只要能看出「落盘的是渲染后的字符串」
         renderText = { text -> (text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value ?: "<res>" },
         includeDetails = { includeDetails },
         scope = backgroundScope,
-        ioDispatcher = dispatcher,
     )
 
     private var includeDetails = false

@@ -78,10 +78,7 @@ class GlobalOptionTest {
         )
 
     private fun load(root: String): ProjectLoadResult.Ready {
-        val result = ProjectLoader(
-            MapProjectSource(mapOf("interface.json" to root)),
-            localeProvider = { "zh-CN" },
-        ).load()
+        val result = loadWithLocale("zh-CN", MapProjectSource(mapOf("interface.json" to root)))
         assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
         return result as ProjectLoadResult.Ready
     }
@@ -236,10 +233,7 @@ class GlobalOptionTest {
             }
         """.trimIndent()
         val extra = """{"global_option":["音量","画质"]}"""
-        val result = ProjectLoader(
-            MapProjectSource(mapOf("interface.json" to root, "extra.json" to extra)),
-            localeProvider = { "zh-CN" },
-        ).load() as ProjectLoadResult.Ready
+        val result = loadWithLocale("zh-CN", MapProjectSource(mapOf("interface.json" to root, "extra.json" to extra))) as ProjectLoadResult.Ready
 
         assertEquals(listOf("音量", "画质"), result.definition.globalOptionNames)
     }

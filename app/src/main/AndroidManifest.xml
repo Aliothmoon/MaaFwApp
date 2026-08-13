@@ -55,6 +55,12 @@
         android:localeConfig="@xml/locales_config"
         tools:targetApi="33">
 
+        <!-- Sentry 的 SentryInitProvider 会在进程起来时自读 manifest 里的 dsn 初始化，
+             而 DSN 只有加载完 PI 才知道；不关掉它，装上就是启动即崩（DSN is required） -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
+
         <!-- 只有启动 Activity 挂启动主题；application 那层保持 Theme.MaaFwApp，
              否则别的窗口也会顶着首屏底色起来 -->
         <activity

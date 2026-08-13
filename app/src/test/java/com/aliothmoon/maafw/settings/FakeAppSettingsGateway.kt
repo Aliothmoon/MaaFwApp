@@ -67,4 +67,10 @@ class FakeAppSettingsGateway : AppSettingsGateway {
     override suspend fun setWakeCredential(credential: String) {
         wakeCredential.value = credential.filter(Char::isDigit)
     }
+
+    override val telemetryEnabled = MutableStateFlow(false)
+
+    override suspend fun setTelemetryEnabled(enabled: Boolean) {
+        telemetryEnabled.value = enabled
+    }
 }

@@ -67,6 +67,7 @@ import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
@@ -606,6 +607,7 @@ private fun TemplateCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
+            MaaPiIcon(template.icon, MaaDesignTokens.IconSize.md, null)
             Text(
                 text = template.label,
                 style = MaterialTheme.typography.titleMedium,

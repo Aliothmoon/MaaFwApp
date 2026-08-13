@@ -1,5 +1,15 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.MaaDispatchers
+
+import io.mockk.unmockkObject
+
+import io.mockk.mockkObject
+
+import io.mockk.every
+
+import com.aliothmoon.maafw.constant.AppPaths
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -18,11 +28,17 @@ class RunSessionLogStoreTest {
     @Before
     fun setUp() {
         logDir = createTempDirectory("run-session").toFile()
-        store = RunSessionLogStore(logDir = { logDir }, ioDispatcher = Dispatchers.Unconfined)
+        mockkObject(AppPaths)
+        mockkObject(MaaDispatchers)
+        every { MaaDispatchers.IO } returns Dispatchers.Unconfined
+        every { AppPaths.LOG_DIR } returns logDir
+        store = RunSessionLogStore()
     }
 
     @After
     fun tearDown() {
+        unmockkObject(AppPaths)
+        unmockkObject(MaaDispatchers)
         logDir.deleteRecursively()
     }
 

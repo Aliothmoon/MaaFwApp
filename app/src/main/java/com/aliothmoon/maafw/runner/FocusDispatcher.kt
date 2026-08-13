@@ -41,10 +41,24 @@ class FocusDispatcher(
     )
     val resolved: Flow<FocusMessage> = _resolved.asSharedFlow()
 
+    /**
+     * `trace` 命中的条目，未补完
+     *
+     * 上报侧要的是事件名与节点名，正文一概不带：PI 可以把用户输入拼进 focus 正文
+     */
+    private val _traced = MutableSharedFlow<FocusMessage>(
+        extraBufferCapacity = 32,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val traced: Flow<FocusMessage> = _traced.asSharedFlow()
+
     init {
         scope.launch {
             runnerPort.events.collect { event ->
-                if (event is RunnerEvent.Focus) _resolved.emit(complete(event.focus))
+                if (event !is RunnerEvent.Focus) return@collect
+                val focus = event.focus
+                if (focus.trace) _traced.emit(focus)
+                if (focus.displayable) _resolved.emit(complete(focus))
             }
         }
     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -14,8 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.OptionCaseState
 import com.aliothmoon.maafw.domain.OptionEditorState
@@ -30,6 +33,7 @@ import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
+import com.aliothmoon.maafw.ui.components.MaaPiIcon
 
 /**
  * 按 OptionEditorState 树渲染；子 option 与父共用 task 级 value map
@@ -68,6 +72,7 @@ private fun CardedOptionItem(
     val switchCases = option.standardSwitchCases()
     MaaCard(
         title = option.label,
+        leading = option.icon?.let { { MaaPiIcon(it, optionIconSize(option.depth), null) } },
         trailing = if (switchCases != null) {
             { OptionSwitch(option, switchCases, locked, onSetOption) }
         } else {
@@ -137,6 +142,21 @@ private fun optionLabelStyle(depth: Int) = when {
     else -> MaterialTheme.typography.bodySmall
 }
 
+private fun optionIconSize(depth: Int): Dp =
+    if (depth <= 2) MaaDesignTokens.IconSize.sm else MaaDesignTokens.IconSize.xs
+
+/** 选项树靠缩进对齐，无图标就不占位——补空槽反而让同层的行左缘错开 */
+@Composable
+private fun OptionLabelRow(option: OptionEditorState) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+    ) {
+        MaaPiIcon(option.icon, optionIconSize(option.depth), null)
+        Text(text = option.label, style = optionLabelStyle(option.depth))
+    }
+}
+
 @Composable
 private fun SelectEditor(
     option: OptionEditorState,
@@ -144,7 +164,7 @@ private fun SelectEditor(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
-        Text(text = option.label, style = optionLabelStyle(option.depth))
+        OptionLabelRow(option)
         ChoiceChipFlow(option, locked, onSetOption)
     }
 }
@@ -166,6 +186,7 @@ private fun ChoiceChipFlow(
                 label = case.label,
                 selected = case.active,
                 enabled = !locked,
+                leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
                 onClick = { onSetOption(option.name, OptionValue.SingleCase(case.name)) },
             )
         }
@@ -206,6 +227,7 @@ private fun SwitchEditor(
     MaaLabeledControlRow(
         label = option.label,
         labelStyle = optionLabelStyle(option.depth),
+        leading = option.icon?.let { { MaaPiIcon(it, optionIconSize(option.depth), null) } },
         trailing = { OptionSwitch(option, cases, locked, onSetOption) },
     )
 }
@@ -217,7 +239,7 @@ private fun CheckboxEditor(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
-        Text(text = option.label, style = optionLabelStyle(option.depth))
+        OptionLabelRow(option)
         CheckboxCases(option, locked, onSetOption)
     }
 }
@@ -240,6 +262,7 @@ private fun CheckboxCases(
                 label = case.label,
                 selected = case.active,
                 enabled = !locked,
+                leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
                 onClick = {
                     val updated = if (case.active) activeNames - case.name else activeNames + case.name
                     // emptyList() 合法，与 Unset 区分
@@ -257,7 +280,7 @@ private fun InputEditor(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
-        Text(text = option.label, style = optionLabelStyle(option.depth))
+        OptionLabelRow(option)
         InputFields(option, locked, onSetOption)
     }
 }

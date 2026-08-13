@@ -53,6 +53,7 @@ import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
+import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.options.OptionEditorList
@@ -248,12 +249,16 @@ private fun GroupHeader(group: TaskCatalogGroup, tone: MaaTone) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
     ) {
-        Box(
-            modifier = Modifier
-                .size(MaaDesignTokens.IconSize.dotMd)
-                .clip(CircleShape)
-                .background(tone.content),
-        )
+        if (group.icon != null) {
+            MaaPiIcon(group.icon, MaaDesignTokens.IconSize.sm, null)
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(MaaDesignTokens.IconSize.dotMd)
+                    .clip(CircleShape)
+                    .background(tone.content),
+            )
+        }
         Text(
             text = group.asUiText().asString(),
             style = MaterialTheme.typography.titleSmall,
@@ -278,6 +283,7 @@ private fun CatalogRow(
     ) {
         TaskPickRow(
             label = item.label,
+            icon = item.icon,
             checked = checked,
             enabled = enabled,
             onToggle = onCheckedChange,

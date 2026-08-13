@@ -46,4 +46,8 @@ interface AppSettingsGateway {
     val wakeCredential: StateFlow<String>
     suspend fun setWakeCredential(credential: String)
 
+    /** PI 声明了 telemetry 时才起作用 */
+    val telemetryEnabled: StateFlow<Boolean>
+    suspend fun setTelemetryEnabled(enabled: Boolean)
+
 }

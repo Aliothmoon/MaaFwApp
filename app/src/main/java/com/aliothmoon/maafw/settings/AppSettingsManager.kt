@@ -98,6 +98,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _wakeCredential = MutableStateFlow(defaults.wakeCredential)
     override val wakeCredential: StateFlow<String> = _wakeCredential.asStateFlow()
 
+    private val _telemetryEnabled = MutableStateFlow(defaults.telemetryEnabled.toBoolean())
+    override val telemetryEnabled: StateFlow<Boolean> = _telemetryEnabled.asStateFlow()
+
     init {
         // 一处 collect 铺开到各字段，而不是每个字段各起一条 stateIn：
         // 那样 loaded 置位与各字段拿到首值是两件并发的事，早读的人仍可能读到默认值
@@ -118,6 +121,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
                 _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
                 _wakeCredential.value = s.wakeCredential
+                _telemetryEnabled.value = s.telemetryEnabled.toBoolean()
                 // 必须是最后一行：置位即宣告上面全部就位
                 _loaded.value = true
             }
@@ -184,6 +188,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     override suspend fun setWakeCredential(credential: String): Unit = with(AppSettingsSchema) {
         val digits = credential.filter(Char::isDigit)
         context.dataStore.edit { it[wakeCredential] = digits }
+    }
+
+    override suspend fun setTelemetryEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[telemetryEnabled] = enabled.toString() }
     }
 
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */

@@ -15,6 +15,7 @@ import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
@@ -169,7 +170,6 @@ class SessionViewModelTest {
             scope = kotlinx.coroutines.CoroutineScope(mainDispatcher),
             scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 0),
         ),
-        locale: (String?) -> Unit = {},
         permissions: FakePermissionGateway = FakePermissionGateway(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
@@ -185,7 +185,6 @@ class SessionViewModelTest {
             servicePort = FakePrivilegedServicePort(),
             displaySize = displaySize,
             appSettings = settings,
-            localeController = locale,
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
             piInstall = emptyPiInstall(),
@@ -211,7 +210,6 @@ class SessionViewModelTest {
             servicePort = FakePrivilegedServicePort(),
             displaySize = FakeDisplaySizeGateway(),
             appSettings = settings,
-            localeController = {},
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
             piInstall = emptyPiInstall(),
@@ -230,14 +228,10 @@ class SessionViewModelTest {
     ) = RunLogRecorder(
         runnerPort = runner,
         focusDispatcher = focusDispatcher,
-        store = RunSessionLogStore(
-            logDir = { createTempDirectory("run-log").toFile() },
-            ioDispatcher = mainDispatcher,
-        ),
+        store = RunSessionLogStore(),
         renderText = { it.toString() },
         includeDetails = { false },
         scope = backgroundScope,
-        ioDispatcher = mainDispatcher,
     )
 
     /**
@@ -301,7 +295,12 @@ class SessionViewModelTest {
         val runner = RecordingEventRunnerPort()
         val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
 
-        runner.emit(RunnerEvent.Focus(FocusMessage("显影罐不足", setOf(FocusChannel.Log))))
+        runner.emit(RunnerEvent.Focus(FocusMessage(
+                message = "Node.PipelineNode.Succeeded",
+                content = "显影罐不足",
+                channels = setOf(FocusChannel.Log),
+                trace = false,
+            )))
         advanceUntilIdle()
 
         assertEquals(RunLogKind.Focus, vm.runLog.value.single().kind)
@@ -314,7 +313,12 @@ class SessionViewModelTest {
         val runner = RecordingEventRunnerPort()
         val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
 
-        runner.emit(RunnerEvent.Focus(FocusMessage("弹一下", setOf(FocusChannel.Toast))))
+        runner.emit(RunnerEvent.Focus(FocusMessage(
+                message = "Node.PipelineNode.Succeeded",
+                content = "弹一下",
+                channels = setOf(FocusChannel.Toast),
+                trace = false,
+            )))
         advanceUntilIdle()
 
         assertTrue(vm.runLog.value.isEmpty())
@@ -568,12 +572,18 @@ class SessionViewModelTest {
 
     @Test
     fun `set language delegates to locale controller when idle`() = runTest(mainDispatcher) {
+        mockkObject(AppLocales)
         var applied: String? = "unset"
-        val (vm, _, _) = createVm(locale = { applied = it })
-        advanceUntilIdle()
-        vm.onIntent(SessionIntent.SetLanguage("en"))
-        advanceUntilIdle()
-        assertEquals("en", applied)
+        every { AppLocales.apply(any()) } answers { applied = firstArg() }
+        try {
+            val (vm, _, _) = createVm()
+            advanceUntilIdle()
+            vm.onIntent(SessionIntent.SetLanguage("en"))
+            advanceUntilIdle()
+            assertEquals("en", applied)
+        } finally {
+            unmockkObject(AppLocales)
+        }
     }
 
     @Test

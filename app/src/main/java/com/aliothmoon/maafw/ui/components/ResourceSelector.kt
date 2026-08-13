@@ -98,6 +98,7 @@ fun ResourceSwitchSheet(
                             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                         ) {
                             MaaSelectionMarker(selected = selected)
+                            MaaPiIcon(resource.icon, MaaDesignTokens.IconSize.md, null)
                             Text(
                                 text = resource.label,
                                 style = MaterialTheme.typography.bodyLarge,

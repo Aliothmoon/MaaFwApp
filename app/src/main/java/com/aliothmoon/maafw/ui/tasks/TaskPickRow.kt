@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import com.aliothmoon.maafw.ui.components.MaaSelectionMarker
 
@@ -32,6 +33,7 @@ internal fun TaskPickRow(
     enabled: Boolean,
     onToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    icon: String? = null,
     labelColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
     trailing: (@Composable () -> Unit)? = null,
     belowLabel: (@Composable () -> Unit)? = null,
@@ -54,6 +56,7 @@ internal fun TaskPickRow(
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
             MaaSelectionMarker(selected = checked)
+            MaaPiIcon(icon, MaaDesignTokens.IconSize.md, null)
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
