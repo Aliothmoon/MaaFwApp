@@ -58,13 +58,15 @@ import java.util.Locale
  */
 @Composable
 internal fun RunLogPanel(
-    entries: List<RunLogEntry>,
+    /** 取值而不是值：这里才是真正显示日志的地方，订阅落在这一层 */
+    entries: () -> List<RunLogEntry>,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var essentialOnly by rememberSaveable { mutableStateOf(true) }
-    val visible = remember(entries, essentialOnly) {
-        if (essentialOnly) entries.filter { it.isEssential } else entries
+    val all = entries()
+    val visible = remember(all, essentialOnly) {
+        if (essentialOnly) all.filter { it.isEssential } else all
     }
 
     Column(
@@ -92,7 +94,7 @@ internal fun RunLogPanel(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onClear, enabled = entries.isNotEmpty()) {
+            TextButton(onClick = onClear, enabled = all.isNotEmpty()) {
                 Text(stringResource(R.string.run_log_clear))
             }
         }

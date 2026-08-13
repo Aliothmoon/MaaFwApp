@@ -21,7 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.material3.Text
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.viewinterop.AndroidView
 import com.aliothmoon.maafw.R
@@ -80,6 +82,24 @@ fun MaaMarkdown(
         }
     }
 
+    val resolved = body ?: stringResource(R.string.common_loading)
+
+    // 认不出任何记号就走 Compose Text：M9A 的 397 条 description 里 382 条是纯文本，
+    // 而 AndroidView 要真 View、要跑两套 measure。必须排在建管线与解析之前，
+    // 否则解析照跑一遍，省下的只有一个 View
+    // 判不准一律回 Markwon——多花几毫秒，总好过把标记直出给用户
+    if (!needsRichText(resolved)) {
+        Text(
+            text = resolved,
+            modifier = modifier.fillMaxWidth(),
+            style = style,
+            color = color,
+            maxLines = maxLines,
+            overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
+        )
+        return
+    }
+
     val onSurface = MaterialTheme.colorScheme.onSurface.toArgb()
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
@@ -87,12 +107,11 @@ fun MaaMarkdown(
     val markwon = remember(onSurface, onSurfaceVariant, linkColor) {
         cachedMarkwon(context, onSurface, onSurfaceVariant, linkColor)
     }
-
-    val resolved = body ?: stringResource(R.string.common_loading)
     // Markdown 解析只在文本/管线变化时执行，与无关重组解耦
     val spanned = remember(markwon, resolved, assetRoot) {
         markwon.toMarkdown(rewriteRelativeImages(resolved, assetRoot))
     }
+
     val textColor = color.toArgb()
     val fontSizeSp = if (style.fontSize.isSpecified) style.fontSize.value else 12f
 
@@ -123,6 +142,19 @@ fun MaaMarkdown(
         },
     )
 }
+
+/** 行内记号；`-` 之类只在行首才是记号，单列到 [RICH_LINE] */
+private val RICH_MARKERS = charArrayOf('*', '_', '`', '#', '[', ']', '<', '>', '|', '~')
+
+private val RICH_LINE = Regex("""^\s*(?:[-+]\s|\d+\.\s)""", RegexOption.MULTILINE)
+
+/** linkify 插件会把裸 URL 变成可点链接，纯文本路径给不出这个，含 URL 的一律回 Markwon */
+private val BARE_URL = Regex("""https?://|www\.""", RegexOption.IGNORE_CASE)
+
+private fun needsRichText(text: String): Boolean =
+    text.any { it in RICH_MARKERS } ||
+        BARE_URL.containsMatchIn(text) ||
+        RICH_LINE.containsMatchIn(text)
 
 // 组合只发生在主线程，普通 HashMap 即可；key = 主题色三元组
 private val markwonCache = HashMap<List<Int>, Markwon>()

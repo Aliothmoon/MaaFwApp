@@ -71,7 +71,8 @@ import com.aliothmoon.maafw.ui.components.maaClickable
 @Composable
 internal fun rememberMovablePreview(
     resolution: DisplayResolution,
-    markers: List<PreviewTouchMarker>,
+    /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
+    markers: () -> List<PreviewTouchMarker>,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
 ): @Composable () -> Unit {
@@ -98,7 +99,7 @@ internal fun rememberMovablePreview(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 MaaTouchOverlay(
-                    markers = currentMarkers,
+                    markers = currentMarkers(),
                     resolution = currentResolution,
                     modifier = Modifier.fillMaxSize(),
                 )

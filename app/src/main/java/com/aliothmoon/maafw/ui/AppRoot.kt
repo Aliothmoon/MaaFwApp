@@ -173,8 +173,10 @@ fun AppRoot(
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
     val settingsState by settingsViewModel.uiState.collectAsStateWithLifecycle()
     // 触点与运行日志各自单独一条流，不并进 SessionUiState（见 SessionViewModel）
-    val previewMarkers by viewModel.previewMarkers.collectAsStateWithLifecycle()
-    val runLog by viewModel.runLog.collectAsStateWithLifecycle()
+    // 刻意不用 by 解构：在这一层读就等于让整棵树跟着触摸与日志频率重组，
+    // 往下传取值函数，读推迟到真正显示它们的叶子
+    val previewMarkersState = viewModel.previewMarkers.collectAsStateWithLifecycle()
+    val runLogState = viewModel.runLog.collectAsStateWithLifecycle()
 
     // 语言重载唯一触发点：App/系统切语言都经 Activity 重建后到此
     val localeTag = LocalConfiguration.current.locales[0]?.toLanguageTag().orEmpty()
@@ -200,7 +202,7 @@ fun AppRoot(
     val previewContent = state.previewResolution?.let { resolution ->
         rememberMovablePreview(
             resolution = resolution,
-            markers = previewMarkers,
+            markers = { previewMarkersState.value },
             onSurfaceAvailable = {
                 previewSurfaceReady = true
                 viewModel.onIntent(SessionIntent.AttachPreviewSurface(it))
@@ -362,6 +364,9 @@ fun AppRoot(
         ) { padding ->
             HorizontalPager(
                 state = pagerState,
+                // 不预组合的话，整页的首次组合与测量全落在切页动画的第一帧里：
+                // 实测任务页那一帧 193ms（7 个 TaskRow 逐个组合 45ms + measureAndLayout 31ms）
+                beyondViewportPageCount = 1,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
@@ -377,7 +382,7 @@ fun AppRoot(
                         previewSurfaceReady = previewSurfaceReady,
                         // 全屏时这里让位，同一份 previewContent 搬到下面的全屏宿主
                         previewContent = previewContent.takeUnless { previewFullscreen },
-                        runLog = runLog,
+                        runLog = { runLogState.value },
                         onEnterFullscreen = { previewFullscreen = true },
                         onIntent = viewModel::onIntent,
                         modifier = Modifier.fillMaxSize(),
