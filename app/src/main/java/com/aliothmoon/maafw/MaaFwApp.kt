@@ -32,7 +32,6 @@ import org.koin.core.Koin
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
 import org.koin.core.qualifier.named
-import java.io.File
 
 class MaaFwApp : Application() {
 
@@ -42,7 +41,7 @@ class MaaFwApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AppPaths.init(this)
-        writer.setup()
+        // 只认 AppPaths，比 Koin 早，崩溃现场只有一次机会，能多盖住一段是一段
         CrashHandler().install()
         val app = this
         val koin = startKoin {
@@ -61,6 +60,8 @@ class MaaFwApp : Application() {
             )
         }.koin
 
+        // writer / settings 都是 by inject，碰它们的第一行只能排在 startKoin 之后
+        writer.setup()
         LogTreeHolder(writer, settings.debugMode::value).setup()
         koin.get<CoroutineScope>(named<AppCoroutineScope>()).launch {
             settings.loaded.first { it }
