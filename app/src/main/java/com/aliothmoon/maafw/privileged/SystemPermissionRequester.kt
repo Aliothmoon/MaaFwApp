@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.privileged
 
 import android.app.Activity
 import android.content.Context
+import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.hjq.permissions.XXPermissions
 import com.hjq.permissions.permission.PermissionLists
@@ -17,12 +18,12 @@ import kotlin.coroutines.resume
  * app 进程一死，特权进程的看门狗就自杀并释放虚拟屏——实测 MIUI 的
  * `ProcessManager: SwipeUpClean` 会按 Adj=905 直接 force-stop
  */
-enum class SystemPermission {
-    Notification,
-    BatteryWhitelist,
-    Overlay,
-    Storage,
-    Accessibility,
+enum class SystemPermission(val grantBit: Int) {
+    Notification(PrivilegedGrant.NOTIFICATION),
+    BatteryWhitelist(PrivilegedGrant.BATTERY),
+    Overlay(PrivilegedGrant.OVERLAY),
+    Storage(PrivilegedGrant.STORAGE),
+    Accessibility(PrivilegedGrant.ACCESSIBILITY),
 }
 
 /**

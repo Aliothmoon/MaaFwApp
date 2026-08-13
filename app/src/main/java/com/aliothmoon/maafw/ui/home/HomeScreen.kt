@@ -5,10 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -183,16 +185,19 @@ private fun ServiceStatusIndicator(status: ServiceStatus) {
     }
 }
 
-/**
- * 折叠态只剩主授权行：后端选择、保活两项、说明文字都收进展开区
- *
- * 只列这两项系统权限，是因为悬浮窗与无障碍平时由特权进程代授
- * （见 PermissionManager.grantViaPrivileged），没有手点的必要
- */
+
 @Composable
 private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val access = state.remoteAccess
+    // 特权进程在线时这几项都能就地代授，按钮文案跟着换：点下去不跳系统页
+    val requestText = stringResource(
+        if (state.privilegedServiceConnected) {
+            R.string.permission_quick_grant
+        } else {
+            R.string.permission_request
+        },
+    )
     MaaCard(title = stringResource(R.string.permission_section)) {
         PermissionRow(
             label = access.configuredBackend.display,
@@ -208,6 +213,7 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                 PermissionRow(
                     label = stringResource(R.string.permission_overlay),
                     granted = state.systemPermissions.overlay,
+                    requestText = requestText,
                     onRequest = {
                         onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Overlay))
                     },
@@ -215,6 +221,7 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                 PermissionRow(
                     label = stringResource(R.string.permission_storage),
                     granted = state.systemPermissions.storage,
+                    requestText = requestText,
                     onRequest = {
                         onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Storage))
                     },
@@ -223,6 +230,7 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                     label = stringResource(R.string.permission_battery),
                     granted = state.systemPermissions.batteryWhitelist,
                     grantedText = stringResource(R.string.permission_battery_added),
+                    requestText = requestText,
                     onRequest = {
                         onIntent(
                             SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
@@ -232,6 +240,7 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                 PermissionRow(
                     label = stringResource(R.string.permission_accessibility),
                     granted = state.systemPermissions.accessibility,
+                    requestText = requestText,
                     onRequest = {
                         onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Accessibility))
                     },
@@ -239,6 +248,7 @@ private fun PermissionCard(state: SessionUiState, onIntent: (SessionIntent) -> U
                 PermissionRow(
                     label = stringResource(R.string.permission_notification),
                     granted = state.systemPermissions.notification,
+                    requestText = requestText,
                     onRequest = {
                         onIntent(SessionIntent.RequestSystemPermission(SystemPermission.Notification))
                     },
@@ -260,25 +270,30 @@ private fun PermissionRow(
     onRequest: () -> Unit,
     loading: Boolean = false,
     grantedText: String = stringResource(R.string.permission_granted),
+    requestText: String = stringResource(R.string.permission_request),
 ) {
     MaaLabeledControlRow(
+        modifier = Modifier.height(MaaDesignTokens.RowHeight.compact),
         label = label,
         labelStyle = MaterialTheme.typography.bodyMedium,
         trailing = {
-            when {
-                loading -> CircularProgressIndicator(
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-                    strokeWidth = MaaDesignTokens.Border.marker,
-                )
-
-                granted -> Text(
-                    text = grantedText,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-
-                else -> TextButton(onClick = onRequest) {
-                    Text(stringResource(R.string.permission_request))
+            TextButton(
+                onClick = onRequest,
+                enabled = !granted && !loading,
+                modifier = Modifier.height(MaaDesignTokens.RowHeight.compact),
+                contentPadding = PaddingValues(horizontal = MaaDesignTokens.Spacing.sm),
+                // 已授权是状态而不是「不可用」，禁用态仍按主色显示
+                colors = ButtonDefaults.textButtonColors(
+                    disabledContentColor = MaterialTheme.colorScheme.primary,
+                ),
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                        strokeWidth = MaaDesignTokens.Border.marker,
+                    )
+                } else {
+                    Text(if (granted) grantedText else requestText)
                 }
             }
         },
@@ -372,7 +387,10 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
                 horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
             ) {
                 CircularProgressIndicator(modifier = Modifier.padding(MaaDesignTokens.Spacing.xs))
-                Text(stringResource(R.string.home_project_loading), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.home_project_loading),
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
 
             is ProjectState.Error -> {
@@ -400,9 +418,6 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
     }
 }
 
-/**
- * 运行模式：单行展示（对齐 MaaMeow）——左 "运行模式"，右 当前模式名 + 开关；ON=后台模式（默认）
- */
 @Composable
 private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     // 单行：左 "运行模式"，右 当前模式名 + 开关（对齐 MaaMeow）
@@ -449,12 +464,6 @@ private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
     }
 }
 
-/**
- * 主屏分辨率（对齐 MaaMeow）：改成 16:9 / 撤回出厂值
- *
- * 前台模式直接在主屏上采集与注入，比例不对识别就会整体错位，所以这一步排在控制层前面。
- * 两个按钮不随运行锁定禁用：改的是设备环境不是运行配置，跑飞了时用户正需要能撤回来
- */
 @Composable
 private fun ForegroundResolutionCard(onIntent: (SessionIntent) -> Unit) {
     MaaCard(title = stringResource(R.string.foreground_resolution_title)) {

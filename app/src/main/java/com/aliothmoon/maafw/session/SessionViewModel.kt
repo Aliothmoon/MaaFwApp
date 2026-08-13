@@ -22,6 +22,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ServiceBindResult
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
+import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
@@ -486,8 +487,7 @@ class SessionViewModel(
             SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
             SessionIntent.InstallShizuku -> effectChannel.send(SessionEffect.InstallShizuku)
             SessionIntent.OpenShizuku -> effectChannel.send(SessionEffect.OpenShizuku)
-            is SessionIntent.RequestSystemPermission ->
-                effectChannel.send(SessionEffect.RequestSystemPermission(intent.permission))
+            is SessionIntent.RequestSystemPermission -> requestSystemPermission(intent.permission)
 
             SessionIntent.RefreshPermissions -> permissionGateway.refresh()
 
@@ -540,6 +540,17 @@ class SessionViewModel(
                 },
             )
         }
+    }
+
+    /**
+     * 先试特权代授，不成再把用户送去系统权限页
+     *
+     * 两条路都得留：代授要特权进程在线，而无障碍这类项被系统页撤掉之后
+     * 只靠上线那次全集代授补不回来
+     */
+    private suspend fun requestSystemPermission(permission: SystemPermission) {
+        if (permissionGateway.quickGrant(permission)) return
+        effectChannel.send(SessionEffect.RequestSystemPermission(permission))
     }
 
     /**

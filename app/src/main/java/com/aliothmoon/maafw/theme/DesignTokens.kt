@@ -74,6 +74,15 @@ object MaaDesignTokens {
         val dotMd: Dp = 8.dp
     }
 
+    /**
+     * 行的固定高度；只在「同一列表里各行尾控件高矮不一」时用来压平
+     * 尾控件本身也要跟着定高，否则行定住了、控件内部仍按自己的最小高撑
+     */
+    object RowHeight {
+        /** 尾部挂 TextButton 的紧凑信息行：M3 按钮最小高 40dp，连着摞几行太散 */
+        val compact: Dp = 32.dp
+    }
+
     /** 图标外面那层圆或圆角方容器；内部图标仍取 [IconSize] */
     object IconContainer {
         /** 单选标记的圈 */

@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 提权授权的唯一入口：状态汇总、发起授权、切后端
@@ -135,7 +136,7 @@ class PermissionManager(
         }
         // 特权进程一上线就代授，省掉用户逐个点系统页
         scope.launch {
-            serviceConnected.filter { it }.collect { grantViaPrivileged() }
+            serviceConnected.filter { it }.collect { grantViaPrivileged(PrivilegedGrant.ALL) }
         }
     }
 
@@ -151,14 +152,26 @@ class PermissionManager(
     }
 
     /**
-     * 用特权身份给自己授权
+     * 权限卡上那行按钮的快路径：特权进程在线就地代授，不跳系统页
      *
-     * 这是保活权限的主路径，首页那两个手点入口只是特权进程没起来时的兜底。
-     * 走 shell/root 身份直接改 AppOps 与 deviceidle 白名单，用户看不到任何系统弹窗
+     * 只认那一位授没授成——全集代授里别的位失败与这次点击无关
      */
-    private suspend fun grantViaPrivileged() {
-        // 对齐 MaaMeow：特权进程上线即把全集代授一遍，不再按运行模式挑
-        val requested = PrivilegedGrant.ALL
+    override suspend fun quickGrant(permission: SystemPermission): Boolean {
+        val bit = permission.grantBit
+        val granted = grantViaPrivileged(bit) ?: return false
+        return granted and bit != 0
+    }
+
+    /**
+     * 用特权身份给自己授权，返回特权进程报回的已授位；特权进程不在线返回 null
+     *
+     * 这是保活权限的主路径，首页那几个手点入口只是特权进程没起来时的兜底。
+     * 走 shell/root 身份直接改 AppOps 与 deviceidle 白名单，用户看不到任何系统弹窗
+     *
+     * [requested] 上线那次是 [PrivilegedGrant.ALL] 全集（对齐 MaaMeow，不按运行模式挑），
+     * [quickGrant] 传单个位
+     */
+    private suspend fun grantViaPrivileged(requested: Int): Int? {
         val granted = withContext(MaaDispatchers.IO) {
             runCatching {
                 servicePort.serviceOrNull()?.grantPermissions(
@@ -171,11 +184,12 @@ class PermissionManager(
         Timber.i("Privileged grant result requested=%s granted=%s", requested, granted)
         // 无障碍是异步绑定的，代授返回成功不代表服务已经连上
         if (granted != null && granted and PrivilegedGrant.ACCESSIBILITY != 0) {
-            withTimeoutOrNull(ACCESSIBILITY_BIND_TIMEOUT_MS) {
+            withTimeoutOrNull(ACCESSIBILITY_BIND_TIMEOUT_MS.milliseconds) {
                 AccessibilityHelperService.isConnected.first { it }
             } ?: Timber.w("Accessibility service did not connect within timeout after grant")
         }
         refresh()
+        return granted
     }
 
     /** 这两项没有变更回调，只能在 onResume 与手动 refresh 时重读 */

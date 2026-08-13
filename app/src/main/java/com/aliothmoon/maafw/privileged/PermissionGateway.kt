@@ -23,6 +23,9 @@ interface PermissionGateway {
     val systemPermissions: StateFlow<SystemPermissionState>
 
     suspend fun requestRemoteAccess(): Boolean
+
+    suspend fun quickGrant(permission: SystemPermission): Boolean
+
     suspend fun setBackend(backend: RemoteBackend)
     suspend fun skipShizukuCheck()
     fun refresh()

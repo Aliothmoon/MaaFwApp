@@ -311,6 +311,7 @@
     <string name="permission_backend">启动模式</string>
     <string name="permission_granted">已授权</string>
     <string name="permission_request">请求权限</string>
+    <string name="permission_quick_grant">快捷授权</string>
     <string name="permission_requesting">授权中…</string>
     <string name="permission_service_connected">特权进程已连接</string>
     <string name="permission_service_disconnected">特权进程未连接</string>

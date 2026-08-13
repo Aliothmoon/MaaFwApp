@@ -317,6 +317,7 @@
     <string name="permission_backend">Startup mode</string>
     <string name="permission_granted">Granted</string>
     <string name="permission_request">Request</string>
+    <string name="permission_quick_grant">Quick grant</string>
     <string name="permission_requesting">Requesting…</string>
     <string name="permission_service_connected">Privileged process connected</string>
     <string name="permission_service_disconnected">Privileged process not connected</string>

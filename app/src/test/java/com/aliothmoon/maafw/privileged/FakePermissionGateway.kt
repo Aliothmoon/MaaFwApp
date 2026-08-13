@@ -31,6 +31,20 @@ class FakePermissionGateway : PermissionGateway {
         return grantResult
     }
 
+    var quickGrantCount: Int = 0
+        private set
+    var lastQuickGrant: SystemPermission? = null
+        private set
+
+    /** 下一次 [quickGrant] 的返回值；false 表示代授走不通，调用方该退回系统页 */
+    var quickGrantResult: Boolean = false
+
+    override suspend fun quickGrant(permission: SystemPermission): Boolean {
+        quickGrantCount++
+        lastQuickGrant = permission
+        return quickGrantResult
+    }
+
     override suspend fun setBackend(backend: RemoteBackend) {
         lastBackend = backend
         state.value = state.value.copy(configuredBackend = backend)
