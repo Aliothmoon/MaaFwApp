@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.i18n.resolve
@@ -291,9 +292,13 @@ class ScheduleExecutionService : Service() {
         )
 
     companion object {
-        /** 倒计时通知上的两个动作；进来的 intent 只置信号，不起新一轮 */
-        const val ACTION_START_NOW = "com.aliothmoon.maafw.action.SCHEDULE_START_NOW"
-        const val ACTION_CANCEL_RUN = "com.aliothmoon.maafw.action.SCHEDULE_CANCEL_RUN"
+        /**
+         * 倒计时通知上的两个动作；进来的 intent 只置信号，不起新一轮
+         * 跟着 applicationId 走，与 [ScheduleAlarmManager.ACTION_SCHEDULE_TRIGGER] 一个口径——
+         * 这两条目前只走显式 intent，撞不上，但 action 命名不该有两套
+         */
+        const val ACTION_START_NOW = BuildConfig.APPLICATION_ID + ".action.SCHEDULE_START_NOW"
+        const val ACTION_CANCEL_RUN = BuildConfig.APPLICATION_ID + ".action.SCHEDULE_CANCEL_RUN"
 
         /** 在途触发的打断面，按策略 id 索引；并发触发各按各的 */
         private val signalsByStrategy = ConcurrentHashMap<String, RunSignals>()
