@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.i18n.UiText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -57,6 +57,18 @@ class RunLogRecorder(
     private val fileLock = Mutex()
     private var flushLoop: Job? = null
 
+    /**
+     * 屏上那份的环形缓冲
+     *
+     * [note] 从发起方的线程进来、事件从合成协程进来，两边都写，用 [uiLock] 串起来。
+     * 不直接改 [_runLog]：那要按条复制整份 500 元素列表，识别期一秒几十条就是在刷垃圾
+     */
+    private val uiBuffer = ArrayDeque<RunLogEntry>(RUN_LOG_CAPACITY)
+    private val uiLock = Any()
+
+    /** 攒批的信号，CONFLATED：一拍之内来多少条都只唤醒一次 */
+    private val uiDirty = Channel<Unit>(Channel.CONFLATED)
+
     init {
         scope.launch {
             merge(
@@ -67,11 +79,21 @@ class RunLogRecorder(
                     .map { RunnerEvent.Focus(it) },
             ).collect(::record)
         }
+        // 先发后等：第一条即时可见，随后那串按 FLUSH_INTERVAL_MS 攒成一次，
+        // 与落盘同拍。等待期间来的条目由 CONFLATED 留到下一轮，不会漏
+        scope.launch {
+            while (true) {
+                uiDirty.receive()
+                publishBuffered()
+                delay(FLUSH_INTERVAL_MS)
+            }
+        }
     }
 
     /** 只清屏上这份，不动已落盘的历史——用户按的是「清空」不是「删记录」 */
     fun clear() {
         composer.reset()
+        synchronized(uiLock) { uiBuffer.clear() }
         _runLog.value = emptyList()
     }
 
@@ -148,10 +170,11 @@ class RunLogRecorder(
     }
 
     private fun publish(entry: RunLogEntry) {
-        _runLog.update { current ->
-            val start = (current.size - RUN_LOG_CAPACITY + 1).coerceAtLeast(0)
-            current.subList(start, current.size) + entry
+        synchronized(uiLock) {
+            while (uiBuffer.size >= RUN_LOG_CAPACITY) uiBuffer.removeFirst()
+            uiBuffer.addLast(entry)
         }
+        uiDirty.trySend(Unit)
 
         // 没开会话就只留内存：会话之外的事件（比如空闲期的服务日志）不该凭空造出一个文件
         if (session.get() == null) return
@@ -163,6 +186,11 @@ class RunLogRecorder(
                 detail = entry.detail?.takeIf { includeDetails() },
             ),
         )
+    }
+
+    /** 把缓冲整份交给屏上那条流；一批只出一个新列表 */
+    private fun publishBuffered() {
+        _runLog.value = synchronized(uiLock) { uiBuffer.toList() }
     }
 
     /** 攒批落盘；整批只 flush 一次 */

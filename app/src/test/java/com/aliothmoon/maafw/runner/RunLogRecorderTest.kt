@@ -17,6 +17,7 @@ import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -68,6 +69,14 @@ class RunLogRecorderTest {
     )
 
     private var includeDetails = false
+
+    /**
+     * 屏上那份是攒批发布的，读 `runLog.value` 之前先把那一拍走完
+     *
+     * 不能用 advanceUntilIdle：攒批循环是 backgroundScope 里的 `while (true)`，
+     * 那个 API 有意不驱动后台工作，否则它自己就永远返回不了
+     */
+    private fun TestScope.settleRunLog() = testScheduler.advanceTimeBy(SETTLE_MILLIS)
 
     private fun sessionRecords(): List<RunSessionRecord> {
         val file = File(logDir, "run").listFiles()?.single() ?: return emptyList()
@@ -170,12 +179,37 @@ class RunLogRecorderTest {
         runner.emit(RunnerEvent.Log("同一句"))
         recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
+        settleRunLog()
         val before = recorder.runLog.value.size
         recorder.beginSession(planOf("a"))
         runner.emit(RunnerEvent.Log("同一句"))
         recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        settleRunLog()
 
         assertTrue("跨轮被去重掉了", recorder.runLog.value.size > before)
+    }
+
+    /**
+     * 一串突发只出几次新列表，不是一条一次
+     *
+     * 逐条发布要按条复制整份 [RUN_LOG_CAPACITY] 列表，还让 UI 跟着事件率重组；
+     * 识别期一秒几十条，这条回归掉了不会有任何测试变红，只会变卡
+     */
+    @Test
+    fun `a burst of entries publishes as a few batches`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        val sizes = mutableListOf<Int>()
+        backgroundScope.launch { recorder.runLog.collect { sizes += it.size } }
+        settleRunLog()
+
+        repeat(20) { index -> runner.emit(RunnerEvent.Log("line $index")) }
+        settleRunLog()
+
+        assertEquals(20, sizes.last())
+        // 不钉死次数：攒批的节拍怎么排是实现的事，逐条发布才是要拦的那件事
+        assertTrue("逐条发布了，共 ${sizes.size} 次", sizes.size <= 3)
     }
 
     private fun planOf(vararg taskNames: String) = RunPlan(
@@ -200,5 +234,8 @@ class RunLogRecorderTest {
             templates = emptyList(),
         )
         val LENIENT = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+        /** 宽出 RunLogRecorder.FLUSH_INTERVAL_MS 一截，那个常量是私有的，不为测试开出来 */
+        const val SETTLE_MILLIS = 500L
     }
 }
