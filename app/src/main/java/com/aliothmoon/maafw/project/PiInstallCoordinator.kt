@@ -65,10 +65,14 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
                 // 恰好是首屏最挤的时候。解包线程池并发调这里，CAS 只放跨档位的那一次过
                 val lastPercent = AtomicInteger(-1)
                 val onProgress: PiUnpackProgress = { done, total, path ->
-                    val percent = if (total > 0) done * 100 / total else 0
-                    val previous = lastPercent.get()
-                    if (percent > previous && lastPercent.compareAndSet(previous, percent)) {
-                        _state.value = PiInstallState.Unpacking(done, total, path)
+                    if (total > 0) {
+                        val percent = done * 100 / total
+                        val previous = lastPercent.get()
+                        if (percent > previous && lastPercent.compareAndSet(previous, percent)) {
+                            _state.value = PiInstallState.Unpacking(done, total, path)
+                        }
+                    } else if (done == 1 || done % 32 == 0) {
+                        _state.value = PiInstallState.Unpacking(done, 0, path)
                     }
                 }
                 // 段名与 StartupBenchmark.PI_UNPACK_SECTION 是一对，改一处要改两处

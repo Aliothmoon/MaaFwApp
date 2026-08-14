@@ -187,16 +187,27 @@ class PiInstallerTest {
         every { AppPaths.ROOT } returns base
         val pi = PiInstaller(MapPiPackage(files), 11)
 
-        assertThrows(IllegalStateException::class.java) { pi.installedDir() }
+        assertThrows(PiNotInstalledException::class.java) { pi.installedDir() }
 
         pi.ensureInstalled()
         assertEquals(AppFiles.PI_DIR, pi.installedDir().name)
     }
 
     @Test
+    fun `仅有目录没有标记时 installedDir 仍抛`() {
+        val base = temp.newFolder("external")
+        every { AppPaths.ROOT } returns base
+        File(base, AppFiles.PI_DIR).mkdirs()
+        val pi = PiInstaller(MapPiPackage(files), 11)
+
+        assertThrows(PiNotInstalledException::class.java) { pi.installedDir() }
+    }
+
+    @Test
     fun `归档解包保留下划线目录与 gz 文件名`() {
         val base = temp.newFolder("external")
         val files = mapOf(
+            "interface.json" to "{}",
             "resource/pipeline/Common/__Private/AutoAltClick/Action.json" to "{}",
             "resource/model/map/navmesh/base.nav.gz" to "gz",
         )
@@ -207,17 +218,64 @@ class PiInstallerTest {
     }
 
     @Test
-    fun `归档与清单不一致时失败且不写标记`() {
+    fun `归档解包按 zip 顺序写出且不看清单`() {
         val base = temp.newFolder("external")
-        val pkg = ZipPiPackage(
-            files = mapOf("interface.json" to "{}"),
-            manifest = listOf("interface.json", "missing.json"),
+        val files = mapOf(
+            "interface.json" to "{}",
+            "resource/base/model/ocr/keys.txt" to "keys",
         )
+        val seen = CopyOnWriteArrayList<Triple<Int, Int, String>>()
+        val root = installer(base, ZipPiPackage(files, manifest = listOf("ignored.json")), 11)
+            .ensureInstalled { done, total, path -> seen += Triple(done, total, path) }
+
+        assertEquals("{}", File(root, "interface.json").readText())
+        assertEquals("keys", File(root, "resource/base/model/ocr/keys.txt").readText())
+        assertFalse(File(root, "ignored.json").exists())
+        assertTrue("归档扫 zip 时不知道总数", seen.all { it.second == 0 })
+        assertEquals(files.keys, seen.map { it.third }.toSet())
+    }
+
+    @Test
+    fun `空归档当无 PI 写出标记`() {
+        val base = temp.newFolder("external")
+        val root = installer(base, ZipPiPackage(emptyMap()), 11).ensureInstalled()
+
+        assertTrue(root.isDirectory)
+        assertEquals("11", File(base, PiInstaller.PI_MARKER_NAME).readText())
+        assertFalse(File(root, "interface.json").exists())
+    }
+
+    @Test
+    fun `有文件但缺 interface json 失败且不写标记`() {
+        val base = temp.newFolder("external")
         every { AppPaths.ROOT } returns base
-        assertThrows(Exception::class.java) {
-            PiInstaller(pkg, 11).ensureInstalled()
+        assertThrows(PiUnpackException::class.java) {
+            installer(base, ZipPiPackage(mapOf("tasks/a.json" to "{}")), 11).ensureInstalled()
         }
         assertFalse(File(base, PiInstaller.PI_MARKER_NAME).exists())
+    }
+
+    @Test
+    fun `zip slip 条目失败且不写标记`() {
+        val base = temp.newFolder("external")
+        every { AppPaths.ROOT } returns base
+        assertThrows(PiUnpackException::class.java) {
+            installer(base, ZipPiPackage(mapOf("../evil" to "x", "interface.json" to "{}")), 11)
+                .ensureInstalled()
+        }
+        assertFalse(File(base, PiInstaller.PI_MARKER_NAME).exists())
+        assertFalse(File(base, "evil").exists())
+    }
+
+    @Test
+    fun `文件名里的连续点不是 zip slip`() {
+        val base = temp.newFolder("external")
+        val files = mapOf(
+            "interface.json" to "{}",
+            "resource/foo..bar.json" to "ok",
+        )
+        val root = installer(base, ZipPiPackage(files), 11).ensureInstalled()
+        assertEquals("ok", File(root, "resource/foo..bar.json").readText())
     }
 }
 
@@ -225,7 +283,18 @@ private class ZipPiPackage(
     files: Map<String, String>,
     manifest: List<String> = files.keys.sorted(),
 ) : PiPackage {
-    private val bytes: ByteArray = ByteArrayOutputStream().use { raw ->
+    private val bytes: ByteArray = zipBytes(files)
+    private val names = manifest
+
+    override fun manifest(): List<String> = names
+
+    override fun open(path: String): InputStream = error(path)
+
+    override fun openArchive(): InputStream = bytes.inputStream()
+}
+
+private fun zipBytes(files: Map<String, String>): ByteArray =
+    ByteArrayOutputStream().use { raw ->
         ZipOutputStream(raw).use { zip ->
             files.forEach { (name, content) ->
                 zip.putNextEntry(ZipEntry(name))
@@ -235,11 +304,3 @@ private class ZipPiPackage(
         }
         raw.toByteArray()
     }
-    private val names = manifest
-
-    override fun manifest(): List<String> = names
-
-    override fun open(path: String): InputStream = error(path)
-
-    override fun openArchive(): InputStream = bytes.inputStream()
-}

@@ -5,10 +5,10 @@ import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import java.io.File
 import java.io.FileNotFoundException
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 /**
@@ -16,44 +16,40 @@ import java.util.zip.ZipInputStream
  * 不复用 ProjectSource：解包要按字节搬运图片与模型，read(String) 的文本语义不够用
  */
 interface PiPackage {
-    /** 构建期 writePiManifest 产出的解包清单，元素是相对 PI 根的文件路径 */
+    /** 无归档时按这条逐个 [open]；生产走 [openArchive]，清单不参与解包 */
     fun manifest(): List<String>
 
     fun open(path: String): InputStream
 
-    /** APK 里的 PI 归档；单测内存包没有这份，解包走 [open] */
+    /** PI 归档；解包按 zip 顺序扫一遍。单测内存包没有这份 */
     fun openArchive(): InputStream? = null
 }
+
+/** zip-slip / 缺根文件：解包失败，由 [PiInstallCoordinator] 收成 Failed */
+class PiUnpackException(message: String) : IOException(message)
+
+/** [PiInstaller.installedDir] 在标记未提交时抛；不解包 */
+class PiNotInstalledException(dir: File) : IllegalStateException("PI is not installed: ${dir.absolutePath}")
 
 /** 路径一律相对 PI 根，与 [ProjectSource] 保持同一套相对路径语义 */
 class AssetPiPackage(context: Context) : PiPackage {
 
     private val assets = context.applicationContext.assets
-    private val cacheZip = File(context.applicationContext.cacheDir, PI_ARCHIVE_ASSET)
 
-    private val zip: ZipFile by lazy {
-        assets.open(PI_ARCHIVE_ASSET).use { input ->
-            cacheZip.outputStream().use { input.copyTo(it) }
-        }
-        ZipFile(cacheZip)
+    override fun manifest(): List<String> = emptyList()
+
+    override fun open(path: String): InputStream = throw FileNotFoundException(path)
+
+    override fun openArchive(): InputStream? = try {
+        assets.open(PI_ARCHIVE_ASSET)
+    } catch (_: FileNotFoundException) {
+        null
     }
-
-    override fun manifest(): List<String> =
-        assets.open(PI_MANIFEST_ASSET).bufferedReader().useLines { lines ->
-            lines.map(String::trim).filter(String::isNotEmpty).toList()
-        }
-
-    override fun open(path: String): InputStream {
-        val entry = zip.getEntry(path) ?: throw FileNotFoundException(path)
-        return zip.getInputStream(entry)
-    }
-
-    override fun openArchive(): InputStream = assets.open(PI_ARCHIVE_ASSET)
 }
 
 /**
- * 逐条目的解包进度；done 从 1 起计，total 是清单条目数
- * 归档解包按 zip 顺序回调；单测内存包按清单顺序
+ * 逐条目的解包进度；done 从 1 起计
+ * 归档扫 zip 时不知道总数，[total] 为 0；单测内存包 [total] 是清单条数
  */
 typealias PiUnpackProgress = (done: Int, total: Int, path: String) -> Unit
 
@@ -73,11 +69,13 @@ class PiInstaller(
 
     /**
      * 已解包的 PI 根目录，本身不解包
-     * 尚未解包时抛出——那说明调用顺序错了，不该在这里补一次几十 MB 的搬运
+     * 就绪定义与 [ensureInstalled] 相同：目录在、标记与本次 versionCode 一致
      */
     fun installedDir(): File {
         val target = File(AppPaths.ROOT, AppFiles.PI_DIR)
-        check(target.isDirectory) { "PI 尚未解包：${target.absolutePath}" }
+        if (!isCurrentInstall(AppPaths.ROOT, target)) {
+            throw PiNotInstalledException(target)
+        }
         return target
     }
 
@@ -89,10 +87,7 @@ class PiInstaller(
     fun ensureInstalled(onProgress: PiUnpackProgress = NO_PROGRESS): File {
         val base = AppPaths.ROOT
         val target = File(base, AppFiles.PI_DIR)
-        val marker = File(base, PI_MARKER_NAME)
-        if (target.isDirectory && marker.isFile && marker.readText().trim() == versionCode.toString()) {
-            return target
-        }
+        if (isCurrentInstall(base, target)) return target
         return install(base, onProgress)
     }
 
@@ -100,6 +95,11 @@ class PiInstaller(
     @Synchronized
     fun reinstall(onProgress: PiUnpackProgress = NO_PROGRESS): File =
         install(AppPaths.ROOT, onProgress)
+
+    private fun isCurrentInstall(base: File, target: File): Boolean {
+        val marker = File(base, PI_MARKER_NAME)
+        return target.isDirectory && marker.isFile && marker.readText().trim() == versionCode.toString()
+    }
 
     private fun install(base: File, onProgress: PiUnpackProgress): File {
         val target = File(base, AppFiles.PI_DIR)
@@ -118,16 +118,14 @@ class PiInstaller(
     }
 
     private fun unpack(dest: File, onProgress: PiUnpackProgress) {
-        val entries = pkg.manifest()
-        if (entries.isEmpty()) return
-
         val archive = pkg.openArchive()
         if (archive != null) {
-            unpackArchive(dest, entries, archive, onProgress)
+            ZipInputStream(archive).use { zip -> unpackZip(dest, zip, onProgress) }
             return
         }
 
-        // 单测内存包没有归档，仍按清单逐条 open
+        val entries = pkg.manifest()
+        if (entries.isEmpty()) return
         entries.mapNotNullTo(mutableSetOf()) { File(dest, it).parentFile }.forEach { it.mkdirs() }
         val buffer = ByteArray(COPY_BUFFER_BYTES)
         val done = AtomicInteger()
@@ -139,44 +137,46 @@ class PiInstaller(
             }
             onProgress(done.incrementAndGet(), entries.size, entry)
         }
+        requireInterfaceJson(dest)
     }
 
-    private fun unpackArchive(
-        dest: File,
-        expected: List<String>,
-        archive: InputStream,
-        onProgress: PiUnpackProgress,
-    ) {
-        val expectedSet = expected.toSet()
-        val seen = linkedSetOf<String>()
+    private fun unpackZip(dest: File, zip: ZipInputStream, onProgress: PiUnpackProgress) {
         val destCanon = dest.canonicalFile
         val buffer = ByteArray(COPY_BUFFER_BYTES)
-        archive.use { raw ->
-            ZipInputStream(raw).use { zip ->
-                while (true) {
-                    val zipEntry = zip.nextEntry ?: break
-                    if (zipEntry.isDirectory) {
-                        zip.closeEntry()
-                        continue
-                    }
-                    val name = zipEntry.name.replace('\\', '/').trimStart('/')
-                    check(!name.contains("..") && name.isNotEmpty()) { "非法 PI 归档条目: $name" }
-                    val outFile = File(dest, name)
-                    check(outFile.canonicalFile.path.startsWith(destCanon.path + File.separator) ||
-                        outFile.canonicalFile == destCanon) { "非法 PI 归档条目: $name" }
-                    outFile.parentFile?.mkdirs()
-                    outFile.outputStream().use { output -> zip.copyTo(output, buffer) }
-                    zip.closeEntry()
-                    seen += name
-                    onProgress(seen.size, expected.size, name)
-                }
+        var done = 0
+        while (true) {
+            val zipEntry = zip.nextEntry ?: break
+            if (zipEntry.isDirectory) {
+                zip.closeEntry()
+                continue
             }
+            val name = normalizeZipName(zipEntry.name)
+            val outFile = File(dest, name)
+            val outCanon = outFile.canonicalFile
+            if (outCanon != destCanon && !outCanon.path.startsWith(destCanon.path + File.separator)) {
+                throw PiUnpackException("illegal PI archive entry: $name")
+            }
+            outFile.parentFile?.mkdirs()
+            outFile.outputStream().use { output -> zip.copyTo(output, buffer) }
+            zip.closeEntry()
+            done++
+            onProgress(done, 0, name)
         }
-        check(seen == expectedSet) {
-            val missing = expectedSet - seen
-            val extra = seen - expectedSet
-            "PI 归档与清单不一致 missing=$missing extra=$extra"
+        if (done > 0) requireInterfaceJson(dest)
+    }
+
+    private fun requireInterfaceJson(dest: File) {
+        if (!File(dest, INTERFACE_JSON).isFile) {
+            throw PiUnpackException("PI archive is missing $INTERFACE_JSON")
         }
+    }
+
+    private fun normalizeZipName(raw: String): String {
+        val name = raw.replace('\\', '/').trimStart('/')
+        if (name.isEmpty() || name.split('/').any { it == ".." }) {
+            throw PiUnpackException("illegal PI archive entry: $raw")
+        }
+        return name
     }
 
     /** 外部私有目录会被媒体扫描，PI 里的 PNG 会整片进相册 */
@@ -202,15 +202,13 @@ class PiInstaller(
         /** 按内容指纹判过期的旧包留下的标记 */
         private const val LEGACY_MARKER_NAME = "pi.fingerprint"
 
+        private const val INTERFACE_JSON = "interface.json"
         private const val NO_MEDIA_NAME = ".nomedia"
         private const val COPY_BUFFER_BYTES = 128 * 1024
 
         private val NO_PROGRESS: PiUnpackProgress = { _, _, _ -> }
     }
 }
-
-/** 构建期 writePiManifest 落在 assets 根的解包清单 */
-private const val PI_MANIFEST_ASSET = "pi.manifest"
 
 /** 构建期 packPiArchive 落在 assets 根的 PI 归档；散装 assets 会被 AAPT 改写 */
 internal const val PI_ARCHIVE_ASSET = "pi.zip"

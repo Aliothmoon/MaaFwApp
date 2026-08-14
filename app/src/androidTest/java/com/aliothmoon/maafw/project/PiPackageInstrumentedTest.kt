@@ -6,10 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.zip.ZipInputStream
 
 /**
  * assets 读取是平台差异，JVM 测试碰不到 AssetManager
- * 完整解包由应用实际启动验证，这里覆盖清单与 pi.zip 条目能对上
+ * 完整解包由应用实际启动验证，这里覆盖 pi.zip 能顺序读到 interface.json
  * 当前包未含 PI（未配置 pi.profile）时跳过
  */
 @RunWith(AndroidJUnit4::class)
@@ -18,52 +19,44 @@ class PiPackageInstrumentedTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
     private fun packageOrSkip(): PiPackage {
-        val pkg = AssetPiPackage(context, PI_ASSET_ROOT)
-        val manifest = runCatching { pkg.manifest() }.getOrDefault(emptyList())
-        assumeTrue("当前包未含 PI", manifest.contains("interface.json"))
+        val pkg = AssetPiPackage(context)
+        assumeTrue("当前包未含 PI", pkg.openArchive() != null)
         return pkg
     }
 
-    /** 清单是解包的唯一依据，条目对不上会静默少解文件 */
     @Test
-    fun manifestEntriesAllOpenable() {
+    fun archiveContainsInterfaceJson() {
         val pkg = packageOrSkip()
-        val entries = pkg.manifest()
-        assertTrue("清单不应为空", entries.isNotEmpty())
-        val unopenable = entries.filter { entry ->
-            runCatching { pkg.open(entry).use { it.read() } }.isFailure
+        val names = pkg.openArchive()!!.use { raw ->
+            ZipInputStream(raw).use { zip ->
+                buildList {
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        if (!entry.isDirectory) add(entry.name.replace('\\', '/').trimStart('/'))
+                        zip.closeEntry()
+                    }
+                }
+            }
         }
-        assertTrue("清单里有打不开的条目: ${unopenable.take(5)}", unopenable.isEmpty())
+        assertTrue("pi.zip 应含 interface.json: $names", "interface.json" in names)
     }
 
     @Test
     fun interfaceJsonReadable() {
         val pkg = packageOrSkip()
-        val content = pkg.open("interface.json").bufferedReader().use { it.readText() }
-        assertTrue(content.contains("interface_version"))
-    }
-
-    /**
-     * PI 常带几十 MB 的模型，压缩存放的大 asset 能否流式读出，JVM 侧验证不到
-     * available() 只是估计，不拿它做相等断言；这里验证的是能读到底且不抛异常
-     */
-    @Test
-    fun largestAssetStreamsFully() {
-        val pkg = packageOrSkip()
-        val largest = pkg.manifest()
-            .maxByOrNull { entry ->
-                runCatching { pkg.open(entry).use { it.available().toLong() } }.getOrDefault(0L)
-            } ?: return
-        val read = pkg.open(largest).use { stream ->
-            var total = 0L
-            val buffer = ByteArray(128 * 1024)
-            while (true) {
-                val n = stream.read(buffer)
-                if (n <= 0) break
-                total += n
+        val content = pkg.openArchive()!!.use { raw ->
+            ZipInputStream(raw).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    val name = entry.name.replace('\\', '/').trimStart('/')
+                    if (name == "interface.json") {
+                        return@use zip.bufferedReader().readText()
+                    }
+                    zip.closeEntry()
+                }
+                ""
             }
-            total
         }
-        assertTrue("最大 asset 应能完整读出: $largest", read > 0)
+        assertTrue(content.contains("interface_version"))
     }
 }

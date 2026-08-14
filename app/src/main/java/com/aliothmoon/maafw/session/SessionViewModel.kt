@@ -188,7 +188,7 @@ class SessionViewModel(
     private val intents = Channel<SessionIntent>(Channel.UNLIMITED)
 
     init {
-        // 解包在前、加载在后；解包没成，reload 只会拿到一句「PI 尚未解包」
+        // 解包在前、加载在后；解包没成不要 reload，半包会被当成已解包
         viewModelScope.launch {
             if (piInstall.ensureInstalled()) projectRepository.reload()
         }

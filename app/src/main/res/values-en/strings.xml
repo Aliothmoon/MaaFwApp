@@ -493,6 +493,7 @@
     <!-- PI unpacking -->
     <string name="pi_install_title">Preparing project resources</string>
     <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
+    <string name="pi_install_progress_count">Wrote %1$d files</string>
     <string name="pi_install_note">Extracted once on first launch and after each version update. Please wait…</string>
     <string name="pi_install_failed_title">Failed to prepare project resources</string>
     <string name="pi_install_failed_message">%1$s\n\nCheck that there is enough free space, then retry.</string>

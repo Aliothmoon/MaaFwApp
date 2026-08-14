@@ -85,19 +85,31 @@ private fun UnpackingDialog(state: PiInstallState.Unpacking) {
                     text = stringResource(R.string.pi_install_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
-                LinearProgressIndicator(
-                    progress = { state.percent / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = MaaDesignTokens.Spacing.lg),
-                )
+                if (state.total > 0) {
+                    LinearProgressIndicator(
+                        progress = { state.percent / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = MaaDesignTokens.Spacing.lg),
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = MaaDesignTokens.Spacing.lg),
+                    )
+                }
                 Text(
-                    text = stringResource(
-                        R.string.pi_install_progress,
-                        state.done,
-                        state.total,
-                        state.percent,
-                    ),
+                    text = if (state.total > 0) {
+                        stringResource(
+                            R.string.pi_install_progress,
+                            state.done,
+                            state.total,
+                            state.percent,
+                        )
+                    } else {
+                        stringResource(R.string.pi_install_progress_count, state.done)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = MaaDesignTokens.Spacing.sm),

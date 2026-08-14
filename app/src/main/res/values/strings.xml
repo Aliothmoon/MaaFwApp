@@ -487,6 +487,7 @@
     <!-- PI 解压 -->
     <string name="pi_install_title">正在准备项目资源</string>
     <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
+    <string name="pi_install_progress_count">已写入 %1$d 个文件</string>
     <string name="pi_install_note">首次启动与版本更新后需要解压一次，请稍候…</string>
     <string name="pi_install_failed_title">项目资源准备失败</string>
     <string name="pi_install_failed_message">%1$s\n\n请检查存储空间是否充足，然后重试。</string>

@@ -15,8 +15,7 @@ import org.gradle.kotlin.dsl.register
  * see [BuildProfile]
  *
  * Loose assets are rewritten by AAPT (`<dir>_*` dropped, `.*` dropped, `.gz` decompressed).
- * Same reason agent runtimes ship as bundle.zip: syncPiAssets -> packPiArchive ->
- * writePiManifest -> assets/pi.zip + assets/pi.manifest
+ * Same reason agent runtimes ship as bundle.zip: syncPiAssets -> packPiArchive -> assets/pi.zip
  */
 class PiAssetsConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
@@ -63,29 +62,8 @@ class PiAssetsConventionPlugin : Plugin<Project> {
                 includeEmptyDirs = false
             }
 
-            val writePiManifest = tasks.register("writePiManifest") {
-                group = "build"
-                description = "List the synced PI entries into assets/pi.manifest"
-                dependsOn(packPiArchive)
-                val manifestFile = packedDir.map { it.file("pi.manifest") }
-                inputs.dir(piDir).withPathSensitivity(PathSensitivity.RELATIVE)
-                outputs.file(manifestFile)
-                doLast {
-                    val root = piDir.get().asFile
-                    val entries = if (root.isDirectory) {
-                        root.walkTopDown().filter { it.isFile }
-                            .map { it.toRelativeString(root).replace('\\', '/') }.sorted().toList()
-                    } else {
-                        emptyList()
-                    }
-                    val out = manifestFile.get().asFile
-                    out.parentFile.mkdirs()
-                    out.writeText(entries.joinToString("\n"))
-                }
-            }
-
             tasks.named("preBuild") {
-                dependsOn(writePiManifest)
+                dependsOn(packPiArchive)
             }
 
             packedDir.get().asFile.mkdirs()
