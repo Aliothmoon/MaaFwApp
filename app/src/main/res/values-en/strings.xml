@@ -140,7 +140,6 @@
     <string name="settings_build">Build</string>
     <string name="settings_telemetry">Help improve this project</string>
     <string name="settings_telemetry_desc">Sends task names and run results to the project author. Screenshots, log text and anything you type are never included</string>
-    <string name="settings_telemetry_dev_desc">This project is a development build, so nothing is sent</string>
     <string name="settings_project">Project</string>
     <string name="settings_project_version">Project version</string>
     <string name="settings_about_contact">Contact</string>

@@ -37,7 +37,7 @@ sealed interface ScheduleIntent {
     /** 拉起系统的精确闹钟设置页；要 Context，转成 Effect */
     data object RequestExactAlarmPermission : ScheduleIntent
 
-    /** 从那个设置页回来后重读；这一项没有变更回调 */
+    /** 从系统设置页回来后重读；那一页没有结果回调 */
     data object RefreshExactAlarmPermission : ScheduleIntent
 }
 

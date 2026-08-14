@@ -399,20 +399,16 @@ private fun OtherCard(
             enabled = !locked,
             onSelect = { onIntent(SessionIntent.SetResolutionPreference(it)) },
         )
-        if (state.telemetryDeclared) {
+        // 开发版 PI 一律不上报（TelemetryController 也照此拦），留个点不动的开关只会让人以为坏了
+        if (state.telemetryDeclared && !state.telemetryLockedByVersion) {
             Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
             MaaSwitchRow(
                 label = stringResource(R.string.settings_telemetry),
-                checked = state.telemetryEnabled && !state.telemetryLockedByVersion,
-                enabled = !state.telemetryLockedByVersion,
+                checked = state.telemetryEnabled,
                 onCheckedChange = { onIntent(SessionIntent.SetTelemetryEnabled(it)) },
             )
             Text(
-                text = if (state.telemetryLockedByVersion) {
-                    stringResource(R.string.settings_telemetry_dev_desc)
-                } else {
-                    stringResource(R.string.settings_telemetry_desc)
-                },
+                text = stringResource(R.string.settings_telemetry_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

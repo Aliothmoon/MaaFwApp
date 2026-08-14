@@ -102,8 +102,19 @@ fun ScheduleScreen(
                 actionIconContentColor = MaterialTheme.colorScheme.primary,
             ),
         )
+        // 空状态靠 fillParentMaxSize 居中，卡片不能再进列表
+        if (!state.exactAlarmAllowed) {
+            ExactAlarmCard(
+                onGrant = { onIntent(ScheduleIntent.RequestExactAlarmPermission) },
+                modifier = Modifier.padding(
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    bottom = MaaDesignTokens.Spacing.md,
+                ),
+            )
+        }
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(
                 start = MaaDesignTokens.Spacing.lg,
                 end = MaaDesignTokens.Spacing.lg,
@@ -111,13 +122,6 @@ fun ScheduleScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            if (!state.exactAlarmAllowed) {
-                item(key = "exact-alarm") {
-                    ExactAlarmCard(
-                        onGrant = { onIntent(ScheduleIntent.RequestExactAlarmPermission) },
-                    )
-                }
-            }
             if (state.rows.isEmpty()) {
                 // 撑满视口才有多余高度可分；item 默认包裹内容，MaaEmptyState 的居中就无从谈起
                 item(key = "empty") { ScheduleEmptyState(Modifier.fillParentMaxSize()) }
@@ -136,8 +140,8 @@ fun ScheduleScreen(
 }
 
 @Composable
-private fun ExactAlarmCard(onGrant: () -> Unit) {
-    MaaCard(title = stringResource(R.string.schedule_exact_alarm_blocked)) {
+private fun ExactAlarmCard(onGrant: () -> Unit, modifier: Modifier = Modifier) {
+    MaaCard(modifier = modifier, title = stringResource(R.string.schedule_exact_alarm_blocked)) {
         Text(
             text = stringResource(R.string.schedule_exact_alarm_hint),
             style = MaterialTheme.typography.bodySmall,

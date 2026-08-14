@@ -45,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.compose.animation.fadeIn
@@ -264,13 +268,22 @@ fun AppRoot(
         LaunchedEffect(Unit) {
             scheduleViewModel.effects.collect { effect ->
                 when (effect) {
-                    ScheduleEffect.RequestExactAlarmPermission -> {
-                        ExactAlarmSettings.open(context)
-                        // 那个页面没有结果回调，只能等用户回来时自己重读
-                        scheduleViewModel.onIntent(ScheduleIntent.RefreshExactAlarmPermission)
-                    }
+                    // 系统页还在启动，此刻重读仍是改动前的值
+                    ScheduleEffect.RequestExactAlarmPermission -> ExactAlarmSettings.open(context)
                 }
             }
+        }
+
+        // Activity 进出都会走这里；系统精确闹钟页没有结果回调
+        val scheduleLifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(scheduleLifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    scheduleViewModel.onIntent(ScheduleIntent.RefreshExactAlarmPermission)
+                }
+            }
+            scheduleLifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { scheduleLifecycleOwner.lifecycle.removeObserver(observer) }
         }
 
         // 未装/未启动/未授权时的引导；needsGuidance 为 false 时自身不渲染
