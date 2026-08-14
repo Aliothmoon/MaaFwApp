@@ -25,4 +25,9 @@ data class RuntimeTask(
     val entry: String,
     /** 有序 patch；Runner 按序传给 MaaFramework，不得提前合并 */
     val pipelineOverrides: List<JsonObject>,
+    /** 加载期已物化的展示名；缺省回落 [taskName] */
+    val label: String = taskName,
 )
+
+fun RunPlan.taskLabelMap(): Map<String, String> =
+    tasks.associate { it.taskName to it.label.ifBlank { it.taskName } }

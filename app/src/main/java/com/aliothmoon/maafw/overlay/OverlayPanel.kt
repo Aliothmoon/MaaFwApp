@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.notification.RunProgressSnapshots
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
@@ -72,7 +73,7 @@ fun OverlayPanel(
                     style = MaterialTheme.typography.titleMedium,
                 )
                 state.activeExecution?.let { execution ->
-                    execution.currentTaskName?.let {
+                    execution.currentTaskLabel?.let {
                         Text(
                             text = it,
                             style = MaterialTheme.typography.bodyMedium,
@@ -87,7 +88,11 @@ fun OverlayPanel(
                         )
                         LinearProgressIndicator(
                             progress = {
-                                execution.completedTaskCount.toFloat() / execution.totalTaskCount
+                                RunProgressSnapshots.progressValue(
+                                    done = execution.completedTaskCount,
+                                    total = execution.totalTaskCount,
+                                    hasCurrentTask = !execution.currentTaskName.isNullOrBlank(),
+                                ) / RunProgressSnapshots.PROGRESS_MAX.toFloat()
                             },
                             modifier = Modifier.fillMaxWidth(),
                         )

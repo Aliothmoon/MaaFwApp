@@ -86,6 +86,111 @@ class RunLogRecorderTest {
     }
 
     @Test
+    fun `user-facing lines update lastUserFacing immediately`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        assertNull(recorder.lastUserFacing.value)
+        runner.emit(RunnerEvent.Log("跑起来了"))
+        assertEquals("跑起来了", recorder.lastUserFacing.value)
+    }
+
+    @Test
+    fun `pipeline node becomes liveUpdateStatus when there is no focus`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(RunnerEvent.Log("任务开始"))
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        assertEquals("任务开始", recorder.lastUserFacing.value)
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `focus wins over the pipeline node for liveUpdateStatus`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.PipelineNode.Succeeded",
+                    content = "刷到第3关",
+                    channels = setOf(FocusChannel.Log),
+                    trace = false,
+                ),
+            ),
+        )
+        assertEquals("刷到第3关", recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `a new PI task clears the pipeline node status`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+        runner.emit(RunnerEvent.Progress("下一任务", 1, 2))
+        assertEquals("下一任务 1/2", recorder.lastUserFacing.value)
+        assertNull(recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `clearing the on-screen log does not wipe liveUpdateStatus`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+        recorder.clear()
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `verbose callbacks do not become lastUserFacing`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(RunnerEvent.Log("关键"))
+        runner.emit(RunnerEvent.Callback("Node.Action.Starting", """{"name":"A"}"""))
+        assertEquals("关键", recorder.lastUserFacing.value)
+    }
+
+    @Test
+    fun `a new session clears lastUserFacing`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(RunnerEvent.Log("上一轮"))
+        recorder.beginSession(planOf("清体力"))
+        assertNull(recorder.lastUserFacing.value)
+        assertNull(recorder.liveUpdateStatus.value)
+        recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+    }
+
+    @Test
     fun `events outside a session stay in memory`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)

@@ -57,6 +57,20 @@ class RunPlanBuilderTest {
     }
 
     @Test
+    fun `任务展示名冻进 RuntimeTask`() {
+        val labeled = definition.copy(
+            tasks = definition.tasks.map {
+                if (it.name == "启动游戏") it.copy(label = "开游戏") else it
+            },
+        )
+        val result = RunPlanBuilder.build(labeled, configWith(ConfiguredTask("启动游戏")))
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val task = (result as RunPlanResult.Success).plan.tasks.single()
+        assertEquals("启动游戏", task.taskName)
+        assertEquals("开游戏", task.label)
+    }
+
+    @Test
     fun `夹具 PI 的 agent 声明原样冻结进 RunPlan`() {
         val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")))
         assertTrue("应编译成功: $result", result is RunPlanResult.Success)

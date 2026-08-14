@@ -183,8 +183,9 @@ class RunLogComposer {
 /**
  * 合成一行人话需要的、Runner 给不出的那些东西
  *
- * [currentTaskName] 取自 `ActiveExecution`：MXU 靠 `task_id → selectedTaskId` 的映射表回认，
- * 我们是串行投递、同时只有一个任务在跑，当前任务名本身就是权威，不必再建一张表
+ * [currentTaskName] 取自 `ActiveExecution.currentTaskLabel`：给人看的展示名，
+ * 不是内部 `taskName`。MXU 靠 `task_id → selectedTaskId` 的映射表回认；
+ * 我们串行投递、同时只有一个任务在跑，当前任务本身就是权威，不必再建一张表
  */
 data class RunLogContext(
     val currentTaskName: String? = null,

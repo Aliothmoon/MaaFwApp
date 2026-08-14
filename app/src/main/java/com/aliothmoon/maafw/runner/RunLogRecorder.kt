@@ -45,6 +45,19 @@ class RunLogRecorder(
     private val _runLog = MutableStateFlow<List<RunLogEntry>>(emptyList())
     val runLog: StateFlow<List<RunLogEntry>> = _runLog.asStateFlow()
 
+    /**
+     * 最近一条用户可见正文；合成当下就更新，不等屏上那份攒批
+     *
+     * Live Update 走 [liveUpdateStatus]：focus / 节点名 压过这一档
+     */
+    private val _lastUserFacing = MutableStateFlow<String?>(null)
+    val lastUserFacing: StateFlow<String?> = _lastUserFacing.asStateFlow()
+
+    private val _lastFocus = MutableStateFlow<String?>(null)
+    private val _lastPipelineNode = MutableStateFlow<String?>(null)
+    private val _liveUpdateStatus = MutableStateFlow<String?>(null)
+    val liveUpdateStatus: StateFlow<String?> = _liveUpdateStatus.asStateFlow()
+
     private val composer = RunLogComposer()
     private val nextId = AtomicLong(0L)
 
@@ -91,6 +104,7 @@ class RunLogRecorder(
         composer.reset()
         synchronized(uiLock) { uiBuffer.clear() }
         _runLog.value = emptyList()
+        // FGS 状态跟这一轮走，beginSession 才换句子
     }
 
     override suspend fun begin(plan: RunPlan) = beginSession(plan)
@@ -121,6 +135,7 @@ class RunLogRecorder(
     suspend fun beginSession(plan: RunPlan) {
         resourceLabel = plan.resource.label
         composer.reset()
+        resetLiveStatus()
         val writer = store.open(System.currentTimeMillis(), plan.tasks.map { it.taskName })
         fileLock.withLock { session.getAndSet(writer)?.close() }
         if (writer == null) return
@@ -153,19 +168,52 @@ class RunLogRecorder(
     }
 
     private fun record(event: RunnerEvent) {
+        when (event) {
+            is RunnerEvent.Progress -> {
+                // Progress 行就是 contentText 的 done/total · label，再当 status 会叠一遍
+                _lastPipelineNode.value = null
+                _lastFocus.value = null
+                _liveUpdateStatus.value = null
+            }
+            is RunnerEvent.Callback -> {
+                PipelineNodeStatus.nameOf(event.message, event.details)?.let {
+                    _lastPipelineNode.value = it
+                    refreshLiveStatus()
+                }
+            }
+            is RunnerEvent.Focus -> {
+                event.focus.content.lineSequence()
+                    .firstOrNull { it.isNotBlank() }
+                    ?.trim()
+                    ?.let {
+                        _lastFocus.value = it
+                        refreshLiveStatus()
+                    }
+            }
+            else -> Unit
+        }
         val entry = composer.compose(
             event = event,
             id = nextId.incrementAndGet(),
             atMillis = System.currentTimeMillis(),
             context = RunLogContext(
-                currentTaskName = runnerPort.state.value.activeExecution?.currentTaskName,
+                currentTaskName = runnerPort.state.value.activeExecution?.currentTaskLabel,
                 resourceLabel = resourceLabel,
             ),
         ) ?: return
-        publish(entry)
+        publish(entry, updateLiveStatus = event !is RunnerEvent.Progress)
     }
 
-    private fun publish(entry: RunLogEntry) {
+    private fun publish(entry: RunLogEntry, updateLiveStatus: Boolean = true) {
+        if (entry.isEssential) {
+            renderText(entry.text).lineSequence()
+                .firstOrNull { it.isNotBlank() }
+                ?.trim()
+                ?.let {
+                    _lastUserFacing.value = it
+                    if (updateLiveStatus) refreshLiveStatus()
+                }
+        }
         synchronized(uiLock) {
             while (uiBuffer.size >= RUN_LOG_CAPACITY) uiBuffer.removeFirst()
             uiBuffer.addLast(entry)
@@ -181,6 +229,21 @@ class RunLogRecorder(
                 text = renderText(entry.text),
                 detail = entry.detail?.takeIf { includeDetails() },
             ),
+        )
+    }
+
+    private fun resetLiveStatus() {
+        _lastUserFacing.value = null
+        _lastFocus.value = null
+        _lastPipelineNode.value = null
+        _liveUpdateStatus.value = null
+    }
+
+    private fun refreshLiveStatus() {
+        _liveUpdateStatus.value = resolveLiveUpdateStatus(
+            focus = _lastFocus.value,
+            pipelineNode = _lastPipelineNode.value,
+            fallback = _lastUserFacing.value,
         )
     }
 

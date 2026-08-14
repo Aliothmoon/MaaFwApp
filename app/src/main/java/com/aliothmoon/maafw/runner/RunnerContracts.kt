@@ -41,7 +41,12 @@ data class ActiveExecution(
     val completedTaskCount: Int,
     val totalTaskCount: Int,
     val taskResults: List<TaskResult>,
-)
+    /** 本轮冻住的 name → 展示名；缺的回落 [currentTaskName] */
+    val taskLabels: Map<String, String> = emptyMap(),
+) {
+    val currentTaskLabel: String?
+        get() = currentTaskName?.let { taskLabels[it]?.takeIf(String::isNotBlank) ?: it }
+}
 
 data class TaskResult(
     val taskName: String,
