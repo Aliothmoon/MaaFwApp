@@ -200,17 +200,38 @@ private fun Project.configureProfileIcon(icon: java.io.File) {
     val writeProfileSplash = tasks.register("writeProfileSplash") {
         group = "build"
         description = "Override the splash theme so it uses the profile icon"
-        val out = profileResDir.map { it.file("values/profile_splash.xml") }
-        outputs.file(out)
+        val themeOut = profileResDir.map { it.file("values/profile_splash.xml") }
+        val iconOut = profileResDir.map { it.file("drawable/ic_profile_splash.xml") }
+        outputs.files(themeOut, iconOut)
         doLast {
-            out.get().asFile.apply {
+            // SplashScreen always circle-masks the icon. Inset so the full bitmap sits
+            // inside that circle; transparent pixels then show colorBackground, not black
+            iconOut.get().asFile.apply {
+                parentFile.mkdirs()
+                writeText(
+                    """
+                    <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+                        <item
+                            android:bottom="48dp"
+                            android:left="48dp"
+                            android:right="48dp"
+                            android:top="48dp">
+                            <bitmap
+                                android:gravity="fill"
+                                android:src="@mipmap/$PROFILE_ICON_NAME" />
+                        </item>
+                    </layer-list>
+                    """.trimIndent() + "\n",
+                )
+            }
+            themeOut.get().asFile.apply {
                 parentFile.mkdirs()
                 writeText(
                     """
                     <resources>
                         <style name="Theme.MaaFwApp.Starting" parent="Theme.SplashScreen">
-                            <item name="windowSplashScreenBackground">@android:color/black</item>
-                            <item name="windowSplashScreenAnimatedIcon">@mipmap/$PROFILE_ICON_NAME</item>
+                            <item name="windowSplashScreenBackground">?android:attr/colorBackground</item>
+                            <item name="windowSplashScreenAnimatedIcon">@drawable/ic_profile_splash</item>
                             <item name="postSplashScreenTheme">@style/Theme.MaaFwApp</item>
                         </style>
                     </resources>

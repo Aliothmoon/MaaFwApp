@@ -6,7 +6,7 @@
     <!--
       冷启动落地前的窗口主题，manifest 指的是这一个
       背景取 launcher icon 的底色，与图标连成一块，避免图标浮在另一种底色上
-      配方给了 app.icon 时，构建期会生成同名 style，改指向 ic_profile_launcher
+      配方给了 app.icon 时，构建期会生成同名 style：图标留圈内边距，底用 colorBackground
     -->
     <style name="Theme.MaaFwApp.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
