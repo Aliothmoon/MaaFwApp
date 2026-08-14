@@ -1,6 +1,6 @@
 # MaaFwApp
 
-MaaFramework 的 Android 通用界面
+MaaFramework 的 Android GUI
 
 [![License](https://img.shields.io/github/license/Aliothmoon/MaaFwApp?style=flat-square&color=4a90d9)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android%209%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://github.com/Aliothmoon/MaaFwApp)
