@@ -197,9 +197,31 @@ private fun Project.configureProfileIcon(icon: java.io.File) {
         from(icon) { rename { "$PROFILE_ICON_NAME.$extension" } }
         into(profileResDir.map { it.dir("mipmap-xxxhdpi") })
     }
+    val writeProfileSplash = tasks.register("writeProfileSplash") {
+        group = "build"
+        description = "Override the splash theme so it uses the profile icon"
+        val out = profileResDir.map { it.file("values/profile_splash.xml") }
+        outputs.file(out)
+        doLast {
+            out.get().asFile.apply {
+                parentFile.mkdirs()
+                writeText(
+                    """
+                    <resources>
+                        <style name="Theme.MaaFwApp.Starting" parent="Theme.SplashScreen">
+                            <item name="windowSplashScreenBackground">@android:color/black</item>
+                            <item name="windowSplashScreenAnimatedIcon">@mipmap/$PROFILE_ICON_NAME</item>
+                            <item name="postSplashScreenTheme">@style/Theme.MaaFwApp</item>
+                        </style>
+                    </resources>
+                    """.trimIndent() + "\n",
+                )
+            }
+        }
+    }
 
     tasks.named("preBuild") {
-        dependsOn(syncProfileIcon)
+        dependsOn(syncProfileIcon, writeProfileSplash)
     }
 
     extensions.configure<ApplicationAndroidComponentsExtension> {
