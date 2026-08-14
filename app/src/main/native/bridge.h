@@ -52,6 +52,7 @@ struct InputArgs {
 
 struct TouchArgs {
     Position p;
+    int contact;
 };
 
 struct KeyArgs {

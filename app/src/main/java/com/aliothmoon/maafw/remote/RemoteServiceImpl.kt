@@ -246,11 +246,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     // ── 预览上的手动操作；主屏模式下不接管输入 ──
 
-    override fun touchDown(x: Int, y: Int) = withVirtualDisplay { InputControlUtils.down(x, y, it) }
+    override fun touchDown(x: Int, y: Int) = withVirtualDisplay { InputControlUtils.down(x, y, 0, it) }
 
-    override fun touchMove(x: Int, y: Int) = withVirtualDisplay { InputControlUtils.move(x, y, it) }
+    override fun touchMove(x: Int, y: Int) = withVirtualDisplay { InputControlUtils.move(x, y, 0, it) }
 
-    override fun touchUp(x: Int, y: Int) = withVirtualDisplay { InputControlUtils.up(x, y, it) }
+    override fun touchUp(x: Int, y: Int) = withVirtualDisplay { InputControlUtils.up(x, y, 0, it) }
 
     private inline fun withVirtualDisplay(action: (Int) -> Unit) {
         if (virtualDisplayMode.get() == DisplayMode.PRIMARY) return

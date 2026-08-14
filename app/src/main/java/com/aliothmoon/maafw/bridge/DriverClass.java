@@ -60,29 +60,18 @@ public final class DriverClass {
         }
     }
 
-    /* 以下五个方法在输入热路径上：一次 Swipe 会连发几十次 TOUCH_MOVE。
-     * 不在这里做字符串拼接与日志——动作与坐标 MaaFramework 自己会记，重复记只是徒增开销。
-     * 失败结果原样回传给 native，由上层判定。 */
+    /* 热路径：一次 Swipe / MultiSwipe 会连发几十次。坐标由框架记，这里不打日志 */
 
-    public static boolean touchDown(int x, int y, int displayId) {
-        Ln.i(TAG + ": touchDown(" + x + ", " + y + ", displayId=" + displayId + ")");
-        boolean result = InputControlUtils.down(x, y, displayId);
-        Ln.i(TAG + ": touchDown result=" + result);
-        return result;
+    public static boolean touchDown(int x, int y, int contact, int displayId) {
+        return InputControlUtils.down(x, y, contact, displayId);
     }
 
-    public static boolean touchMove(int x, int y, int displayId) {
-        Ln.i(TAG + ": touchMove(" + x + ", " + y + ", displayId=" + displayId + ")");
-        boolean result = InputControlUtils.move(x, y, displayId);
-        Ln.i(TAG + ": touchMove result=" + result);
-        return result;
+    public static boolean touchMove(int x, int y, int contact, int displayId) {
+        return InputControlUtils.move(x, y, contact, displayId);
     }
 
-    public static boolean touchUp(int x, int y, int displayId) {
-        Ln.i(TAG + ": touchUp(" + x + ", " + y + ", displayId=" + displayId + ")");
-        boolean result = InputControlUtils.up(x, y, displayId);
-        Ln.i(TAG + ": touchUp result=" + result);
-        return result;
+    public static boolean touchUp(int x, int y, int contact, int displayId) {
+        return InputControlUtils.up(x, y, contact, displayId);
     }
 
     public static boolean keyDown(int keyCode, int displayId) {

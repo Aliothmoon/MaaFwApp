@@ -14,7 +14,7 @@
 
 # ── 1. native upcall ──
 # bridge.cpp 里 kNativeBridgeClass / kDriverClass 是字面量，
-# bridge_input.cpp 按 "touchDown" "(III)Z" 这类签名取 methodID
+# bridge_input.cpp 按 "touchDown" "(IIII)Z" 这类签名取 methodID
 -keep class com.aliothmoon.maafw.bridge.NativeBridgeLib { *; }
 -keep class com.aliothmoon.maafw.bridge.DriverClass { *; }
 

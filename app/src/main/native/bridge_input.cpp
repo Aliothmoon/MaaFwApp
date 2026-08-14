@@ -22,7 +22,8 @@ static int FinishUpcall(JNIEnv *env, jboolean result, const char *context) {
 }
 
 static int
-UpcallInputControl(JNIEnv *env, MethodType method, int x, int y, int keyCode, int displayId) {
+UpcallInputControl(JNIEnv *env, MethodType method, int x, int y, int contact, int keyCode,
+                   int displayId) {
     if (!env || !g_driver_clz) {
         return -1;
     }
@@ -31,17 +32,17 @@ UpcallInputControl(JNIEnv *env, MethodType method, int x, int y, int keyCode, in
         case TOUCH_DOWN:
             return FinishUpcall(env,
                                 env->CallStaticBooleanMethod(g_driver_clz, g_touch_down_method, x,
-                                                             y, displayId),
+                                                             y, contact, displayId),
                                 "DriverClass.touchDown");
         case TOUCH_MOVE:
             return FinishUpcall(env,
                                 env->CallStaticBooleanMethod(g_driver_clz, g_touch_move_method, x,
-                                                             y, displayId),
+                                                             y, contact, displayId),
                                 "DriverClass.touchMove");
         case TOUCH_UP:
             return FinishUpcall(env,
                                 env->CallStaticBooleanMethod(g_driver_clz, g_touch_up_method, x, y,
-                                                             displayId),
+                                                             contact, displayId),
                                 "DriverClass.touchUp");
         case KEY_DOWN:
             return FinishUpcall(env,
@@ -98,9 +99,9 @@ bool InitInputBridge(JavaVM *vm, JNIEnv *env, const char *driverClassName) {
         return false;
     }
 
-    g_touch_down_method = env->GetStaticMethodID(g_driver_clz, "touchDown", "(III)Z");
-    g_touch_move_method = env->GetStaticMethodID(g_driver_clz, "touchMove", "(III)Z");
-    g_touch_up_method = env->GetStaticMethodID(g_driver_clz, "touchUp", "(III)Z");
+    g_touch_down_method = env->GetStaticMethodID(g_driver_clz, "touchDown", "(IIII)Z");
+    g_touch_move_method = env->GetStaticMethodID(g_driver_clz, "touchMove", "(IIII)Z");
+    g_touch_up_method = env->GetStaticMethodID(g_driver_clz, "touchUp", "(IIII)Z");
     g_key_down_method = env->GetStaticMethodID(g_driver_clz, "keyDown", "(II)Z");
     g_key_up_method = env->GetStaticMethodID(g_driver_clz, "keyUp", "(II)Z");
     g_start_app_method = env->GetStaticMethodID(g_driver_clz, "startApp", "(Ljava/lang/String;IZ)Z");
@@ -169,18 +170,19 @@ BRIDGE_API int DispatchInputMessage(MethodParam param) {
     switch (param.method) {
         case TOUCH_DOWN:
             return UpcallInputControl(env, TOUCH_DOWN, param.args.touch.p.x, param.args.touch.p.y,
-                                      0, param.display_id);
+                                      param.args.touch.contact, 0, param.display_id);
         case TOUCH_MOVE:
             return UpcallInputControl(env, TOUCH_MOVE, param.args.touch.p.x, param.args.touch.p.y,
-                                      0, param.display_id);
+                                      param.args.touch.contact, 0, param.display_id);
         case TOUCH_UP:
-            return UpcallInputControl(env, TOUCH_UP, param.args.touch.p.x, param.args.touch.p.y, 0,
-                                      param.display_id);
+            return UpcallInputControl(env, TOUCH_UP, param.args.touch.p.x, param.args.touch.p.y,
+                                      param.args.touch.contact, 0, param.display_id);
         case KEY_DOWN:
-            return UpcallInputControl(env, KEY_DOWN, 0, 0, param.args.key.key_code,
+            return UpcallInputControl(env, KEY_DOWN, 0, 0, 0, param.args.key.key_code,
                                       param.display_id);
         case KEY_UP:
-            return UpcallInputControl(env, KEY_UP, 0, 0, param.args.key.key_code, param.display_id);
+            return UpcallInputControl(env, KEY_UP, 0, 0, 0, param.args.key.key_code,
+                                      param.display_id);
         case START_GAME:
             return UpcallStartApp(env, param.args.start_game.package_name, param.display_id,
                                   param.args.start_game.force_stop != 0);

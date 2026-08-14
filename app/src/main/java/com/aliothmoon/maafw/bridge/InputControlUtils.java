@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.bridge;
 
-import android.app.UiAutomation;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.view.InputDevice;
@@ -12,6 +11,9 @@ import com.aliothmoon.maafw.ITouchEventCallback;
 import com.aliothmoon.maafw.third.Ln;
 import com.aliothmoon.maafw.third.wrappers.InputManager;
 import com.aliothmoon.maafw.third.wrappers.ServiceManager;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 public final class InputControlUtils {
@@ -31,37 +33,32 @@ public final class InputControlUtils {
     private static final int DEFAULT_DEVICE_ID = 0;
     private static final int DEFAULT_SOURCE = InputDevice.SOURCE_TOUCHSCREEN;
 
-    private static final MotionEvent.PointerProperties[] POINTER_PROPERTIES = new MotionEvent.PointerProperties[1];
-    private static final MotionEvent.PointerCoords[] POINTER_COORDS = new MotionEvent.PointerCoords[1];
-
-    static {
-        MotionEvent.PointerProperties props = new MotionEvent.PointerProperties();
-        props.id = 0;
-        props.toolType = MotionEvent.TOOL_TYPE_FINGER;
-        POINTER_PROPERTIES[0] = props;
-
-        POINTER_COORDS[0] = new MotionEvent.PointerCoords();
-    }
-
-    private static long currentDownTime = 0;
+    private static final List<TouchPointerSequence.Pointer> slots = new ArrayList<>();
+    private static long gestureDownTime = 0;
 
     private InputControlUtils() {
     }
 
-    private static void setPointerCoords(float x, float y, float pressure) {
-        MotionEvent.PointerCoords coords = POINTER_COORDS[0];
-        coords.x = Math.max(0, x);
-        coords.y = Math.max(0, y);
-        coords.pressure = pressure;
-        coords.size = 1.0f;
-    }
-
-    private static MotionEvent obtainTouchEvent(long downTime, long eventTime, int action,
-                                                float x, float y, float pressure) {
-        setPointerCoords(x, y, pressure);
+    private static MotionEvent obtainFromSlots(long downTime, long eventTime, int action) {
+        int n = slots.size();
+        MotionEvent.PointerProperties[] props = new MotionEvent.PointerProperties[n];
+        MotionEvent.PointerCoords[] coords = new MotionEvent.PointerCoords[n];
+        for (int i = 0; i < n; i++) {
+            TouchPointerSequence.Pointer p = slots.get(i);
+            MotionEvent.PointerProperties prop = new MotionEvent.PointerProperties();
+            prop.id = p.getContact();
+            prop.toolType = MotionEvent.TOOL_TYPE_FINGER;
+            props[i] = prop;
+            MotionEvent.PointerCoords coord = new MotionEvent.PointerCoords();
+            coord.x = Math.max(0, p.getX());
+            coord.y = Math.max(0, p.getY());
+            coord.pressure = 1.0f;
+            coord.size = 1.0f;
+            coords[i] = coord;
+        }
         return MotionEvent.obtain(
                 downTime, eventTime, action,
-                1, POINTER_PROPERTIES, POINTER_COORDS,
+                n, props, coords,
                 0, 0,
                 1.0f, 1.0f,
                 DEFAULT_DEVICE_ID, 0, DEFAULT_SOURCE, 0
@@ -97,50 +94,104 @@ public final class InputControlUtils {
         }
     }
 
-
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     private static boolean setDisplayId(InputEvent event, int displayId) {
         return displayId == 0 || InputManager.setDisplayId(event, displayId);
     }
 
-    public static synchronized boolean down(int x, int y, int displayId) {
-        // 在按下前，如果发现上一次序列未正常结束，强制发送一个 ACTION_CANCEL 确保触控槽位被清空
-        if (currentDownTime != 0) {
-            MotionEvent cancelEvent = obtainTouchEvent(currentDownTime, SystemClock.uptimeMillis(),
-                    MotionEvent.ACTION_CANCEL, (float) x, (float) y, 0.0f);
-            injectInputEvent(cancelEvent, displayId, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+    private static int encodeAction(int masked, int index) {
+        if (masked == TouchPointerSequence.ACTION_POINTER_DOWN
+                || masked == TouchPointerSequence.ACTION_POINTER_UP) {
+            return masked | (index << MotionEvent.ACTION_POINTER_INDEX_SHIFT);
         }
-
-        currentDownTime = SystemClock.uptimeMillis();
-
-        MotionEvent motionEvent = obtainTouchEvent(currentDownTime, currentDownTime,
-                MotionEvent.ACTION_DOWN, (float) x, (float) y, 1.0f);
-
-        // DOWN 事件必须使用 WAIT_FOR_FINISH 模式，确保起始状态被系统成功接收
-        return injectInputEvent(motionEvent, displayId, InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH);
+        return masked;
     }
 
-    public static synchronized boolean move(int x, int y, int displayId) {
-        if (currentDownTime == 0) return false;
-
-        long eventTime = SystemClock.uptimeMillis();
-        MotionEvent motionEvent = obtainTouchEvent(currentDownTime, eventTime,
-                MotionEvent.ACTION_MOVE, (float) x, (float) y, 1.0f);
-        return injectInputEvent(motionEvent, displayId, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+    private static void replaceSlots(List<TouchPointerSequence.Pointer> next) {
+        slots.clear();
+        slots.addAll(next);
     }
 
-    public static synchronized boolean up(int x, int y, int displayId) {
-        if (currentDownTime == 0) return false;
+    private static void injectCancel(int displayId) {
+        if (slots.isEmpty() || gestureDownTime == 0) {
+            slots.clear();
+            gestureDownTime = 0;
+            return;
+        }
+        MotionEvent cancel = obtainFromSlots(
+                gestureDownTime, SystemClock.uptimeMillis(), MotionEvent.ACTION_CANCEL);
+        boolean result = injectInputEvent(cancel, displayId, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+        slots.clear();
+        gestureDownTime = 0;
+    }
 
-        long eventTime = SystemClock.uptimeMillis();
-        MotionEvent motionEvent = obtainTouchEvent(currentDownTime, eventTime,
-                MotionEvent.ACTION_UP, (float) x, (float) y, 0.0f);
-        
-        boolean result = injectInputEvent(motionEvent, displayId, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
-        
-        // 抬起后重置时间戳
-        currentDownTime = 0;
+    private static boolean injectStep(TouchPointerSequence.Step step, int displayId) {
+        if (!step.getOk()) {
+            return false;
+        }
+        if (step.getCancelFirst()) {
+            injectCancel(displayId);
+        }
+        replaceSlots(step.getPointers());
+        if (slots.isEmpty()) {
+            return false;
+        }
+        if (gestureDownTime == 0) {
+            gestureDownTime = SystemClock.uptimeMillis();
+        }
+        int action = encodeAction(step.getActionMasked(), step.getChangingIndex());
+        boolean wait = step.getActionMasked() == TouchPointerSequence.ACTION_DOWN
+                || step.getActionMasked() == TouchPointerSequence.ACTION_POINTER_DOWN;
+        int mode = wait
+                ? InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH
+                : InputManager.INJECT_INPUT_EVENT_MODE_ASYNC;
+        boolean result = injectInputEvent(
+                obtainFromSlots(gestureDownTime, SystemClock.uptimeMillis(), action),
+                displayId,
+                mode);
+        if (step.getActionMasked() == TouchPointerSequence.ACTION_UP) {
+            slots.clear();
+            gestureDownTime = 0;
+        } else if (step.getActionMasked() == TouchPointerSequence.ACTION_POINTER_UP) {
+            int idx = step.getChangingIndex();
+            if (idx >= 0 && idx < slots.size()) {
+                slots.remove(idx);
+            }
+        }
         return result;
+    }
+
+    public static synchronized boolean down(int x, int y, int contact, int displayId) {
+        return injectStep(
+                TouchPointerSequence.INSTANCE.plan(
+                        TouchPointerSequence.Kind.Down,
+                        new ArrayList<>(slots),
+                        contact,
+                        x,
+                        y),
+                displayId);
+    }
+
+    public static synchronized boolean move(int x, int y, int contact, int displayId) {
+        return injectStep(
+                TouchPointerSequence.INSTANCE.plan(
+                        TouchPointerSequence.Kind.Move,
+                        new ArrayList<>(slots),
+                        contact,
+                        x,
+                        y),
+                displayId);
+    }
+
+    public static synchronized boolean up(int x, int y, int contact, int displayId) {
+        return injectStep(
+                TouchPointerSequence.INSTANCE.plan(
+                        TouchPointerSequence.Kind.Up,
+                        new ArrayList<>(slots),
+                        contact,
+                        x,
+                        y),
+                displayId);
     }
 
     public static boolean keyDown(int keyCode, int displayId) {
