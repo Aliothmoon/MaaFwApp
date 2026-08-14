@@ -144,12 +144,15 @@ internal fun LivePreview(
 }
 @Composable
 private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modifier) {
-    // 三态着色：WATCHING 绿 / APP_DIED 红 / IDLE 灰（对齐 MaaMeow 预览小窗右上角徽标）
+    // 着色对齐 MaaMeow 预览小窗右上角徽标；两种坏结局同为红，但文字要分得开——
+    // 「已停止」去看应用是不是被杀了，「已离屏」去改运行模式，指向不同
     val (dotColor, label) = when (state) {
         WatchdogState.WATCHING ->
             Color(0xFF4CAF50) to stringResource(R.string.virtual_display_game_running)
         WatchdogState.APP_DIED ->
             Color(0xFFF44336) to stringResource(R.string.virtual_display_game_stopped)
+        WatchdogState.DISPLAY_DRIFT ->
+            Color(0xFFF44336) to stringResource(R.string.virtual_display_app_drifted)
         WatchdogState.IDLE ->
             Color(0xFF9E9E9E) to stringResource(R.string.virtual_display_idle)
     }

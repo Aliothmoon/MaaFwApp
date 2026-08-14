@@ -26,6 +26,7 @@
     <string name="tasks_preview_waiting_surface">Waiting for frames</string>
     <string name="virtual_display_game_running">Running</string>
     <string name="virtual_display_game_stopped">Stopped</string>
+    <string name="virtual_display_app_drifted">Off-display</string>
     <string name="virtual_display_idle">Idle</string>
     <string name="tasks_preview_exit_fullscreen">Exit fullscreen</string>
     <string name="tasks_preview_idle">Not running</string>
@@ -392,6 +393,9 @@
     <string name="run_log_task_succeeded">Task completed: %1$s</string>
     <string name="run_log_task_failed">Task failed: %1$s</string>
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
+    <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s). Try foreground mode instead.</string>
+    <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
+    <string name="run_log_app_unknown">unknown app</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
 
     <!-- Run history: one file per run -->

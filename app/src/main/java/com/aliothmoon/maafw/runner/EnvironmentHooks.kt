@@ -56,6 +56,9 @@ internal object HookOrder {
     const val SCREEN_SAVER = 20
     const val CLOSE_APP = 30
     const val COUNTDOWN = 40
+
+    /** 只是挂一个监听，排在最后，收尾时最先摘掉 */
+    const val WATCHDOG_NOTICE = 50
 }
 
 /**
