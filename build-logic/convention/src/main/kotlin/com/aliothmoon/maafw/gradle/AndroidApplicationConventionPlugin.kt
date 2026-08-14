@@ -109,16 +109,18 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     if (generated) {
                         variant.applicationId.set(maafwApplicationId() + BENCHMARK_APP_ID_SUFFIX)
                     }
-                    val name = variant.name.replaceFirstChar(Char::uppercaseChar)
-                    val verify = tasks.register<VerifyR8KeepsTask>("verify${name}R8Keeps") {
-                        mapping.set(
-                            variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE),
-                        )
-                        criticalClasses.set(R8_CRITICAL_CLASSES)
+                    // Debug / nonMinified / benchmark do not produce OBFUSCATION_MAPPING_FILE.
+                    // Wiring the task there leaves mapping unconfigured and configure fails.
+                    if (variant.name == "release") {
+                        val verify = tasks.register<VerifyR8KeepsTask>("verifyReleaseR8Keeps") {
+                            mapping.set(
+                                variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE),
+                            )
+                            criticalClasses.set(R8_CRITICAL_CLASSES)
+                        }
+                        tasks.matching { it.name == "assembleRelease" }
+                            .configureEach { finalizedBy(verify) }
                     }
-                    // Non-minified variants produce no mapping, so the task simply has no input
-                    tasks.matching { it.name == "assemble$name" }
-                        .configureEach { finalizedBy(verify) }
                 }
             }
 
