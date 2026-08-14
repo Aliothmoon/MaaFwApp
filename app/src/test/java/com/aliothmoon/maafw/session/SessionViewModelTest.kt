@@ -265,12 +265,15 @@ class SessionViewModelTest {
         val vm = createVmWithRunner(runner)
 
         repeat(RUN_LOG_CAPACITY + 20) { index -> runner.emit(RunnerEvent.Log("line $index")) }
+        // 屏上那份攒批发布，读 value 之前得让那一拍走完
+        advanceUntilIdle()
 
         assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.size)
         // 丢的是最老的，最新一条必须还在
         assertEquals(UiText.Verbatim("line ${RUN_LOG_CAPACITY + 19}"), vm.runLog.value.last().text)
 
         vm.onIntent(SessionIntent.ClearRunLog)
+        advanceUntilIdle()
         assertTrue(vm.runLog.value.isEmpty())
     }
 
@@ -283,6 +286,7 @@ class SessionViewModelTest {
         runner.emit(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"启动游戏"}"""))
         runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"NodeA"}"""))
         runner.emit(RunnerEvent.MalformedCallback("{}"))
+        advanceUntilIdle()
 
         assertEquals(
             listOf(RunLogKind.Success, RunLogKind.Verbose, RunLogKind.Error),
@@ -341,6 +345,7 @@ class SessionViewModelTest {
         runner.emit(RunnerEvent.Callback("Controller.Action.Succeeded", """{"action":"Screencap"}"""))
         runner.emit(RunnerEvent.Callback("Node.Recognition.Failed", """{"name":"NodeB"}"""))
         runner.emit(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"启动游戏"}"""))
+        advanceUntilIdle()
 
         // 只剩「任务开始」；截图动作与节点识别失败都是原始回调，节点失败在协议里是正常控制流
         assertEquals(

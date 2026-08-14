@@ -102,6 +102,7 @@ open class FakePrivilegedService : RemoteService {
     override fun maaVersion(): String = "fake"
     override fun testUnlock(credential: String?): Int = unlockResult
     override fun watchdogState(): Int = 0
+    override fun watchdogTargetPackage(): String = ""
 
     /** 缓存帧要真 controller 才有；测试里没有可落盘的东西 */
     override fun saveCachedImage(path: String?): Boolean = false

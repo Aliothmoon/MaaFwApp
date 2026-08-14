@@ -53,12 +53,12 @@ data class ScheduleStrategy(
     val enabled: Boolean = true,
     val scheduleType: ScheduleType = ScheduleType.FIXED_TIME,
     /**
-     * 要跑哪份运行配置；**null = 跟随当前激活的那份**
+     * 要跑哪份运行配置，空串 = 还没绑
      *
-     * null 是编辑页可选的一档，不只是老数据的兼容值——盘上没有这个字段的旧规则
-     * 反序列化即得 null，语义正好是「跟着我当前用的配置走」，不需要单独的迁移步骤
+     * 没有「跟随当前激活的那份」这一档：半夜到点跑的是哪份配置得看得见，
+     * 跟着用户当下选中的那份走，等于每次触发都可能是另一回事
      */
-    val runConfigurationId: String? = null,
+    val runConfigurationId: String = "",
     /**
      * 到点时已有执行在跑：true 掐掉它再上，false 让这次触发落空
      *
@@ -135,11 +135,12 @@ enum class TriggerFailureReason {
     REJECTED,
 }
 /** 编辑期字段级校验；空集 = 可保存 */
-enum class ScheduleFieldError { NAME, DAYS, TIMES, START, INTERVAL }
+enum class ScheduleFieldError { NAME, CONFIGURATION, DAYS, TIMES, START, INTERVAL }
 
 val ScheduleStrategy.validationErrors: Set<ScheduleFieldError>
     get() = buildSet {
         if (name.trim().isBlank()) add(ScheduleFieldError.NAME)
+        if (runConfigurationId.isBlank()) add(ScheduleFieldError.CONFIGURATION)
         when (scheduleType) {
             ScheduleType.FIXED_TIME -> {
                 if (daysOfWeek.isEmpty()) add(ScheduleFieldError.DAYS)

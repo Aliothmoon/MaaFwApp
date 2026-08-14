@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      API 30 起包对彼此不可见，不声明就 launch 不到被测包
+      targetAppId 由 maafw.android.benchmark 填，与 :app 的 applicationId 同源推导
+    -->
+    <queries>
+        <package android:name="${targetAppId}" />
+    </queries>
+
+</manifest>

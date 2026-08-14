@@ -101,6 +101,9 @@ interface RemoteService {
     /** 看门狗状态：0=IDLE / 1=WATCHING / 2=APP_DIED（目标 app 是否仍在虚拟屏上） */
     int watchdogState() = 60;
 
+    /** 看门狗当下盯着的包名；没有目标时为空串。运行日志要把它写进那句提示里 */
+    String watchdogTargetPackage() = 61;
+
     // ── 亮屏与解锁 ──
 
     /**

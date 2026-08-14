@@ -100,7 +100,12 @@ object RunPlanBuilder {
                 patches = patches,
                 diagnostics = diagnostics,
             )
-            runtimeTasks += RuntimeTask(task.name, task.entry, patches)
+            runtimeTasks += RuntimeTask(
+                taskName = task.name,
+                entry = task.entry,
+                pipelineOverrides = patches,
+                label = task.label.ifBlank { task.name },
+            )
         }
 
         // 有可执行任务才让全局诊断参与判定：任务全禁用的配置该报 NoExecutableTasks，

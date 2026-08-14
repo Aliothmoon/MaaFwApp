@@ -102,7 +102,8 @@ class RunLogComposer {
      * 排障时对得上官方文档与源码的原文比什么都值钱
      */
     private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed {
-        val details = parseDetails(event.details)
+        // 落到 else 的 Node.* 是识别期最密的一档，它不看 details；compose 单协程，不必上锁
+        val details by lazy(LazyThreadSafetyMode.NONE) { parseDetails(event.details) }
         val verbose = Composed(RunLogKind.Verbose, uiTextFromFramework(event.message), event.details)
 
         return when (event.message) {
@@ -182,8 +183,9 @@ class RunLogComposer {
 /**
  * 合成一行人话需要的、Runner 给不出的那些东西
  *
- * [currentTaskName] 取自 `ActiveExecution`：MXU 靠 `task_id → selectedTaskId` 的映射表回认，
- * 我们是串行投递、同时只有一个任务在跑，当前任务名本身就是权威，不必再建一张表
+ * [currentTaskName] 取自 `ActiveExecution.currentTaskLabel`：给人看的展示名，
+ * 不是内部 `taskName`。MXU 靠 `task_id → selectedTaskId` 的映射表回认；
+ * 我们串行投递、同时只有一个任务在跑，当前任务本身就是权威，不必再建一张表
  */
 data class RunLogContext(
     val currentTaskName: String? = null,

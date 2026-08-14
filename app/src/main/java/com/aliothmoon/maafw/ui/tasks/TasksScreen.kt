@@ -55,7 +55,8 @@ fun TasksScreen(
     state: SessionUiState,
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
-    runLog: List<RunLogEntry>,
+    /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
+    runLog: () -> List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
@@ -105,7 +106,7 @@ private fun TasksContent(
     state: SessionUiState,
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
-    runLog: List<RunLogEntry>,
+    runLog: () -> List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,

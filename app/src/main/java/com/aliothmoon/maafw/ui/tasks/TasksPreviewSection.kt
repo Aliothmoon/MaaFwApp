@@ -71,7 +71,8 @@ import com.aliothmoon.maafw.ui.components.maaClickable
 @Composable
 internal fun rememberMovablePreview(
     resolution: DisplayResolution,
-    markers: List<PreviewTouchMarker>,
+    /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
+    markers: () -> List<PreviewTouchMarker>,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
 ): @Composable () -> Unit {
@@ -98,7 +99,7 @@ internal fun rememberMovablePreview(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 MaaTouchOverlay(
-                    markers = currentMarkers,
+                    markers = currentMarkers(),
                     resolution = currentResolution,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -143,12 +144,15 @@ internal fun LivePreview(
 }
 @Composable
 private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modifier) {
-    // 三态着色：WATCHING 绿 / APP_DIED 红 / IDLE 灰（对齐 MaaMeow 预览小窗右上角徽标）
+    // 着色对齐 MaaMeow 预览小窗右上角徽标；两种坏结局同为红，但文字要分得开——
+    // 「已停止」去看应用是不是被杀了，「已离屏」去改运行模式，指向不同
     val (dotColor, label) = when (state) {
         WatchdogState.WATCHING ->
             Color(0xFF4CAF50) to stringResource(R.string.virtual_display_game_running)
         WatchdogState.APP_DIED ->
             Color(0xFFF44336) to stringResource(R.string.virtual_display_game_stopped)
+        WatchdogState.DISPLAY_DRIFT ->
+            Color(0xFFF44336) to stringResource(R.string.virtual_display_app_drifted)
         WatchdogState.IDLE ->
             Color(0xFF9E9E9E) to stringResource(R.string.virtual_display_idle)
     }

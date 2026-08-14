@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.i18n.UiText
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -45,6 +45,19 @@ class RunLogRecorder(
     private val _runLog = MutableStateFlow<List<RunLogEntry>>(emptyList())
     val runLog: StateFlow<List<RunLogEntry>> = _runLog.asStateFlow()
 
+    /**
+     * 最近一条用户可见正文；合成当下就更新，不等屏上那份攒批
+     *
+     * Live Update 走 [liveUpdateStatus]：focus / 节点名 压过这一档
+     */
+    private val _lastUserFacing = MutableStateFlow<String?>(null)
+    val lastUserFacing: StateFlow<String?> = _lastUserFacing.asStateFlow()
+
+    private val _lastFocus = MutableStateFlow<String?>(null)
+    private val _lastPipelineNode = MutableStateFlow<String?>(null)
+    private val _liveUpdateStatus = MutableStateFlow<String?>(null)
+    val liveUpdateStatus: StateFlow<String?> = _liveUpdateStatus.asStateFlow()
+
     private val composer = RunLogComposer()
     private val nextId = AtomicLong(0L)
 
@@ -57,6 +70,15 @@ class RunLogRecorder(
     private val fileLock = Mutex()
     private var flushLoop: Job? = null
 
+    /**
+     * 屏上那份的环形缓冲；[note] 与合成协程两边都写，靠 [uiLock] 串起来
+     *
+     * 不逐条改 [_runLog]：那要按条复制整份 500 元素列表，识别期一秒几十条就是在刷垃圾
+     */
+    private val uiBuffer = ArrayDeque<RunLogEntry>(RUN_LOG_CAPACITY)
+    private val uiLock = Any()
+    private val uiDirty = Channel<Unit>(Channel.CONFLATED)
+
     init {
         scope.launch {
             merge(
@@ -67,12 +89,22 @@ class RunLogRecorder(
                     .map { RunnerEvent.Focus(it) },
             ).collect(::record)
         }
+        // 先发后等：第一条即时可见，随后那串攒成一次。等待期间来的由 CONFLATED 留到下一轮
+        scope.launch {
+            while (true) {
+                uiDirty.receive()
+                publishBuffered()
+                delay(FLUSH_INTERVAL_MS)
+            }
+        }
     }
 
     /** 只清屏上这份，不动已落盘的历史——用户按的是「清空」不是「删记录」 */
     fun clear() {
         composer.reset()
+        synchronized(uiLock) { uiBuffer.clear() }
         _runLog.value = emptyList()
+        // FGS 状态跟这一轮走，beginSession 才换句子
     }
 
     override suspend fun begin(plan: RunPlan) = beginSession(plan)
@@ -103,6 +135,7 @@ class RunLogRecorder(
     suspend fun beginSession(plan: RunPlan) {
         resourceLabel = plan.resource.label
         composer.reset()
+        resetLiveStatus()
         val writer = store.open(System.currentTimeMillis(), plan.tasks.map { it.taskName })
         fileLock.withLock { session.getAndSet(writer)?.close() }
         if (writer == null) return
@@ -135,23 +168,57 @@ class RunLogRecorder(
     }
 
     private fun record(event: RunnerEvent) {
+        when (event) {
+            is RunnerEvent.Progress -> {
+                // Progress 行就是 contentText 的 done/total · label，再当 status 会叠一遍
+                _lastPipelineNode.value = null
+                _lastFocus.value = null
+                _liveUpdateStatus.value = null
+            }
+            is RunnerEvent.Callback -> {
+                PipelineNodeStatus.nameOf(event.message, event.details)?.let {
+                    _lastPipelineNode.value = it
+                    refreshLiveStatus()
+                }
+            }
+            is RunnerEvent.Focus -> {
+                event.focus.content.lineSequence()
+                    .firstOrNull { it.isNotBlank() }
+                    ?.trim()
+                    ?.let {
+                        _lastFocus.value = it
+                        refreshLiveStatus()
+                    }
+            }
+            else -> Unit
+        }
         val entry = composer.compose(
             event = event,
             id = nextId.incrementAndGet(),
             atMillis = System.currentTimeMillis(),
             context = RunLogContext(
-                currentTaskName = runnerPort.state.value.activeExecution?.currentTaskName,
+                currentTaskName = runnerPort.state.value.activeExecution?.currentTaskLabel,
                 resourceLabel = resourceLabel,
             ),
         ) ?: return
-        publish(entry)
+        publish(entry, updateLiveStatus = event !is RunnerEvent.Progress)
     }
 
-    private fun publish(entry: RunLogEntry) {
-        _runLog.update { current ->
-            val start = (current.size - RUN_LOG_CAPACITY + 1).coerceAtLeast(0)
-            current.subList(start, current.size) + entry
+    private fun publish(entry: RunLogEntry, updateLiveStatus: Boolean = true) {
+        if (entry.isEssential) {
+            renderText(entry.text).lineSequence()
+                .firstOrNull { it.isNotBlank() }
+                ?.trim()
+                ?.let {
+                    _lastUserFacing.value = it
+                    if (updateLiveStatus) refreshLiveStatus()
+                }
         }
+        synchronized(uiLock) {
+            while (uiBuffer.size >= RUN_LOG_CAPACITY) uiBuffer.removeFirst()
+            uiBuffer.addLast(entry)
+        }
+        uiDirty.trySend(Unit)
 
         // 没开会话就只留内存：会话之外的事件（比如空闲期的服务日志）不该凭空造出一个文件
         if (session.get() == null) return
@@ -163,6 +230,25 @@ class RunLogRecorder(
                 detail = entry.detail?.takeIf { includeDetails() },
             ),
         )
+    }
+
+    private fun resetLiveStatus() {
+        _lastUserFacing.value = null
+        _lastFocus.value = null
+        _lastPipelineNode.value = null
+        _liveUpdateStatus.value = null
+    }
+
+    private fun refreshLiveStatus() {
+        _liveUpdateStatus.value = resolveLiveUpdateStatus(
+            focus = _lastFocus.value,
+            pipelineNode = _lastPipelineNode.value,
+            fallback = _lastUserFacing.value,
+        )
+    }
+
+    private fun publishBuffered() {
+        _runLog.value = synchronized(uiLock) { uiBuffer.toList() }
     }
 
     /** 攒批落盘；整批只 flush 一次 */

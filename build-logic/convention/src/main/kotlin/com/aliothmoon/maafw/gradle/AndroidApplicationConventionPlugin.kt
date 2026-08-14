@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.gradle
 
+import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import org.gradle.api.Plugin
@@ -22,8 +23,18 @@ private const val BASE_APPLICATION_ID = "com.aliothmoon.maafw"
  */
 private val APP_ID_PATTERN = Regex("""[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*""")
 
+/**
+ * A separate package on purpose: the benchmarks run `pm clear` to measure a first launch, which
+ * would otherwise wipe the configurations of the build the developer is actually using
+ */
+internal const val BENCHMARK_APP_ID_SUFFIX = ".benchmark"
+
 /** Resource name the profile icon lands under, kept apart from the checked-in ic_launcher */
 private const val PROFILE_ICON_NAME = "ic_profile_launcher"
+
+/** Single source for both :app and :macrobenchmark, which has to name the same package */
+internal fun Project.maafwApplicationId(): String =
+    buildProfile().appId?.let { "$BASE_APPLICATION_ID.${it.requireAppId()}" } ?: BASE_APPLICATION_ID
 
 /** Android decodes neither ico nor svg, a profile pointing at one is a mistake worth failing on */
 private val ICON_EXTENSIONS = setOf("png", "webp")
@@ -45,8 +56,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             val icon = profile.appIcon?.also { configureProfileIcon(it) }
 
             android.defaultConfig {
-                applicationId = profile.appId?.let { "$BASE_APPLICATION_ID.${it.requireAppId()}" }
-                    ?: BASE_APPLICATION_ID
+                applicationId = maafwApplicationId()
                 targetSdk = TARGET_SDK
                 versionCode = gitVersionCode()
                 versionName = gitVersionName()
@@ -87,6 +97,31 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 }
             }
 
+            extensions.configure<ApplicationAndroidComponentsExtension> {
+                onVariants { variant ->
+                    // Set here rather than as an applicationIdSuffix on the build type: the
+                    // baselineprofile plugin passes its own action to buildTypes.create, which
+                    // runs after configureEach and drops the suffix again. Without this the
+                    // generation build installs over whatever the developer has on the device
+                    val generated = variant.buildType.orEmpty().let {
+                        it.startsWith("nonMinified") || it.startsWith("benchmarkRelease")
+                    }
+                    if (generated) {
+                        variant.applicationId.set(maafwApplicationId() + BENCHMARK_APP_ID_SUFFIX)
+                    }
+                    val name = variant.name.replaceFirstChar(Char::uppercaseChar)
+                    val verify = tasks.register<VerifyR8KeepsTask>("verify${name}R8Keeps") {
+                        mapping.set(
+                            variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE),
+                        )
+                        criticalClasses.set(R8_CRITICAL_CLASSES)
+                    }
+                    // Non-minified variants produce no mapping, so the task simply has no input
+                    tasks.matching { it.name == "assemble$name" }
+                        .configureEach { finalizedBy(verify) }
+                }
+            }
+
             val debugAbis = listSetting("build.debugAbi").ifEmpty { SHIPPED_ABIS }
             android.buildTypes {
                 getByName("debug") {
@@ -98,7 +133,9 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     ndk {
                         abiFilters += SHIPPED_ABIS
                     }
-                    isMinifyEnabled = false
+                    // Resource shrinking stays off: it is a separate lever with its own
+                    // failure mode, and nothing here has measured it yet
+                    isMinifyEnabled = true
                     proguardFiles(
                         android.getDefaultProguardFile("proguard-android-optimize.txt"),
                         "proguard-rules.pro",
@@ -107,6 +144,26 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                         signingConfig = releaseSigning
                     }
                 }
+            }
+
+            // androidx.baselineprofile brings a pair of its own: nonMinifiedRelease to collect
+            // the profile from, benchmarkRelease to measure the shipping shape with. A
+            // hand-rolled `benchmark` type used to sit alongside doing the latter's job;
+            // keeping both multiplied the test module's variants and let an unsuffixed one
+            // through, which uninstalled the app on the developer's device
+            //
+            // They keep release's full ABI set: collection needs API 33+ or a rooted adb
+            // session, so it often has to run on an emulator, and that one is x86_64.
+            // configureEach rather than getByName - they do not exist yet when this runs
+            android.buildTypes.configureEach {
+                if (!name.startsWith("nonMinified") && !name.startsWith("benchmarkRelease")) {
+                    return@configureEach
+                }
+                // Debug signing so they install without release keystore material; profileable
+                // so macrobenchmark can attach a tracer to a non-debuggable build.
+                // The applicationId suffix is set in onVariants above, not here
+                signingConfig = android.signingConfigs.getByName("debug")
+                isProfileable = true
             }
         }
     }

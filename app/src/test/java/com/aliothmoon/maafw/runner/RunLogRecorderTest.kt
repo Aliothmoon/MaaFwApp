@@ -12,6 +12,7 @@ import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -66,11 +67,124 @@ class RunLogRecorderTest {
 
     private var includeDetails = false
 
+    /**
+     * 屏上那份是攒批发布的，读 `runLog.value` 之前先把那一拍走完
+     *
+     * 不能用 advanceUntilIdle：攒批循环是 backgroundScope 里的 `while (true)`，
+     * 那个 API 有意不驱动后台工作，否则它自己就永远返回不了
+     */
+    private fun TestScope.settleRunLog() = testScheduler.advanceTimeBy(SETTLE_MILLIS)
+
     private fun sessionRecords(): List<RunSessionRecord> {
         val file = File(logDir, "run").listFiles()?.single() ?: return emptyList()
         return file.readLines()
             .filter { it.isNotBlank() }
             .map { LENIENT.decodeFromString(RunSessionRecord.serializer(), it) }
+    }
+
+    @Test
+    fun `user-facing lines update lastUserFacing immediately`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        assertNull(recorder.lastUserFacing.value)
+        runner.emit(RunnerEvent.Log("跑起来了"))
+        assertEquals("跑起来了", recorder.lastUserFacing.value)
+    }
+
+    @Test
+    fun `pipeline node becomes liveUpdateStatus when there is no focus`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(RunnerEvent.Log("任务开始"))
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        assertEquals("任务开始", recorder.lastUserFacing.value)
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `focus wins over the pipeline node for liveUpdateStatus`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.PipelineNode.Succeeded",
+                    content = "刷到第3关",
+                    channels = setOf(FocusChannel.Log),
+                    trace = false,
+                ),
+            ),
+        )
+        assertEquals("刷到第3关", recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `a new PI task clears the pipeline node status`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+        runner.emit(RunnerEvent.Progress("下一任务", 1, 2))
+        assertEquals("下一任务 1/2", recorder.lastUserFacing.value)
+        assertNull(recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `clearing the on-screen log does not wipe liveUpdateStatus`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback(
+                "Node.PipelineNode.Starting",
+                """{"name":"StartFight"}""",
+            ),
+        )
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+        recorder.clear()
+        assertEquals("StartFight", recorder.liveUpdateStatus.value)
+    }
+
+    @Test
+    fun `verbose callbacks do not become lastUserFacing`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(RunnerEvent.Log("关键"))
+        runner.emit(RunnerEvent.Callback("Node.Action.Starting", """{"name":"A"}"""))
+        assertEquals("关键", recorder.lastUserFacing.value)
+    }
+
+    @Test
+    fun `a new session clears lastUserFacing`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(RunnerEvent.Log("上一轮"))
+        recorder.beginSession(planOf("清体力"))
+        assertNull(recorder.lastUserFacing.value)
+        assertNull(recorder.liveUpdateStatus.value)
+        recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
     }
 
     @Test
@@ -167,12 +281,37 @@ class RunLogRecorderTest {
         runner.emit(RunnerEvent.Log("同一句"))
         recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
+        settleRunLog()
         val before = recorder.runLog.value.size
         recorder.beginSession(planOf("a"))
         runner.emit(RunnerEvent.Log("同一句"))
         recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        settleRunLog()
 
         assertTrue("跨轮被去重掉了", recorder.runLog.value.size > before)
+    }
+
+    /**
+     * 一串突发只出几次新列表，不是一条一次
+     *
+     * 逐条发布要按条复制整份 [RUN_LOG_CAPACITY] 列表，还让 UI 跟着事件率重组；
+     * 识别期一秒几十条，这条回归掉了不会有任何测试变红，只会变卡
+     */
+    @Test
+    fun `a burst of entries publishes as a few batches`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        val sizes = mutableListOf<Int>()
+        backgroundScope.launch { recorder.runLog.collect { sizes += it.size } }
+        settleRunLog()
+
+        repeat(20) { index -> runner.emit(RunnerEvent.Log("line $index")) }
+        settleRunLog()
+
+        assertEquals(20, sizes.last())
+        // 不钉死次数：攒批的节拍怎么排是实现的事，逐条发布才是要拦的那件事
+        assertTrue("逐条发布了，共 ${sizes.size} 次", sizes.size <= 3)
     }
 
     private fun planOf(vararg taskNames: String) = RunPlan(
@@ -197,5 +336,8 @@ class RunLogRecorderTest {
             templates = emptyList(),
         )
         val LENIENT = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+        /** 宽出 RunLogRecorder.FLUSH_INTERVAL_MS 一截，那个常量是私有的，不为测试开出来 */
+        const val SETTLE_MILLIS = 500L
     }
 }

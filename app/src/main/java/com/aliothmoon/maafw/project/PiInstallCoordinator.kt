@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import androidx.tracing.trace
+import java.util.concurrent.atomic.AtomicInteger
 
 /** PI 解包的可观测状态；除 [Unpacking] 外几档都是一闪而过，留着是为了状态机完整 */
 sealed interface PiInstallState {
@@ -59,10 +61,20 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
         _state.value = PiInstallState.Checking
         try {
             withContext(MaaDispatchers.IO) {
+                // 逐条目写状态，几千项的 PI 就是几千次 SessionUiState 重建，而这几秒
+                // 恰好是首屏最挤的时候。解包线程池并发调这里，CAS 只放跨档位的那一次过
+                val lastPercent = AtomicInteger(-1)
                 val onProgress: PiUnpackProgress = { done, total, path ->
-                    _state.value = PiInstallState.Unpacking(done, total, path)
+                    val percent = if (total > 0) done * 100 / total else 0
+                    val previous = lastPercent.get()
+                    if (percent > previous && lastPercent.compareAndSet(previous, percent)) {
+                        _state.value = PiInstallState.Unpacking(done, total, path)
+                    }
                 }
-                if (force) installer.reinstall(onProgress) else installer.ensureInstalled(onProgress)
+                // 段名与 StartupBenchmark.PI_UNPACK_SECTION 是一对，改一处要改两处
+                trace(PI_UNPACK_TRACE) {
+                    if (force) installer.reinstall(onProgress) else installer.ensureInstalled(onProgress)
+                }
             }
             _state.value = PiInstallState.Ready
             true
@@ -73,5 +85,9 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
             _state.value = PiInstallState.Failed(uiTextOf(R.string.pi_install_error, e.message.orEmpty()))
             false
         }
+    }
+
+    private companion object {
+        const val PI_UNPACK_TRACE = "MaaPiUnpack"
     }
 }

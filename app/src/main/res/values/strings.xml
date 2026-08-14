@@ -26,6 +26,7 @@
     <string name="tasks_preview_waiting_surface">等待画面</string>
     <string name="virtual_display_game_running">运行中</string>
     <string name="virtual_display_game_stopped">已停止</string>
+    <string name="virtual_display_app_drifted">已离屏</string>
     <string name="virtual_display_idle">空闲</string>
     <string name="tasks_preview_exit_fullscreen">退出全屏</string>
     <string name="tasks_preview_idle">未在运行</string>
@@ -258,7 +259,8 @@
     <string name="schedule_reason_blocked">启动前检查未通过</string>
     <string name="schedule_reason_rejected">已有执行在进行中</string>
     <string name="schedule_edit_configuration">运行配置</string>
-    <string name="schedule_edit_configuration_active">跟随当前选中</string>
+    <string name="schedule_edit_configuration_required">请选择这条规则要跑的配置</string>
+    <string name="schedule_configuration_missing">绑定的配置已删除</string>
     <string name="schedule_edit_configuration_none">还没有运行配置，请先在任务页创建</string>
     <string name="schedule_result_failed_validation">规则缺失</string>
     <string name="schedule_result_failed_service">服务启动失败</string>
@@ -384,6 +386,9 @@
     <string name="run_log_task_succeeded">任务完成: %1$s</string>
     <string name="run_log_task_failed">任务失败: %1$s</string>
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
+    <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)，可改用前台模式</string>
+    <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
+    <string name="run_log_app_unknown">未知应用</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
 
     <!-- 历史日志：每轮运行落盘一份 -->

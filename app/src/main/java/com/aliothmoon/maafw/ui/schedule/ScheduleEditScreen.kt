@@ -84,13 +84,16 @@ fun ScheduleEditScreen(
     val isNew = strategyId.isNullOrBlank() || strategyId == NEW_STRATEGY
     // 自增默认名：与 MaaMeow 一致用「现有数 + 1」，避免重名也无须让用户起名
     val defaultName = stringResource(R.string.schedule_default_name, state.rows.size + 1)
-    val initial: ScheduleStrategy = remember(strategyId, defaultName, state.rows) {
+    // 新建时预选当前激活的配置：没有「跟随当前选中」那一档了，总得给个最可能的起点
+    val defaultConfigurationId = state.activeConfigurationId
+        ?: state.configurations.firstOrNull()?.id.orEmpty()
+    val initial: ScheduleStrategy = remember(strategyId, defaultName, defaultConfigurationId, state.rows) {
         if (isNew) {
-            ScheduleStrategy(name = defaultName)
+            ScheduleStrategy(name = defaultName, runConfigurationId = defaultConfigurationId)
         } else {
             // 列表已展示过这条，VM 里必有；极端情况下找不到（被删）退回新建态
             state.rows.firstOrNull { it.strategy.id == strategyId }?.strategy
-                ?: ScheduleStrategy(name = defaultName)
+                ?: ScheduleStrategy(name = defaultName, runConfigurationId = defaultConfigurationId)
         }
     }
 
@@ -191,16 +194,22 @@ fun ScheduleEditScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    // null 是一档真选项而不是缺省兜底：绑死某一份和「跟着我当下用的那份」
-                    // 是两种不同的意图，老规则读出来是 null，落在后者上正合适
-                    MaaSingleChoiceFlow(
-                        options = listOf(
-                            null to stringResource(R.string.schedule_edit_configuration_active),
-                        ) + state.configurations.map { it.id to it.name },
+                    MaaSingleChoiceFlow<String?>(
+                        options = state.configurations.map { it.id to it.name },
                         selected = draft.runConfigurationId
-                            ?.takeIf { id -> state.configurations.any { it.id == id } },
-                        onSelect = { draft = draft.copy(runConfigurationId = it) },
+                            .takeIf { id -> state.configurations.any { it.id == id } },
+                        onSelect = { id -> draft = draft.copy(runConfigurationId = id.orEmpty()) },
                     )
+                    // 绑定的那份被删掉时落在这里：选中项为空，保存被 CONFIGURATION 挡住
+                    if (ScheduleFieldError.CONFIGURATION in errors ||
+                        state.configurations.none { it.id == draft.runConfigurationId }
+                    ) {
+                        Text(
+                            text = stringResource(R.string.schedule_edit_configuration_required),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
 

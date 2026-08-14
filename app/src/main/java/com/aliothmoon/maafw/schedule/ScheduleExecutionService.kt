@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.i18n.resolve
@@ -150,7 +151,7 @@ class ScheduleExecutionService : Service() {
                         closeAppAfterTask = strategy.closeAppAfterTask,
                     ),
                 ),
-                configurationId = strategy.runConfigurationId?.let(::RunConfigurationId),
+                configurationId = RunConfigurationId(strategy.runConfigurationId),
                 // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
                 requestId = RunRequestId($$"${strategy.id}@$scheduledTimeMs"),
                 force = strategy.forceStart,
@@ -214,6 +215,7 @@ class ScheduleExecutionService : Service() {
             NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.notification_channel_schedule),
+                // LOW：短暂 FGS 不该出声。MIN 进不了状态栏；Live Update 也只禁 MIN
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
                 description = getString(R.string.notification_channel_schedule_desc)
@@ -256,13 +258,16 @@ class ScheduleExecutionService : Service() {
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.notification_schedule_title))
             .setContentText(text)
             .setContentIntent(contentIntent)
             .setOngoing(true)
+            .setRequestPromotedOngoing(manager.canRequestPromotedOngoing())
             .setSilent(true)
+            .setOnlyAlertOnce(true)
             .apply {
                 interruptibleStrategyId?.let { id ->
                     addAction(

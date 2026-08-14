@@ -82,6 +82,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun watchdogState(): Int = AppWatchdog.state.value
 
+    override fun watchdogTargetPackage(): String = AppWatchdog.targetPackage.orEmpty()
+
     // ── 亮屏与解锁 ──
 
     override fun unlock(credential: String?): Int =

@@ -26,7 +26,12 @@ object AppWatchdog {
 
     const val STATE_IDLE = 0
     const val STATE_WATCHING = 1
-    const val STATE_APP_DIED = 2
+
+    /** 窗口离开虚拟屏且拉回失败，进程还活着 */
+    const val STATE_DISPLAY_DRIFT = 2
+
+    /** pidof 查不到进程 */
+    const val STATE_APP_DIED = 3
 
     private const val POLL_INTERVAL_MS = 5000L
     private const val REPIN_GRACE_MS = 5000L
@@ -44,6 +49,7 @@ object AppWatchdog {
         private set
     private var driftFirstSeenMs = 0L
     private var driftRepinAttempts = 0
+    private var driftNotified = false
     private var diedNotified = false
 
     fun startWatching() {
@@ -51,6 +57,7 @@ object AppWatchdog {
         targetPackage = null
         driftFirstSeenMs = 0L
         driftRepinAttempts = 0
+        driftNotified = false
         diedNotified = false
         _state.value = STATE_IDLE
         Ln.i("AppWatchdog: start watching display ${VirtualDisplayManager.getDisplayId()}")
@@ -80,6 +87,7 @@ object AppWatchdog {
             targetPackage = top
             driftFirstSeenMs = 0L
             driftRepinAttempts = 0
+            driftNotified = false
             diedNotified = false
             _state.value = STATE_WATCHING
             return
@@ -91,7 +99,22 @@ object AppWatchdog {
             return
         }
 
-        // 曾有目标、屏上空了 → 宽限后 repin，超限判死
+        // 屏上空了先问进程还在不在：被杀和"窗口跑到主屏去了"是两回事，
+        // 拿后者的文案去讲前者，用户会照着去改前台模式而问题根本不在那
+        when (isAlive(pkg)) {
+            ALIVE_NO -> {
+                if (!diedNotified) {
+                    diedNotified = true
+                    _state.value = STATE_APP_DIED
+                    Ln.w("AppWatchdog: $pkg process is gone")
+                }
+                return
+            }
+            // 判不出就不下结论，等下一拍
+            ALIVE_UNKNOWN -> return
+        }
+
+        // 进程还在，那就是窗口飘了 → 宽限后 repin，超限上报
         if (driftRepinAttempts >= MAX_REPIN_ATTEMPTS) return
         val now = SystemClock.elapsedRealtime()
         if (driftFirstSeenMs == 0L) {
@@ -111,10 +134,38 @@ object AppWatchdog {
             return
         }
         driftRepinAttempts++
-        if (driftRepinAttempts >= MAX_REPIN_ATTEMPTS && !diedNotified) {
-            diedNotified = true
-            _state.value = STATE_APP_DIED
-            Ln.w("AppWatchdog: $pkg gone and repin failed")
+        if (driftRepinAttempts >= MAX_REPIN_ATTEMPTS && !driftNotified) {
+            driftNotified = true
+            _state.value = STATE_DISPLAY_DRIFT
+            Ln.w("AppWatchdog: $pkg left the virtual display and repin failed")
         }
+    }
+
+    private const val ALIVE_YES = 0
+    private const val ALIVE_NO = 1
+    private const val ALIVE_UNKNOWN = 2
+
+    /**
+     * 判活走 pidof（与 MaaMeow 同法）：本对象跑在特权进程里，shell 身份直接 exec 即可
+     *
+     * 只有"退出码 1 且两个流都空"才算确认死亡——ROM 换了 pidof 实现、或权限被挡时，
+     * 输出形态五花八门，一律当判不出，宁可漏报也不要把还活着的应用报成死了
+     */
+    private fun isAlive(packageName: String): Int = runCatching {
+        val process = Runtime.getRuntime().exec(arrayOf("pidof", packageName))
+        val exitCode = process.waitFor()
+        val out = process.inputStream.bufferedReader().readText().trim()
+        val err = process.errorStream.bufferedReader().readText().trim()
+        when {
+            exitCode == 0 && out.isNotEmpty() -> ALIVE_YES
+            exitCode == 1 && out.isEmpty() && err.isEmpty() -> ALIVE_NO
+            else -> {
+                Ln.w("AppWatchdog: pidof $packageName unexpected: exit=$exitCode out=$out err=$err")
+                ALIVE_UNKNOWN
+            }
+        }
+    }.getOrElse {
+        Ln.w("AppWatchdog: pidof $packageName failed: ${it.message}")
+        ALIVE_UNKNOWN
     }
 }

@@ -34,3 +34,5 @@ include(":annotation-api")
 include(":ksp-processor")
 // Semi Design 图标（vector drawable + SemiIconRes）
 include(":semi-icons")
+// 真机性能测量；只有 benchmark 变体，跑的是 .benchmark 后缀那个包
+include(":macrobenchmark")

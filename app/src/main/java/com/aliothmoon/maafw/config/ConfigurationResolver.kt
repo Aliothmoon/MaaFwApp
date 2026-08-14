@@ -129,6 +129,9 @@ object ConfigurationResolver {
         config: UserConfiguration,
         diagnostics: MutableList<Diagnostic>,
     ): ResolvedRunConfiguration {
+        // 非激活配置只有名字与任务数会被显示（ConfigurationSheet 的 ConfigRowCard），
+        // 给它们递归物化整棵 option 编辑器树是纯浪费——而每次勾一个任务都要重算一遍
+        val isActive = runConfiguration.id == config.activeConfigurationId
         val tasks = runConfiguration.tasks.map { configured ->
             val taskDefinition = definition.task(configured.taskName)
             if (taskDefinition == null) {
@@ -158,12 +161,16 @@ object ConfigurationResolver {
                     applicable = applicability == null,
                     missingDefinition = false,
                     unavailableReason = applicability,
-                    options = buildOptionEditors(
-                        definition = definition,
-                        optionNames = taskDefinition.optionNames,
-                        values = configured.optionValues,
-                        resourceName = resourceName,
-                    ),
+                    options = if (isActive) {
+                        buildOptionEditors(
+                            definition = definition,
+                            optionNames = taskDefinition.optionNames,
+                            values = configured.optionValues,
+                            resourceName = resourceName,
+                        )
+                    } else {
+                        emptyList()
+                    },
                     icon = taskDefinition.icon,
                 )
             }
@@ -171,7 +178,7 @@ object ConfigurationResolver {
         return ResolvedRunConfiguration(
             id = runConfiguration.id,
             name = runConfiguration.name,
-            isActive = runConfiguration.id == config.activeConfigurationId,
+            isActive = isActive,
             tasks = tasks,
         )
     }

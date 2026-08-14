@@ -202,6 +202,7 @@ class MaaFrameworkRunnerPort(
                 completedTaskCount = 0,
                 totalTaskCount = plan.tasks.size,
                 taskResults = emptyList(),
+                taskLabels = plan.taskLabelMap(),
             ),
             latestResult = null,
         )

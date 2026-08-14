@@ -25,7 +25,9 @@ import com.aliothmoon.maafw.runner.RunScreenSaver
 import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.runner.ScreenSaverHook
 import com.aliothmoon.maafw.runner.SessionLogHook
+import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.runner.WakeUnlockHook
+import com.aliothmoon.maafw.runner.WatchdogNoticeHook
 import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import org.koin.android.ext.koin.androidContext
@@ -123,6 +125,12 @@ val runnerModule = module {
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,
                 KeepAliveHook(get()),
+                WatchdogNoticeHook(
+                    watchdogState = get<PermissionGateway>().watchdogState,
+                    servicePort = get(),
+                    journal = get(),
+                    scope = get(named<AppCoroutineScope>()),
+                ),
             ),
             runMode = get<AppSettingsManager>().runMode::value,
             scope = get(named<AppCoroutineScope>()),
