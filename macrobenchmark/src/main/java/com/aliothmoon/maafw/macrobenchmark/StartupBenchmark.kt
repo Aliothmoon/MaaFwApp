@@ -1,6 +1,8 @@
 package com.aliothmoon.maafw.macrobenchmark
 
 import android.os.ParcelFileDescriptor
+import androidx.benchmark.macro.BaselineProfileMode
+import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.ExperimentalMetricApi
 import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
@@ -73,6 +75,26 @@ class StartupBenchmark {
         val dir = "/sdcard/Android/data/${BuildConfig.TARGET_PACKAGE}/files"
         shell("rm -f $dir/pi.version")
         shell("rm -rf $dir/pi")
+    }
+
+    /** 完全不 AOT，作为 Baseline Profile 的对照下限 */
+    @Test
+    fun coldStartupNoCompilation() = measureColdStartup(CompilationMode.None())
+
+    /** Require 而不是 Enable：profile 没打进包时直接失败，免得把「没接上」读成「没效果」 */
+    @Test
+    fun coldStartupBaselineProfile() =
+        measureColdStartup(CompilationMode.Partial(BaselineProfileMode.Require))
+
+    private fun measureColdStartup(mode: CompilationMode) = rule.measureRepeated(
+        packageName = BuildConfig.TARGET_PACKAGE,
+        metrics = listOf(StartupTimingMetric()),
+        iterations = ITERATIONS,
+        startupMode = StartupMode.COLD,
+        compilationMode = mode,
+    ) {
+        pressHome()
+        startActivityAndWait()
     }
 
     /** 读到 EOF 才算完：executeShellCommand 是异步的，只 close 会撞上还没做完的那一步 */

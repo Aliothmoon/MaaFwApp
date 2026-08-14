@@ -1,5 +1,6 @@
 plugins {
     id("maafw.android.benchmark")
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {

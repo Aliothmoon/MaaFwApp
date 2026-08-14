@@ -99,6 +99,16 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
 
             extensions.configure<ApplicationAndroidComponentsExtension> {
                 onVariants { variant ->
+                    // Set here rather than as an applicationIdSuffix on the build type: the
+                    // baselineprofile plugin passes its own action to buildTypes.create, which
+                    // runs after configureEach and drops the suffix again. Without this the
+                    // generation build installs over whatever the developer has on the device
+                    val generated = variant.buildType.orEmpty().let {
+                        it.startsWith("nonMinified") || it.startsWith("benchmarkRelease")
+                    }
+                    if (generated) {
+                        variant.applicationId.set(maafwApplicationId() + BENCHMARK_APP_ID_SUFFIX)
+                    }
                     val name = variant.name.replaceFirstChar(Char::uppercaseChar)
                     val verify = tasks.register<VerifyR8KeepsTask>("verify${name}R8Keeps") {
                         mapping.set(
@@ -134,22 +144,26 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                         signingConfig = releaseSigning
                     }
                 }
-                // What :macrobenchmark drives: release-shaped for the numbers to mean anything,
-                // profileable so the shell can attach a tracer, debug-signed so it installs
-                // without release keystore material
-                create("benchmark") {
-                    initWith(getByName("release"))
-                    applicationIdSuffix = BENCHMARK_APP_ID_SUFFIX
-                    isDebuggable = false
-                    isProfileable = true
-                    signingConfig = android.signingConfigs.getByName("debug")
-                    matchingFallbacks += "release"
-                    // Only ever runs on the device that is plugged in
-                    ndk {
-                        abiFilters.clear()
-                        abiFilters += debugAbis
-                    }
+            }
+
+            // androidx.baselineprofile brings a pair of its own: nonMinifiedRelease to collect
+            // the profile from, benchmarkRelease to measure the shipping shape with. A
+            // hand-rolled `benchmark` type used to sit alongside doing the latter's job;
+            // keeping both multiplied the test module's variants and let an unsuffixed one
+            // through, which uninstalled the app on the developer's device
+            //
+            // They keep release's full ABI set: collection needs API 33+ or a rooted adb
+            // session, so it often has to run on an emulator, and that one is x86_64.
+            // configureEach rather than getByName - they do not exist yet when this runs
+            android.buildTypes.configureEach {
+                if (!name.startsWith("nonMinified") && !name.startsWith("benchmarkRelease")) {
+                    return@configureEach
                 }
+                // Debug signing so they install without release keystore material; profileable
+                // so macrobenchmark can attach a tracer to a non-debuggable build.
+                // The applicationId suffix is set in onVariants above, not here
+                signingConfig = android.signingConfigs.getByName("debug")
+                isProfileable = true
             }
         }
     }

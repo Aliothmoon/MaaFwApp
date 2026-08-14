@@ -5,6 +5,7 @@ plugins {
     id("maafw.agent.runtime")
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -35,12 +36,20 @@ android {
     }
 }
 
+baselineProfile {
+    // 落进 src/main 而不是 src/release：测量用的 benchmark 是另一个 build type，
+    // 吃不到 src/release 的源集，不合并的话量出来会是「profile 毫无效果」
+    mergeIntoMain = true
+}
+
 dependencies {
     compileOnly(project(":hidden-api"))
 
     implementation(project(":annotation-api"))
     ksp(project(":ksp-processor"))
     implementation(project(":semi-icons"))
+    // Baseline Profile 的生产者；采集用例在那个模块里
+    baselineProfile(project(":macrobenchmark"))
 
     // MIUI 上系统权限页的跳转差异大，自己拼 Intent 覆盖不全
     implementation(libs.xx.permissions)
@@ -69,6 +78,8 @@ dependencies {
     implementation(libs.androidx.window)
     // 解包与项目加载各圈一段，Perfetto / macrobenchmark 里才归得了因
     implementation(libs.androidx.tracing.ktx)
+    // Baseline Profile 在 API 33 以下靠它在启动时装入
+    implementation(libs.androidx.profileinstaller)
 
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)

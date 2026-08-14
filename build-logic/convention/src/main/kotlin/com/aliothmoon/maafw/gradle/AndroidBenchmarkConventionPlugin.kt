@@ -23,15 +23,10 @@ class AndroidBenchmarkConventionPlugin : Plugin<Project> {
             android.defaultConfig.manifestPlaceholders["targetAppId"] = targetAppId
             android.buildFeatures.buildConfig = true
 
-            android.buildTypes {
-                create("benchmark") {
-                    isDebuggable = true
-                    // 自建的 build type 不会自动继承 debug 签名，不给就是
-                    // INSTALL_PARSE_FAILED_NO_CERTIFICATES
-                    signingConfig = android.signingConfigs.getByName("debug")
-                    matchingFallbacks += "release"
-                }
-            }
+            // No build type of its own: androidx.baselineprofile derives nonMinifiedRelease
+            // and benchmarkRelease from the app's release, and one here would get multiplied
+            // against those. Self-built types also do not inherit debug signing, which shows up
+            // as INSTALL_PARSE_FAILED_NO_CERTIFICATES rather than anything about signing
 
             // Runs the test APK in its own process, which is what lets it cold-start the target
             android.experimentalProperties["android.experimental.self-instrumenting"] = true
