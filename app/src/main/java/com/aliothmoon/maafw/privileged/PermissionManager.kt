@@ -71,9 +71,6 @@ class PermissionManager(
      *
      * 每轮现取服务面而不是扣住连上那一刻的 binder：binder 死了 serviceOrNull 即 null，
      * 轮询当场收摊，不必等连接态那条流转过来
-     *
-     * 共享档位是 WhileSubscribed 而不是 Eagerly：这个值只有任务页的预览区读，
-     * Eagerly 会让它在没人看的时候也一直发 binder——服务连着就一直，与跑不跑无关
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     override val watchdogState: StateFlow<WatchdogState> = servicePort.serviceState
@@ -95,11 +92,7 @@ class PermissionManager(
                 }
             }
         }
-        .stateIn(
-            scope,
-            SharingStarted.WhileSubscribed(WATCHDOG_IDLE_TIMEOUT_MS),
-            WatchdogState.IDLE,
-        )
+        .stateIn(scope, SharingStarted.Eagerly, WatchdogState.IDLE)
 
     private val serviceConnected: StateFlow<Boolean> = serviceState
         .map { it == PrivilegedServiceState.Connected }
@@ -293,9 +286,6 @@ class PermissionManager(
     private companion object {
         /** 系统绑定无障碍服务是异步的，3 秒等不到就当没连上，不卡住授权流程 */
         const val ACCESSIBILITY_BIND_TIMEOUT_MS = 3_000L
-
-        /** 切页离开预览区就停轮询，但别停在切回来的那一瞬 */
-        const val WATCHDOG_IDLE_TIMEOUT_MS = 5_000L
     }
 }
 
