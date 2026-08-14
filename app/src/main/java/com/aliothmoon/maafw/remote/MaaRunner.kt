@@ -342,7 +342,10 @@ class MaaRunner(private val agentHost: AgentHost) {
         val reusable = loadedAgents == payload.agents &&
             agents.size == payload.agents.size &&
             agents.all { it.session.isAlive() && agentLib.MaaAgentClientAlive(it.client).toInt() != 0 }
-        if (reusable) return null
+        if (reusable) {
+            notifyAgentsConnected(payload.agents)
+            return null
+        }
 
         releaseAgents()
 
@@ -385,6 +388,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 return failAgents(started, "agent 连接超时：${agent.childExec}")
             }
             Ln.i("MaaRunner: agent[$index] connected, identifier=$identifier")
+            notify { onAgentConnected(index, payload.agents.size, agent.childExec) }
             started += ActiveAgent(client, session)
         }
 
@@ -393,6 +397,14 @@ class MaaRunner(private val agentHost: AgentHost) {
         // agent 注册的 custom 节点挂在 resource 上，绑定关系要重来
         releaseTasker(lib)
         return null
+    }
+
+    /** 复用还活着的 child 时也回投：新一轮会话日志不能因为没重新 connect 就缺这行 */
+    private fun notifyAgentsConnected(declared: List<AgentPayload>) {
+        declared.forEachIndexed { index, agent ->
+            Ln.i("MaaRunner: agent[$index] reused, exec=${agent.childExec}")
+            notify { onAgentConnected(index, declared.size, agent.childExec) }
+        }
     }
 
     /** identifier 走 MaaStringBuffer 出参；buffer 由调用方负责销毁 */

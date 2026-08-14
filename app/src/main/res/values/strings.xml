@@ -378,6 +378,7 @@
     <string name="run_log_filter_all">全部</string>
     <string name="run_log_connecting">正在连接设备…</string>
     <string name="run_log_connected">设备连接成功</string>
+    <string name="run_log_agent_connected">Agent 已连接: %1$s</string>
     <string name="run_log_connect_failed">设备连接失败</string>
     <string name="run_log_resource_loading">正在加载资源: %1$s</string>
     <string name="run_log_resource_loaded">资源加载成功: %1$s</string>

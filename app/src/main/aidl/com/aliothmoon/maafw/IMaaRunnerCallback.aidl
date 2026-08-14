@@ -17,4 +17,7 @@ oneway interface IMaaRunnerCallback {
     void onFinished(int outcome, String reason) = 4;
 
     void onAgentOutput(String line, boolean fromStderr) = 5;
+
+    /** 一个 agent child 已 connect（含本轮复用已在线的）；[exec] 是 PI 的 child_exec */
+    void onAgentConnected(int index, int total, String exec) = 6;
 }

@@ -92,6 +92,17 @@ sealed interface RunnerEvent {
         val lineCount: Int get() = line.count { it == '\n' } + 1
     }
 
+    /**
+     * 一个 agent child 已经 MaaAgentClientConnect 成功（或本轮复用了还活着的）
+     *
+     * 不是 child 自己 print 的，也不是 MaaFramework 回调——编排层的事实，单独一档才能进关键档
+     */
+    data class AgentConnected(val index: Int, val total: Int, val exec: String) : RunnerEvent {
+        val label: String
+            get() = exec.substringAfterLast('/').substringAfterLast('\\')
+                .ifBlank { "agent[$index]" }
+    }
+
     /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */
     data class Focus(val focus: FocusMessage) : RunnerEvent
 }

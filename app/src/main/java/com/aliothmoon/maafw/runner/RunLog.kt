@@ -71,6 +71,7 @@ fun RunnerEvent.toLogText(): String = when (this) {
     is RunnerEvent.Progress -> "$taskName $completed/$total"
     is RunnerEvent.Focus -> focus.content
     is RunnerEvent.AgentOutput -> line
+    is RunnerEvent.AgentConnected -> label
     is RunnerEvent.MalformedCallback -> MALFORMED_LABEL
     is RunnerEvent.Callback -> message
 }

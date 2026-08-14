@@ -384,6 +384,7 @@
     <string name="run_log_filter_all">All</string>
     <string name="run_log_connecting">Connecting to device…</string>
     <string name="run_log_connected">Device connected</string>
+    <string name="run_log_agent_connected">Agent connected: %1$s</string>
     <string name="run_log_connect_failed">Device connection failed</string>
     <string name="run_log_resource_loading">Loading resource: %1$s</string>
     <string name="run_log_resource_loaded">Resource loaded: %1$s</string>

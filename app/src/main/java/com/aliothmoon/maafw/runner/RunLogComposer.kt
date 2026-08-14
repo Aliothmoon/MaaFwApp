@@ -52,6 +52,11 @@ class RunLogComposer {
 
             is RunnerEvent.AgentOutput -> agentEntry(event, atMillis) ?: return null
 
+            is RunnerEvent.AgentConnected -> Composed(
+                RunLogKind.Success,
+                uiTextOf(R.string.run_log_agent_connected, event.label),
+            )
+
             is RunnerEvent.MalformedCallback -> Composed(
                 RunLogKind.Error,
                 uiTextFromFramework(MALFORMED_LABEL),

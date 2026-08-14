@@ -146,6 +146,24 @@ class RunLogComposerTest {
         assertEquals(false, compose(agentLine("err", fromStderr = true))!!.isEssential)
     }
 
+    /** 编排层的 connect 成功是关键档，跟设备连接同一档；child 自己的 stderr 仍不是 */
+    @Test
+    fun `agent connect is an essential success line using the exec basename`() {
+        val entry = compose(
+            RunnerEvent.AgentConnected(
+                index = 1,
+                total = 2,
+                exec = "/data/app/~~x/lib/arm64/libcpp-algo.so",
+            ),
+        )
+        assertEquals(RunLogKind.Success, entry?.kind)
+        assertEquals(true, entry?.isEssential)
+        assertEquals(
+            UiText.Resource(R.string.run_log_agent_connected, listOf("libcpp-algo.so")),
+            entry?.text,
+        )
+    }
+
     /**
      * 特权进程攒批之后，洪泛滑窗必须按行计
      *
