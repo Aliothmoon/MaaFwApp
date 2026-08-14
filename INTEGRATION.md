@@ -2,7 +2,7 @@
 
 MaaFwApp 本身不包含业务资源。资源开发者写好 Project Interface 之后，用一份打包配方告诉本仓库「资源在哪、包名叫什么、agent 怎么拉起」，再出 APK。
 
-和桌面端不同：[MFAAvalonia](https://github.com/MaaXYZ/MFAAvalonia) / [MXU](https://github.com/MistEO/MXU) 是把 GUI 解压到资源目录旁，运行时读旁边的 `interface.json`；Android 上资源在**构建期**打进包，换资源就要重新出包。
+资源在**构建期**打进 APK。换资源就要重新出包，不能在设备上换一份 `interface.json` 接着用。
 
 开发资源前请先读 [Project Interface V2 协议](https://github.com/MaaXYZ/MaaFramework/blob/main/docs/zh_cn/3.3-ProjectInterfaceV2%E5%8D%8F%E8%AE%AE.md)。本应用面向发布后的配置与运行；写 Pipeline、对识别请用 MaaFramework 提供的调试工具。
 
@@ -54,13 +54,14 @@ app:
 
 按桌面端习惯写即可，下面几条是 Android 上会对不上的地方：
 
-| 桌面端 | 在 MaaFwApp 里 |
-|:---|:---|
-| 把 GUI 放到资源目录旁 | 构建期打进 APK，换资源重新出包 |
+| 桌面端 | 在 MaaFwApp 里                                                      |
+|:---|:------------------------------------------------------------------|
+| 把 GUI 放到资源目录旁 | 构建期打进 APK，换资源重新出包                                                 |
 | `controller` 写 Adb / Win32 / PlayCover… | 只取 `type: Adb` 的一项，设备上由 native controller 实现，**不必为 Android 另写一条** |
-| `child_exec` / `child_args` 决定怎么起 agent | 这两项不参与实际命令行；可执行体和参数写在配方的 `agent.runtimes` |
+| `child_exec` / `child_args` 决定怎么起 agent | 这两项不参与实际命令行；可执行体和参数写在配方的 `agent.runtimes`                         |
 | 应用名、图标来自 PI 顶层 `label` / `icon` | 由配方的 `app.*` 决定 |
-| Mirror酱 / 热更新资源 | 不支持，资源随 APK 绑定 |
+| Mirror酱 | 暂不支持 |
+| 热更新资源 | 资源随 APK 绑定，换资源重新出包 |
 | 调试期改完资源刷新即可 | 重装或清数据。版本号跟本仓库提交走，只换资源不改本仓库时设备可能继续用旧解包 |
 
 `welcome`、`description`、`contact`、`license`、`github`、`telemetry` 会进首启弹窗和设置页「关于」。正文支持 `$i18n`、相对文件、URL 或直接文本。

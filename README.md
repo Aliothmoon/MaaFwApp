@@ -89,8 +89,6 @@ python scripts/setup_maa_framework.py
 ## 相关项目
 
 - [MaaFramework](https://github.com/MaaXYZ/MaaFramework) — 基于图像识别的自动化框架
-- [MFAAvalonia](https://github.com/MaaXYZ/MFAAvalonia) — 桌面端通用 GUI
-- [MXU](https://github.com/MistEO/MXU) — 另一套桌面端通用 GUI
 
 ## 开源许可
 
@@ -98,4 +96,4 @@ python scripts/setup_maa_framework.py
 
 ## 致谢
 
-MaaFwApp 使用了 [MaaFramework](https://github.com/MaaXYZ/MaaFramework)、[Shizuku](https://github.com/RikkaApps/Shizuku) 等开源项目。感谢 Maa 生态里 MFAAvalonia、MXU 以及各资源项目的作者。
+MaaFwApp 使用了 [MaaFramework](https://github.com/MaaXYZ/MaaFramework)、[Shizuku](https://github.com/RikkaApps/Shizuku) 等开源项目。
