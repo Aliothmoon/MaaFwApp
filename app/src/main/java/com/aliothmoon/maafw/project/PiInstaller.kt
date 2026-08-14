@@ -4,11 +4,12 @@ import android.content.Context
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.InputStream
 import java.io.OutputStream
-import java.util.concurrent.Callable
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 /**
  * 打包进 APK 的 PI 只读包
@@ -19,24 +20,40 @@ interface PiPackage {
     fun manifest(): List<String>
 
     fun open(path: String): InputStream
+
+    /** APK 里的 PI 归档；单测内存包没有这份，解包走 [open] */
+    fun openArchive(): InputStream? = null
 }
 
 /** 路径一律相对 PI 根，与 [ProjectSource] 保持同一套相对路径语义 */
-class AssetPiPackage(context: Context, private val root: String) : PiPackage {
+class AssetPiPackage(context: Context) : PiPackage {
 
     private val assets = context.applicationContext.assets
+    private val cacheZip = File(context.applicationContext.cacheDir, PI_ARCHIVE_ASSET)
+
+    private val zip: ZipFile by lazy {
+        assets.open(PI_ARCHIVE_ASSET).use { input ->
+            cacheZip.outputStream().use { input.copyTo(it) }
+        }
+        ZipFile(cacheZip)
+    }
 
     override fun manifest(): List<String> =
         assets.open(PI_MANIFEST_ASSET).bufferedReader().useLines { lines ->
             lines.map(String::trim).filter(String::isNotEmpty).toList()
         }
 
-    override fun open(path: String): InputStream = assets.open("$root/$path")
+    override fun open(path: String): InputStream {
+        val entry = zip.getEntry(path) ?: throw FileNotFoundException(path)
+        return zip.getInputStream(entry)
+    }
+
+    override fun openArchive(): InputStream = assets.open(PI_ARCHIVE_ASSET)
 }
 
 /**
  * 逐条目的解包进度；done 从 1 起计，total 是清单条目数
- * 由解包线程池的多个线程并发调用，实现要自己扛并发
+ * 归档解包按 zip 顺序回调；单测内存包按清单顺序
  */
 typealias PiUnpackProgress = (done: Int, total: Int, path: String) -> Unit
 
@@ -52,7 +69,6 @@ typealias PiUnpackProgress = (done: Int, total: Int, path: String) -> Unit
 class PiInstaller(
     private val pkg: PiPackage,
     private val versionCode: Int,
-    private val parallelism: Int = Runtime.getRuntime().availableProcessors(),
 ) {
 
     /**
@@ -105,28 +121,61 @@ class PiInstaller(
         val entries = pkg.manifest()
         if (entries.isEmpty()) return
 
-        // 先建目录再并发写文件：mkdirs 并发调用会有一方返回 false，单线程建好省掉这层不确定
-        entries.mapNotNullTo(mutableSetOf()) { File(dest, it).parentFile }.forEach { it.mkdirs() }
+        val archive = pkg.openArchive()
+        if (archive != null) {
+            unpackArchive(dest, entries, archive, onProgress)
+            return
+        }
 
-        val pool = Executors.newFixedThreadPool(parallelism)
-        // 每线程一块大 buffer：默认 8 KB 拷几十 MB 会被 read/write 次数拖死
-        val buffers = ThreadLocal.withInitial { ByteArray(COPY_BUFFER_BYTES) }
+        // 单测内存包没有归档，仍按清单逐条 open
+        entries.mapNotNullTo(mutableSetOf()) { File(dest, it).parentFile }.forEach { it.mkdirs() }
+        val buffer = ByteArray(COPY_BUFFER_BYTES)
         val done = AtomicInteger()
-        try {
-            val tasks = entries.map { entry ->
-                Callable {
-                    pkg.open(entry).use { input ->
-                        File(dest, entry).outputStream().use { output ->
-                            input.copyTo(output, buffers.get())
-                        }
-                    }
-                    onProgress(done.incrementAndGet(), entries.size, entry)
+        for (entry in entries) {
+            pkg.open(entry).use { input ->
+                File(dest, entry).outputStream().use { output ->
+                    input.copyTo(output, buffer)
                 }
             }
-            // 任一条目失败即整体失败：解包不完整比解包失败更难查
-            pool.invokeAll(tasks).forEach { it.get() }
-        } finally {
-            pool.shutdown()
+            onProgress(done.incrementAndGet(), entries.size, entry)
+        }
+    }
+
+    private fun unpackArchive(
+        dest: File,
+        expected: List<String>,
+        archive: InputStream,
+        onProgress: PiUnpackProgress,
+    ) {
+        val expectedSet = expected.toSet()
+        val seen = linkedSetOf<String>()
+        val destCanon = dest.canonicalFile
+        val buffer = ByteArray(COPY_BUFFER_BYTES)
+        archive.use { raw ->
+            ZipInputStream(raw).use { zip ->
+                while (true) {
+                    val zipEntry = zip.nextEntry ?: break
+                    if (zipEntry.isDirectory) {
+                        zip.closeEntry()
+                        continue
+                    }
+                    val name = zipEntry.name.replace('\\', '/').trimStart('/')
+                    check(!name.contains("..") && name.isNotEmpty()) { "非法 PI 归档条目: $name" }
+                    val outFile = File(dest, name)
+                    check(outFile.canonicalFile.path.startsWith(destCanon.path + File.separator) ||
+                        outFile.canonicalFile == destCanon) { "非法 PI 归档条目: $name" }
+                    outFile.parentFile?.mkdirs()
+                    outFile.outputStream().use { output -> zip.copyTo(output, buffer) }
+                    zip.closeEntry()
+                    seen += name
+                    onProgress(seen.size, expected.size, name)
+                }
+            }
+        }
+        check(seen == expectedSet) {
+            val missing = expectedSet - seen
+            val extra = seen - expectedSet
+            "PI 归档与清单不一致 missing=$missing extra=$extra"
         }
     }
 
@@ -162,3 +211,6 @@ class PiInstaller(
 
 /** 构建期 writePiManifest 落在 assets 根的解包清单 */
 private const val PI_MANIFEST_ASSET = "pi.manifest"
+
+/** 构建期 packPiArchive 落在 assets 根的 PI 归档；散装 assets 会被 AAPT 改写 */
+internal const val PI_ARCHIVE_ASSET = "pi.zip"

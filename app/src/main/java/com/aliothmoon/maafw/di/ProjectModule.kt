@@ -1,11 +1,9 @@
 package com.aliothmoon.maafw.di
 
 import com.aliothmoon.maafw.BuildConfig
-import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.project.AssetPiPackage
 import com.aliothmoon.maafw.project.DefaultProjectRepository
 import com.aliothmoon.maafw.project.InstalledProjectSource
-import com.aliothmoon.maafw.project.PI_ASSET_ROOT
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.ProjectLoader
@@ -17,7 +15,7 @@ import org.koin.dsl.module
 val projectModule = module {
     single {
         PiInstaller(
-            pkg = AssetPiPackage(androidContext(), root = PI_ASSET_ROOT),
+            pkg = AssetPiPackage(androidContext()),
             versionCode = BuildConfig.VERSION_CODE,
         )
     }

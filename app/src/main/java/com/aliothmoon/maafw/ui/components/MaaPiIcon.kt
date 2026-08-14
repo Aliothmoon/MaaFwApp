@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.ui.components
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
@@ -13,13 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.MaaDispatchers
-import com.aliothmoon.maafw.project.PI_ASSET_ROOT
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
@@ -27,8 +27,8 @@ import kotlin.math.max
 /**
  * PI 各级声明的 icon
  *
- * 取的是 APK assets 而不是解包目录：与 [MaaMarkdown] 的相对路径图片同一套映射，
- * 且不必等 PI 解包完成。**图标文件要落进包里，profile 的 `include` 必须覆盖它所在目录**
+ * 取的是解包目录，与 [MaaMarkdown] 的相对路径图片同一套映射。
+ * 解包在首启加载前完成。**图标文件要落进包里，profile 的 `include` 必须覆盖它所在目录**
  *
  * 位图一律不 tint：PI 图标是彩图，涂成单色就没了原意
  */
@@ -40,11 +40,10 @@ fun MaaPiIcon(
     modifier: Modifier = Modifier,
 ) {
     if (path.isNullOrBlank()) return
-    val context = LocalContext.current
     val sizePx = with(LocalDensity.current) { size.roundToPx() }
     val key = "$path@$sizePx"
     val bitmap by produceState(initialValue = PiIconCache.peek(key), key) {
-        if (value == null) value = PiIconCache.load(context, path, sizePx, key)
+        if (value == null) value = PiIconCache.load(path, sizePx, key)
     }
     bitmap?.let {
         Image(
@@ -71,23 +70,22 @@ private object PiIconCache {
     /** 命中即同步返回，否则一列 chip 每次重组都要先闪一次无图 */
     fun peek(key: String): ImageBitmap? = cache.get(key)
 
-    suspend fun load(context: Context, path: String, sizePx: Int, key: String): ImageBitmap? =
+    suspend fun load(path: String, sizePx: Int, key: String): ImageBitmap? =
         withContext(MaaDispatchers.IO) {
             if (key in missing) return@withContext null
-            val assets = context.applicationContext.assets
-            val asset = "$PI_ASSET_ROOT/$path"
+            val file = File(AppPaths.ROOT, "${AppFiles.PI_DIR}/$path")
             runCatching {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                assets.open(asset).use { BitmapFactory.decodeStream(it, null, bounds) }
+                file.inputStream().use { BitmapFactory.decodeStream(it, null, bounds) }
                 val options = BitmapFactory.Options().apply {
                     inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, sizePx)
                     inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
-                assets.open(asset).use { BitmapFactory.decodeStream(it, null, options) }
+                file.inputStream().use { BitmapFactory.decodeStream(it, null, options) }
                     ?.asImageBitmap()
             }.onFailure {
                 // PI 写错图标路径或 profile 漏配 include 都落这里；不产诊断，图标缺失不该拦住加载
-                Timber.w("PI icon unavailable: %s (%s)", asset, it.message)
+                Timber.w("PI icon unavailable: %s (%s)", file.path, it.message)
             }.getOrNull()?.also { cache.put(key, it) } ?: run {
                 missing += key
                 null

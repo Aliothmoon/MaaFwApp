@@ -27,7 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.viewinterop.AndroidView
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.project.PI_ASSET_ROOT
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.project.isRemoteUrl
 import com.aliothmoon.maafw.project.normalizeProjectPath
 import io.noties.markwon.AbstractMarkwonPlugin
@@ -60,7 +61,7 @@ import java.io.File
  * - 表格走 `ext-tables`：core 不带表格，PI 的 CONTACT 这类正文正是表格写的；
  * - `<span style>` 的 color/font-size/font-weight 由自定义 TagHandler 解析；
  *   黑白灰系颜色映射主题（深浅色都可读），彩色原样保留；
- * - 相对路径图片映射到 PI assets 目录，网络图直连；
+ * - 相对路径图片映射到 PI 解包目录，网络图直连；
  * - URL 形态的 description 懒加载（OkHttp + ETag 磁盘缓存），失败回落显示原始 URL
  */
 @Composable
@@ -71,8 +72,6 @@ fun MaaMarkdown(
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     maxLines: Int = Int.MAX_VALUE,
     linksClickable: Boolean = true,
-    /** PI 资源根（assets 相对路径），由上层注入，避免 UI 写死产品 id */
-    assetRoot: String = PI_ASSET_ROOT,
 ) {
     val context = LocalContext.current
     var body by remember(text) { mutableStateOf(if (isRemoteUrl(text)) null else text) }
@@ -108,8 +107,8 @@ fun MaaMarkdown(
         cachedMarkwon(context, onSurface, onSurfaceVariant, linkColor)
     }
     // Markdown 解析只在文本/管线变化时执行，与无关重组解耦
-    val spanned = remember(markwon, resolved, assetRoot) {
-        markwon.toMarkdown(rewriteRelativeImages(resolved, assetRoot))
+    val spanned = remember(markwon, resolved) {
+        markwon.toMarkdown(rewriteRelativeImages(resolved))
     }
 
     val textColor = color.toArgb()
@@ -174,8 +173,8 @@ private fun buildMarkwon(
         plugin.addHandler(StyledSpanTagHandler(onSurface, onSurfaceVariant))
     })
     .usePlugin(ImagesPlugin.create { plugin ->
-        // file:///android_asset/… 支持（相对路径图片经 rewriteRelativeImages 映射至此）
-        plugin.addSchemeHandler(FileSchemeHandler.createWithAssets(context))
+        // file:// 指向解包目录（相对路径图片经 rewriteRelativeImages 映射至此）
+        plugin.addSchemeHandler(FileSchemeHandler.create())
     })
     .usePlugin(TablePlugin.create { builder ->
         builder.tableBorderColor(onSurfaceVariant)
@@ -193,15 +192,16 @@ private fun buildMarkwon(
 private val MARKDOWN_RELATIVE_IMAGE = Regex("""(!\[[^\]]*]\()(?!https?://|file:|data:)([^)\s]+)""")
 private val HTML_RELATIVE_IMAGE = Regex("""(<img[^>]*\bsrc=")(?!https?://|file:|data:)([^"]+)""", RegexOption.IGNORE_CASE)
 
-/** 相对路径图片（md 与 <img>）重写为 PI assets URI；http/file/data 原样保留 */
-private fun rewriteRelativeImages(body: String, assetRoot: String = PI_ASSET_ROOT): String {
-    val prefix = "file:///android_asset/$assetRoot/"
+/** 相对路径图片（md 与 <img>）重写为 PI 解包目录 URI；http/file/data 原样保留 */
+private fun rewriteRelativeImages(body: String): String {
+    val root = File(AppPaths.ROOT, AppFiles.PI_DIR)
+    fun toUri(rel: String): String = File(root, normalizeProjectPath(rel)).toURI().toString()
     return body
         .replace(MARKDOWN_RELATIVE_IMAGE) {
-            "${it.groupValues[1]}$prefix${normalizeProjectPath(it.groupValues[2])}"
+            "${it.groupValues[1]}${toUri(it.groupValues[2])}"
         }
         .replace(HTML_RELATIVE_IMAGE) {
-            "${it.groupValues[1]}$prefix${normalizeProjectPath(it.groupValues[2])}"
+            "${it.groupValues[1]}${toUri(it.groupValues[2])}"
         }
 }
 

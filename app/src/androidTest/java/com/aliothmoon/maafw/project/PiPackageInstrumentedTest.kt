@@ -9,8 +9,8 @@ import org.junit.runner.RunWith
 
 /**
  * assets 读取是平台差异，JVM 测试碰不到 AssetManager
- * 完整解包由应用实际启动验证，这里只覆盖 AssetPiPackage 的读取语义与构建期清单的一致性
- * 当前包未含 PI（未配置 pi.sourceDir）时跳过
+ * 完整解包由应用实际启动验证，这里覆盖清单与 pi.zip 条目能对上
+ * 当前包未含 PI（未配置 pi.profile）时跳过
  */
 @RunWith(AndroidJUnit4::class)
 class PiPackageInstrumentedTest {

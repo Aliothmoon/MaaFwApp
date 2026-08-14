@@ -5,13 +5,18 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.bundling.Zip
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.register
 
 /**
- * The chain that syncs the external PI project into assets; apply after maafw.android.application
- * Which PI and which parts of it come from the build profile, see [BuildProfile]
- * syncPiAssets -> writePiManifest -> assets/pi + assets/pi.manifest
+ * The chain that syncs the external PI project into a single archive; apply after
+ * maafw.android.application. Which PI and which parts of it come from the build profile,
+ * see [BuildProfile]
+ *
+ * Loose assets are rewritten by AAPT (`<dir>_*` dropped, `.*` dropped, `.gz` decompressed).
+ * Same reason agent runtimes ship as bundle.zip: syncPiAssets -> packPiArchive ->
+ * writePiManifest -> assets/pi.zip + assets/pi.manifest
  */
 class PiAssetsConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
@@ -19,14 +24,15 @@ class PiAssetsConventionPlugin : Plugin<Project> {
             val profile = buildProfile()
             val assetsSourceDir = profile.assetsDir
             val piAssetsDir = layout.buildDirectory.dir("generated/piAssets")
+            val piDir = piAssetsDir.map { it.dir("pi") }
+            val packedDir = piAssetsDir.map { it.dir("packed") }
             val includePatterns = profile.piInclude
             val excludePatterns = profile.piExclude
 
             val syncPiAssets = tasks.register<Sync>("syncPiAssets") {
                 group = "build"
-                description = "Sync the configured PI project into assets/pi"
-                // Mirrors PI_ASSET_ROOT: the source dir sits one level up so the in-APK path is assets/pi
-                into(piAssetsDir.map { it.dir("pi") })
+                description = "Sync the configured PI project into the generated PI tree"
+                into(piDir)
                 if (assetsSourceDir != null) {
                     from(assetsSourceDir) {
                         includePatterns.forEach { include(it) }
@@ -47,19 +53,34 @@ class PiAssetsConventionPlugin : Plugin<Project> {
                 }
             }
 
+            val packPiArchive = tasks.register<Zip>("packPiArchive") {
+                group = "build"
+                description = "Pack the synced PI tree into assets/pi.zip"
+                dependsOn(syncPiAssets)
+                from(piDir)
+                destinationDirectory.set(packedDir)
+                archiveFileName.set("pi.zip")
+                includeEmptyDirs = false
+            }
+
             val writePiManifest = tasks.register("writePiManifest") {
                 group = "build"
                 description = "List the synced PI entries into assets/pi.manifest"
-                dependsOn(syncPiAssets)
-                val piDir = piAssetsDir.map { it.dir("pi") }
-                val manifestFile = piAssetsDir.map { it.file("pi.manifest") }
+                dependsOn(packPiArchive)
+                val manifestFile = packedDir.map { it.file("pi.manifest") }
                 inputs.dir(piDir).withPathSensitivity(PathSensitivity.RELATIVE)
                 outputs.file(manifestFile)
                 doLast {
                     val root = piDir.get().asFile
-                    val entries = root.walkTopDown().filter { it.isFile }
-                        .map { it.toRelativeString(root).replace('\\', '/') }.sorted().toList()
-                    manifestFile.get().asFile.writeText(entries.joinToString("\n"))
+                    val entries = if (root.isDirectory) {
+                        root.walkTopDown().filter { it.isFile }
+                            .map { it.toRelativeString(root).replace('\\', '/') }.sorted().toList()
+                    } else {
+                        emptyList()
+                    }
+                    val out = manifestFile.get().asFile
+                    out.parentFile.mkdirs()
+                    out.writeText(entries.joinToString("\n"))
                 }
             }
 
@@ -67,17 +88,19 @@ class PiAssetsConventionPlugin : Plugin<Project> {
                 dependsOn(writePiManifest)
             }
 
+            packedDir.get().asFile.mkdirs()
+
             extensions.configure<ApplicationAndroidComponentsExtension> {
                 onVariants { variant ->
                     variant.sources.assets?.addStaticSourceDirectory(
-                        piAssetsDir.get().asFile.absolutePath
+                        packedDir.get().asFile.absolutePath
                     )
                 }
             }
 
             tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
                 .configureEach {
-                    inputs.files(piAssetsDir.map { it.asFileTree })
+                    inputs.files(packedDir.map { it.asFileTree })
                         .withPathSensitivity(PathSensitivity.RELATIVE)
                 }
         }

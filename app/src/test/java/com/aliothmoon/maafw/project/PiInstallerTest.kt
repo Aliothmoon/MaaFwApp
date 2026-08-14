@@ -14,10 +14,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class PiInstallerTest {
 
@@ -135,7 +138,7 @@ class PiInstallerTest {
         assertEquals("11", File(base, PiInstaller.PI_MARKER_NAME).readText())
     }
 
-    /** 弹窗的进度条吃的就是这串回报，条目顺序由线程池决定，只有计数是确定的 */
+    /** 弹窗的进度条吃的就是这串回报；内存包按清单顺序 */
     @Test
     fun `解包逐条目回报进度`() {
         val base = temp.newFolder("external")
@@ -189,4 +192,54 @@ class PiInstallerTest {
         pi.ensureInstalled()
         assertEquals(AppFiles.PI_DIR, pi.installedDir().name)
     }
+
+    @Test
+    fun `归档解包保留下划线目录与 gz 文件名`() {
+        val base = temp.newFolder("external")
+        val files = mapOf(
+            "resource/pipeline/Common/__Private/AutoAltClick/Action.json" to "{}",
+            "resource/model/map/navmesh/base.nav.gz" to "gz",
+        )
+        val root = installer(base, ZipPiPackage(files), 11).ensureInstalled()
+
+        assertEquals("{}", File(root, "resource/pipeline/Common/__Private/AutoAltClick/Action.json").readText())
+        assertEquals("gz", File(root, "resource/model/map/navmesh/base.nav.gz").readText())
+    }
+
+    @Test
+    fun `归档与清单不一致时失败且不写标记`() {
+        val base = temp.newFolder("external")
+        val pkg = ZipPiPackage(
+            files = mapOf("interface.json" to "{}"),
+            manifest = listOf("interface.json", "missing.json"),
+        )
+        every { AppPaths.ROOT } returns base
+        assertThrows(Exception::class.java) {
+            PiInstaller(pkg, 11).ensureInstalled()
+        }
+        assertFalse(File(base, PiInstaller.PI_MARKER_NAME).exists())
+    }
+}
+
+private class ZipPiPackage(
+    files: Map<String, String>,
+    manifest: List<String> = files.keys.sorted(),
+) : PiPackage {
+    private val bytes: ByteArray = ByteArrayOutputStream().use { raw ->
+        ZipOutputStream(raw).use { zip ->
+            files.forEach { (name, content) ->
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(content.toByteArray())
+                zip.closeEntry()
+            }
+        }
+        raw.toByteArray()
+    }
+    private val names = manifest
+
+    override fun manifest(): List<String> = names
+
+    override fun open(path: String): InputStream = error(path)
+
+    override fun openArchive(): InputStream = bytes.inputStream()
 }
