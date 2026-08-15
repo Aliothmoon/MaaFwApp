@@ -78,6 +78,39 @@ def _request(url: str, accept: str, with_auth: bool, token: str | None):
     return req
 
 
+def _print_rate_limit_hint(
+    error: urllib.error.HTTPError, *, token_configured: bool
+) -> None:
+    """GitHub 返回限流信息时，提示用户下一步操作，并保留响应体。"""
+    response_bytes = b""
+    try:
+        # 直接读底层流，避免 HTTPError 将旧流的 read 方法缓存到实例上。
+        response_bytes = error.fp.read()
+    except (OSError, AttributeError):
+        pass
+    finally:
+        # HTTPError 是可读取的响应对象。恢复已读取的内容，避免提示逻辑吞掉诊断信息。
+        if response_bytes:
+            restored_response = io.BytesIO(response_bytes)
+            error.fp = restored_response
+            error.file = restored_response
+
+    response = response_bytes.decode("utf-8", errors="replace")
+    remaining = error.headers.get("X-RateLimit-Remaining")
+    retry_after = error.headers.get("Retry-After")
+    error_message = f"{error.reason}\n{response}".lower()
+    if remaining != "0" and retry_after is None and "rate limit" not in error_message:
+        return
+
+    if token_configured:
+        print(
+            "[HINT] 当前 GITHUB_TOKEN 已触发 rate limit，"
+            "请等待限额恢复或更换 token 后重试"
+        )
+    else:
+        print("[HINT] GitHub 请求已触发 rate limit，请配置环境变量 GITHUB_TOKEN 后重试")
+
+
 def fetch_json(url: str) -> dict:
     token = os.environ.get("GITHUB_TOKEN")
 
@@ -110,10 +143,15 @@ def download_file(url: str, dest: Path):
     except urllib.error.HTTPError as e:
         if e.code == 401 and token:
             print(f"[WARN] 带 token 下载被拒（{e.code}），改用匿名重试")
-            resp_ctx = urllib.request.urlopen(
-                _request(url, "application/octet-stream", False, token), timeout=600
-            )
+            try:
+                resp_ctx = urllib.request.urlopen(
+                    _request(url, "application/octet-stream", False, token), timeout=600
+                )
+            except urllib.error.HTTPError as retry_error:
+                _print_rate_limit_hint(retry_error, token_configured=False)
+                raise
         else:
+            _print_rate_limit_hint(e, token_configured=bool(token))
             raise
     with resp_ctx as resp:
         total = int(resp.headers.get("Content-Length", 0))
@@ -142,6 +180,9 @@ def get_release_assets(tag: str | None) -> tuple[str, list]:
         data = fetch_json(url)
     except urllib.error.HTTPError as e:
         print(f"[ERROR] 请求失败: {e.code} {e.reason}")
+        _print_rate_limit_hint(
+            e, token_configured=bool(os.environ.get("GITHUB_TOKEN"))
+        )
         sys.exit(1)
     tag_name = data.get("tag_name", "unknown")
     print(f"  tag: {tag_name}")

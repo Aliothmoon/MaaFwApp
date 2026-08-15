@@ -49,3 +49,7 @@ versioncode.txt
 
 # Kotlin 2.x 的构建缓存目录
 .kotlin/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
