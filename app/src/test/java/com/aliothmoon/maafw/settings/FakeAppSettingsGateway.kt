@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeAppSettingsGateway : AppSettingsGateway {
 
+    override val appWelcomeSeen = MutableStateFlow(false)
+
+    override suspend fun setAppWelcomeSeen(seen: Boolean) {
+        appWelcomeSeen.value = seen
+    }
+
     override val runMode = MutableStateFlow(RunMode.BACKGROUND)
 
     override suspend fun setRunMode(mode: RunMode) {

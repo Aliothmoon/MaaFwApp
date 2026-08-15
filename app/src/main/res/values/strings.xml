@@ -140,6 +140,10 @@
     <string name="settings_about_contact">联系方式</string>
     <string name="settings_about_license">开源许可</string>
     <string name="settings_about_repository">项目仓库</string>
+    <string name="settings_about_announcements">查看公告</string>
+    <string name="announcement_title">公告</string>
+    <string name="app_welcome_title">欢迎使用 %1$s</string>
+    <string name="app_welcome_message">应用已准备就绪。接下来将展示项目欢迎信息和最新公告。</string>
     <string name="welcome_title">欢迎</string>
 
     <!-- 通知 -->

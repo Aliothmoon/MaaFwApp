@@ -15,6 +15,10 @@ import com.aliothmoon.preferences.PrefSchema
  */
 @PrefSchema
 data class AppSettings(
+    /** 应用级首次欢迎是否已确认；不随 PI 运行配置重置。 */
+    @PrefKey(default = "false")
+    val appWelcomeSeen: String = "false",
+
     /** [com.aliothmoon.maafw.domain.RemoteBackend] 的 name */
     @PrefKey(default = "SHIZUKU")
     val startupBackend: String = "SHIZUKU",

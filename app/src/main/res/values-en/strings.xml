@@ -146,6 +146,10 @@
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
+    <string name="settings_about_announcements">Announcements</string>
+    <string name="announcement_title">Announcements</string>
+    <string name="app_welcome_title">Welcome to %1$s</string>
+    <string name="app_welcome_message">The app is ready. Project welcome information and the latest announcements will follow.</string>
     <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->

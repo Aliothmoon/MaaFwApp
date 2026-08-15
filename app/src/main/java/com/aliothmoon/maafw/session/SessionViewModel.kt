@@ -71,6 +71,7 @@ private data class SettingsSnapshot(
     val screenSaverEnabled: Boolean,
     val resolutionPreference: ResolutionPreference,
     val debugMode: Boolean,
+    val appWelcomeSeen: Boolean = false,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     val env: EnvSnapshot = EnvSnapshot(),
     val quick: QuickSnapshot = QuickSnapshot(),
@@ -137,6 +138,8 @@ class SessionViewModel(
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
     }.combine(appSettings.themeStyle) { snapshot, style ->
         snapshot.copy(themeStyle = style)
+    }.combine(appSettings.appWelcomeSeen) { snapshot, seen ->
+        snapshot.copy(appWelcomeSeen = seen)
     }.combine(
         combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
     ) { snapshot, env -> snapshot.copy(env = env) }
@@ -269,16 +272,29 @@ class SessionViewModel(
             shizukuReadiness = privileged.readiness,
             privilegedService = privileged.serviceState,
             systemPermissions = privileged.systemPermissions,
+            startupPrompt = StartupPrompt.AppWelcome.takeUnless { settings.appWelcomeSeen },
         )
         if (project !is ProjectState.Ready) return base
         val session = resolveCached(project, config)
         val metadata = project.definition.metadata
+        val appWelcomeSeen = settings.appWelcomeSeen
+        val interfaceWelcomeSeen = metadata.welcome == null ||
+            metadata.welcomeFingerprint == config.welcomeFingerprint
+        val announcements = project.definition.announcements
+        val startupPrompt = when {
+            !appWelcomeSeen -> StartupPrompt.AppWelcome
+            !interfaceWelcomeSeen -> StartupPrompt.InterfaceWelcome(metadata.welcome)
+            announcements.items.isNotEmpty() &&
+                announcements.fingerprint != config.announcementFingerprint ->
+                StartupPrompt.Announcements(announcements)
+            else -> null
+        }
         return base.copy(
             projectMetadata = metadata,
+            announcementCatalog = announcements,
             telemetryDeclared = project.definition.telemetry != null,
             telemetryLockedByVersion = isDebugProjectVersion(project.definition.version),
-            welcomePrompt = metadata.welcome
-                ?.takeIf { metadata.welcomeFingerprint != config.welcomeFingerprint },
+            startupPrompt = startupPrompt,
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
@@ -481,11 +497,23 @@ class SessionViewModel(
                 projectRepository.reload()
             }
 
+            SessionIntent.DismissAppWelcome -> {
+                appSettings.setAppWelcomeSeen(true)
+            }
+
             SessionIntent.DismissWelcome -> {
                 val fingerprint = (projectRepository.state.value as? ProjectState.Ready)
                     ?.definition?.metadata?.welcomeFingerprint
                 if (fingerprint != null) {
                     configurationStore.update { it.copy(welcomeFingerprint = fingerprint) }
+                }
+            }
+
+            SessionIntent.DismissAnnouncements -> {
+                val fingerprint = (projectRepository.state.value as? ProjectState.Ready)
+                    ?.definition?.announcements?.fingerprint
+                if (fingerprint != null) {
+                    configurationStore.update { it.copy(announcementFingerprint = fingerprint) }
                 }
             }
 

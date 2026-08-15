@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.StateFlow
  * 而不必把 DataStore 一起拖进来
  */
 interface AppSettingsGateway {
+    val appWelcomeSeen: StateFlow<Boolean>
+    suspend fun setAppWelcomeSeen(seen: Boolean)
+
     val runMode: StateFlow<RunMode>
     suspend fun setRunMode(mode: RunMode)
 

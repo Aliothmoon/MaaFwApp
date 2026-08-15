@@ -95,12 +95,15 @@ import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.util.Misc
 import com.aliothmoon.maafw.session.SessionIntent
+import com.aliothmoon.maafw.session.StartupPrompt
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
+import com.aliothmoon.maafw.ui.components.AnnouncementCenterSheet
+import com.aliothmoon.maafw.ui.components.AppWelcomeDialog
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.PiInstallDialog
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
@@ -305,11 +308,22 @@ fun AppRoot(
             onRetry = { viewModel.onIntent(SessionIntent.ReinstallPi) },
         )
 
-        MaaMarkdownSheet(
-            title = stringResource(R.string.welcome_title),
-            body = state.welcomePrompt,
-            onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
-        )
+        when (val prompt = state.startupPrompt) {
+            StartupPrompt.AppWelcome -> AppWelcomeDialog(
+                visible = true,
+                onConfirm = { viewModel.onIntent(SessionIntent.DismissAppWelcome) },
+            )
+            is StartupPrompt.InterfaceWelcome -> MaaMarkdownSheet(
+                title = stringResource(R.string.welcome_title),
+                body = prompt.body,
+                onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
+            )
+            is StartupPrompt.Announcements -> AnnouncementCenterSheet(
+                announcements = prompt.catalog.items,
+                onDismiss = { viewModel.onIntent(SessionIntent.DismissAnnouncements) },
+            )
+            null -> Unit
+        }
 
         // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂
         Box(

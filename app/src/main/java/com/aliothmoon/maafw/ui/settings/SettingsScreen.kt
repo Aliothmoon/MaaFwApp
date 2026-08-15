@@ -46,6 +46,7 @@ import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.AnnouncementCenterSheet
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaFieldLabel
@@ -424,6 +425,7 @@ private fun AboutCard(state: SessionUiState) {
     val metadata = state.projectMetadata
     val definition = (state.projectState as? ProjectState.Ready)?.definition
     var sheet by remember { mutableStateOf<AboutSheet?>(null) }
+    var showAnnouncements by remember { mutableStateOf(false) }
 
     MaaCard(title = stringResource(R.string.settings_about), collapsible = true) {
         definition?.let {
@@ -439,6 +441,12 @@ private fun AboutCard(state: SessionUiState) {
             MaaDescriptionPanel {
                 MaaMarkdown(text = it, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
+        }
+        if (state.announcementCatalog.items.isNotEmpty()) {
+            MaaNavigationRow(
+                label = stringResource(R.string.settings_about_announcements),
+                onClick = { showAnnouncements = true },
+            )
         }
         metadata.contact?.let { body ->
             MaaNavigationRow(
@@ -470,6 +478,12 @@ private fun AboutCard(state: SessionUiState) {
             title = stringResource(it.titleRes),
             body = it.body,
             onDismiss = { sheet = null },
+        )
+    }
+    if (showAnnouncements) {
+        AnnouncementCenterSheet(
+            announcements = state.announcementCatalog.items,
+            onDismiss = { showAnnouncements = false },
         )
     }
 }

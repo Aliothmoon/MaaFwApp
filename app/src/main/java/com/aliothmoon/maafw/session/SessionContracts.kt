@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.ProjectMetadata
+import com.aliothmoon.maafw.domain.AnnouncementCatalog
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.WatchdogState
@@ -47,8 +48,10 @@ data class SessionUiState(
     /** PI 版本是开发态：设置页不展示开关；上报仍由 TelemetryController 拦截 */
     val telemetryLockedByVersion: Boolean = false,
     val telemetryEnabled: Boolean = false,
-    /** 非 null = 这份 welcome 还没给用户看过 */
-    val welcomePrompt: String? = null,
+    /** 启动流程任一时刻只展示一个提示。 */
+    val startupPrompt: StartupPrompt? = null,
+    /** 独立保留给设置页的手动公告入口。 */
+    val announcementCatalog: AnnouncementCatalog = AnnouncementCatalog(),
     val environment: ResolvedEnvironment? = null,
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),
@@ -152,6 +155,12 @@ data class ServiceStatus(
     val tone: StatusTone,
     val busy: Boolean = false,
 )
+
+sealed interface StartupPrompt {
+    data object AppWelcome : StartupPrompt
+    data class InterfaceWelcome(val body: String) : StartupPrompt
+    data class Announcements(val catalog: AnnouncementCatalog) : StartupPrompt
+}
 
 enum class PreviewTouchAction { Down, Move, Up }
 
@@ -276,7 +285,11 @@ sealed interface SessionIntent {
     data object ShowScreenSaver : SessionIntent
     data object ReloadProject : SessionIntent
 
+    data object DismissAppWelcome : SessionIntent
+
     data object DismissWelcome : SessionIntent
+
+    data object DismissAnnouncements : SessionIntent
 
     /** 无条件重解 PI 再重载；失败弹窗的重试与设置页的手动重来是同一个动作 */
     data object ReinstallPi : SessionIntent
