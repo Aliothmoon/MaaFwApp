@@ -372,6 +372,7 @@
     <!-- 运行日志 -->
     <string name="run_log_title">运行日志</string>
     <string name="run_log_count">%1$d 条</string>
+    <string name="run_log_export">导出</string>
     <string name="run_log_clear">清空</string>
     <string name="run_log_empty">还没有日志；开始任务后 MaaFramework 的运行输出会显示在这里</string>
     <string name="tasks_log">日志</string>

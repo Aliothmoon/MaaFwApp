@@ -60,6 +60,7 @@ import java.util.Locale
 internal fun RunLogPanel(
     /** 取值而不是值：这里才是真正显示日志的地方，订阅落在这一层 */
     entries: () -> List<RunLogEntry>,
+    onExport: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -94,6 +95,9 @@ internal fun RunLogPanel(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
+            TextButton(onClick = onExport) {
+                Text(stringResource(R.string.run_log_export))
+            }
             TextButton(onClick = onClear, enabled = all.isNotEmpty()) {
                 Text(stringResource(R.string.run_log_clear))
             }
