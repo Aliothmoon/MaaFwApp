@@ -104,8 +104,8 @@ def _print_rate_limit_hint(
 
     if token_configured:
         print(
-            "[HINT] 当前 GITHUB_TOKEN 已触发 rate limit，"
-            "请等待限额恢复或更换 token 后重试"
+            "[HINT] 已配置 GITHUB_TOKEN，但 GitHub 请求仍触发 rate limit；"
+            "若此前收到 401，请更换为可访问目标仓库的 token，否则请等待限额恢复后重试"
         )
     else:
         print("[HINT] GitHub 请求已触发 rate limit，请配置环境变量 GITHUB_TOKEN 后重试")
@@ -148,7 +148,7 @@ def download_file(url: str, dest: Path):
                     _request(url, "application/octet-stream", False, token), timeout=600
                 )
             except urllib.error.HTTPError as retry_error:
-                _print_rate_limit_hint(retry_error, token_configured=False)
+                _print_rate_limit_hint(retry_error, token_configured=bool(token))
                 raise
         else:
             _print_rate_limit_hint(e, token_configured=bool(token))
