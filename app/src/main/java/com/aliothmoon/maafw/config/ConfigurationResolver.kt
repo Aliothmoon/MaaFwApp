@@ -81,6 +81,12 @@ object ConfigurationResolver {
                 values = config.globalOptionValues,
                 resourceName = resourceName,
             ),
+            resourceOptions = buildOptionEditors(
+                definition = definition,
+                optionNames = definition.resources.firstOrNull { it.name == resourceName }?.optionNames.orEmpty(),
+                values = resourceName?.let { config.resourceOptionValues[it] }.orEmpty(),
+                resourceName = resourceName,
+            ),
             environment = environment,
             diagnostics = diagnostics,
         )

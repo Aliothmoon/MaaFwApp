@@ -113,6 +113,7 @@
 
     <!-- Settings screen -->
     <string name="settings_section_global_option">Task settings</string>
+    <string name="settings_section_resource_option">Resource settings</string>
     <string name="settings_section_display">Display</string>
     <string name="settings_section_schedule">Scheduled tasks</string>
     <string name="settings_section_other">Other</string>

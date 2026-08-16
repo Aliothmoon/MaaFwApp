@@ -46,6 +46,7 @@ data class PiResourceContent(
     val icon: String? = null,
     /** 原样条目，PI_RESOURCE 要整条 */
     val raw: JsonObject = JsonObject(emptyMap()),
+    val optionNames: List<String> = emptyList(),
 )
 
 /**
@@ -147,7 +148,14 @@ object PiParser {
                 diagnostics += error(source, DiagnosticMessages.resourcePathMissing(name))
                 null
             } else {
-                PiResourceContent(name, paths, obj.string("label"), obj.iconPath(), obj)
+                PiResourceContent(
+                    name,
+                    paths,
+                    obj.string("label"),
+                    obj.iconPath(),
+                    obj,
+                    obj.stringList("option"),
+                )
             }
         }
 

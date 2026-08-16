@@ -104,7 +104,13 @@ class ProjectLoader(
             diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.projectHasNoTasks())
         }
 
-        validateOptionReferences(state.tasks, state.globalOptionNames, state.options, diagnostics)
+        validateOptionReferences(
+            state.tasks,
+            state.globalOptionNames,
+            pi.resources,
+            state.options,
+            diagnostics,
+        )
         detectOptionCycles(state.options, diagnostics)
         validateTemplates(state.templates, state.tasks, diagnostics)
 
@@ -138,6 +144,7 @@ class ProjectLoader(
                         text.label(it.label) ?: it.name,
                         it.raw,
                         it.icon,
+                        it.optionNames.filter { name -> name in state.options },
                     )
                 }
                 .takeIf { it.isNotEmpty() }
@@ -337,6 +344,7 @@ class ProjectLoader(
     private fun validateOptionReferences(
         tasks: List<TaskDefinition>,
         globalOptionNames: List<String>,
+        resources: List<PiResourceContent>,
         options: Map<String, OptionDefinition>,
         diagnostics: MutableList<Diagnostic>,
     ) {
@@ -346,6 +354,16 @@ class ProjectLoader(
                     "global_option",
                     DiagnosticMessages.missingReference("option", ref)
                 )
+            }
+        }
+        for (resource in resources) {
+            for (ref in resource.optionNames) {
+                if (ref !in options) {
+                    diagnostics += error(
+                        "resource:${resource.name}",
+                        DiagnosticMessages.missingReference("option", ref),
+                    )
+                }
             }
         }
         for (task in tasks) {

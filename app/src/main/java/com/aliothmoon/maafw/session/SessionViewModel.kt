@@ -283,6 +283,7 @@ class SessionViewModel(
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
             globalOptions = session.globalOptions,
+            resourceOptions = session.resourceOptions,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
             previewResolution = settings.resolutionPreference.resolution,
@@ -404,6 +405,19 @@ class SessionViewModel(
             is SessionIntent.SetGlobalOption -> guarded {
                 configurationStore.update {
                     it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to intent.value))
+                }
+            }
+
+            is SessionIntent.SetResourceOption -> guarded {
+                val known = (projectRepository.state.value as? ProjectState.Ready)
+                    ?.definition?.resources?.any { it.name == intent.resourceName } == true
+                if (!known) return@guarded
+                configurationStore.update { config ->
+                    val current = config.resourceOptionValues[intent.resourceName].orEmpty()
+                    config.copy(
+                        resourceOptionValues = config.resourceOptionValues +
+                            (intent.resourceName to (current + (intent.optionName to intent.value))),
+                    )
                 }
             }
 

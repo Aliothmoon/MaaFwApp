@@ -107,6 +107,7 @@
 
     <!-- 设置页；分组对齐 MaaMeow 的 settings_section_* -->
     <string name="settings_section_global_option">任务设置</string>
+    <string name="settings_section_resource_option">资源设置</string>
     <string name="settings_section_display">显示设置</string>
     <string name="settings_section_schedule">定时任务设置</string>
     <string name="settings_section_other">其他设置</string>

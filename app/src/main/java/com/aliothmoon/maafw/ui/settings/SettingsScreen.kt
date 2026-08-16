@@ -109,6 +109,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
         ) {
             GlobalOptionCard(state, onIntent)
+            ResourceOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
             NotificationCard(onOpenNotificationSettings)
@@ -133,6 +134,26 @@ private fun GlobalOptionCard(state: SessionUiState, onIntent: (SessionIntent) ->
             options = state.globalOptions,
             locked = state.configurationLocked,
             onSetOption = { name, value -> onIntent(SessionIntent.SetGlobalOption(name, value)) },
+        )
+    }
+}
+
+/**
+ * 落在设置页而不是首页资源选择：`resource.option` 对所有运行配置生效，只随当前资源换一份
+ *
+ * 卡名取「资源设置」：和「任务设置」并列，值按 resource name 分桶
+ */
+@Composable
+private fun ResourceOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    if (state.resourceOptions.isEmpty()) return
+    val resourceName = state.environment?.resource?.name ?: return
+    MaaCard(title = stringResource(R.string.settings_section_resource_option), collapsible = true) {
+        OptionEditorList(
+            options = state.resourceOptions,
+            locked = state.configurationLocked,
+            onSetOption = { name, value ->
+                onIntent(SessionIntent.SetResourceOption(resourceName, name, value))
+            },
         )
     }
 }

@@ -11,6 +11,8 @@ data class ResolvedProjectSession(
     val taskCatalog: List<TaskCatalogGroup>,
     /** PI `global_option[]` 的编辑投影，按声明顺序；不随运行配置走 */
     val globalOptions: List<OptionEditorState>,
+    /** 当前选中 resource 的 `option[]`；换资源换这份，值按 resource name 分桶 */
+    val resourceOptions: List<OptionEditorState> = emptyList(),
     val environment: ResolvedEnvironment,
     val diagnostics: List<Diagnostic>,
 )

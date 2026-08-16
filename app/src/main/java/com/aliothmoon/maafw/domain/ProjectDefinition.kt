@@ -78,6 +78,8 @@ data class ResourceDefinition(
     /** 同 [ControllerDefinition.raw]，供 `PI_RESOURCE` 透传 */
     val raw: JsonObject = JsonObject(emptyMap()),
     val icon: String? = null,
+    /** PI v2.3.0 `resource[].option`：当前选中这份时参与每个任务的 override */
+    val optionNames: List<String> = emptyList(),
 )
 
 data class AgentDefinition(

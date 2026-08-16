@@ -41,6 +41,8 @@ data class SessionUiState(
     val taskCatalog: List<TaskCatalogGroup> = emptyList(),
     /** 空 = PI 没声明 global_option，设置页据此决定要不要出这张卡 */
     val globalOptions: List<OptionEditorState> = emptyList(),
+    /** 空 = 当前 resource 没有 option[]，设置页不出「资源设置」 */
+    val resourceOptions: List<OptionEditorState> = emptyList(),
     val projectMetadata: ProjectMetadata = ProjectMetadata(),
     /** PI 声明了 telemetry；没声明时设置页不出这一行 */
     val telemetryDeclared: Boolean = false,
@@ -219,6 +221,13 @@ sealed interface SessionIntent {
 
     /** 不属于任何运行配置：改一次对所有配置的所有任务生效 */
     data class SetGlobalOption(val optionName: String, val value: OptionValue) : SessionIntent
+
+    /** 按 resource name 分桶；UI 只改当前选中那份 */
+    data class SetResourceOption(
+        val resourceName: String,
+        val optionName: String,
+        val value: OptionValue,
+    ) : SessionIntent
 
     data class SelectResource(val resourceName: String) : SessionIntent
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent
