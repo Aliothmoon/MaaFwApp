@@ -60,6 +60,7 @@ class PiMetadataTest {
         val en = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "Welcome")))
 
         assertNotEquals(zh.welcome, en.welcome)
+        assertEquals(zh.welcomeFingerprint, en.welcomeFingerprint)
     }
 
     @Test
