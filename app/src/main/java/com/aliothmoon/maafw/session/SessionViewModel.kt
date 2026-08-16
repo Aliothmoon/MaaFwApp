@@ -278,12 +278,13 @@ class SessionViewModel(
         val session = resolveCached(project, config)
         val metadata = project.definition.metadata
         val appWelcomeSeen = settings.appWelcomeSeen
-        val interfaceWelcomeSeen = metadata.welcome == null ||
-            metadata.welcomeFingerprint == config.welcomeFingerprint
+        val interfaceWelcome = metadata.welcome
         val announcements = project.definition.announcements
         val startupPrompt = when {
             !appWelcomeSeen -> StartupPrompt.AppWelcome
-            !interfaceWelcomeSeen -> StartupPrompt.InterfaceWelcome(metadata.welcome)
+            interfaceWelcome != null &&
+                metadata.welcomeFingerprint != config.welcomeFingerprint ->
+                StartupPrompt.InterfaceWelcome(interfaceWelcome)
             announcements.items.isNotEmpty() &&
                 announcements.fingerprint != config.announcementFingerprint ->
                 StartupPrompt.Announcements(announcements)
