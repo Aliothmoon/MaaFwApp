@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <atomic>
 #include <cstring>
 #include "bridge_input.h"
 
@@ -10,6 +11,19 @@ static jmethodID g_touch_up_method = nullptr;
 static jmethodID g_key_down_method = nullptr;
 static jmethodID g_key_up_method = nullptr;
 static jmethodID g_start_app_method = nullptr;
+
+/* TouchArgs.contact 是随 MaaFramework v5.12.3 才由 fw 填的合约字段；旧 fw 不写它，
+ * 那 4 字节是调用方栈上的残值，可能落进 [0,16) 变成幻影手指。默认 false：
+ * Kotlin 判完 fw 版本之前，触摸一律按单指 contact 0 注入 */
+static std::atomic_bool g_read_contact{false};
+
+void SetInputContactSupport(bool supported) {
+    g_read_contact.store(supported, std::memory_order_relaxed);
+}
+
+static int TouchContact(const MethodParam &param) {
+    return g_read_contact.load(std::memory_order_relaxed) ? param.args.touch.contact : 0;
+}
 
 /* upcall 落到 DriverClass -> InputControlUtils/ActivityUtils，那边全是对隐藏 API 的反射，
  * 各家 ROM 上抛异常是常态。异常挂在 JNIEnv 上不清掉，下一次 JNI 调用就是未定义行为——
@@ -129,6 +143,7 @@ void ReleaseInputBridge(JNIEnv *env) {
     }
     g_driver_clz = nullptr;
     g_jvm = nullptr;
+    SetInputContactSupport(false);
 }
 // JNA callback 发力了不得不这样做了
 struct JniThreadDetacher {
@@ -170,13 +185,13 @@ BRIDGE_API int DispatchInputMessage(MethodParam param) {
     switch (param.method) {
         case TOUCH_DOWN:
             return UpcallInputControl(env, TOUCH_DOWN, param.args.touch.p.x, param.args.touch.p.y,
-                                      param.args.touch.contact, 0, param.display_id);
+                                      TouchContact(param), 0, param.display_id);
         case TOUCH_MOVE:
             return UpcallInputControl(env, TOUCH_MOVE, param.args.touch.p.x, param.args.touch.p.y,
-                                      param.args.touch.contact, 0, param.display_id);
+                                      TouchContact(param), 0, param.display_id);
         case TOUCH_UP:
             return UpcallInputControl(env, TOUCH_UP, param.args.touch.p.x, param.args.touch.p.y,
-                                      param.args.touch.contact, 0, param.display_id);
+                                      TouchContact(param), 0, param.display_id);
         case KEY_DOWN:
             return UpcallInputControl(env, KEY_DOWN, 0, 0, 0, param.args.key.key_code,
                                       param.display_id);

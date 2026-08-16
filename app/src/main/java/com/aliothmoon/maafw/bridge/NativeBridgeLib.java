@@ -24,6 +24,9 @@ public class NativeBridgeLib {
     @FastNative
     public static native String ping();
 
+    // fw 版本闸，见 MaaFwVersion；false 时触摸恒按单指 contact 0 注入
+    public static native void setContactSupport(boolean supported);
+
     public static native Surface setupNativeCapturer(int width, int height);
 
     public static native void releaseNativeCapturer();

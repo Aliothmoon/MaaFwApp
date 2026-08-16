@@ -5,5 +5,6 @@
 
 bool InitInputBridge(JavaVM *vm, JNIEnv *env, const char *driverClassName);
 void ReleaseInputBridge(JNIEnv *env);
+void SetInputContactSupport(bool supported);
 
 #endif // BRIDGE_INPUT_H
