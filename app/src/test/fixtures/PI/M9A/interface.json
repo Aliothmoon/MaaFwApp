@@ -1,0 +1,194 @@
+{
+    "interface_version": 2,
+    "contact": "CONTACT",
+    "license": "LICENSE",
+    "name": "m9a",
+    "label": "M9A",
+    "version": "v0.1.0",
+    "icon": "logo.ico",
+    "github": "https://github.com/MAA1999/M9A",
+    "mirrorchyan_rid": "M9A",
+    "mirrorchyan_multiplatform": true,
+    "controller": [
+        {
+            "name": "ADB",
+            "label": "模拟器",
+            "type": "Adb"
+        },
+        {
+            "name": "PC",
+            "label": "PC",
+            "type": "Win32",
+            "win32": {
+                "class_regex": "UnityWndClass",
+                "window_regex": "(重返未来|重返未來|Reverse|リバース)[：:：].*1999",
+                "screencap": "PrintWindow",
+                "mouse": "SendMessageWithCursorPos",
+                "keyboard": "SendMessageWithCursorPos"
+            },
+            "permission_required": true
+        },
+        {
+            "name": "PlayCover",
+            "type": "PlayCover"
+        }
+    ],
+    "resource": [
+        {
+            "name": "官服",
+            "path": [
+                "./resource/base"
+            ],
+            "controller": [
+                "ADB",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "B 服",
+            "path": [
+                "./resource/base",
+                "./resource/bilibili"
+            ],
+            "controller": [
+                "ADB",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "OPPO 服",
+            "path": [
+                "./resource/base",
+                "./resource/oppo"
+            ],
+            "controller": [
+                "ADB",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "小米服",
+            "path": [
+                "./resource/base",
+                "./resource/mi"
+            ],
+            "controller": [
+                "ADB",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "华为服",
+            "path": [
+                "./resource/base",
+                "./resource/huawei"
+            ],
+            "controller": [
+                "ADB",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "国际服（EN）",
+            "path": [
+                "./resource/base",
+                "./resource/global_jp",
+                "./resource/global_en"
+            ],
+            "controller": [
+                "ADB",
+                "PC",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "国际服（JP）",
+            "path": [
+                "./resource/base",
+                "./resource/global_jp"
+            ],
+            "controller": [
+                "ADB",
+                "PC",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "港澳台服",
+            "path": [
+                "./resource/base",
+                "./resource/global_jp",
+                "./resource/tw"
+            ],
+            "controller": [
+                "ADB",
+                "PC",
+                "PlayCover"
+            ]
+        },
+        {
+            "name": "国际服（KR）",
+            "path": [
+                "./resource/base",
+                "./resource/global_jp",
+                "./resource/global_kr"
+            ],
+            "controller": [
+                "ADB",
+                "PC",
+                "PlayCover"
+            ]
+        }
+    ],
+    "agent": [
+        {
+            "child_exec": "uv",
+            "child_args": [
+                "run",
+                "python",
+                "agent/bootstrap.py"
+            ]
+        }
+    ],
+    "group": [
+        {
+            "name": "daily",
+            "label": "日常任务"
+        },
+        {
+            "name": "standalone",
+            "label": "独立任务"
+        }
+    ],
+    "import": [
+        "tasks/preset/Daily.json",
+        "tasks/preset/DailyActivity.json",
+        "tasks/preset/DailyReRelease.json",
+        "tasks/preset/StandAlone.json",
+        "tasks/StartUp.json",
+        "tasks/Wilderness.json",
+        "tasks/Psychube.json",
+        "tasks/Combat.json",
+        "tasks/BalancedFarming.json",
+        "tasks/CombatActivity.json",
+        "tasks/Limbo.json",
+        "tasks/Lucidscape.json",
+        "tasks/Bank.json",
+        "tasks/Awards.json",
+        "tasks/SwitchAccount.json",
+        "tasks/SwitchFramework.json",
+        "tasks/RedeemCode.json",
+        "tasks/Close1999.json",
+        "tasks/SeriesOfDusks.json",
+        "tasks/TheSyndromeOfSilence.json",
+        "tasks/SSReopen.json",
+        "tasks/Colosseum.json",
+        "tasks/TheAlarm.json",
+        "tasks/AutoPromotion.json",
+        "tasks/CritterCrash.json",
+        "tasks/PreStormProtocol.json",
+        "tasks/UTTU.json",
+        "tasks/CompleteInduction.json",
+        "tasks/8bit.json"
+    ]
+}
