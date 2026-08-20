@@ -17,6 +17,7 @@ data class ProjectDefinition(
     /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
     val agents: List<AgentDefinition> = emptyList(),
     val metadata: ProjectMetadata = ProjectMetadata(),
+    val announcements: AnnouncementCatalog = AnnouncementCatalog(),
     /** null = PI 没声明 telemetry，或声明了但 dsn 为空 */
     val telemetry: TelemetryDefinition? = null,
     /**
@@ -40,9 +41,20 @@ data class TelemetryDefinition(
     val environment: String? = null,
 )
 
-/**
- * [welcomeFingerprint] 算在物化前的原始声明上：算在正文上的话，切一次语言换了译文就会重弹
- */
+/** resource/announcement 下的一篇项目公告。 */
+data class ProjectAnnouncement(
+    val id: String,
+    val title: String,
+    val body: String,
+    val sourcePath: String? = null,
+)
+
+data class AnnouncementCatalog(
+    val items: List<ProjectAnnouncement> = emptyList(),
+    val fingerprint: String? = null,
+)
+
+/** [welcomeFingerprint] 算在物化前的原始声明上：算在正文上的话，切一次语言换了译文就会重弹。 */
 data class ProjectMetadata(
     val welcome: String? = null,
     val welcomeFingerprint: String? = null,

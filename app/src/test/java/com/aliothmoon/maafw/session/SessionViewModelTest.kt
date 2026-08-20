@@ -6,6 +6,9 @@ import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.ProjectAnnouncement
+import com.aliothmoon.maafw.domain.AnnouncementCatalog
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -74,6 +77,7 @@ import kotlin.io.path.createTempDirectory
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -590,6 +594,56 @@ class SessionViewModelTest {
         vm.onIntent(SessionIntent.SetLanguage("en"))
         advanceUntilIdle()
         verify { AppLocales.apply("en") }
+    }
+
+    @Test
+    fun `首次启动按应用欢迎 PI welcome 公告依次展示`() = runTest(mainDispatcher) {
+        val announcement = ProjectAnnouncement("news", "News", "Body")
+        val project = FakeProjectRepository(
+            ProjectState.Ready(
+                definition.copy(
+                    metadata = ProjectMetadata(
+                        welcome = "Welcome body",
+                        welcomeFingerprint = "welcome-fingerprint",
+                    ),
+                    announcements = AnnouncementCatalog(
+                        listOf(announcement),
+                        "announcement-fingerprint",
+                    ),
+                ),
+                emptyList(),
+            ),
+        )
+        val settings = FakeAppSettingsGateway()
+        val (vm, store, _) = createVm(project = project, settings = settings)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(StartupPrompt.AppWelcome, vm.uiState.value.startupPrompt)
+
+        vm.onIntent(SessionIntent.DismissAppWelcome)
+        advanceUntilIdle()
+
+        assertEquals(
+            StartupPrompt.InterfaceWelcome("Welcome body"),
+            vm.uiState.value.startupPrompt,
+        )
+
+        vm.onIntent(SessionIntent.DismissWelcome)
+        advanceUntilIdle()
+
+        assertEquals(
+            StartupPrompt.Announcements(AnnouncementCatalog(listOf(announcement), "announcement-fingerprint")),
+            vm.uiState.value.startupPrompt,
+        )
+
+        vm.onIntent(SessionIntent.DismissAnnouncements)
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.startupPrompt)
+        assertTrue(settings.appWelcomeSeen.value)
+        assertEquals("welcome-fingerprint", store.current.welcomeFingerprint)
+        assertEquals("announcement-fingerprint", store.current.announcementFingerprint)
     }
 
     @Test

@@ -53,9 +53,8 @@ class PiMetadataTest {
         assertNull(metadata.github)
     }
 
-    /** 指纹算在原始声明上，否则切一次语言就会让同一份 welcome 再弹一次 */
     @Test
-    fun `welcome 指纹不随语言变化`() {
+    fun `welcome 正文随语言物化`() {
         val source = root("""{ "version": "1.2.0", "welcome": "${'$'}welcome.body" }""")
         val zh = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "欢迎")))
         val en = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "Welcome")))
@@ -66,10 +65,16 @@ class PiMetadataTest {
 
     @Test
     fun `PI 版本变化时指纹跟着变`() {
-        val text = MapTextResolver(emptyMap())
-        val v1 = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": "hi" }"""), text)
-        val v2 = PiParser.parseMetadata(root("""{ "version": "1.1.0", "welcome": "hi" }"""), text)
-        assertNotEquals(v1.welcomeFingerprint, v2.welcomeFingerprint)
+        fun load(version: String) = (ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to
+                        """{"interface_version":2,"name":"t","version":"$version","welcome":"hi"}""",
+                ),
+            ),
+        ).load() as ProjectLoadResult.Ready).definition.metadata
+
+        assertNotEquals(load("1.0.0").welcomeFingerprint, load("1.1.0").welcomeFingerprint)
     }
 
     @Test

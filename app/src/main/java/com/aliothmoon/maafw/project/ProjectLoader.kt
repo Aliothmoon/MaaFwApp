@@ -75,6 +75,9 @@ class ProjectLoader(
 
         val translations = loadTranslations(pi, diagnostics)
         val text = buildTextResolver(translations, diagnostics)
+        val metadata = pi.root?.let { PiParser.parseMetadata(it, text) } ?: ProjectMetadata()
+        val announcementResult = AnnouncementLoader(source).load()
+        diagnostics += announcementResult.diagnostics
 
         // 根文件自身作为首个分片（task/option/preset/group），import 分片按声明顺序追加；
         // 重名一律先定义优先；缺失分片降级为 warning 跳过
@@ -156,7 +159,8 @@ class ProjectLoader(
             globalOptionNames = state.globalOptionNames.filter { it in state.options },
             templates = templates,
             agents = pi.agents,
-            metadata = pi.root?.let { PiParser.parseMetadata(it, text) } ?: ProjectMetadata(),
+            metadata = metadata,
+            announcements = announcementResult.catalog,
             telemetry = pi.root?.let(PiParser::parseTelemetry),
             translations = translations,
         )
@@ -434,7 +438,10 @@ class ProjectLoader(
     /** interface.json 未提供可用声明时，从 resource/ 目录派生兜底资源 */
     private fun deriveResources(diagnostics: MutableList<Diagnostic>): List<ResourceDefinition> {
         val dirs = try {
-            source.list("resource").filter { source.list("resource/$it").isNotEmpty() }
+            source.list("resource").filter {
+                !it.equals(AnnouncementLoader.DIRECTORY.substringAfter('/'), ignoreCase = true) &&
+                    source.list("resource/$it").isNotEmpty()
+            }
         } catch (e: Exception) {
             diagnostics += warning(
                 "resource",

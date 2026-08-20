@@ -21,6 +21,7 @@ data class UserConfiguration(
     val configurations: List<RunConfiguration> = emptyList(),
     val activeConfigurationId: RunConfigurationId? = null,
     val welcomeFingerprint: String? = null,
+    val announcementFingerprint: String? = null,
 ) {
     fun configuration(id: RunConfigurationId?): RunConfiguration? =
         id?.let { target -> configurations.firstOrNull { it.id == target } }

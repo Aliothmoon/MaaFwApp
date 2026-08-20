@@ -44,6 +44,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private val _loaded = MutableStateFlow(false)
 
+    private val _appWelcomeSeen = MutableStateFlow(defaults.appWelcomeSeen.toBoolean())
+    override val appWelcomeSeen: StateFlow<Boolean> = _appWelcomeSeen.asStateFlow()
+
     /**
      * 首次读盘是否已落到下面各 StateFlow 上；置位后 `.value` 才是盘上的值
      *
@@ -106,6 +109,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         // 那样 loaded 置位与各字段拿到首值是两件并发的事，早读的人仍可能读到默认值
         scope.launch {
             settings.collect { s ->
+                _appWelcomeSeen.value = s.appWelcomeSeen.toBoolean()
                 _startupBackend.value = parseBackend(s.startupBackend)
                 _skipShizukuCheck.value = s.skipShizukuCheck.toBoolean()
                 _shizukuLaunchPackage.value = s.shizukuLaunchPackage
@@ -126,6 +130,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _loaded.value = true
             }
         }
+    }
+
+    override suspend fun setAppWelcomeSeen(seen: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[appWelcomeSeen] = seen.toString() }
     }
 
     suspend fun setStartupBackend(backend: RemoteBackend) = with(AppSettingsSchema) {
