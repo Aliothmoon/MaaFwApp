@@ -378,6 +378,7 @@
     <!-- Run log -->
     <string name="run_log_title">Run log</string>
     <string name="run_log_count">%1$d entries</string>
+    <string name="run_log_export">Export</string>
     <string name="run_log_clear">Clear</string>
     <string name="run_log_empty">No entries yet. MaaFramework output appears here once a run starts.</string>
     <string name="tasks_log">Log</string>

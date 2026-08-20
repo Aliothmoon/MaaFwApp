@@ -58,6 +58,7 @@ fun TasksScreen(
     /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
     runLog: () -> List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
+    onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -95,6 +96,7 @@ fun TasksScreen(
                 previewContent = previewContent,
                 runLog = runLog,
                 onEnterFullscreen = onEnterFullscreen,
+                onExportLogs = onExportLogs,
                 onIntent = onIntent,
             )
         }
@@ -108,6 +110,7 @@ private fun TasksContent(
     previewContent: (@Composable () -> Unit)?,
     runLog: () -> List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
+    onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -188,6 +191,7 @@ private fun TasksContent(
                         when {
                             logOpen -> RunLogPanel(
                                 entries = runLog,
+                                onExport = onExportLogs,
                                 onClear = { onIntent(SessionIntent.ClearRunLog) },
                                 modifier = Modifier.fillMaxSize(),
                             )

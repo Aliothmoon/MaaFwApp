@@ -397,6 +397,7 @@ fun AppRoot(
                         previewContent = previewContent.takeUnless { previewFullscreen },
                         runLog = { runLogState.value },
                         onEnterFullscreen = { previewFullscreen = true },
+                        onExportLogs = { exportSheetVisible = true },
                         onIntent = viewModel::onIntent,
                         modifier = Modifier.fillMaxSize(),
                     )
