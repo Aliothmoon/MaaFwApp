@@ -75,7 +75,7 @@ MaaFwApp 本身不包含具体业务资源。Android 上要把资源在**构建�
 
 ## 从源码构建
 
-需要 JDK 17、Android SDK、Python 3。构建用 git 计算版本号，请在 clone 下来的仓库里执行：
+需要 JDK 17、Android SDK、Python 3。构建用 git 计算版本号：独立 checkout 跟随本仓库，作为 submodule 时跟随最外层主仓库。请在 clone 下来的仓库里执行：
 
 ```bash
 git clone https://github.com/Aliothmoon/MaaFwApp.git
