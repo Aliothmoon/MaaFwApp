@@ -10,6 +10,7 @@ plugins {
 
 android {
     namespace = "com.aliothmoon.maafw"
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         externalNativeBuild {

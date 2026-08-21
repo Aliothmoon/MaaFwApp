@@ -10,7 +10,7 @@ MaaFwApp 本身不包含业务资源。资源开发者写好 Project Interface �
 
 ## 环境
 
-- JDK 17、Android SDK
+- JDK 17、Android SDK、Android NDK 29.0.14206865
 - Python 3（下载 MaaFramework 产物、组装 Python agent）
 - 一份 `interface_version` 为 `2` 的资源项目
 
