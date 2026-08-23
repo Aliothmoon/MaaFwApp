@@ -10,9 +10,6 @@ import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.register
 
-/** ABIs that ship; a debug build can narrow to one via build.debugAbi to save build time */
-private val SHIPPED_ABIS = listOf("arm64-v8a", "x86_64")
-
 /** The package every build sits under; a profile only appends to it, it never replaces it */
 private const val BASE_APPLICATION_ID = "com.aliothmoon.maafw"
 
@@ -125,6 +122,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             }
 
             val debugAbis = listSetting("build.debugAbi").ifEmpty { SHIPPED_ABIS }
+            val releaseAbis = abiSetting("build.releaseAbi")
             android.buildTypes {
                 getByName("debug") {
                     ndk {
@@ -133,7 +131,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 }
                 getByName("release") {
                     ndk {
-                        abiFilters += SHIPPED_ABIS
+                        abiFilters += releaseAbis
                     }
                     // Resource shrinking stays off: it is a separate lever with its own
                     // failure mode, and nothing here has measured it yet
@@ -154,8 +152,9 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             // keeping both multiplied the test module's variants and let an unsuffixed one
             // through, which uninstalled the app on the developer's device
             //
-            // They keep release's full ABI set: collection needs API 33+ or a rooted adb
-            // session, so it often has to run on an emulator, and that one is x86_64.
+            // By default they keep release's full ABI set: collection needs API 33+ or a rooted adb
+            // session, so it often has to run on an emulator, and that one is x86_64. Narrowing
+            // build.releaseAbi also narrows these release-derived variants to the shipping shape.
             // configureEach rather than getByName - they do not exist yet when this runs
             android.buildTypes.configureEach {
                 if (!name.startsWith("nonMinified") && !name.startsWith("benchmarkRelease")) {
