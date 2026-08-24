@@ -50,6 +50,7 @@ data class ProjectMetadata(
     val contact: String? = null,
     val license: String? = null,
     val github: String? = null,
+    val mirrorChyanRid: String? = null,
 )
 
 /**

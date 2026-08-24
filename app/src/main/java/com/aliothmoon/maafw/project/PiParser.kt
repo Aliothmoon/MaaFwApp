@@ -254,6 +254,7 @@ object PiParser {
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
             github = text.label(root.string("github"))?.takeIf(::isRemoteUrl),
+            mirrorChyanRid = root.string("mirrorchyan_rid")?.trim()?.takeIf(String::isNotBlank),
         )
     }
 

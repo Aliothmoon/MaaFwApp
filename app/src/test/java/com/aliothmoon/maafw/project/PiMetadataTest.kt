@@ -53,6 +53,16 @@ class PiMetadataTest {
         assertNull(metadata.github)
     }
 
+    @Test
+    fun `mirrorchyan rid 原样投影`() {
+        val metadata = PiParser.parseMetadata(
+            root("""{ "mirrorchyan_rid": " M9A " }"""),
+            MapTextResolver(emptyMap()),
+        )
+
+        assertEquals("M9A", metadata.mirrorChyanRid)
+    }
+
     /** 指纹算在原始声明上，否则切一次语言就会让同一份 welcome 再弹一次 */
     @Test
     fun `welcome 指纹不随语言变化`() {
