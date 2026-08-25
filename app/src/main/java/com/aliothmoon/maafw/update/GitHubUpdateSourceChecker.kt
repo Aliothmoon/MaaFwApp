@@ -117,7 +117,7 @@ internal class GitHubUpdateSourceChecker(
     private fun asset(raw: JsonObject): GithubAsset? {
         val apiUrl = raw.string("url")
         val browserUrl = raw.string("browser_download_url")
-        val downloadUrl = apiUrl ?: browserUrl ?: return null
+        val downloadUrl = browserUrl ?: apiUrl ?: return null
         return GithubAsset(
             name = raw.string("name") ?: downloadUrl.substringAfterLast('/'),
             downloadUrl = downloadUrl,

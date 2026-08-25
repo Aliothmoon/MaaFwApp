@@ -52,7 +52,7 @@ class GitHubUpdateSourceCheckerTest {
         assertEquals(
             SourceCheckResult.UpdateAvailable(
                 version = "v1.5.0",
-                downloadUrl = "https://example.com/arm64",
+                downloadUrl = "https://example.com/app-arm64-v8a.apk",
                 sha256 = "sha256:" + "a".repeat(64),
                 releaseNotesUrl = "https://github.com/maaxyz/example/releases/tag/v1.5.0",
                 releaseNotes = "Release 1.5.0",
@@ -81,7 +81,10 @@ class GitHubUpdateSourceCheckerTest {
 
         val result = checker(gateway).check(request(abi = AndroidAbi.X86))
 
-        assertEquals("https://example.com/universal", (result as SourceCheckResult.UpdateAvailable).downloadUrl)
+        assertEquals(
+            "https://example.com/MaaFwApp.apk",
+            (result as SourceCheckResult.UpdateAvailable).downloadUrl,
+        )
     }
 
     @Test

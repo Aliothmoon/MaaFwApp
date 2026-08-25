@@ -1,12 +1,16 @@
 package com.aliothmoon.maafw.update
 
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
+import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -18,20 +22,50 @@ internal class OkHttpUpdateHttpGateway(
     private val client = okHttpClient.newBuilder().build()
 
     override suspend fun get(url: String, headers: Map<String, String>): UpdateHttpResponse {
-        val request = Request.Builder()
-            .url(url.toHttpUrl())
-            .apply { headers.forEach { (name, value) -> header(name, value) } }
-            .get()
-            .build()
-        client.newCall(request).await().use { response ->
-            return UpdateHttpResponse(response.code, response.body.string())
+        return withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(url.toHttpUrl())
+                .apply { headers.forEach { (name, value) -> header(name, value) } }
+                .get()
+                .build()
+            client.newCall(request).await().use { response ->
+                UpdateHttpResponse(response.code, response.readBody())
+            }
         }
     }
 
+    private fun okhttp3.Response.readBody(): String {
+        val charset = body.contentType()?.charset(StandardCharsets.UTF_8)
+            ?: StandardCharsets.UTF_8
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(READ_BUFFER_SIZE)
+        var total = 0L
+        body.byteStream().use { stream ->
+            while (total <= MAX_RESPONSE_BODY_BYTES) {
+                val remaining = (MAX_RESPONSE_BODY_BYTES + 1 - total).toInt()
+                val read = stream.read(buffer, 0, minOf(buffer.size, remaining))
+                if (read < 0) break
+                output.write(buffer, 0, read)
+                total += read
+            }
+        }
+        if (total > MAX_RESPONSE_BODY_BYTES) {
+            throw UpdateSourceException(
+                reason = UpdateCheckFailure.INVALID_RESPONSE,
+                message = "Update response exceeds ${MAX_RESPONSE_BODY_BYTES} bytes",
+            )
+        }
+        return String(output.toByteArray(), charset)
+    }
+
     private companion object {
+        const val MAX_RESPONSE_BODY_BYTES = 2 * 1024 * 1024
+        const val READ_BUFFER_SIZE = 8 * 1024
+
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
             .build()
     }
 }
