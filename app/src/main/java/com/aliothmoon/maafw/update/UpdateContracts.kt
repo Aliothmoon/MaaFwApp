@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.update
 
+import java.io.File
+
 /** Update metadata sources. The API never silently switches between them. */
 enum class UpdateSource {
     MIRROR_CHYAN,
@@ -66,6 +68,70 @@ sealed interface UpdateCheckResult {
 
 interface UpdateCheckApi {
     suspend fun check(request: UpdateCheckRequest): UpdateCheckResult
+}
+
+enum class UpdateDownloadFailure {
+    INVALID_URL,
+    NETWORK,
+    HTTP,
+    STORAGE,
+    INVALID_DIGEST,
+    DIGEST_MISMATCH,
+    UNKNOWN,
+}
+
+data class DownloadedUpdate(
+    val source: UpdateSource,
+    val version: String,
+    val file: File,
+    val sha256: String,
+)
+
+sealed interface UpdateDownloadResult {
+    data class Downloaded(val update: DownloadedUpdate) : UpdateDownloadResult
+
+    data class Failed(
+        val reason: UpdateDownloadFailure,
+        val message: String? = null,
+    ) : UpdateDownloadResult
+}
+
+interface UpdateDownloadApi {
+    /** [onProgress] 的 totalBytes 为 -1 表示服务端未提供 Content-Length。 */
+    suspend fun download(
+        update: UpdateCheckResult.UpdateAvailable,
+        onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit = NO_PROGRESS,
+    ): UpdateDownloadResult
+
+    companion object {
+        val NO_PROGRESS: (Long, Long) -> Unit = { _, _ -> }
+    }
+}
+
+enum class UpdateInstallFailure {
+    FILE_INVALID,
+    INSTALLER_NOT_FOUND,
+    UNKNOWN,
+}
+
+sealed interface UpdateInstallResult {
+    data object InstallerStarted : UpdateInstallResult
+
+    data class Failed(
+        val reason: UpdateInstallFailure,
+        val message: String? = null,
+    ) : UpdateInstallResult
+}
+
+interface UpdateInstallApi {
+    /** 只表示系统安装器已成功拉起；最终安装结果由系统流程决定。 */
+    suspend fun install(update: DownloadedUpdate): UpdateInstallResult
+}
+
+internal object UpdateDownloadFiles {
+    const val DIRECTORY_NAME = "updates"
+
+    fun directory(cacheDir: File): File = File(cacheDir, DIRECTORY_NAME)
 }
 
 /** A provider's view of the result; the orchestrator adds source-switching metadata. */

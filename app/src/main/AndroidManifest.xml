@@ -4,6 +4,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- 应用自更新交给系统安装器；Android 8+ 仍需用户授予“安装未知应用” -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Shizuku 后端：由 Shizuku 服务校验，未装时无副作用 -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
