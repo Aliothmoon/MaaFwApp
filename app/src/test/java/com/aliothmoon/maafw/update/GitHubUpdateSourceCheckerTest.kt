@@ -100,13 +100,103 @@ class GitHubUpdateSourceCheckerTest {
     }
 
     @Test
-    fun `rate limit http status is mapped`() = runBlocking {
+    fun `api 429 falls back to release html`() = runBlocking {
         val gateway = RecordingUpdateHttpGateway(
             UpdateHttpResponse(429, """{"message":"rate limited"}"""),
+            UpdateHttpResponse(
+                200,
+                releasesHtml(
+                    releaseHtmlSection("v2.0.0-beta.1", prerelease = true),
+                    releaseHtmlSection("v1.5.0"),
+                ),
+            ),
+            UpdateHttpResponse(
+                200,
+                assetsHtml(
+                    assetHtml("app-x86_64.apk"),
+                    assetHtml("app-arm64-v8a.apk", digest = "sha256:" + "a".repeat(64)),
+                ),
+            ),
+        )
+
+        val result = checker(gateway).check(request(token = "token"))
+
+        assertEquals(
+            SourceCheckResult.UpdateAvailable(
+                version = "v1.5.0",
+                downloadUrl = "https://github.com/maaxyz/example/releases/download/v1.5.0/app-arm64-v8a.apk",
+                sha256 = "sha256:" + "a".repeat(64),
+                releaseNotesUrl = "https://github.com/maaxyz/example/releases/tag/v1.5.0",
+                releaseNotes = "Release v1.5.0",
+            ),
+            result,
+        )
+        assertEquals("Bearer token", gateway.requests.first().second["Authorization"])
+        assertEquals("/repos/maaxyz/example/releases", gateway.requests[0].first.toHttpUrl().encodedPath)
+        assertEquals("/maaxyz/example/releases", gateway.requests[1].first.toHttpUrl().encodedPath)
+        assertEquals("text/html", gateway.requests[1].second["Accept"])
+        assertEquals(null, gateway.requests[1].second["Authorization"])
+        assertEquals(
+            "/maaxyz/example/releases/expanded_assets/v1.5.0",
+            gateway.requests[2].first.toHttpUrl().encodedPath,
+        )
+    }
+
+    @Test
+    fun `api 403 stays rate limited without html fallback`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(403, """{"message":"rate limited"}"""),
         )
 
         assertEquals(
             SourceCheckResult.Failed(UpdateCheckFailure.RATE_LIMITED, "rate limited"),
+            checker(gateway).check(request()),
+        )
+        assertEquals(1, gateway.requests.size)
+    }
+
+    @Test
+    fun `html fallback can select beta channel release`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(429, ""),
+            UpdateHttpResponse(200, releasesHtml(releaseHtmlSection("v2.0.0-beta.1", prerelease = true))),
+            UpdateHttpResponse(200, assetsHtml(assetHtml("app-universal.apk"))),
+        )
+
+        val result = checker(gateway).check(request(channel = UpdateChannel.BETA))
+
+        assertEquals(
+            "v2.0.0-beta.1",
+            (result as SourceCheckResult.UpdateAvailable).version,
+        )
+    }
+
+    @Test
+    fun `html fallback without apk has no matching asset`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(429, ""),
+            UpdateHttpResponse(200, releasesHtml(releaseHtmlSection("v1.5.0"))),
+            UpdateHttpResponse(200, assetsHtml(assetHtml("app.zip"))),
+        )
+
+        assertEquals(
+            SourceCheckResult.Failed(UpdateCheckFailure.NO_MATCHING_ASSET),
+            checker(gateway).check(request()),
+        )
+    }
+
+    @Test
+    fun `html fallback failure is reported as rate limited`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(429, ""),
+            UpdateHttpResponse(503, "Service unavailable"),
+        )
+
+        assertEquals(
+            SourceCheckResult.Failed(
+                UpdateCheckFailure.RATE_LIMITED,
+                "GitHub API returned HTTP 429; HTML fallback returned HTTP 503",
+            ),
             checker(gateway).check(request()),
         )
     }
@@ -189,4 +279,37 @@ class GitHubUpdateSourceCheckerTest {
     } else {
         """{"name":"$name","url":"$url","browser_download_url":"https://example.com/$name","digest":"$digest"}"""
     }
+
+    private fun releasesHtml(vararg sections: String): String = """
+        <html><body>${sections.joinToString("")}</body></html>
+    """.trimIndent()
+
+    private fun releaseHtmlSection(
+        tag: String,
+        prerelease: Boolean = false,
+    ): String = """
+        <section id="release-$tag">
+          <h2 class="sr-only">$tag</h2>
+          <a href="/maaxyz/example/releases/tag/$tag">$tag</a>
+          ${if (prerelease) """<span class="Label">Pre-release</span>""" else ""}
+          <div class="markdown-body"><p>Release $tag</p></div>
+          <include-fragment src="https://github.com/maaxyz/example/releases/expanded_assets/$tag"></include-fragment>
+        </section>
+    """.trimIndent()
+
+    private fun assetsHtml(vararg assets: String): String = """
+        <div><ul>${assets.joinToString("")}</ul></div>
+    """.trimIndent()
+
+    private fun assetHtml(
+        name: String,
+        digest: String? = null,
+    ): String = """
+        <li class="Box-row">
+          <a class="Truncate" href="/maaxyz/example/releases/download/v1.5.0/$name">
+            <span class="Truncate-text">$name</span>
+          </a>
+          <span>${digest.orEmpty()}</span>
+        </li>
+    """.trimIndent()
 }
