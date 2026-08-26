@@ -147,6 +147,29 @@
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
+    <string name="settings_section_update">Updates</string>
+    <string name="settings_update_download_source">Download source</string>
+    <string name="settings_update_source_mirror">MirrorChyan</string>
+    <string name="settings_update_source_github">GitHub</string>
+    <string name="settings_update_mirror_cdk">MirrorChyan CDK</string>
+    <string name="settings_update_mirror_cdk_required">Required when MirrorChyan is selected</string>
+    <string name="settings_update_github_token">GitHub token</string>
+    <string name="settings_update_github_token_hint">Optional; used only for GitHub update downloads</string>
+    <string name="settings_update_channel">Update channel</string>
+    <string name="settings_update_channel_stable">Stable</string>
+    <string name="settings_update_channel_beta">Beta</string>
+    <string name="settings_update_check">Check for updates</string>
+    <string name="settings_update_checking">Checking…</string>
+    <string name="settings_update_download">Download update</string>
+    <string name="settings_update_downloading">Downloading…</string>
+    <string name="settings_update_available">Available update</string>
+    <string name="settings_update_result">Check result</string>
+    <string name="settings_update_up_to_date">You are up to date</string>
+    <string name="settings_update_failed">Check failed: %1$s</string>
+    <string name="settings_update_progress_known">Downloaded %1$s of %2$s</string>
+    <string name="settings_update_progress_unknown">Downloaded %1$s</string>
+    <string name="settings_update_installer_started">System installer opened</string>
+    <string name="settings_update_source_hint">The download source affects downloads only, not the default update-check source</string>
     <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->

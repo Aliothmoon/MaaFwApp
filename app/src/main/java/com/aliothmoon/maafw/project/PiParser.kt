@@ -25,6 +25,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.security.MessageDigest
 
 /** 单个 PI 分片文件（task[] / option{} / global_option[] / preset[] / group[]）的解析结果 */
@@ -254,8 +255,20 @@ object PiParser {
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
             github = text.label(root.string("github"))?.takeIf(::isRemoteUrl),
+            githubRepository = root.string("github")
+                ?.let(::githubRepository)
+                ?.takeIf(String::isNotBlank),
             mirrorChyanRid = root.string("mirrorchyan_rid")?.trim()?.takeIf(String::isNotBlank),
         )
+    }
+
+    /** 只认 github.com/<owner>/<repo>；仓库页 URL 常带 release 等后续路径，都截掉 */
+    private fun githubRepository(rawUrl: String): String? {
+        val url = rawUrl.toHttpUrlOrNull() ?: return null
+        if (url.host != "github.com") return null
+        val owner = url.pathSegments.getOrNull(0)?.takeIf(String::isNotBlank) ?: return null
+        val repository = url.pathSegments.getOrNull(1)?.removeSuffix(".git")?.takeIf(String::isNotBlank) ?: return null
+        return "$owner/$repository"
     }
 
     fun parseTelemetry(root: JsonObject): TelemetryDefinition? {

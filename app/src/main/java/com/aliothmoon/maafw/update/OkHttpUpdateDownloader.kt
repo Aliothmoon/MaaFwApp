@@ -38,15 +38,17 @@ internal class OkHttpUpdateDownloader(
 
     override suspend fun download(
         update: UpdateCheckResult.UpdateAvailable,
+        credentials: UpdateDownloadCredentials,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit,
     ): UpdateDownloadResult = mutex.withLock {
         withContext(MaaDispatchers.IO) {
-            downloadLocked(update, onProgress)
+            downloadLocked(update, credentials, onProgress)
         }
     }
 
     private suspend fun downloadLocked(
         update: UpdateCheckResult.UpdateAvailable,
+        credentials: UpdateDownloadCredentials,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit,
     ): UpdateDownloadResult {
         val url = try {
@@ -78,7 +80,17 @@ internal class OkHttpUpdateDownloader(
 
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", userAgent)
+                .apply {
+                    header("User-Agent", userAgent)
+                    when (update.source) {
+                        UpdateSource.GITHUB -> credentials.githubToken
+                            ?.trim()
+                            ?.takeIf(String::isNotBlank)
+                            ?.let { header("Authorization", "Bearer $it") }
+                        // Mirror酱的 CDK 用于解析下载地址，不作为 CDN 下载请求的鉴权头。
+                        UpdateSource.MIRROR_CHYAN -> Unit
+                    }
+                }
                 .get()
                 .build()
             client.newCall(request).await().use { response ->

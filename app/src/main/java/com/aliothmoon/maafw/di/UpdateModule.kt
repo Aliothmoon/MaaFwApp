@@ -10,12 +10,13 @@ import com.aliothmoon.maafw.update.UpdateCheckApi
 import com.aliothmoon.maafw.update.UpdateCheckCoordinator
 import com.aliothmoon.maafw.update.UpdateDownloadApi
 import com.aliothmoon.maafw.update.UpdateDownloadFiles
+import com.aliothmoon.maafw.update.UpdateHttpGateway
 import com.aliothmoon.maafw.update.UpdateInstallApi
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
 val updateModule = module {
-    single { OkHttpUpdateHttpGateway() }
+    single<UpdateHttpGateway> { OkHttpUpdateHttpGateway() }
     single {
         MirrorChyanUpdateSourceChecker(
             gateway = get(),

@@ -17,11 +17,13 @@ class MirrorChyanUpdateSourceCheckerTest {
         currentVersion: String = "1.0.0",
         channel: UpdateChannel = UpdateChannel.STABLE,
         abi: AndroidAbi = AndroidAbi.ARM64,
+        mirrorChyanCdk: String? = null,
     ) = UpdateCheckRequest(
         currentVersion = currentVersion,
         mirrorChyanRid = "M9A",
         channel = channel,
         abi = abi,
+        mirrorChyanCdk = mirrorChyanCdk,
     )
 
     @Test
@@ -64,7 +66,22 @@ class MirrorChyanUpdateSourceCheckerTest {
         assertEquals("android", parsedUrl.queryParameter("os"))
         assertEquals("arm64", parsedUrl.queryParameter("arch"))
         assertEquals("MaaFwApp/1.2.3 Android", parsedUrl.queryParameter("user_agent"))
+        assertEquals(null, parsedUrl.queryParameter("cdk"))
         assertEquals("MaaFwApp/1.2.3 Android", headers["User-Agent"])
+    }
+
+    @Test
+    fun `cdk is sent trimmed when supplied`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(200, """{"code":0,"data":{"version_name":"1.0.0"}}"""),
+        )
+
+        checker(gateway).check(request(mirrorChyanCdk = " cdk-value "))
+
+        assertEquals(
+            "cdk-value",
+            gateway.requests.single().first.toHttpUrl().queryParameter("cdk"),
+        )
     }
 
     @Test

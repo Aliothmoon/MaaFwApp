@@ -39,6 +39,7 @@ data class UpdateCheckRequest(
     val channel: UpdateChannel = UpdateChannel.STABLE,
     val abi: AndroidAbi = AndroidAbi.ARM64,
     val mirrorChyanRid: String? = null,
+    val mirrorChyanCdk: String? = null,
     val githubRepository: String? = null,
     val githubToken: String? = null,
 )
@@ -97,9 +98,13 @@ sealed interface UpdateDownloadResult {
 }
 
 interface UpdateDownloadApi {
-    /** [onProgress] 的 totalBytes 为 -1 表示服务端未提供 Content-Length。 */
+    /**
+     * [credentials] 只属于下载动作；更新检查不应因此改变默认源行为。
+     * [onProgress] 的 totalBytes 为 -1 表示服务端未提供 Content-Length。
+     */
     suspend fun download(
         update: UpdateCheckResult.UpdateAvailable,
+        credentials: UpdateDownloadCredentials = UpdateDownloadCredentials(),
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit = NO_PROGRESS,
     ): UpdateDownloadResult
 
@@ -107,6 +112,11 @@ interface UpdateDownloadApi {
         val NO_PROGRESS: (Long, Long) -> Unit = { _, _ -> }
     }
 }
+
+data class UpdateDownloadCredentials(
+    val githubToken: String? = null,
+    val mirrorChyanCdk: String? = null,
+)
 
 enum class UpdateInstallFailure {
     FILE_INVALID,

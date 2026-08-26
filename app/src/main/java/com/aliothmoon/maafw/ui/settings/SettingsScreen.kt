@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -15,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
@@ -29,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
 import android.content.Intent
+import android.text.format.Formatter
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
@@ -42,10 +45,12 @@ import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaFieldLabel
@@ -54,12 +59,16 @@ import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitchRow
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaSwitch
+import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.UpdateCheckResult
+import com.aliothmoon.maafw.update.UpdateSource
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +124,7 @@ fun SettingsScreen(
             NotificationCard(onOpenNotificationSettings)
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
+            UpdateCard(settingsState, onSettingsIntent)
             OtherCard(state, settingsState, onIntent, onSettingsIntent)
             AboutCard(state)
         }
@@ -385,6 +395,168 @@ private fun PiCard(onIntent: (SessionIntent) -> Unit) {
         )
     }
 }
+
+@Composable
+private fun UpdateCard(
+    state: SettingsUiState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
+    val update = state.update
+    MaaCard(title = stringResource(R.string.settings_section_update), collapsible = true) {
+        MaaFieldLabel(stringResource(R.string.settings_update_download_source))
+        MaaSingleChoiceFlow(
+            options = listOf(
+                UpdateSource.MIRROR_CHYAN to stringResource(R.string.settings_update_source_mirror),
+                UpdateSource.GITHUB to stringResource(R.string.settings_update_source_github),
+            ),
+            selected = update.downloadSource,
+            onSelect = { onSettingsIntent(SettingsIntent.SetUpdateDownloadSource(it)) },
+        )
+        if (update.downloadSource == UpdateSource.MIRROR_CHYAN) {
+            ITextFieldWithFocus(
+                value = update.mirrorChyanCdk,
+                onValueChange = { onSettingsIntent(SettingsIntent.SetMirrorChyanCdk(it)) },
+                onFocusLost = {},
+                label = stringResource(R.string.settings_update_mirror_cdk),
+                supportingText = {
+                    Text(
+                        text = stringResource(R.string.settings_update_mirror_cdk_required),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+            )
+        } else {
+            ITextFieldWithFocus(
+                value = update.githubToken,
+                onValueChange = { onSettingsIntent(SettingsIntent.SetGithubToken(it)) },
+                onFocusLost = {},
+                label = stringResource(R.string.settings_update_github_token),
+                supportingText = {
+                    Text(
+                        text = stringResource(R.string.settings_update_github_token_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+            )
+        }
+        Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
+        MaaFieldLabel(stringResource(R.string.settings_update_channel))
+        MaaSingleChoiceFlow(
+            options = listOf(
+                UpdateChannel.STABLE to stringResource(R.string.settings_update_channel_stable),
+                UpdateChannel.BETA to stringResource(R.string.settings_update_channel_beta),
+            ),
+            selected = update.channel,
+            onSelect = { onSettingsIntent(SettingsIntent.SetUpdateChannel(it)) },
+        )
+        UpdateStatus(update)
+        Row(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
+            MaaOutlinedButton(
+                onClick = { onSettingsIntent(SettingsIntent.CheckUpdate) },
+                enabled = !update.checking && !update.downloading,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(
+                        if (update.checking) R.string.settings_update_checking
+                        else R.string.settings_update_check,
+                    ),
+                )
+            }
+            MaaButton(
+                onClick = { onSettingsIntent(SettingsIntent.DownloadUpdate) },
+                enabled = update.canDownload,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(
+                        if (update.downloading) R.string.settings_update_downloading
+                        else R.string.settings_update_download,
+                    ),
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.settings_update_source_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun UpdateStatus(update: UpdatePanelState) {
+    when (val result = update.checkResult) {
+        is UpdateCheckResult.UpdateAvailable -> MaaInfoRow(
+            label = stringResource(R.string.settings_update_available),
+            value = "${result.version} · ${result.source.updateSourceLabel()}",
+        )
+
+        is UpdateCheckResult.UpToDate -> MaaInfoRow(
+            label = stringResource(R.string.settings_update_result),
+            value = stringResource(R.string.settings_update_up_to_date),
+        )
+
+        is UpdateCheckResult.SourceFailed -> Text(
+            text = stringResource(R.string.settings_update_failed, result.errorMessage()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        null -> Unit
+    }
+    update.errorMessage?.let {
+        Text(
+            text = it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+    if (update.downloading) {
+        if (update.totalBytes > 0) {
+            LinearProgressIndicator(
+                progress = { update.downloadedBytes.toFloat() / update.totalBytes },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        val context = LocalContext.current
+        val downloaded = Formatter.formatShortFileSize(
+            context,
+            update.downloadedBytes.coerceAtLeast(0L),
+        )
+        Text(
+            text = if (update.totalBytes > 0) {
+                stringResource(
+                    R.string.settings_update_progress_known,
+                    downloaded,
+                    Formatter.formatShortFileSize(context, update.totalBytes),
+                )
+            } else {
+                stringResource(R.string.settings_update_progress_unknown, downloaded)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (update.installerStarted) {
+        Text(
+            text = stringResource(R.string.settings_update_installer_started),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
+@Composable
+private fun UpdateSource.updateSourceLabel(): String = when (this) {
+    UpdateSource.MIRROR_CHYAN -> stringResource(R.string.settings_update_source_mirror)
+    UpdateSource.GITHUB -> stringResource(R.string.settings_update_source_github)
+}
+
+private fun UpdateCheckResult.SourceFailed.errorMessage(): String =
+    message?.let { "$source: $it" } ?: "$source: $reason"
 
 /**
  * 启动模式与后台模式分辨率：都是「跑起来之前得先定」的环境选项（对齐 MaaMeow 的「其他设置」）

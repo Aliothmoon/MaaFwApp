@@ -51,6 +51,17 @@ class PiMetadataTest {
             MapTextResolver(emptyMap()),
         )
         assertNull(metadata.github)
+        assertNull(metadata.githubRepository)
+    }
+
+    @Test
+    fun `github 仓库页解析出 owner repo`() {
+        val metadata = PiParser.parseMetadata(
+            root("""{ "github": "https://github.com/owner/repo/releases" }"""),
+            MapTextResolver(emptyMap()),
+        )
+
+        assertEquals("owner/repo", metadata.githubRepository)
     }
 
     @Test

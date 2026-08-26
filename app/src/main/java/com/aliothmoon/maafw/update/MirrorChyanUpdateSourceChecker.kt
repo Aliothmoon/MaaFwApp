@@ -87,6 +87,12 @@ internal class MirrorChyanUpdateSourceChecker(
             .addQueryParameter("os", "android")
             .addQueryParameter("arch", request.abi.mirrorArch)
             .addQueryParameter("user_agent", userAgent)
+            .apply {
+                request.mirrorChyanCdk
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { addQueryParameter("cdk", it) }
+            }
             .build()
             .toString()
 
