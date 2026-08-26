@@ -178,7 +178,7 @@ class UpdateDownloadForegroundService : Service() {
         return NotificationCompat.Builder(this, UpdateDownloadProgressSnapshots.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(snapshot.barColor)
-            .setContentTitle(getString(snapshot.titleRes))
+            .setContentTitle(getString(snapshot.titleRes, snapshot.shortCriticalText ?: ""))
             .setContentText(snapshot.contentText.takeIf { it.isNotBlank() })
             .setProgress(
                 UpdateDownloadProgressSnapshots.PROGRESS_MAX,
