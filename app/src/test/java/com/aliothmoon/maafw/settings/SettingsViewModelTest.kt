@@ -17,8 +17,12 @@ import com.aliothmoon.maafw.update.UpdateDownloadResult
 import com.aliothmoon.maafw.update.UpdateInstallApi
 import com.aliothmoon.maafw.update.UpdateInstallResult
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.notification.DownloadState
 import com.aliothmoon.maafw.notification.UpdateDownloadNotification
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -216,6 +220,8 @@ class SettingsViewModelTest {
 }
 
 private class NoopUpdateDownloadNotification : UpdateDownloadNotification {
+    private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
+    override val state: StateFlow<DownloadState> = _state.asStateFlow()
     override fun start(version: String, totalBytes: Long) = Unit
     override fun progress(version: String, downloadedBytes: Long, totalBytes: Long) = Unit
     override fun complete(version: String) = Unit
