@@ -1,17 +1,24 @@
 package com.aliothmoon.maafw.log
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Point
 import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
 import android.provider.OpenableColumns
+import android.view.WindowManager
 import androidx.core.content.FileProvider
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.BuildConfig
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
+import java.time.ZonedDateTime
 import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
@@ -32,14 +39,18 @@ class LogExportService(
     private val roots: () -> List<File>,
     /** 调试模式下额外附一份 `getprop`：ROM 差异是排障时最先要问的 */
     private val debugMode: () -> Boolean,
+    private val deviceInfoProvider: (() -> String)? = null,
 ) {
 
-    /** 返回 null = 没有可导出的日志，或打包失败 */
+    private val deviceInfo: () -> String = {
+        deviceInfoProvider?.invoke() ?: DeviceInfoText.render(collectDeviceInfo())
+    }
+
+    /** 返回 null = 打包失败；没有日志时也保留设备信息快照 */
     suspend fun exportZip(): File? = withContext(MaaDispatchers.IO) {
         val files = LogExportCollector.collect(roots(), System.currentTimeMillis())
         if (files.isEmpty()) {
-            Timber.w("没有可导出的日志")
-            return@withContext null
+            Timber.w("没有可导出的日志，仅导出设备信息")
         }
         runCatching {
             val dir = File(baseDir(), "${LOG_DIR_NAME}/${LogExportCollector.EXPORT_DIR_NAME}")
@@ -71,6 +82,7 @@ class LogExportService(
         val base = baseDir()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
             if (debugMode()) appendDeviceProperties(out)
+            appendDeviceInfo(out)
             files.forEach { file ->
                 val entry = ZipEntry(file.relativeTo(base).invariantSeparatorsPath)
                 entry.time = file.lastModified()
@@ -91,6 +103,84 @@ class LogExportService(
             process.waitFor()
         }.onFailure { Timber.w(it, "收集设备属性失败") }
     }
+
+    private fun appendDeviceInfo(out: ZipOutputStream) {
+        runCatching {
+            out.putNextEntry(ZipEntry(DEVICE_INFO_ENTRY))
+            out.write(deviceInfo().toByteArray(Charsets.UTF_8))
+            out.closeEntry()
+        }.onFailure { Timber.w(it, "收集设备信息失败") }
+    }
+
+    private fun collectDeviceInfo() = DeviceInfo(
+        exportTime = ZonedDateTime.now(),
+        applicationId = BuildConfig.APPLICATION_ID,
+        versionName = BuildConfig.VERSION_NAME,
+        versionCode = BuildConfig.VERSION_CODE.toLong(),
+        buildType = BuildConfig.BUILD_TYPE,
+        device = "${Build.MANUFACTURER} ${Build.MODEL}",
+        android = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+        securityPatch = Build.VERSION.SECURITY_PATCH,
+        abi = Build.SUPPORTED_ABIS.joinToString(),
+        screen = screenInfo,
+        memory = memoryInfo,
+        storage = storageInfo,
+        batteryOptimization = batteryOptimized,
+        selinux = selinuxMode,
+    )
+
+    private val screenInfo: String
+        get() = runCatching {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val (w, h) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                wm.maximumWindowMetrics.bounds.let { it.width() to it.height() }
+            } else {
+                @Suppress("DEPRECATION")
+                val size = Point()
+                wm.defaultDisplay.getRealSize(size)
+                size.x to size.y
+            }
+            @Suppress("DEPRECATION")
+            val refresh = wm.defaultDisplay.refreshRate
+            "$w x $h @ ${"%.0f".format(Locale.US, refresh)}Hz " +
+                "(density ${context.resources.displayMetrics.densityDpi}dpi)"
+        }.getOrDefault("unknown")
+
+    private val memoryInfo: String
+        get() = runCatching {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val mi = ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            "${formatGb(mi.totalMem)} total, ${formatGb(mi.availMem)} free"
+        }.getOrDefault("unknown")
+
+    private val storageInfo: String
+        get() = runCatching {
+            val dir = baseDir()
+            "${formatGb(dir.usableSpace)} usable / ${formatGb(dir.totalSpace)} total"
+        }.getOrDefault("unknown")
+
+    private val batteryOptimized: String
+        get() = runCatching {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (pm.isIgnoringBatteryOptimizations(context.packageName)) {
+                "ignored (app exempt)"
+            } else {
+                "NOT ignored (schedule may be killed)"
+            }
+        }.getOrDefault("unknown")
+
+    private val selinuxMode: String
+        get() = runCatching {
+            when (File("/sys/fs/selinux/enforce").readText().trim()) {
+                "1" -> "enforcing"
+                "0" -> "permissive"
+                else -> "unknown"
+            }
+        }.getOrDefault("unknown")
+
+    private fun formatGb(bytes: Long): String =
+        "%.1f GB".format(Locale.US, bytes / 1024f / 1024f / 1024f)
 
     /** 走 FileProvider 而非 file://：API 24 起后者直接抛 FileUriExposedException */
     private fun createShareIntent(zip: File): Intent {
@@ -114,6 +204,7 @@ class LogExportService(
     private companion object {
         const val LOG_DIR_NAME = "log"
         const val PROPERTIES_ENTRY = "properties.txt"
+        const val DEVICE_INFO_ENTRY = "device_info.txt"
         const val MIME_ZIP = "application/zip"
         const val BUFFER_SIZE = 8 * 1024
 

@@ -432,7 +432,7 @@
     <string name="log_export_share">Share</string>
     <string name="log_export_save">Save to device</string>
     <string name="log_export_running">Packing…</string>
-    <string name="log_export_failed">Export failed: nothing to export</string>
+    <string name="log_export_failed">Export failed</string>
     <string name="log_export_saved">Saved as %1$s</string>
     <string name="log_export_subject">MaaFwApp logs</string>
 
