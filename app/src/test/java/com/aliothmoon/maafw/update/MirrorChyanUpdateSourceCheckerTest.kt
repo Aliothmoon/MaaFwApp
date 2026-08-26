@@ -112,6 +112,42 @@ class MirrorChyanUpdateSourceCheckerTest {
     }
 
     @Test
+    fun `http 404 with business code 8001 still maps to resource not found`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(404, """{"code":8001,"msg":"resource not found"}"""),
+        )
+
+        assertEquals(
+            SourceCheckResult.Failed(UpdateCheckFailure.RESOURCE_NOT_FOUND, "resource not found"),
+            checker(gateway).check(request()),
+        )
+    }
+
+    @Test
+    fun `http 404 without business code keeps http reason`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(404, "<html>not found</html>"),
+        )
+
+        assertEquals(
+            SourceCheckResult.Failed(UpdateCheckFailure.HTTP, "MirrorChyan returned HTTP 404"),
+            checker(gateway).check(request()),
+        )
+    }
+
+    @Test
+    fun `http 502 without business code keeps http reason`() = runBlocking {
+        val gateway = RecordingUpdateHttpGateway(
+            UpdateHttpResponse(502, "Bad Gateway"),
+        )
+
+        assertEquals(
+            SourceCheckResult.Failed(UpdateCheckFailure.HTTP, "MirrorChyan returned HTTP 502"),
+            checker(gateway).check(request()),
+        )
+    }
+
+    @Test
     fun `malformed success json maps to invalid response`() = runBlocking {
         val gateway = RecordingUpdateHttpGateway(UpdateHttpResponse(200, """{"code":0,"data":""}"""))
 

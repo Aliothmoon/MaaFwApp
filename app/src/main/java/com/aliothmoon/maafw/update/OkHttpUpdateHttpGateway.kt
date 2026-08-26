@@ -8,6 +8,7 @@ import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import timber.log.Timber
 import java.io.IOException
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
@@ -29,7 +30,21 @@ internal class OkHttpUpdateHttpGateway(
                 .get()
                 .build()
             client.newCall(request).await().use { response ->
-                UpdateHttpResponse(response.code, response.readBody())
+                val body = try {
+                    response.readBody()
+                } catch (e: Throwable) {
+                    Timber.tag("UpdateHttp").w(
+                        "HTTP %d GET %s bodyReadFailed=%s",
+                        response.code, url, e.message,
+                    )
+                    throw e
+                }
+                Timber.tag("UpdateHttp").w(
+                    "HTTP %d GET %s bytes=%d head=%s",
+                    response.code, url, body.length,
+                    body.take(200).replace("\n", " ").replace("\r", " "),
+                )
+                UpdateHttpResponse(response.code, body)
             }
         }
     }

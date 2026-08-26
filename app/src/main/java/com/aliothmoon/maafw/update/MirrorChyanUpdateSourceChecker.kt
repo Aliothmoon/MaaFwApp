@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.update
 
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import timber.log.Timber
 import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -42,17 +43,27 @@ internal class MirrorChyanUpdateSourceChecker(
             headers = mapOf("User-Agent" to userAgent, "Accept" to "application/json"),
         )
         val root = parseJsonObject(response.body)
+        // MirrorChyan 用 HTTP 404 + body {"code":8001,...} 表示「资源不存在」，
+        // 服务端约定。先看 body 的业务码再判定 HTTP 状态，否则 8001 会被吞成 HTTP reason，
+        // 失去（也跳）过 GitHub fallback 的机会。其它业务码（例如 7003 rate-limited）
+        // 同样以 body code 为准。
+        val bodyCode = root?.int("code")
+        if (bodyCode != null && bodyCode != 0) {
+            return SourceCheckResult.Failed(businessFailure(bodyCode), root.string("msg"))
+        }
+        Timber.tag("UpdateCheck").w(
+            "mirrorchyan http=%d bodyCode=%s",
+            response.statusCode, bodyCode,
+        )
         if (!response.statusCode.isSuccess()) {
             return SourceCheckResult.Failed(
                 UpdateCheckFailure.HTTP,
                 root?.string("msg") ?: "MirrorChyan returned HTTP ${response.statusCode}",
             )
         }
-        if (root == null) return SourceCheckResult.Failed(UpdateCheckFailure.INVALID_RESPONSE)
-
-        val code = root.int("code")
-            ?: return SourceCheckResult.Failed(UpdateCheckFailure.INVALID_RESPONSE, "Missing business code")
-        if (code != 0) return SourceCheckResult.Failed(businessFailure(code), root.string("msg"))
+        if (root == null || bodyCode == null) {
+            return SourceCheckResult.Failed(UpdateCheckFailure.INVALID_RESPONSE, "Missing business code")
+        }
 
         val data = root["data"] as? JsonObject
             ?: return SourceCheckResult.Failed(UpdateCheckFailure.INVALID_RESPONSE, "Missing update data")
