@@ -30,6 +30,7 @@ val viewModelModule = module {
             updateDownloader = get(),
             updateInstaller = get(),
             updateDownloadNotifier = get(),
+            notificationPermissionRequester = get(),
         )
     }
 }

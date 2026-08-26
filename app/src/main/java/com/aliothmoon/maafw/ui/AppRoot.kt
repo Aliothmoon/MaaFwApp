@@ -85,11 +85,13 @@ import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
+import com.aliothmoon.maafw.settings.SettingsEffect
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
@@ -272,6 +274,27 @@ fun AppRoot(
                 when (effect) {
                     // 系统页还在启动，此刻重读仍是改动前的值
                     ScheduleEffect.RequestExactAlarmPermission -> ExactAlarmSettings.open(context)
+                }
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            settingsViewModel.effects.collect { effect ->
+                when (effect) {
+                    SettingsEffect.RequestNotificationPermission -> {
+                        // POST_NOTIFICATIONS 走运行时弹窗；拒了也别在后台反复 retry，
+                        // SettingsScreen 顶上会显示一条「未授权」+ 跳系统通知详情页的入口
+                        val activity = context.findActivity()
+                        val granted = if (activity != null) {
+                            SystemPermissionRequester.request(
+                                activity,
+                                SystemPermission.Notification,
+                            )
+                        } else false
+                        settingsViewModel.onIntent(
+                            SettingsIntent.NotificationPermissionResult(granted),
+                        )
+                    }
                 }
             }
         }

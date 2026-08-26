@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.domain.ProjectMetadata
+import com.aliothmoon.maafw.notification.NotificationPermissionRequester
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -21,9 +22,13 @@ import com.aliothmoon.maafw.update.UpdateInstallResult
 import com.aliothmoon.maafw.update.UpdateSource
 import com.aliothmoon.maafw.notification.UpdateDownloadNotification
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -42,6 +47,7 @@ class SettingsViewModel(
     private val updateDownloader: UpdateDownloadApi,
     private val updateInstaller: UpdateInstallApi,
     private val updateDownloadNotifier: UpdateDownloadNotification,
+    private val notificationPermissionRequester: NotificationPermissionRequester,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     supportedAbis: List<String> = Build.SUPPORTED_ABIS.orEmpty().toList(),
 ) : ViewModel() {
@@ -55,6 +61,15 @@ class SettingsViewModel(
 
     private val abi = supportedAbis.firstNotNullOfOrNull(::androidAbi) ?: AndroidAbi.ARM64
     private val updateOperation = MutableStateFlow(UpdatePanelState())
+
+    // 用 SharedFlow 当一次性 effect：UI 层 LaunchedEffect 收一次即消费；不让任何 effect 被覆盖
+    // 也用 BufferOverflow.DROP_OLDEST 防 UI 层还没挂上 collect 时的丢消息
+    private val _effects = MutableSharedFlow<SettingsEffect>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val effects: Flow<SettingsEffect> = _effects.asSharedFlow()
 
     private val updateSettings = combine(
         appSettings.updateDownloadSource,
@@ -109,6 +124,16 @@ class SettingsViewModel(
 
             SettingsIntent.CheckUpdate -> viewModelScope.launch { checkUpdate() }
             SettingsIntent.DownloadUpdate -> viewModelScope.launch { downloadUpdate() }
+
+            is SettingsIntent.NotificationPermissionResult -> {
+                updateOperation.update {
+                    it.copy(
+                        notificationPermissionDenied = !intent.granted,
+                        // 用户刚授权过，清掉「需要通知权限」的红字 errorMessage
+                        errorMessage = if (intent.granted) null else it.errorMessage,
+                    )
+                }
+            }
         }
     }
 
@@ -147,6 +172,20 @@ class SettingsViewModel(
         val credentialMissing = settings.source == UpdateSource.MIRROR_CHYAN && settings.mirrorChyanCdk.isBlank()
         if (current.availableUpdate == null || current.checking || current.downloading || credentialMissing) return
 
+        // 通知权限守卫：Android 13+ 上 POST_NOTIFICATIONS 是运行时权限，拒了之后
+        // FGS 起来也只会被系统悄悄吞掉通知。这里在动 notifier 之前先看一眼；拒了就把
+        // 状态打上「需开启通知」+ 把请求抛给 UI 层弹系统对话框，下载流程不启动
+        if (!notificationPermissionRequester.isGranted()) {
+            updateOperation.update {
+                it.copy(
+                    notificationPermissionDenied = true,
+                    errorMessage = "需要授予通知权限才能在通知栏显示下载进度",
+                )
+            }
+            _effects.tryEmit(SettingsEffect.RequestNotificationPermission)
+            return
+        }
+
         updateOperation.update {
             it.copy(
                 downloading = true,
@@ -155,6 +194,7 @@ class SettingsViewModel(
                 downloadedVersion = null,
                 installerStarted = false,
                 errorMessage = null,
+                notificationPermissionDenied = false,
             )
         }
         try {
@@ -164,7 +204,7 @@ class SettingsViewModel(
                 mirrorChyanCdk = settings.mirrorChyanCdk.takeIf { settings.source == UpdateSource.MIRROR_CHYAN },
             )
 
-            // 下载前按用户选择的源重新解析一次：检查结果可能来自另一个源，且下载凭据不能带入首次检查。
+            // 下载前按用户选择源重新解析一次：检查结果可能来自另一个源，且下载凭据不能带入首次检查。
             val resolved = updateCheckApi.check(
                 UpdateCheckRequest(
                     currentVersion = currentVersion,

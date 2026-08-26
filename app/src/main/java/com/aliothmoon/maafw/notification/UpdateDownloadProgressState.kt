@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.notification
 
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationManagerCompat
 import com.aliothmoon.maafw.service.UpdateDownloadForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,13 @@ import kotlinx.coroutines.flow.update
  *
  * 进 [DownloadState.Downloading] 同时 [start] 还会额外启一次前台服务——service 决定何时
  * stopSelf（看到 Idle / Complete / Failed 都退）
+ *
+ * 通知权限守卫：Android 13+ 的 POST_NOTIFICATIONS 是运行时权限，拒了之后 FGS 起来也只会被
+ * 系统悄悄吞掉通知栏条目。这里在 [start] 触到 FGS 之前用
+ * [NotificationManagerCompat.areNotificationsEnabled] 做一次同步判断；不让 start 就把
+ * state 推到 [DownloadState.Failed]、不启 service，让 ViewModel 走到错误分支并提示用户。
+ * 这样 SettingsViewModel 即便被绕过（比如未来直接复用 start 的别处入口），通知栏至少不会
+ * 出现「FGS 在跑、通知栏啥都没有」的诡异状态。
  */
 class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification {
 
@@ -27,6 +35,13 @@ class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification
     override val state: StateFlow<DownloadState> = _state.asStateFlow()
 
     override fun start(version: String, totalBytes: Long) {
+        if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) {
+            _state.value = DownloadState.Failed(
+                version = null,
+                message = NOTIFICATION_DISABLED_MESSAGE,
+            )
+            return
+        }
         _state.value = DownloadState.Downloading(
             version = version,
             downloadedBytes = 0L,
@@ -69,5 +84,10 @@ class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification
 
     override fun cancel() {
         _state.value = DownloadState.Idle
+    }
+
+    private companion object {
+        const val NOTIFICATION_DISABLED_MESSAGE =
+            "通知未授权，无法在通知栏显示下载进度"
     }
 }

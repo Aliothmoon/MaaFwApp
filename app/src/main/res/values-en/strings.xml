@@ -170,6 +170,9 @@
     <string name="settings_update_progress_unknown">Downloaded %1$s</string>
     <string name="settings_update_installer_started">System installer opened</string>
     <string name="settings_update_source_hint">The download source affects downloads only, not the default update-check source</string>
+    <string name="settings_update_notification_denied">Notification permission is off; download progress will not show in the notification bar</string>
+    <string name="settings_update_notification_open_settings">Open settings</string>
+    <string name="settings_update_notification_error">Notification permission is required to show download progress in the notification bar</string>
     <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->

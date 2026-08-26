@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
 import android.content.Intent
+import android.provider.Settings
 import android.text.format.Formatter
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
@@ -450,6 +451,27 @@ private fun UpdateCard(
             onSelect = { onSettingsIntent(SettingsIntent.SetUpdateChannel(it)) },
         )
         UpdateStatus(update)
+        if (update.notificationPermissionDenied) {
+            val context = LocalContext.current
+            Column(
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_update_notification_denied),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        runCatching { context.startActivity(intent) }
+                    },
+                ) {
+                    Text(stringResource(R.string.settings_update_notification_open_settings))
+                }
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
             MaaOutlinedButton(
                 onClick = { onSettingsIntent(SettingsIntent.CheckUpdate) },

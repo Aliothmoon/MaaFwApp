@@ -19,18 +19,23 @@ import com.aliothmoon.maafw.update.UpdateInstallResult
 import com.aliothmoon.maafw.update.UpdateSource
 import com.aliothmoon.maafw.notification.DownloadState
 import com.aliothmoon.maafw.notification.UpdateDownloadNotification
+import com.aliothmoon.maafw.notification.NotificationPermissionRequester
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -91,6 +96,63 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `download update surfaces error and skips notifier when notification permission denied`() = runTest {
+        val checkApi = RecordingUpdateCheckApi(availableUpdate())
+        val downloader = RecordingUpdateDownloader()
+        val notifier = NoopUpdateDownloadNotification()
+        val settings = FakeAppSettingsGateway()
+        val viewModel = viewModel(
+            checkApi = checkApi,
+            downloader = downloader,
+            settings = settings,
+            notificationPermissionRequester = FakeNotificationPermissionRequester(granted = false),
+        )
+
+        settings.setUpdateDownloadSource(UpdateSource.GITHUB)
+        viewModel.onIntent(SettingsIntent.CheckUpdate)
+        viewModel.onIntent(SettingsIntent.DownloadUpdate)
+        advanceUntilIdle()
+
+        // 重检照常跑（拿到 UpdateAvailable），但 downloader 不该被调到——permission 拦在前面
+        assertEquals(1, checkApi.requests.size)
+        assertTrue(downloader.updates.isEmpty())
+        val panel = latestPanel(viewModel)
+        assertTrue(panel.notificationPermissionDenied)
+        assertNotNull(panel.errorMessage)
+        assertFalse(panel.downloading)
+    }
+
+    private suspend fun latestPanel(viewModel: SettingsViewModel): UpdatePanelState {
+        // uiState 用 stateIn(WhileSubscribed)；直接 .value 会拿 initialValue。订阅一次
+        // 等 combine 跑完，再读才有最新 updateOperation
+        val first = viewModel.uiState.first().update
+        return first
+    }
+
+    @Test
+    fun `notification permission result clears denial flag when granted`() = runTest {
+        val checkApi = RecordingUpdateCheckApi(availableUpdate())
+        val settings = FakeAppSettingsGateway()
+        val viewModel = viewModel(
+            checkApi = checkApi,
+            settings = settings,
+            notificationPermissionRequester = FakeNotificationPermissionRequester(granted = false),
+        )
+        settings.setUpdateDownloadSource(UpdateSource.GITHUB)
+        viewModel.onIntent(SettingsIntent.CheckUpdate)
+        viewModel.onIntent(SettingsIntent.DownloadUpdate)
+        advanceUntilIdle()
+        assertTrue(latestPanel(viewModel).notificationPermissionDenied)
+
+        viewModel.onIntent(SettingsIntent.NotificationPermissionResult(granted = true))
+        advanceUntilIdle()
+
+        val panel = latestPanel(viewModel)
+        assertFalse(panel.notificationPermissionDenied)
+        assertNull(panel.errorMessage)
+    }
+
+    @Test
     fun `mirror download requires cdk`() = runTest {
         val checkApi = RecordingUpdateCheckApi(availableUpdate())
         val downloader = RecordingUpdateDownloader()
@@ -122,6 +184,8 @@ class SettingsViewModelTest {
         checkApi: UpdateCheckApi = RecordingUpdateCheckApi(availableUpdate()),
         downloader: UpdateDownloadApi = RecordingUpdateDownloader(),
         settings: AppSettingsGateway = FakeAppSettingsGateway(),
+        notificationPermissionRequester: NotificationPermissionRequester =
+            FakeNotificationPermissionRequester(granted = true),
     ): SettingsViewModel {
         val definition = ProjectDefinition(
             name = "demo",
@@ -145,6 +209,7 @@ class SettingsViewModelTest {
             updateDownloader = downloader,
             updateInstaller = RecordingUpdateInstaller(),
             updateDownloadNotifier = NoopUpdateDownloadNotification(),
+            notificationPermissionRequester = notificationPermissionRequester,
             currentVersion = "1.0.0",
             supportedAbis = listOf("arm64-v8a"),
         )
@@ -227,4 +292,11 @@ private class NoopUpdateDownloadNotification : UpdateDownloadNotification {
     override fun complete(version: String) = Unit
     override fun failed(message: String) = Unit
     override fun cancel() = Unit
+}
+
+
+private class FakeNotificationPermissionRequester(
+    private val granted: Boolean = true,
+) : NotificationPermissionRequester {
+    override fun isGranted(): Boolean = granted
 }
