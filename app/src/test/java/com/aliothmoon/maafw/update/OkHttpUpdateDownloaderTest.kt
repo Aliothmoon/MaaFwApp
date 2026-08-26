@@ -16,11 +16,13 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 
@@ -126,13 +128,14 @@ class OkHttpUpdateDownloaderTest {
     }
 
     @Test
-    fun `http failure is returned instead of thrown`() = runTest(dispatcher) {
+    fun `http failure returns error before body bytes`() = runTest(dispatcher) {
         val directory = temp.newFolder("updates")
         val downloader = downloader("error".toByteArray(), directory = directory, code = 503)
 
         val result = downloader.download(update(sha256 = "0".repeat(64)))
 
         assertEquals(UpdateDownloadFailure.HTTP, (result as UpdateDownloadResult.Failed).reason)
+        // 服务器 4xx/5xx 在拿到 body 之前就被 reject,目录里没落盘任何 .part
         assertEquals(emptyList<String>(), directory.list()!!.toList())
     }
 
@@ -169,13 +172,126 @@ class OkHttpUpdateDownloaderTest {
         val result = downloader.download(update(sha256 = "0".repeat(64)))
 
         assertEquals(UpdateDownloadFailure.NETWORK, (result as UpdateDownloadResult.Failed).reason)
+        // IOException 在还没读到 body 之前抛,目录里没 .part
         assertEquals(emptyList<String>(), directory.list()!!.toList())
+    }
+
+    @Test
+    fun `sends Range header and appends when server returns 206`() = runTest(dispatcher) {
+        val fullBytes = "resume-apk-bytes".toByteArray()  // 17 bytes
+        val cut = 6
+        val prefix = fullBytes.copyOfRange(0, cut)  // "resume"
+        val remaining = fullBytes.copyOfRange(cut, fullBytes.size)  // "-apk-bytes"
+
+        val directory = temp.newFolder("updates")
+        val identity = sha256(fullBytes).takeLast(16)
+        val partFile = File(directory, "maafw-1.2.3-$identity.apk.part")
+        partFile.writeBytes(prefix)
+
+        val requests = mutableListOf<okhttp3.Request>()
+        val client = OkHttpClient.Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    requests += chain.request()
+                    val range = chain.request().header("Range")
+                    if (range == "bytes=$cut-") {
+                        Response.Builder()
+                            .request(chain.request())
+                            .protocol(Protocol.HTTP_2)
+                            .code(206)
+                            .message("Partial Content")
+                            .header("Content-Range", "bytes $cut-${fullBytes.size - 1}/${fullBytes.size}")
+                            .body(remaining.toResponseBody(APK_MEDIA_TYPE))
+                            .build()
+                    } else {
+                        Response.Builder()
+                            .request(chain.request())
+                            .protocol(Protocol.HTTP_2)
+                            .code(200)
+                            .message("OK")
+                            .body(fullBytes.toResponseBody(APK_MEDIA_TYPE))
+                            .build()
+                    }
+                },
+            )
+            .build()
+        val downloader = OkHttpUpdateDownloader(directory, client)
+
+        val result = downloader.download(update(sha256 = sha256(fullBytes)))
+
+        assertEquals(UpdateDownloadResult.Downloaded::class, result::class)
+        val downloaded = result as UpdateDownloadResult.Downloaded
+        assertArrayEquals(fullBytes, downloaded.update.file.readBytes())
+        assertEquals("bytes=$cut-", requests.single().header("Range"))
+        // .part 已经被 rename 成 .apk,目录里没有 part 残留
+        assertEquals(1, downloaded.update.file.parentFile!!.list()!!.size)
+    }
+
+    @Test
+    fun `falls back to full download when server ignores Range`() = runTest(dispatcher) {
+        val fullBytes = "resume-apk-bytes".toByteArray()
+        val directory = temp.newFolder("updates")
+        // 预存一段错的字节,模拟上一次失败留下的 .part
+        val identity = sha256(fullBytes).takeLast(16)
+        val partFile = File(directory, "maafw-1.2.3-$identity.apk.part")
+        partFile.writeBytes("STALE-".toByteArray())
+
+        val requests = mutableListOf<okhttp3.Request>()
+        val client = OkHttpClient.Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    requests += chain.request()
+                    Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_2)
+                        .code(200)  // 服务器忽略 Range,从头 200 全量
+                        .message("OK")
+                        .body(fullBytes.toResponseBody(APK_MEDIA_TYPE))
+                        .build()
+                },
+            )
+            .build()
+        val downloader = OkHttpUpdateDownloader(directory, client)
+
+        val result = downloader.download(update(sha256 = sha256(fullBytes)))
+
+        assertEquals(UpdateDownloadResult.Downloaded::class, result::class)
+        val downloaded = result as UpdateDownloadResult.Downloaded
+        assertArrayEquals(fullBytes, downloaded.update.file.readBytes())
+        assertEquals("bytes=6-", requests.single().header("Range"))
+        // STALE- 前缀不应出现在最终文件里
+        assertNull(downloaded.update.file.parentFile!!.listFiles()!!.singleOrNull { it.extension == "part" })
+    }
+
+    @Test
+    fun `no Range header sent when no existing part`() = runTest(dispatcher) {
+        val bytes = "fresh-apk".toByteArray()
+        val requests = mutableListOf<okhttp3.Request>()
+        val downloader = OkHttpClient.Builder()
+            .addInterceptor(
+                Interceptor { chain ->
+                    requests += chain.request()
+                    Response.Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_2)
+                        .code(200)
+                        .message("OK")
+                        .body(bytes.toResponseBody(APK_MEDIA_TYPE))
+                        .build()
+                },
+            )
+            .build()
+            .let { OkHttpUpdateDownloader(temp.newFolder("updates"), it) }
+
+        downloader.download(update(sha256 = sha256(bytes)))
+
+        assertNull(requests.single().header("Range"))
     }
 
     private fun downloader(
         body: ByteArray,
         requests: MutableList<okhttp3.Request> = mutableListOf(),
-        directory: java.io.File = temp.newFolder("updates"),
+        directory: File = temp.newFolder("updates"),
         code: Int = 200,
     ): OkHttpUpdateDownloader {
         val client = OkHttpClient.Builder()
