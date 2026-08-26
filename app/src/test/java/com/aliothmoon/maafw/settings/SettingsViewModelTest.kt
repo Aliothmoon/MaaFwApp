@@ -17,6 +17,7 @@ import com.aliothmoon.maafw.update.UpdateDownloadResult
 import com.aliothmoon.maafw.update.UpdateInstallApi
 import com.aliothmoon.maafw.update.UpdateInstallResult
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.notification.UpdateDownloadNotification
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -139,6 +140,7 @@ class SettingsViewModelTest {
             updateCheckApi = checkApi,
             updateDownloader = downloader,
             updateInstaller = RecordingUpdateInstaller(),
+            updateDownloadNotifier = NoopUpdateDownloadNotification(),
             currentVersion = "1.0.0",
             supportedAbis = listOf("arm64-v8a"),
         )
@@ -211,4 +213,12 @@ class SettingsViewModelTest {
     private class RecordingUpdateInstaller : UpdateInstallApi {
         override suspend fun install(update: DownloadedUpdate) = UpdateInstallResult.InstallerStarted
     }
+}
+
+private class NoopUpdateDownloadNotification : UpdateDownloadNotification {
+    override fun start(version: String, totalBytes: Long) = Unit
+    override fun progress(version: String, downloadedBytes: Long, totalBytes: Long) = Unit
+    override fun complete(version: String) = Unit
+    override fun failed(message: String) = Unit
+    override fun cancel() = Unit
 }

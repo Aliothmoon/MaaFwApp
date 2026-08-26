@@ -621,6 +621,14 @@
     <string name="notification_event_channel_silent_desc">Leaves an entry in the shade when a run ends, without a sound</string>
     <string name="notification_event_channel_popup_name">Run result (banner)</string>
     <string name="notification_event_channel_popup_desc">Shows a banner with a sound when a run ends</string>
+    <string name="notification_channel_update_download">App update download</string>
+    <string name="notification_channel_update_download_desc">Shows progress in the shade while a new version is downloading, auto-cancels when done</string>
+    <string name="notification_update_download_title">Downloading %1$s</string>
+    <string name="notification_update_download_complete_title">%1$s downloaded</string>
+    <string name="notification_update_download_complete">Download complete, opening the system installer</string>
+    <string name="notification_update_download_failed_title">Download failed</string>
+    <string name="notification_update_download_failed">Download failed: %1$s</string>
+
     <string name="notification_event_run_completed">All tasks completed</string>
     <plurals name="notification_event_run_completed_body">
         <item quantity="one">%1$d task in total</item>

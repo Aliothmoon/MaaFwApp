@@ -29,6 +29,7 @@ val viewModelModule = module {
             updateCheckApi = get(),
             updateDownloader = get(),
             updateInstaller = get(),
+            updateDownloadNotifier = get(),
         )
     }
 }

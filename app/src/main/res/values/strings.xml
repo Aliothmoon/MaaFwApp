@@ -615,6 +615,14 @@
     <string name="notification_event_channel_silent_desc">任务结束后在通知栏留一条，不出声</string>
     <string name="notification_event_channel_popup_name">任务结果（弹出）</string>
     <string name="notification_event_channel_popup_desc">任务结束后弹出横幅并出声</string>
+    <string name="notification_channel_update_download">应用更新下载</string>
+    <string name="notification_channel_update_download_desc">下载新版本时在通知栏显示进度，下载完成后自动收起</string>
+    <string name="notification_update_download_title">正在下载 %1$s</string>
+    <string name="notification_update_download_complete_title">%1$s 已下载</string>
+    <string name="notification_update_download_complete">已下载完毕，准备进入系统安装</string>
+    <string name="notification_update_download_failed_title">下载失败</string>
+    <string name="notification_update_download_failed">下载失败：%1$s</string>
+
     <string name="notification_event_run_completed">任务已全部完成</string>
     <plurals name="notification_event_run_completed_body">
         <item quantity="other">共 %1$d 个任务</item>

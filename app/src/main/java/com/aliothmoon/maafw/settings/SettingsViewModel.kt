@@ -19,6 +19,7 @@ import com.aliothmoon.maafw.update.UpdateDownloadResult
 import com.aliothmoon.maafw.update.UpdateInstallApi
 import com.aliothmoon.maafw.update.UpdateInstallResult
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.notification.UpdateDownloadNotification
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,6 +41,7 @@ class SettingsViewModel(
     private val updateCheckApi: UpdateCheckApi,
     private val updateDownloader: UpdateDownloadApi,
     private val updateInstaller: UpdateInstallApi,
+    private val updateDownloadNotifier: UpdateDownloadNotification,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     supportedAbis: List<String> = Build.SUPPORTED_ABIS.orEmpty().toList(),
 ) : ViewModel() {
@@ -179,24 +181,34 @@ class SettingsViewModel(
             val update = resolved as? UpdateCheckResult.UpdateAvailable
                 ?: error(resolved.errorMessage() ?: "Selected update source has no downloadable APK")
 
+            updateDownloadNotifier.start(update.version, totalBytes = -1L)
             val downloadResult = updateDownloader.download(
                 update = update,
                 credentials = credentials,
                 onProgress = { downloaded, total ->
+                    updateDownloadNotifier.progress(update.version, downloaded, total)
                     updateOperation.update {
                         it.copy(downloadedBytes = downloaded, totalBytes = total)
                     }
                 },
             )
             when (downloadResult) {
-                is UpdateDownloadResult.Downloaded -> install(downloadResult)
-                is UpdateDownloadResult.Failed -> updateOperation.update {
-                    it.copy(downloading = false, errorMessage = downloadResult.errorMessage())
+                is UpdateDownloadResult.Downloaded -> {
+                    updateDownloadNotifier.complete(downloadResult.update.version)
+                    install(downloadResult)
+                }
+                is UpdateDownloadResult.Failed -> {
+                    updateDownloadNotifier.failed(downloadResult.errorMessage())
+                    updateOperation.update {
+                        it.copy(downloading = false, errorMessage = downloadResult.errorMessage())
+                    }
                 }
             }
         } catch (e: CancellationException) {
+            updateDownloadNotifier.cancel()
             throw e
         } catch (e: Exception) {
+            updateDownloadNotifier.failed(e.message ?: "未知错误")
             updateOperation.update { it.copy(downloading = false, errorMessage = e.message) }
         }
     }
