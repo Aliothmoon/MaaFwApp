@@ -11,6 +11,10 @@ data class DeviceInfo(
     val versionName: String,
     val versionCode: Long,
     val buildType: String,
+    val gitCommit: String,
+    val gitTag: String,
+    val parentGitCommit: String,
+    val parentGitTag: String,
     val device: String,
     val android: String,
     val securityPatch: String,
@@ -35,6 +39,15 @@ object DeviceInfoText {
         append("Version     : ").append(info.versionName)
             .append(" (").append(info.versionCode).append(") ")
             .append(info.buildType).append('\n')
+        append(formatGitLine("Git (MaaFwApp)", info.gitTag, info.gitCommit)).append('\n')
+        append(
+            formatGitLine(
+                "Git (Parent)",
+                info.parentGitTag,
+                info.parentGitCommit,
+                notSubmodule = info.parentGitCommit.isEmpty(),
+            ),
+        ).append('\n')
         append("Device      : ").append(info.device).append('\n')
         append("Android     : ").append(info.android).append('\n')
         append("Security    : ").append(info.securityPatch).append('\n')
@@ -46,5 +59,26 @@ object DeviceInfoText {
         append("Battery Opt : ").append(info.batteryOptimization).append('\n')
         append("SELinux     : ").append(info.selinux).append('\n')
         append(line).append('\n')
+    }
+
+    /**
+     * Render a single `Git (...)` line shared by [render], `AppLogWriter.setup()` and
+     * `CrashHandler.report()` so the three places never drift apart.
+     *
+     * Empty `commit` and `notSubmodule == true` -> the literal "(not a submodule)" marker;
+     * non-empty `tag` -> "tag (commit)"; otherwise the bare short hash.
+     */
+    fun formatGitLine(
+        label: String,
+        tag: String,
+        commit: String,
+        notSubmodule: Boolean = false,
+    ): String = buildString {
+        append(label).append(" : ")
+        when {
+            notSubmodule -> append("(not a submodule)")
+            tag.isNotEmpty() -> append(tag).append(" (").append(commit).append(")")
+            else -> append(commit)
+        }
     }
 }
