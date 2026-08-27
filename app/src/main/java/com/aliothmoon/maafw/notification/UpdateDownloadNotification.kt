@@ -17,7 +17,8 @@ interface UpdateDownloadNotification {
     val state: StateFlow<DownloadState>
 
     /** 进入下载；[totalBytes] 未知传 `-1L` 用不定态进度条。会启前台 service */
-    fun start(version: String, totalBytes: Long)
+    /** @return 前台通知服务是否成功提交；false 时调用方应中止下载并提示 */
+    fun start(version: String, totalBytes: Long): Boolean
 
     /** 下载进度；多个回调，最后一次会覆盖之前的同 ID 通知 */
     fun progress(version: String, downloadedBytes: Long, totalBytes: Long)

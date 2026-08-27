@@ -34,24 +34,31 @@ class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification
     private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
     override val state: StateFlow<DownloadState> = _state.asStateFlow()
 
-    override fun start(version: String, totalBytes: Long) {
+    override fun start(version: String, totalBytes: Long): Boolean {
         if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) {
             _state.value = DownloadState.Failed(
                 version = null,
                 message = NOTIFICATION_DISABLED_MESSAGE,
             )
-            return
+            return false
         }
         _state.value = DownloadState.Downloading(
             version = version,
             downloadedBytes = 0L,
             totalBytes = totalBytes.coerceAtLeast(-1L),
         )
-        runCatching {
+        val submitted = runCatching {
             appContext.startForegroundService(
                 Intent(appContext, UpdateDownloadForegroundService::class.java),
             )
         }
+        submitted.onFailure { e ->
+            _state.value = DownloadState.Failed(
+                version = version,
+                message = e.message ?: NOTIFICATION_SERVICE_FAILED_MESSAGE,
+            )
+        }
+        return submitted.isSuccess
     }
 
     override fun progress(version: String, downloadedBytes: Long, totalBytes: Long) {
@@ -89,5 +96,7 @@ class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification
     private companion object {
         const val NOTIFICATION_DISABLED_MESSAGE =
             "通知未授权，无法在通知栏显示下载进度"
+        const val NOTIFICATION_SERVICE_FAILED_MESSAGE =
+            "无法启动下载通知服务"
     }
 }

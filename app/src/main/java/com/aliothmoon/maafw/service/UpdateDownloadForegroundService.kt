@@ -95,7 +95,7 @@ class UpdateDownloadForegroundService : Service() {
                             // 终态:刷新一次,留痕,然后退
                             post(buildNotification(snapshotFromState()))
                             delay(STOP_DELAY_MS)  // 给系统时间接收 autoCancel 末端
-                            stopNow()
+                            stopNow(removeNotification = false)
                         }
                         is DownloadState.Downloading -> {
                             throttledPost(state)
@@ -204,8 +204,9 @@ class UpdateDownloadForegroundService : Service() {
             .onFailure { Timber.w(it, "Failed to update download notification") }
     }
 
-    private fun stopNow() {
-        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+    private fun stopNow(removeNotification: Boolean = true) {
+        val flag = if (removeNotification) STOP_FOREGROUND_REMOVE else STOP_FOREGROUND_DETACH
+        runCatching { stopForeground(flag) }
         runCatching { stopSelf() }
     }
 

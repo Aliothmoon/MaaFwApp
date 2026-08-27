@@ -133,6 +133,7 @@ class SettingsViewModel(
                         errorMessage = if (intent.granted) null else it.errorMessage,
                     )
                 }
+                if (intent.granted) viewModelScope.launch { downloadUpdate() }
             }
         }
     }
@@ -168,6 +169,7 @@ class SettingsViewModel(
 
     private suspend fun downloadUpdate() {
         val current = updateOperation.value
+        val requestedUpdate = current.availableUpdate ?: return
         val settings = currentSettings()
         val credentialMissing = settings.source == UpdateSource.MIRROR_CHYAN && settings.mirrorChyanCdk.isBlank()
         if (current.availableUpdate == null || current.checking || current.downloading || credentialMissing) return
@@ -197,6 +199,18 @@ class SettingsViewModel(
                 notificationPermissionDenied = false,
             )
         }
+
+        // FGS 必须趁 Activity 还在前台时提交；下面的二次解析是网络请求，用户点完
+        // 下载就退后台后再启动会被系统按后台 FGS 限制拒绝。
+        if (!updateDownloadNotifier.start(requestedUpdate.version, totalBytes = -1L)) {
+            updateOperation.update {
+                it.copy(
+                    downloading = false,
+                    errorMessage = "无法启动下载通知服务",
+                )
+            }
+            return
+        }
         try {
             val metadata = projectMetadata()
             val credentials = UpdateDownloadCredentials(
@@ -221,7 +235,15 @@ class SettingsViewModel(
             val update = resolved as? UpdateCheckResult.UpdateAvailable
                 ?: error(resolved.errorMessage() ?: "Selected update source has no downloadable APK")
 
-            updateDownloadNotifier.start(update.version, totalBytes = -1L)
+            if (!updateDownloadNotifier.start(update.version, totalBytes = -1L)) {
+                updateOperation.update {
+                    it.copy(
+                        downloading = false,
+                        errorMessage = "无法启动下载通知服务",
+                    )
+                }
+                return
+            }
             val downloadResult = updateDownloader.download(
                 update = update,
                 credentials = credentials,
