@@ -455,6 +455,48 @@ private fun AboutCard(state: SessionUiState) {
         }
         MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
         MaaInfoRow(stringResource(R.string.settings_build), BuildConfig.VERSION_CODE.toString())
+        MaaInfoRow(
+            label = stringResource(
+                R.string.settings_git_tag,
+                stringResource(R.string.settings_git_source_maafwapp),
+            ),
+            value = BuildConfig.MAFW_GIT_TAG.ifBlank {
+                stringResource(R.string.settings_git_no_tag)
+            },
+        )
+        MaaInfoRow(
+            label = stringResource(
+                R.string.settings_git_hash,
+                stringResource(R.string.settings_git_source_maafwapp),
+            ),
+            value = BuildConfig.MAFW_GIT_COMMIT.ifBlank {
+                stringResource(R.string.settings_git_unknown)
+            },
+        )
+        val isSubmodule = BuildConfig.MAFW_PARENT_GIT_COMMIT.isNotEmpty()
+        val noTagText = stringResource(R.string.settings_git_no_tag)
+        val unknownText = stringResource(R.string.settings_git_unknown)
+        val notSubmoduleText = stringResource(R.string.settings_git_not_submodule)
+        val parentTag =
+            if (isSubmodule) BuildConfig.MAFW_PARENT_GIT_TAG.ifBlank { noTagText }
+            else notSubmoduleText
+        val parentHash =
+            if (isSubmodule) BuildConfig.MAFW_PARENT_GIT_COMMIT.ifBlank { unknownText }
+            else notSubmoduleText
+        MaaInfoRow(
+            label = stringResource(
+                R.string.settings_git_tag,
+                stringResource(R.string.settings_git_source_main),
+            ),
+            value = parentTag,
+        )
+        MaaInfoRow(
+            label = stringResource(
+                R.string.settings_git_hash,
+                stringResource(R.string.settings_git_source_main),
+            ),
+            value = parentHash,
+        )
 
         metadata.description?.let {
             MaaDescriptionPanel {

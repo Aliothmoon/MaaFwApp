@@ -140,6 +140,13 @@
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_build">Build</string>
+    <string name="settings_git_tag">%1$s tag</string>
+    <string name="settings_git_hash">%1$s hash</string>
+    <string name="settings_git_source_maafwapp">MaaFwApp</string>
+    <string name="settings_git_source_main">Main repository</string>
+    <string name="settings_git_no_tag">Not tagged</string>
+    <string name="settings_git_not_submodule">Not a submodule</string>
+    <string name="settings_git_unknown">Unknown</string>
     <string name="settings_telemetry">Help improve this project</string>
     <string name="settings_telemetry_desc">Sends task names and run results to the project author. Screenshots, log text and anything you type are never included</string>
     <string name="settings_project">Project</string>
