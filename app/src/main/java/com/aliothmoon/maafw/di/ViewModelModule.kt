@@ -22,6 +22,15 @@ val viewModelModule = module {
     viewModelOf(::ScheduleViewModel)
 
     viewModel {
-        SettingsViewModel(get())
+        SettingsViewModel(
+            permissionGateway = get(),
+            appSettings = get(),
+            projectRepository = get(),
+            updateCheckApi = get(),
+            updateDownloader = get(),
+            updateInstaller = get(),
+            updateDownloadNotifier = get(),
+            notificationPermissionRequester = get(),
+        )
     }
 }
