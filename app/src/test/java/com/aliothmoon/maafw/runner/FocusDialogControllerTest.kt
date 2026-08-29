@@ -88,6 +88,39 @@ class FocusDialogControllerTest {
     }
 
     @Test
+    fun `dialog queue keeps a bounded newest window and active modal`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        runner.emitState(activeState())
+        val controller = controller(runner)
+
+        runner.emitFocus("blocking", setOf(FocusChannel.Modal), "modal-1")
+        repeat(35) { index -> runner.emitFocus("dialog-$index", setOf(FocusChannel.Dialog)) }
+
+        val requests = controller.requests.value
+        assertEquals("modal-1", requests.first().id)
+        assertEquals(33, requests.size)
+        assertEquals(
+            (3..34).map { "dialog-$it" },
+            requests.drop(1).map { it.content },
+        )
+    }
+
+    @Test
+    fun `oversized dialog content is truncated before queueing`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        runner.emitState(activeState())
+        val controller = controller(runner)
+        val content = "a".repeat(65_540)
+
+        runner.emitFocus(content, setOf(FocusChannel.Dialog))
+
+        val queued = controller.requests.value.single().content
+        assertTrue(queued.length < content.length)
+        assertTrue(queued.startsWith("a"))
+        assertEquals("...", queued.takeLast(3))
+    }
+
+    @Test
     fun `modal without a privileged-process handle is not queued as blocking`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         runner.emitState(activeState())

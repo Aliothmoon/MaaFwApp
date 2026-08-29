@@ -65,9 +65,15 @@ class FocusDialogController(
 
     private fun offerDialog(content: String) {
         _requests.update { requests ->
-            requests + FocusDialogRequest(
+            var next = requests
+            val unreadDialogCount = requests.count { !it.modal }
+            if (unreadDialogCount >= MAX_DIALOG_REQUESTS) {
+                val oldestDialogId = requests.first { !it.modal }.id
+                next = next.filterNot { it.id == oldestDialogId }
+            }
+            next + FocusDialogRequest(
                 id = UUID.randomUUID().toString(),
-                content = content,
+                content = boundedContent(content),
                 modal = false,
             )
         }
@@ -81,7 +87,7 @@ class FocusDialogController(
             } else {
                 requests + FocusDialogRequest(
                     id = id,
-                    content = content,
+                    content = boundedContent(content),
                     modal = true,
                     executionId = sourceExecutionId,
                 )
@@ -129,4 +135,23 @@ class FocusDialogController(
             requests.filterNot { it.id == id && it.modal == modal }
         }
     }
+
+    private companion object {
+        /** dialog 需要用户逐条处理；无界保留会让后台运行变成进程级内存泄漏 */
+        private const val MAX_DIALOG_REQUESTS = 32
+    }
 }
+
+private fun boundedContent(content: String): String {
+    if (content.length <= MAX_DIALOG_CONTENT_CHARS) return content
+    var end = MAX_DIALOG_CONTENT_CHARS
+    if (Character.isHighSurrogate(content[end - 1]) &&
+        end < content.length &&
+        Character.isLowSurrogate(content[end])
+    ) {
+        end--
+    }
+    return content.take(end) + "..."
+}
+
+private const val MAX_DIALOG_CONTENT_CHARS = 64 * 1024

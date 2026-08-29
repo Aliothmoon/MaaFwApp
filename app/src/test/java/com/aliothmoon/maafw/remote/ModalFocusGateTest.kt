@@ -61,6 +61,22 @@ class ModalFocusGateTest {
         assertFalse(ModalFocusGate().await("unknown"))
     }
 
+    @Test
+    fun `releaseAll closes the gate until the next run resets it`() {
+        val gate = ModalFocusGate()
+
+        assertTrue(gate.register("focus-1"))
+        gate.releaseAll()
+
+        assertFalse(gate.acknowledge("focus-1"))
+        assertFalse(gate.register("late-focus"))
+
+        gate.reset()
+
+        assertTrue(gate.register("focus-2"))
+        assertTrue(gate.acknowledge("focus-2"))
+    }
+
     private fun submitAwait(
         executor: ExecutorService,
         gate: ModalFocusGate,

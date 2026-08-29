@@ -217,6 +217,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             Ln.e("MaaRunner: payload has no executionId")
             return false
         }
+        modalFocusGate.reset()
         activeExecutionId.set(payload.executionId)
         worker.execute { runPlan(payload) }
         return true
