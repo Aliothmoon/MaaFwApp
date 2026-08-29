@@ -149,6 +149,10 @@
     <string name="notification_channel_focus">项目消息</string>
     <string name="notification_channel_focus_desc">PI 项目在运行中要求推送给你的提示</string>
     <string name="notification_focus_title">项目消息</string>
+    <string name="focus_modal_title">任务等待确认</string>
+    <string name="focus_modal_continue">继续</string>
+    <string name="focus_modal_notification_title">任务等待确认</string>
+    <string name="msg_modal_ack_failed">未能确认，请重试</string>
     <string name="notification_run_preparing">正在准备</string>
     <string name="notification_run_running">正在执行</string>
     <string name="notification_run_stopping">正在停止</string>

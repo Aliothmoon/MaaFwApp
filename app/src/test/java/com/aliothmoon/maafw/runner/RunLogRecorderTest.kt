@@ -133,6 +133,62 @@ class RunLogRecorderTest {
     }
 
     @Test
+    fun `dialog and modal focus reaches the run log while toast and notification do not`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Succeeded",
+                    content = "modal line",
+                    channels = setOf(FocusChannel.Modal),
+                    trace = false,
+                    modalId = "modal-1",
+                ),
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Starting",
+                    content = "dialog line",
+                    channels = setOf(FocusChannel.Dialog),
+                    trace = false,
+                ),
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Starting",
+                    content = "toast line",
+                    channels = setOf(FocusChannel.Toast),
+                    trace = false,
+                ),
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Starting",
+                    content = "notification line",
+                    channels = setOf(FocusChannel.Notification),
+                    trace = false,
+                ),
+            ),
+        )
+        settleRunLog()
+
+        assertEquals(
+            listOf("modal line", "dialog line"),
+            recorder.runLog.value.map { line ->
+                (line.text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value ?: "<res>"
+            },
+        )
+    }
+
+    @Test
     fun `a new PI task clears the pipeline node status`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)

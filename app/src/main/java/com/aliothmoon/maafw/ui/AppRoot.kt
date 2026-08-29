@@ -96,10 +96,12 @@ import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.util.Misc
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
+import com.aliothmoon.maafw.runner.FocusDialogController
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
+import com.aliothmoon.maafw.ui.components.FocusDialogHost
 import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.PiInstallDialog
@@ -172,6 +174,7 @@ fun AppRoot(
     settingsViewModel: SettingsViewModel = koinViewModel(),
     overlayController: OverlayController = koinInject(),
     screenSaverManager: ScreenSaverOverlayManager = koinInject(),
+    focusDialogController: FocusDialogController = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
@@ -554,5 +557,10 @@ fun AppRoot(
                 },
             )
         }
+
+        FocusDialogHost(
+            controller = focusDialogController,
+            onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+        )
     }
 }

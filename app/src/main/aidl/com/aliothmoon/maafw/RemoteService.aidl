@@ -133,4 +133,7 @@ interface RemoteService {
      * 走文件不回传字节：一张 720p PNG 几百 KB，binder 事务缓冲总共才 1MB
      */
     boolean saveCachedImage(String path) = 75;
+
+    /** 确认特权进程里等待的 blocking modal；未知或已释放的 id 返回 false */
+    boolean acknowledgeModalFocus(String focusId) = 76;
 }

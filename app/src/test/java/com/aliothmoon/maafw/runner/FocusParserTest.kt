@@ -69,11 +69,19 @@ class FocusParserTest {
         assertEquals(setOf(FocusChannel.Notification), FocusParser.parse("M", details)?.channels)
     }
 
-    /** modal 要求把 pipeline 卡住等用户点头，回调是单向的，做不到 */
     @Test
-    fun `dialog and modal fall back to the log channel`() {
+    fun `dialog and modal channels are parsed`() {
         val details = """{"focus":{"M":{"content":"x","display":["dialog","modal"]}}}"""
-        assertEquals(setOf(FocusChannel.Log), FocusParser.parse("M", details)?.channels)
+        assertEquals(setOf(FocusChannel.Dialog, FocusChannel.Modal), FocusParser.parse("M", details)?.channels)
+    }
+
+    @Test
+    fun `mixed display values keep known channels and degrade unknown values`() {
+        val details = """{"focus":{"M":{"content":"x","display":["toast","modal","hologram"]}}}"""
+        assertEquals(
+            setOf(FocusChannel.Toast, FocusChannel.Modal, FocusChannel.Log),
+            FocusParser.parse("M", details)?.channels,
+        )
     }
 
     @Test

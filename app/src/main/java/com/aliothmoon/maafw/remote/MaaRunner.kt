@@ -15,6 +15,8 @@ import com.aliothmoon.maafw.maa.MaaStatus
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.runner.AgentPayload
+import com.aliothmoon.maafw.runner.FocusChannel
+import com.aliothmoon.maafw.runner.FocusParser
 import com.aliothmoon.maafw.runner.RunOutcome
 import com.aliothmoon.maafw.runner.RunPlanPayload
 import com.aliothmoon.maafw.runner.runPlanWireJson
@@ -25,6 +27,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -43,6 +46,8 @@ class MaaRunner(private val agentHost: AgentHost) {
 
     private val running = AtomicBoolean(false)
     private val callbackRef = AtomicReference<IMaaRunnerCallback?>()
+    private val modalFocusGate = ModalFocusGate()
+    private val activeExecutionId = AtomicReference<String?>()
 
     // native handle
     private var resource: Pointer? = null
@@ -76,12 +81,41 @@ class MaaRunner(private val agentHost: AgentHost) {
 
     /** JNA 回调必须被强引用住，否则会被 GC，native 回调时踩空 */
     private val eventSink = MaaFrameworkLibrary.MaaEventCallback { _, message, detailsJson, _ ->
-        Ln.i("MaaEventCallback on $message")
+        val rawMessage = message.orEmpty()
+        val rawDetails = detailsJson.orEmpty()
+        Ln.i("MaaEventCallback on $rawMessage")
         runCatching {
-            callbackRef.get()?.onEvent(message.orEmpty(), detailsJson.orEmpty())
+            val callback = callbackRef.get() ?: return@runCatching
+            val focus = FocusParser.parse(rawMessage, rawDetails)
+            if (focus?.displayable == true && FocusChannel.Modal in focus.channels) {
+                dispatchModalFocus(callback, rawMessage, rawDetails)
+            } else {
+                callback.onEvent(rawMessage, rawDetails)
+            }
         }.onFailure {
             // 回调穿回 native 会直接崩进程
             Ln.w("MaaRunner: event dispatch failed: ${it.message}")
+        }
+    }
+
+    /** modal 是 native 回调里唯一允许阻塞的受控例外 */
+    private fun dispatchModalFocus(callback: IMaaRunnerCallback, message: String, detailsJson: String) {
+        val executionId = activeExecutionId.get()
+        if (executionId.isNullOrBlank()) {
+            callback.onEvent(message, detailsJson)
+            return
+        }
+        val focusId = UUID.randomUUID().toString()
+        if (!modalFocusGate.register(focusId)) {
+            callback.onEvent(message, detailsJson)
+            return
+        }
+        try {
+            callback.onModalFocus(executionId, focusId, message, detailsJson)
+            modalFocusGate.await(focusId)
+        } catch (e: Throwable) {
+            modalFocusGate.release(focusId)
+            throw e
         }
     }
 
@@ -178,12 +212,19 @@ class MaaRunner(private val agentHost: AgentHost) {
                 Ln.e("MaaRunner: bad payload: ${it.message}")
                 return false
             }
+        if (payload.executionId.isBlank()) {
+            running.set(false)
+            Ln.e("MaaRunner: payload has no executionId")
+            return false
+        }
+        activeExecutionId.set(payload.executionId)
         worker.execute { runPlan(payload) }
         return true
     }
 
     /** 幂等：未在跑时也返回 true，避免 app 侧为了停止先查状态 */
     fun stop(): Boolean {
+        modalFocusGate.releaseAll()
         val lib = MaaFrameworkLoader.library ?: return false
         val handle = tasker ?: return true
         lib.MaaTaskerPostStop(handle)
@@ -191,9 +232,12 @@ class MaaRunner(private val agentHost: AgentHost) {
     }
 
     fun destroy() {
+        modalFocusGate.releaseAll()
         worker.shutdownNow()
         releaseNative()
     }
+
+    fun acknowledgeModalFocus(focusId: String): Boolean = modalFocusGate.acknowledge(focusId)
 
     private fun runPlan(payload: RunPlanPayload) {
         var outcome = RunOutcome.FAILED
@@ -243,6 +287,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             reason = "${e.javaClass.simpleName}: ${e.message}"
             Ln.e("MaaRunner: run failed: $reason")
         } finally {
+            activeExecutionId.set(null)
             running.set(false)
             notify { onFinished(outcome, reason) }
         }

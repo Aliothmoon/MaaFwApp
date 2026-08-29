@@ -20,4 +20,7 @@ oneway interface IMaaRunnerCallback {
 
     /** 一个 agent child 已 connect（含本轮复用已在线的）；[exec] 是 PI 的 child_exec */
     void onAgentConnected(int index, int total, String exec) = 6;
+
+    /** blocking modal；特权进程会在本地等待 acknowledgeModalFocus 后才放行 pipeline */
+    oneway void onModalFocus(String executionId, String focusId, String message, String detailsJson) = 7;
 }

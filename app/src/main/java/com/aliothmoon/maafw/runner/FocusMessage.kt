@@ -28,19 +28,31 @@ data class FocusMessage(
     val trace: Boolean,
     /** 同一条回调 details 里的标量字段；非标量取不出可比的文本，不收 */
     val placeholders: Map<String, String> = emptyMap(),
+    /** 特权进程为 blocking modal 生成的确认句柄；普通事件与旧通道事件没有这个值 */
+    val modalId: String? = null,
+    /** 产生这条消息的执行轮次；blocking modal 展示前用它拒绝晚到的旧请求 */
+    val executionId: String? = null,
 ) {
     val displayable: Boolean get() = content.isNotBlank()
 }
 
+/** 只有仍属于当前执行轮次的 blocking modal 才允许进入可操作 UI */
+fun FocusMessage.isActionableModalFor(state: RunnerState): Boolean {
+    val activeExecutionId = state.activeExecution?.executionId
+        ?.takeIf(String::isNotBlank)
+        ?: return false
+    val sourceExecutionId = executionId?.takeIf(String::isNotBlank) ?: return false
+    return sourceExecutionId == activeExecutionId &&
+        modalId?.takeIf(String::isNotBlank) != null
+}
+
 /**
- * 协议的 `display` 有五档，Android 外壳只落地三档
+ * 协议的 `display` 五档全部落地
  *
- * `dialog` / `modal` 一并归到 [Log]：modal 的语义是「弹出后任务暂停等待用户确认」，
- * 而回调是 oneway 单向通知，没有让外壳把 pipeline 卡住再放行的通道。dialog 协议上是
- * 非阻塞的，本可以做成弹窗，只是外壳还没有这一档展示面，先跟着降级（见 pi-compatibility.md）
- * 认不出的档也落 [Log]——协议加档时少显示一处，好过整条丢掉
+ * [Dialog] 是非阻塞弹窗；[Modal] 由特权进程 gate 阻塞 native 回调，app 确认后才放行。
+ * 认不出的档仍落 [Log]——协议加档时少显示一处，好过整条丢掉
  */
-enum class FocusChannel { Log, Toast, Notification }
+enum class FocusChannel { Log, Toast, Notification, Dialog, Modal }
 
 /**
  * 把 `{key}` 换成 [placeholders] 里的值
@@ -149,6 +161,8 @@ object FocusParser {
             when (name.lowercase()) {
                 "toast" -> FocusChannel.Toast
                 "notification" -> FocusChannel.Notification
+                "dialog" -> FocusChannel.Dialog
+                "modal" -> FocusChannel.Modal
                 else -> FocusChannel.Log
             }
         }

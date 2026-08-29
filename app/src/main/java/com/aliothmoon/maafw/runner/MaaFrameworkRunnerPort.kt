@@ -145,6 +145,17 @@ class MaaFrameworkRunnerPort(
             _events.tryEmit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
 
+        override fun onModalFocus(
+            executionId: String?,
+            focusId: String?,
+            message: String?,
+            detailsJson: String?,
+        ) {
+            _events.tryEmit(
+                modalFocusEvent(executionId, focusId, message.orEmpty(), detailsJson.orEmpty()),
+            )
+        }
+
         override fun onAgentOutput(line: String?, fromStderr: Boolean) {
             _events.tryEmit(RunnerEvent.AgentOutput(line.orEmpty(), fromStderr))
         }
@@ -197,10 +208,11 @@ class MaaFrameworkRunnerPort(
         if (_state.value.phase.isBusy) {
             return RunnerCommandResult.Rejected(uiTextOf(R.string.msg_reject_already_running))
         }
+        val executionId = UUID.randomUUID().toString()
         _state.value = RunnerState(
             phase = RunnerPhase.Preparing,
             activeExecution = ActiveExecution(
-                executionId = UUID.randomUUID().toString(),
+                executionId = executionId,
                 runConfigurationId = plan.runConfigurationId,
                 currentTaskName = null,
                 completedTaskCount = 0,
@@ -213,7 +225,7 @@ class MaaFrameworkRunnerPort(
 
         return withContext(MaaDispatchers.IO) {
             try {
-                val rejection = launchOnService(plan)
+                val rejection = launchOnService(plan, executionId)
                 if (rejection != null) return@withContext failPreparation(rejection)
                 // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
                 // 无条件写成 Running 会把停止意图丢掉，任务继续跑到结束
@@ -263,17 +275,28 @@ class MaaFrameworkRunnerPort(
         }
     }
 
+    override suspend fun acknowledgeModalFocus(focusId: String): Boolean =
+        withContext(MaaDispatchers.IO) {
+            runCatching { servicePort.serviceOrNull()?.acknowledgeModalFocus(focusId) == true }
+                .getOrDefault(false)
+        }
+
     /**
      * 返回 null 表示已受理，否则返回拒绝原因
      * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
      * 后端换了也会重新绑定
      */
-    private suspend fun launchOnService(plan: RunPlan): UiText? {
+    private suspend fun launchOnService(plan: RunPlan, executionId: String): UiText? {
         val piRoot = installer.installedDir()
-        return servicePort.useService { service -> prepareAndStart(plan, piRoot, service) }
+        return servicePort.useService { service -> prepareAndStart(plan, executionId, piRoot, service) }
     }
 
-    private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): UiText? {
+    private fun prepareAndStart(
+        plan: RunPlan,
+        executionId: String,
+        piRoot: File,
+        service: RemoteService,
+    ): UiText? {
         if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
             return uiTextOf(R.string.msg_reject_setup_failed)
         }
@@ -311,6 +334,7 @@ class MaaFrameworkRunnerPort(
         bindRunnerCallback(service)
 
         val payload = RunPlanPayload(
+            executionId = executionId,
             resourcePaths = plan.resource.paths.map { File(piRoot, it).absolutePath },
             screenWidth = width,
             screenHeight = height,
@@ -357,6 +381,20 @@ class MaaFrameworkRunnerPort(
         if (message.isEmpty()) return RunnerEvent.MalformedCallback(detailsJson)
         FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it) }
         return RunnerEvent.Callback(message, detailsJson)
+    }
+
+    internal fun modalFocusEvent(
+        executionId: String?,
+        focusId: String?,
+        message: String,
+        detailsJson: String,
+    ): RunnerEvent {
+        val focus = FocusParser.parse(message, detailsJson)
+        val event = focus?.copy(
+            modalId = focusId?.takeIf(String::isNotBlank),
+            executionId = executionId?.takeIf(String::isNotBlank),
+        )
+        return event?.let(RunnerEvent::Focus) ?: toRunnerEvent(message, detailsJson)
     }
 
     private companion object {

@@ -20,6 +20,8 @@ import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
 import com.aliothmoon.maafw.notification.stringRes
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
+import com.aliothmoon.maafw.runner.FocusDialogController
+import com.aliothmoon.maafw.runner.FocusDialogRequest
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -54,6 +56,7 @@ class RunForegroundService : Service() {
 
     private val runnerPort: RunnerPort by inject()
     private val focusDispatcher: FocusDispatcher by inject()
+    private val focusDialogController: FocusDialogController by inject()
     private val recorder: RunLogRecorder by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -64,6 +67,8 @@ class RunForegroundService : Service() {
 
     private var focusChannelReady = false
     private var focusNotificationSeq = 0
+    private val modalNotificationIds = mutableMapOf<String, Int>()
+    private var modalNotificationSeq = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -93,6 +98,7 @@ class RunForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        runCatching(::cancelModalNotifications)
         observeJob = null
         serviceScope.cancel()
         super.onDestroy()
@@ -103,6 +109,7 @@ class RunForegroundService : Service() {
         observeJob = serviceScope.launch {
             launch { observeProgress() }
             launch { observeFocusNotifications() }
+            launch { observeFocusDialogRequests() }
         }
     }
 
@@ -113,6 +120,7 @@ class RunForegroundService : Service() {
         }.collectLatest { (state, status) ->
             if (!state.phase.isBusy) {
                 lastPostedPhase = null
+                cancelModalNotifications()
                 stopNow()
                 return@collectLatest
             }
@@ -140,8 +148,9 @@ class RunForegroundService : Service() {
      * `{name}` 这些形态得先补完，否则推给用户的是没处理过的模板
      */
     private suspend fun observeFocusNotifications() {
-        focusDispatcher.resolved.collect { focus ->
-            if (FocusChannel.Notification !in focus.channels) return@collect
+            focusDispatcher.resolved.collect { focus ->
+                if (FocusChannel.Modal in focus.channels) return@collect
+                if (FocusChannel.Notification !in focus.channels) return@collect
             ensureFocusChannel()
             val notification = NotificationCompat.Builder(this, FOCUS_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
@@ -159,6 +168,42 @@ class RunForegroundService : Service() {
         }
     }
 
+    private suspend fun observeFocusDialogRequests() {
+        focusDialogController.requests.collect { requests ->
+            val pendingRequests = requests
+                .filter(FocusDialogRequest::modal)
+                .associateBy(FocusDialogRequest::id)
+            modalNotificationIds.keys
+                .filterNot(pendingRequests::containsKey)
+                .forEach(::cancelModalNotification)
+            pendingRequests.forEach { (id, request) ->
+                if (id !in modalNotificationIds) postModalNotification(id, request.content)
+            }
+        }
+    }
+
+    private fun postModalNotification(id: String, content: String) {
+        ensureFocusChannel()
+        val notification = NotificationCompat.Builder(this, FOCUS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.focus_modal_notification_title))
+            .setContentText(content)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+            .setContentIntent(contentIntent())
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build()
+        val notificationId = modalNotificationIds.getOrPut(id) {
+            MODAL_NOTIFICATION_ID_BASE + (modalNotificationSeq++ % FOCUS_NOTIFICATION_ID_SLOTS)
+        }
+        runCatching { notificationManager.notify(notificationId, notification) }
+            .onFailure {
+                modalNotificationIds.remove(id)
+                Timber.w(it, "Failed to post modal focus notification")
+            }
+    }
+
     /** 用完才建：不带 notification 模板的 PI 不该在系统设置里多出一个空频道 */
     private fun ensureFocusChannel() {
         if (focusChannelReady) return
@@ -174,6 +219,16 @@ class RunForegroundService : Service() {
 
     private fun nextFocusNotificationId(): Int =
         FOCUS_NOTIFICATION_ID_BASE + (focusNotificationSeq++ % FOCUS_NOTIFICATION_ID_SLOTS)
+
+    private fun cancelModalNotification(id: String) {
+        val notificationId = modalNotificationIds.remove(id) ?: return
+        runCatching { notificationManager.cancel(notificationId) }
+            .onFailure { Timber.w(it, "Failed to cancel modal focus notification") }
+    }
+
+    private fun cancelModalNotifications() {
+        modalNotificationIds.keys.toList().forEach(::cancelModalNotification)
+    }
 
     private fun stopNow() {
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -271,6 +326,7 @@ class RunForegroundService : Service() {
 
         /** 与 [NOTIFICATION_ID] 隔开一段，循环取用；一轮里堆几十条通知本身就是 PI 配错了 */
         private const val FOCUS_NOTIFICATION_ID_BASE = 1100
+        private const val MODAL_NOTIFICATION_ID_BASE = 1120
         private const val FOCUS_NOTIFICATION_ID_SLOTS = 20
 
         fun start(context: Context) {

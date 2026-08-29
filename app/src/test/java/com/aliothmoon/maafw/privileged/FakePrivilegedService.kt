@@ -37,8 +37,14 @@ open class FakePrivilegedService : RemoteService {
     var running: Boolean = false
     var setupResult: Boolean = true
     var startRunResult: Boolean = true
+    var startRunPayloads: MutableList<String> = mutableListOf()
+        private set
     var stopRunCount: Int = 0
         private set
+    var acknowledgeModalFocusCalls: MutableList<String> = mutableListOf()
+        private set
+    var acknowledgeModalFocusResult: Boolean = true
+    var acknowledgeModalFocusThrows: Boolean = false
 
     override fun asBinder(): IBinder? = null
 
@@ -91,12 +97,18 @@ open class FakePrivilegedService : RemoteService {
     }
     override fun startRun(runPlanJson: String?): Boolean {
         if (!startRunResult) return false
+        runPlanJson?.let(startRunPayloads::add)
         running = true
         return true
     }
     override fun stopRun(): Boolean {
         stopRunCount++
         return true
+    }
+    override fun acknowledgeModalFocus(focusId: String?): Boolean {
+        if (acknowledgeModalFocusThrows) error("binder rejected modal acknowledgement")
+        focusId?.let { acknowledgeModalFocusCalls += it }
+        return acknowledgeModalFocusResult
     }
     override fun isRunning(): Boolean = running
     override fun maaVersion(): String = "fake"
