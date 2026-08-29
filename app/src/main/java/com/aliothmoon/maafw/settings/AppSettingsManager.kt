@@ -12,6 +12,8 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -101,6 +103,19 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _telemetryEnabled = MutableStateFlow(defaults.telemetryEnabled.toBoolean())
     override val telemetryEnabled: StateFlow<Boolean> = _telemetryEnabled.asStateFlow()
 
+    private val _updateDownloadSource =
+        MutableStateFlow(parseUpdateSource(defaults.updateDownloadSource))
+    override val updateDownloadSource: StateFlow<UpdateSource> = _updateDownloadSource.asStateFlow()
+
+    private val _updateChannel = MutableStateFlow(parseUpdateChannel(defaults.updateChannel))
+    override val updateChannel: StateFlow<UpdateChannel> = _updateChannel.asStateFlow()
+
+    private val _githubToken = MutableStateFlow(defaults.githubToken)
+    override val githubToken: StateFlow<String> = _githubToken.asStateFlow()
+
+    private val _mirrorChyanCdk = MutableStateFlow(defaults.mirrorChyanCdk)
+    override val mirrorChyanCdk: StateFlow<String> = _mirrorChyanCdk.asStateFlow()
+
     init {
         // 一处 collect 铺开到各字段，而不是每个字段各起一条 stateIn：
         // 那样 loaded 置位与各字段拿到首值是两件并发的事，早读的人仍可能读到默认值
@@ -122,6 +137,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
                 _wakeCredential.value = s.wakeCredential
                 _telemetryEnabled.value = s.telemetryEnabled.toBoolean()
+                _updateDownloadSource.value = parseUpdateSource(s.updateDownloadSource)
+                _updateChannel.value = parseUpdateChannel(s.updateChannel)
+                _githubToken.value = s.githubToken
+                _mirrorChyanCdk.value = s.mirrorChyanCdk
                 // 必须是最后一行：置位即宣告上面全部就位
                 _loaded.value = true
             }
@@ -194,6 +213,22 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[telemetryEnabled] = enabled.toString() }
     }
 
+    override suspend fun setUpdateDownloadSource(source: UpdateSource): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[updateDownloadSource] = source.name }
+    }
+
+    override suspend fun setUpdateChannel(channel: UpdateChannel): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[updateChannel] = channel.name }
+    }
+
+    override suspend fun setGithubToken(token: String): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[githubToken] = token.trim() }
+    }
+
+    override suspend fun setMirrorChyanCdk(cdk: String): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[mirrorChyanCdk] = cdk.trim() }
+    }
+
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
     private fun parseBackend(raw: String): RemoteBackend =
         runCatching { RemoteBackend.valueOf(raw) }.getOrDefault(RemoteBackend.SHIZUKU)
@@ -212,4 +247,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseEventNotificationLevel(raw: String): EventNotificationLevel =
         runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)
+
+    private fun parseUpdateSource(raw: String): UpdateSource =
+        runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRROR_CHYAN)
+
+    private fun parseUpdateChannel(raw: String): UpdateChannel =
+        runCatching { UpdateChannel.valueOf(raw) }.getOrDefault(UpdateChannel.STABLE)
 }

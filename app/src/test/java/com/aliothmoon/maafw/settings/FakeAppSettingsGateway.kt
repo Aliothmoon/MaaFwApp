@@ -4,6 +4,8 @@ import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeAppSettingsGateway : AppSettingsGateway {
@@ -72,5 +74,29 @@ class FakeAppSettingsGateway : AppSettingsGateway {
 
     override suspend fun setTelemetryEnabled(enabled: Boolean) {
         telemetryEnabled.value = enabled
+    }
+
+    override val updateDownloadSource = MutableStateFlow(UpdateSource.MIRROR_CHYAN)
+
+    override suspend fun setUpdateDownloadSource(source: UpdateSource) {
+        updateDownloadSource.value = source
+    }
+
+    override val updateChannel = MutableStateFlow(UpdateChannel.STABLE)
+
+    override suspend fun setUpdateChannel(channel: UpdateChannel) {
+        updateChannel.value = channel
+    }
+
+    override val githubToken = MutableStateFlow("")
+
+    override suspend fun setGithubToken(token: String) {
+        githubToken.value = token.trim()
+    }
+
+    override val mirrorChyanCdk = MutableStateFlow("")
+
+    override suspend fun setMirrorChyanCdk(cdk: String) {
+        mirrorChyanCdk.value = cdk.trim()
     }
 }

@@ -141,6 +141,32 @@
     <string name="settings_about_contact">联系方式</string>
     <string name="settings_about_license">开源许可</string>
     <string name="settings_about_repository">项目仓库</string>
+    <string name="settings_section_update">更新</string>
+    <string name="settings_update_download_source">下载源</string>
+    <string name="settings_update_source_mirror">Mirror酱</string>
+    <string name="settings_update_source_github">GitHub</string>
+    <string name="settings_update_mirror_cdk">Mirror酱 CDK</string>
+    <string name="settings_update_mirror_cdk_required">选择 Mirror酱 下载源时必填</string>
+    <string name="settings_update_github_token">GitHub Token</string>
+    <string name="settings_update_github_token_hint">可选；仅用于 GitHub 更新下载</string>
+    <string name="settings_update_channel">更新渠道</string>
+    <string name="settings_update_channel_stable">正式版</string>
+    <string name="settings_update_channel_beta">公测版</string>
+    <string name="settings_update_check">检测更新</string>
+    <string name="settings_update_checking">检测中…</string>
+    <string name="settings_update_download">下载更新</string>
+    <string name="settings_update_downloading">下载中…</string>
+    <string name="settings_update_available">可更新版本</string>
+    <string name="settings_update_result">检测结果</string>
+    <string name="settings_update_up_to_date">当前已是最新版本</string>
+    <string name="settings_update_failed">检测失败：%1$s</string>
+    <string name="settings_update_progress_known">已下载 %1$s / %2$s</string>
+    <string name="settings_update_progress_unknown">已下载 %1$s</string>
+    <string name="settings_update_installer_started">已打开系统安装器</string>
+    <string name="settings_update_source_hint">下载源只影响更新下载，不改变更新检测的默认来源</string>
+    <string name="settings_update_notification_denied">通知权限未开启，无法在通知栏显示下载进度</string>
+    <string name="settings_update_notification_open_settings">前往开启</string>
+    <string name="settings_update_notification_error">需要授予通知权限才能在通知栏显示下载进度</string>
     <string name="welcome_title">欢迎</string>
 
     <!-- 通知 -->
@@ -596,6 +622,14 @@
     <string name="notification_event_channel_silent_desc">任务结束后在通知栏留一条，不出声</string>
     <string name="notification_event_channel_popup_name">任务结果（弹出）</string>
     <string name="notification_event_channel_popup_desc">任务结束后弹出横幅并出声</string>
+    <string name="notification_channel_update_download">应用更新下载</string>
+    <string name="notification_channel_update_download_desc">下载新版本时在通知栏显示进度，下载完成后自动收起</string>
+    <string name="notification_update_download_title">正在下载 %1$s</string>
+    <string name="notification_update_download_complete_title">%1$s 已下载</string>
+    <string name="notification_update_download_complete">已下载完毕，准备进入系统安装</string>
+    <string name="notification_update_download_failed_title">下载失败</string>
+    <string name="notification_update_download_failed">下载失败：%1$s</string>
+
     <string name="notification_event_run_completed">任务已全部完成</string>
     <plurals name="notification_event_run_completed_body">
         <item quantity="other">共 %1$d 个任务</item>

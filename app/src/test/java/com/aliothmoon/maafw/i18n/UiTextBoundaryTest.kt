@@ -93,6 +93,7 @@ class UiTextBoundaryTest {
         val EAGER_RESOLVE_ALLOWED = setOf(
             "i18n/UiText.kt",
             "service/RunForegroundService.kt",
+            "service/UpdateDownloadForegroundService.kt",
             "schedule/ScheduleExecutionService.kt",
             "notification/RunEventNotifier.kt",
         )

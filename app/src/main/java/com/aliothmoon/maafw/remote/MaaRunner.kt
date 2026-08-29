@@ -29,7 +29,6 @@ import kotlinx.serialization.json.put
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -44,7 +43,10 @@ class MaaRunner(private val agentHost: AgentHost) {
         Thread(r, "maa-runner").apply { isDaemon = true }
     }
 
-    private val running = AtomicBoolean(false)
+    /** Binder stop can arrive while the worker is still preparing native handles. */
+    private val lifecycleLock = Any()
+    private var running = false
+    private var stopRequested = false
     private val callbackRef = AtomicReference<IMaaRunnerCallback?>()
     private val modalFocusGate = ModalFocusGate()
     private val activeExecutionId = AtomicReference<String?>()
@@ -198,22 +200,26 @@ class MaaRunner(private val agentHost: AgentHost) {
         return lib.MaaGlobalSetOption(key, memory, 1).toInt() != 0
     }
 
-    fun isRunning(): Boolean = running.get()
+    fun isRunning(): Boolean = synchronized(lifecycleLock) { running }
 
     /** 立即返回；执行进度与结果走 [IMaaRunnerCallback] */
     fun start(payloadJson: String): Boolean {
-        if (!running.compareAndSet(false, true)) {
-            Ln.w("MaaRunner: already running")
-            return false
+        synchronized(lifecycleLock) {
+            if (running) {
+                Ln.w("MaaRunner: already running")
+                return false
+            }
+            running = true
+            stopRequested = false
         }
         val payload = runCatching { runPlanWireJson.decodeFromString<RunPlanPayload>(payloadJson) }
             .getOrElse {
-                running.set(false)
+                synchronized(lifecycleLock) { running = false }
                 Ln.e("MaaRunner: bad payload: ${it.message}")
                 return false
             }
         if (payload.executionId.isBlank()) {
-            running.set(false)
+            synchronized(lifecycleLock) { running = false }
             Ln.e("MaaRunner: payload has no executionId")
             return false
         }
@@ -227,8 +233,11 @@ class MaaRunner(private val agentHost: AgentHost) {
     fun stop(): Boolean {
         modalFocusGate.releaseAll()
         val lib = MaaFrameworkLoader.library ?: return false
-        val handle = tasker ?: return true
-        lib.MaaTaskerPostStop(handle)
+        synchronized(lifecycleLock) {
+            if (!running) return true
+            stopRequested = true
+            tasker?.let(lib::MaaTaskerPostStop)
+        }
         return true
     }
 
@@ -252,6 +261,10 @@ class MaaRunner(private val agentHost: AgentHost) {
             val prepared = prepare(lib, payload)
             if (prepared != null) {
                 reason = prepared
+                if (isStopRequested()) {
+                    outcome = RunOutcome.CANCELLED
+                    reason = ""
+                }
                 return
             }
 
@@ -259,22 +272,27 @@ class MaaRunner(private val agentHost: AgentHost) {
             var cancelled = false
             payload.tasks.forEachIndexed { index, task ->
                 if (cancelled) return@forEachIndexed
+                if (stopRequested(lib)) {
+                    cancelled = true
+                    return@forEachIndexed
+                }
                 notify { onTaskStarted(task.taskName, index, payload.tasks.size) }
 
                 val overrides = JsonArray(task.pipelineOverrides).toString()
-                val taskId = lib.MaaTaskerPostTask(tasker, task.entry, overrides)
+                val currentTasker = synchronized(lifecycleLock) { tasker }
+                val taskId = lib.MaaTaskerPostTask(currentTasker, task.entry, overrides)
                 if (taskId == INVALID_ID) {
                     anyFailed = true
                     notify { onTaskFinished(task.taskName, false, "PostTask 被拒绝") }
                     return@forEachIndexed
                 }
-                val status = lib.MaaTaskerWait(tasker, taskId)
+                val status = lib.MaaTaskerWait(currentTasker, taskId)
                 val success = status == MaaStatus.SUCCEEDED
                 if (!success) anyFailed = true
                 notify { onTaskFinished(task.taskName, success, statusText(status)) }
 
                 // Stop 之后 Tasker 会把剩余任务直接判失败，这里提前收尾避免刷一串假失败
-                if (lib.MaaTaskerStopping(tasker).toInt() != 0) {
+                if (lib.MaaTaskerStopping(currentTasker).toInt() != 0) {
                     cancelled = true
                 }
             }
@@ -289,9 +307,25 @@ class MaaRunner(private val agentHost: AgentHost) {
             Ln.e("MaaRunner: run failed: $reason")
         } finally {
             activeExecutionId.set(null)
-            running.set(false)
+            synchronized(lifecycleLock) {
+                running = false
+                stopRequested = false
+            }
             notify { onFinished(outcome, reason) }
         }
+    }
+
+    private fun isStopRequested(): Boolean = synchronized(lifecycleLock) {
+        running && stopRequested
+    }
+
+    private fun stopRequested(lib: MaaFrameworkLibrary): Boolean {
+        val handle = synchronized(lifecycleLock) {
+            if (!running || !stopRequested) return false
+            tasker
+        }
+        if (handle != null) lib.MaaTaskerPostStop(handle)
+        return true
     }
 
     /** 返回 null 表示就绪，否则返回失败原因 */
@@ -360,7 +394,8 @@ class MaaRunner(private val agentHost: AgentHost) {
             releaseTasker(lib)
         }
 
-        if (tasker == null) {
+        val needsTasker = synchronized(lifecycleLock) { tasker == null }
+        if (needsTasker) {
             val tsk = lib.MaaTaskerCreate() ?: return "MaaTaskerCreate 失败"
             lib.MaaTaskerAddSink(tsk, eventSink, null)
             if (lib.MaaTaskerBindResource(tsk, resource).toInt() == 0 ||
@@ -370,7 +405,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 lib.MaaTaskerDestroy(tsk)
                 return "Tasker 绑定失败"
             }
-            tasker = tsk
+            synchronized(lifecycleLock) { tasker = tsk }
         }
         return null
     }
@@ -531,8 +566,12 @@ class MaaRunner(private val agentHost: AgentHost) {
 
 
     private fun releaseTasker(lib: MaaFrameworkLibrary) {
-        tasker?.let(lib::MaaTaskerDestroy)
-        tasker = null
+        val handle = synchronized(lifecycleLock) {
+            val current = tasker
+            tasker = null
+            current
+        }
+        handle?.let(lib::MaaTaskerDestroy)
     }
 
     private fun releaseController(lib: MaaFrameworkLibrary) {

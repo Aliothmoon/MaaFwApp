@@ -50,6 +50,9 @@ data class ProjectMetadata(
     val contact: String? = null,
     val license: String? = null,
     val github: String? = null,
+    /** 从 metadata.github 解出的 owner/repo；只用于 GitHub 更新源 */
+    val githubRepository: String? = null,
+    val mirrorChyanRid: String? = null,
 )
 
 /**

@@ -11,6 +11,7 @@ import com.aliothmoon.maafw.di.privilegedModule
 import com.aliothmoon.maafw.di.projectModule
 import com.aliothmoon.maafw.di.runnerModule
 import com.aliothmoon.maafw.di.scheduleModule
+import com.aliothmoon.maafw.di.updateModule
 import com.aliothmoon.maafw.di.viewModelModule
 import com.aliothmoon.maafw.log.AppLogWriter
 import com.aliothmoon.maafw.log.CrashHandler
@@ -56,6 +57,7 @@ class MaaFwApp : Application() {
                 notificationModule,
                 overlayModule,
                 scheduleModule,
+                updateModule,
                 viewModelModule,
             )
         }.koin
