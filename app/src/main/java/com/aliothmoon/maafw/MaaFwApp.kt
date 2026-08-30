@@ -17,6 +17,7 @@ import com.aliothmoon.maafw.log.CrashHandler
 import com.aliothmoon.maafw.log.LogTreeHolder
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.settings.AppSettingsManager
@@ -72,6 +73,7 @@ class MaaFwApp : Application() {
         val provider = koin.get<AppSettingsManager>().startupBackend::value
         RemoteServiceManager.initialize(this, provider)
         koin.get<OverlayController>().setup()
+        koin.get<SessionMessagePresenter>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
         koin.get<TelemetryController>().setup()
     }

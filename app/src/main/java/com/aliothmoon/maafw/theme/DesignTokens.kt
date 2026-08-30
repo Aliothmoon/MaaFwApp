@@ -120,6 +120,32 @@ object MaaDesignTokens {
         /** 全部 modal sheet 统一固定高度：屏幕的 3/4 */
         const val heightFraction = 0.75f
     }
+
+    /**
+     * 前台悬浮窗专用密度；对齐 MaaMeow ExpandedControlPanel（12 外框、4/6 行垫、36 底栏）
+     * 再收一档：窗是屏宽 85% × 屏高 60%，任务页那套 40dp 按钮和内容卡会把左栏撑满
+     */
+    object Overlay {
+        val pad: Dp = 8.dp
+        val gap: Dp = 6.dp
+        val row: Dp = 28.dp
+        val bar: Dp = 32.dp
+        val iconHit: Dp = 24.dp
+
+        /**
+         * M3 Checkbox 画布 20 + 两侧 2 padding；再小会溢出贴上同行文字
+         */
+        val checkbox: Dp = 24.dp
+
+        val field: Dp = 32.dp
+        val leftMax: Dp = 156.dp
+
+        /** 相对 M3 Switch 轨道 52×32，压进 overlay 行高 */
+        const val switchScale = 0.7f
+
+        val switchTrackWidth: Dp = 52.dp
+        val switchTrackHeight: Dp = 32.dp
+    }
 }
 
 /**

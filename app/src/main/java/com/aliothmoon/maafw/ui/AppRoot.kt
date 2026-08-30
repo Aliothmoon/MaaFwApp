@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -39,8 +40,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -81,7 +80,6 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
-import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
@@ -163,11 +161,11 @@ private fun Modifier.subPageOverlayInput(): Modifier = this
     // 排在截断内侧，先于它拿到 Press
     .clearFocusOnBlankTap()
 
-/** Route：收集 state、消费 Effect、承载四个主 tab 与二级页面的 NavHost；VM 为 Activity 作用域 */
+/** Route：收集 state、消费 Effect、承载四个主 tab 与二级页面的 NavHost；Session VM 是进程级单例 */
 @Composable
 fun AppRoot(
     onDarkThemeChanged: (Boolean) -> Unit,
-    viewModel: SessionViewModel = koinViewModel(),
+    viewModel: SessionViewModel = koinInject(),
     scheduleViewModel: ScheduleViewModel = koinViewModel(),
     settingsViewModel: SettingsViewModel = koinViewModel(),
     overlayController: OverlayController = koinInject(),
@@ -231,16 +229,19 @@ fun AppRoot(
         val onSubPage = currentRoute != null && currentRoute !in Routes.mainTabs
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
         val scope = rememberCoroutineScope()
-        val snackbarHostState = remember { SnackbarHostState() }
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var exportSheetVisible by remember { mutableStateOf(false) }
 
         val context = LocalContext.current
+        // 悬浮窗面板的「导出」：先把应用拉到前面，再由这条流打开 Activity 里的导出 sheet
+        LaunchedEffect(overlayController) {
+            overlayController.exportLogRequests.collect { exportSheetVisible = true }
+        }
         LaunchedEffect(Unit) {
             viewModel.effects.collect { effect ->
                 when (effect) {
-                    is SessionEffect.ShowMessage ->
-                        snackbarHostState.showSnackbar(effect.message.resolve(context))
+                    // ShowMessage 由进程级 SessionMessagePresenter 打 Toast
+                    is SessionEffect.ShowMessage -> Unit
 
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
 
@@ -509,21 +510,13 @@ fun AppRoot(
             }
         }
 
-        // 挂在二级页面之上，否则整屏的二级页一盖，snackbar 就没人看得见
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = if (onSubPage) 0.dp else BottomBarHeight),
-        )
         }
 
         // 无条件挂在这一层：它注册的 SAF launcher 要活得比 sheet 的显隐久
         LogExportController(
             visible = exportSheetVisible,
             onDismiss = { exportSheetVisible = false },
-            onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+            onMessage = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
         )
 
         // 挂在 Scaffold 之外，才盖得住底部 tab 栏与系统栏

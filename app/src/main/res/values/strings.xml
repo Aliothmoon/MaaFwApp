@@ -155,10 +155,26 @@
 
     <!-- 前台模式控制层 -->
     <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板。只拦按键，不读取屏幕内容</string>
-    <string name="overlay_panel_title">操作面板</string>
+    <string name="overlay_tab_tasks">任务</string>
+    <string name="overlay_tab_log">日志</string>
+    <string name="overlay_task_running">进行中</string>
+    <string name="overlay_tasks_empty">暂无执行中的任务</string>
+    <string name="overlay_hide">隐藏</string>
     <string name="overlay_back_to_app">回到应用</string>
     <string name="overlay_lock">锁定位置</string>
     <string name="overlay_unlock">解除锁定</string>
+    <string name="overlay_edit_tasks">编辑任务</string>
+    <string name="overlay_edit_done">完成</string>
+    <string name="overlay_manage_config">编辑配置</string>
+    <string name="overlay_pane_view_empty_title">选择一个任务</string>
+    <string name="overlay_pane_view_empty_hint">左侧点一项，右侧改选项</string>
+    <string name="overlay_pane_edit_empty_title">选择要管理的任务</string>
+    <string name="overlay_pane_edit_empty_hint">可重命名、复制或移除</string>
+    <string name="overlay_pane_edit_add_hint">点「添加任务」从目录追加</string>
+    <string name="overlay_pane_reorder_hint">长按左侧任务可拖动排序</string>
+    <string name="overlay_delete_task">移除这个任务？</string>
+    <string name="overlay_delete_config">删除这个配置？</string>
+    <string name="overlay_new_config">新建</string>
     <string name="overlay_ball_idle">空闲</string>
     <string name="overlay_ball_preparing">启动中</string>
     <string name="overlay_ball_running">运行中</string>
@@ -514,7 +530,6 @@
     <string name="foreground_resolution_too_small">屏幕 %1$s 太小，放不下 16:9 的画面</string>
     <string name="foreground_resolution_required">当前屏幕比例不是 16:9，请先点「修改分辨率」</string>
     <string name="foreground_service_required">请先连接 Shizuku 或 Root 后端</string>
-    <string name="foreground_overlay_unsupported">操作面板暂不可用</string>
 
     <!-- 设置页「通知」分组入口 -->
     <string name="settings_section_notification">通知</string>

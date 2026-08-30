@@ -161,10 +161,26 @@
 
     <!-- Foreground control layer -->
     <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
-    <string name="overlay_panel_title">Control panel</string>
+    <string name="overlay_tab_tasks">Tasks</string>
+    <string name="overlay_tab_log">Log</string>
+    <string name="overlay_task_running">Running</string>
+    <string name="overlay_tasks_empty">No run in progress</string>
+    <string name="overlay_hide">Hide</string>
     <string name="overlay_back_to_app">Back to app</string>
     <string name="overlay_lock">Lock position</string>
     <string name="overlay_unlock">Unlock position</string>
+    <string name="overlay_edit_tasks">Edit tasks</string>
+    <string name="overlay_edit_done">Done</string>
+    <string name="overlay_manage_config">Edit configs</string>
+    <string name="overlay_pane_view_empty_title">Select a task</string>
+    <string name="overlay_pane_view_empty_hint">Tap a task on the left to edit its options</string>
+    <string name="overlay_pane_edit_empty_title">Select a task to manage</string>
+    <string name="overlay_pane_edit_empty_hint">Rename, duplicate, or remove</string>
+    <string name="overlay_pane_edit_add_hint">Tap Add to append from the catalog</string>
+    <string name="overlay_pane_reorder_hint">Long-press a task on the left to reorder</string>
+    <string name="overlay_delete_task">Remove this task?</string>
+    <string name="overlay_delete_config">Delete this configuration?</string>
+    <string name="overlay_new_config">New</string>
     <string name="overlay_ball_idle">Idle</string>
     <string name="overlay_ball_preparing">Starting</string>
     <string name="overlay_ball_running">Running</string>
@@ -520,7 +536,6 @@
     <string name="foreground_resolution_too_small">The screen %1$s is too small to fit a 16:9 picture</string>
     <string name="foreground_resolution_required">The screen is not 16:9 yet — tap Change resolution first</string>
     <string name="foreground_service_required">Connect the Shizuku or Root backend first</string>
-    <string name="foreground_overlay_unsupported">The control panel is unavailable for now</string>
 
     <!-- Settings "Notifications" group entry -->
     <string name="settings_section_notification">Notifications</string>

@@ -57,6 +57,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import io.mockk.Runs
 import io.mockk.every
@@ -152,8 +153,8 @@ class SessionViewModelTest {
     )
 
     /**
-     * 带上真实的前台模式检查与保活挂载物：VM 侧要验的「前台模式点不动」如今由
-     * ForegroundModePrecheck 产生，emptyList 会让那条用例空转通过
+     * 带上真实的前台拦截（只拦定时）与保活挂载物：手动路径不受影响，
+     * overlay Start 的用例才证明它真的送到了 runner
      */
     private fun TestScope.launcherFor(
         project: FakeProjectRepository,
@@ -265,7 +266,8 @@ class SessionViewModelTest {
         val vm = createVmWithRunner(runner)
 
         repeat(RUN_LOG_CAPACITY + 20) { index -> runner.emit(RunnerEvent.Log("line $index")) }
-        // 屏上那份攒批发布，读 value 之前得让那一拍走完
+        // 屏上那份攒批发布：第一条即时，随后要等 FLUSH_INTERVAL
+        advanceTimeBy(100)
         advanceUntilIdle()
 
         assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.size)
@@ -286,6 +288,7 @@ class SessionViewModelTest {
         runner.emit(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"启动游戏"}"""))
         runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"NodeA"}"""))
         runner.emit(RunnerEvent.MalformedCallback("{}"))
+        advanceTimeBy(100)
         advanceUntilIdle()
 
         assertEquals(
@@ -345,6 +348,7 @@ class SessionViewModelTest {
         runner.emit(RunnerEvent.Callback("Controller.Action.Succeeded", """{"action":"Screencap"}"""))
         runner.emit(RunnerEvent.Callback("Node.Recognition.Failed", """{"name":"NodeB"}"""))
         runner.emit(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"启动游戏"}"""))
+        advanceTimeBy(100)
         advanceUntilIdle()
 
         // 只剩「任务开始」；截图动作与节点识别失败都是原始回调，节点失败在协议里是正常控制流
@@ -387,7 +391,7 @@ class SessionViewModelTest {
         val effects = mutableListOf<SessionEffect>()
         backgroundScope.launch { vm.effects.collect { effects += it } }
 
-        vm.onIntent(SessionIntent.Start)
+        vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()
         assertTrue(runner.state.value.phase.isBusy)
 
@@ -413,7 +417,7 @@ class SessionViewModelTest {
         val effects = mutableListOf<SessionEffect>()
         backgroundScope.launch { vm.effects.collect { effects += it } }
 
-        vm.onIntent(SessionIntent.Start)
+        vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()
 
         assertTrue(
@@ -476,7 +480,7 @@ class SessionViewModelTest {
     }
 
     @Test
-    fun `overlay reports unsupported even after every check passes`() = runTest(mainDispatcher) {
+    fun `overlay shows up when every check passes`() = runTest(mainDispatcher) {
         val permissions = FakePermissionGateway()
             .apply { serviceState.value = PrivilegedServiceState.Connected }
         val (vm, _, _) = createVm(permissions = permissions)
@@ -488,13 +492,7 @@ class SessionViewModelTest {
         vm.onIntent(SessionIntent.ShowOverlay)
         advanceUntilIdle()
 
-        assertTrue(
-            effects.any {
-                it is SessionEffect.ShowMessage &&
-                    it.message.isResource(R.string.foreground_overlay_unsupported)
-            },
-        )
-        assertTrue(effects.none { it is SessionEffect.ShowOverlay })
+        assertTrue(effects.any { it is SessionEffect.ShowOverlay })
     }
 
     @Test
@@ -526,17 +524,21 @@ class SessionViewModelTest {
         )
     }
 
-    /** 前台模式的拦截在 VM 而不是 RunLauncher，只有这条路径能证明它没漏 */
+    /** 应用内前台 Start 拦在 VM；长延时 stub 保证漏拦会离开 Idle */
     @Test
     fun `start in foreground mode is blocked before reaching the launcher`() = runTest(mainDispatcher) {
         val settings = FakeAppSettingsGateway().apply { runMode.value = RunMode.FOREGROUND }
-        val (vm, _, runner) = createVm(settings = settings)
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(settings = settings, runner = runner)
         advanceUntilIdle()
 
         val effects = mutableListOf<SessionEffect>()
         backgroundScope.launch { vm.effects.collect { effects += it } }
 
-        vm.onIntent(SessionIntent.Start)
+        vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()
 
         assertTrue(
@@ -545,8 +547,32 @@ class SessionViewModelTest {
                     it.message.isResource(R.string.runner_foreground_blocked)
             },
         )
-        // 拦在投递之前：runner 连 Preparing 都不该进
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+    }
+
+    @Test
+    fun `overlay start in foreground is accepted`() = runTest(mainDispatcher) {
+        val settings = FakeAppSettingsGateway().apply { runMode.value = RunMode.FOREGROUND }
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(settings = settings, runner = runner)
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start(TaskSurface.Overlay))
+        advanceUntilIdle()
+
+        assertTrue(runner.state.value.phase.isBusy)
+        assertTrue(
+            effects.none {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.runner_foreground_blocked)
+            },
+        )
     }
 
     /** 虚拟屏尺寸改由用户选之后，这条是它进 UiState 的唯一通路 */
@@ -574,7 +600,7 @@ class SessionViewModelTest {
         )
         val (vm, store, _) = createVm(runner = runner)
         advanceUntilIdle()
-        vm.onIntent(SessionIntent.Start)
+        vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()
         assertTrue(runner.state.value.phase.isBusy)
 
@@ -604,7 +630,7 @@ class SessionViewModelTest {
         val before = project.reloadCount
         assertTrue(before >= 1)
 
-        vm.onIntent(SessionIntent.Start)
+        vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()
         vm.onIntent(SessionIntent.ReloadProject)
         advanceUntilIdle()

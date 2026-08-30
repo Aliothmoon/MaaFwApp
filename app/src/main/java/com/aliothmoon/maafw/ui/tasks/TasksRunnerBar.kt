@@ -88,7 +88,7 @@ internal fun RunnerToggleButton(
             // 前台模式灰显但仍可点：点了走 Start，由 SessionViewModel 拦下并给提示
             val foregroundBlocked = state.runMode == RunMode.FOREGROUND
             MaaButton(
-                onClick = { onIntent(SessionIntent.Start) },
+                onClick = { onIntent(SessionIntent.Start()) },
                 enabled = state.canStart,
                 colors = if (foregroundBlocked) {
                     ButtonDefaults.buttonColors(

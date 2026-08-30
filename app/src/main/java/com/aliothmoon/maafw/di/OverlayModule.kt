@@ -17,6 +17,7 @@ val overlayModule = module {
             appSettings = get(),
             borderOverlayManager = get(),
             viewModelOwner = get(),
+            sessionViewModel = get(),
         )
     }
 
