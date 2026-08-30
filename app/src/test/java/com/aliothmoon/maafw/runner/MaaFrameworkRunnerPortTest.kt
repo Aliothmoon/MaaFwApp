@@ -86,7 +86,7 @@ class MaaFrameworkRunnerPortTest {
     }
 
     @Test
-    fun `stop during prepare keeps Stopping after start returns`() = runTest(dispatcher) {
+    fun `stop during prepare is retried after start returns`() = runTest(dispatcher) {
         val service = FakePrivilegedService()
         val hold = CompletableDeferred<Unit>()
         val servicePort = FakePrivilegedServicePort(service).apply { holdUseService = hold }
@@ -104,7 +104,28 @@ class MaaFrameworkRunnerPortTest {
 
         assertEquals(RunnerCommandResult.Accepted, started.await())
         assertEquals(RunnerPhase.Stopping, runner.state.value.phase)
-        assertEquals(1, service.stopRunCount)
+        assertEquals(2, service.stopRunCount)
+    }
+
+    @Test
+    fun `start rejection during Stopping returns to Idle`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val hold = CompletableDeferred<Unit>()
+        val servicePort = FakePrivilegedServicePort(service).apply { holdUseService = hold }
+        val (runner, _) = port(this, service, servicePort)
+
+        val started = async { runner.start(plan()) }
+        advanceUntilIdle()
+        assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
+
+        assertEquals(RunnerCommandResult.Accepted, runner.stop())
+        service.startRunResult = false
+        hold.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(started.await() is RunnerCommandResult.Rejected)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertTrue(runner.state.value.latestResult is ExecutionResult.Cancelled)
     }
 
     @Test

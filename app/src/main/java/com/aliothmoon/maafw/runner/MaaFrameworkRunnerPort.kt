@@ -197,10 +197,11 @@ class MaaFrameworkRunnerPort(
         if (_state.value.phase.isBusy) {
             return RunnerCommandResult.Rejected(uiTextOf(R.string.msg_reject_already_running))
         }
+        val executionId = UUID.randomUUID().toString()
         _state.value = RunnerState(
             phase = RunnerPhase.Preparing,
             activeExecution = ActiveExecution(
-                executionId = UUID.randomUUID().toString(),
+                executionId = executionId,
                 runConfigurationId = plan.runConfigurationId,
                 currentTaskName = null,
                 completedTaskCount = 0,
@@ -213,8 +214,8 @@ class MaaFrameworkRunnerPort(
 
         return withContext(MaaDispatchers.IO) {
             try {
-                val rejection = launchOnService(plan)
-                if (rejection != null) return@withContext failPreparation(rejection)
+                val rejection = launchOnService(plan, executionId)
+                if (rejection != null) return@withContext failPreparation(rejection, executionId)
                 // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
                 // 无条件写成 Running 会把停止意图丢掉，任务继续跑到结束
                 val accepted = _state.updateAndGet { current ->
@@ -235,11 +236,14 @@ class MaaFrameworkRunnerPort(
                     RunnerCommandResult.Accepted
                 }
             } catch (cancellation: CancellationException) {
-                failPreparation(uiTextOf(R.string.msg_fail_default))
+                failPreparation(uiTextOf(R.string.msg_fail_default), executionId)
                 throw cancellation
             } catch (throwable: Throwable) {
                 Timber.e(throwable, "Failed to start run")
-                failPreparation(uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName))
+                failPreparation(
+                    uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
+                    executionId,
+                )
             }
         }
     }
@@ -268,12 +272,17 @@ class MaaFrameworkRunnerPort(
      * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
      * 后端换了也会重新绑定
      */
-    private suspend fun launchOnService(plan: RunPlan): UiText? {
+    private suspend fun launchOnService(plan: RunPlan, executionId: String): UiText? {
         val piRoot = installer.installedDir()
-        return servicePort.useService { service -> prepareAndStart(plan, piRoot, service) }
+        return servicePort.useService { service -> prepareAndStart(plan, piRoot, service, executionId) }
     }
 
-    private fun prepareAndStart(plan: RunPlan, piRoot: File, service: RemoteService): UiText? {
+    private fun prepareAndStart(
+        plan: RunPlan,
+        piRoot: File,
+        service: RemoteService,
+        executionId: String,
+    ): UiText? {
         if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
             return uiTextOf(R.string.msg_reject_setup_failed)
         }
@@ -330,16 +339,30 @@ class MaaFrameworkRunnerPort(
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return uiTextOf(R.string.msg_reject_service_rejected)
         }
+        if (shouldRetryStop(executionId)) {
+            runCatching { service.stopRun() }
+                .onFailure { Timber.w(it, "Failed to retry stop after run start") }
+        }
         return null
+    }
+
+    private fun shouldRetryStop(executionId: String): Boolean {
+        val current = _state.value
+        return current.phase == RunnerPhase.Stopping &&
+            current.activeExecution?.executionId == executionId
     }
 
     /**
      * 准备失败才把 phase 收回 Idle；onFinished / abort 已经写过终态的不要盖掉
      */
-    private fun failPreparation(reason: UiText): RunnerCommandResult {
+    private fun failPreparation(reason: UiText, executionId: String): RunnerCommandResult {
         val next = _state.updateAndGet { current ->
             if (current.phase == RunnerPhase.Preparing) {
                 RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Failed(reason))
+            } else if (current.phase == RunnerPhase.Stopping &&
+                current.activeExecution?.executionId == executionId
+            ) {
+                RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Cancelled(emptyList()))
             } else {
                 current
             }
@@ -366,7 +389,7 @@ class MaaFrameworkRunnerPort(
         /**
          * 一次否定读数之后的宽限
          *
-         * 特权进程收尾时先 `running.set(false)` 再发 onFinished，中间那一瞬问到的就是
+         * 特权进程收尾时先收回 running 再发 onFinished，中间那一瞬问到的就是
          * 「没在跑」。onFinished 是 oneway 调用，微秒级就该落地，等这么久足够分辨
          */
         const val RECONCILE_GRACE_MS = 2_000L

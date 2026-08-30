@@ -1,10 +1,14 @@
 package com.aliothmoon.maafw.di
 
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
+import com.aliothmoon.maafw.notification.DefaultNotificationPermissionRequester
 import com.aliothmoon.maafw.notification.ExternalNotificationService
 import com.aliothmoon.maafw.notification.NotificationCenter
+import com.aliothmoon.maafw.notification.NotificationPermissionRequester
+import com.aliothmoon.maafw.notification.UpdateDownloadNotification
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.RunEventNotifier
+import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
 import com.aliothmoon.maafw.notification.provider.BarkProvider
 import com.aliothmoon.maafw.notification.provider.CustomWebhookProvider
 import com.aliothmoon.maafw.notification.provider.DingTalkProvider
@@ -25,6 +29,10 @@ import org.koin.dsl.module
 val notificationModule = module {
     single { NotificationSettingsManager(androidContext()) }
     single { RunEventNotifier(androidContext(), get()) }
+    single<UpdateDownloadNotification> { UpdateDownloadProgressState(androidContext()) }
+    single<NotificationPermissionRequester> {
+        DefaultNotificationPermissionRequester(androidContext())
+    }
     single { NotificationHttpClient(OkHttpClient.Builder().build()) }
 
     single {

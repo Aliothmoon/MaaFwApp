@@ -15,6 +15,10 @@ private fun Project.loadLocalProperties(): Properties = Properties().apply {
 internal fun Project.pathSetting(key: String, envName: String): String? =
     (loadLocalProperties().getProperty(key) ?: System.getenv(envName))?.takeIf { it.isNotBlank() }
 
+/** Text switches use the same precedence as path switches */
+internal fun Project.textSetting(key: String, envName: String): String? =
+    (loadLocalProperties().getProperty(key) ?: System.getenv(envName))?.takeIf { it.isNotBlank() }
+
 /**
  * Signing material flips the precedence: a release build injects env vars and a stale
  * local.properties entry must not override them

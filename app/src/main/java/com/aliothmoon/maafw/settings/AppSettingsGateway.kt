@@ -4,6 +4,8 @@ import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -49,5 +51,20 @@ interface AppSettingsGateway {
     /** PI 声明了 telemetry 时才起作用 */
     val telemetryEnabled: StateFlow<Boolean>
     suspend fun setTelemetryEnabled(enabled: Boolean)
+
+    /** 只影响更新下载，不影响检查更新的默认源行为 */
+    val updateDownloadSource: StateFlow<UpdateSource>
+    suspend fun setUpdateDownloadSource(source: UpdateSource)
+
+    val updateChannel: StateFlow<UpdateChannel>
+    suspend fun setUpdateChannel(channel: UpdateChannel)
+
+    /** GitHub 下载源可用；匿名 GitHub 检查不携带它 */
+    val githubToken: StateFlow<String>
+    suspend fun setGithubToken(token: String)
+
+    /** Mirror酱 下载源必填；匿名检查不携带它 */
+    val mirrorChyanCdk: StateFlow<String>
+    suspend fun setMirrorChyanCdk(cdk: String)
 
 }
