@@ -131,6 +131,8 @@
     <string name="settings_run_mode_foreground">Foreground mode</string>
     <string name="settings_run_mode_hint_background">Runs on a separate virtual display so the phone stays usable; resolution derived from the project declaration</string>
     <string name="settings_run_mode_hint_foreground">Drives the current screen directly, occupying the phone while running; the target app is not restarted and preview touch is disabled</string>
+    <string name="settings_force_restart_app">Force-restart the target app</string>
+    <string name="settings_force_restart_app_desc">Try enabling this when the target app cannot start normally</string>
     <string name="settings_resource">Server selection</string>
     <string name="settings_no_resources">The project provides no selectable servers</string>
     <string name="settings_current_resource">Current resource</string>

@@ -58,6 +58,10 @@ data class AppSettings(
     @PrefKey(default = "true")
     val touchPreviewEnabled: String = "true",
 
+    /** 后台模式下 StartApp 前是否无条件强停目标应用；默认开，保持既有强停行为 */
+    @PrefKey(default = "true")
+    val forceRestartApp: String = "true",
+
     /** [com.aliothmoon.maafw.runner.ResolutionPreference] 的 name */
     @PrefKey(default = "P720")
     val resolutionPreference: String = "P720",

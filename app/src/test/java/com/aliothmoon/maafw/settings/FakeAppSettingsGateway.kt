@@ -40,6 +40,12 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         touchPreviewEnabled.value = enabled
     }
 
+    override val forceRestartApp = MutableStateFlow(true)
+
+    override suspend fun setForceRestartApp(enabled: Boolean) {
+        forceRestartApp.value = enabled
+    }
+
     override val resolutionPreference = MutableStateFlow(ResolutionPreference.P720)
 
     override suspend fun setResolutionPreference(preference: ResolutionPreference) {

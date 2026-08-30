@@ -12,6 +12,7 @@ import com.aliothmoon.maafw.maa.MaaFwVersion
 import com.aliothmoon.maafw.maa.MaaGlobalOption
 import com.aliothmoon.maafw.maa.MaaLoggingLevel
 import com.aliothmoon.maafw.maa.MaaStatus
+import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.runner.AgentPayload
@@ -292,6 +293,7 @@ class MaaRunner(private val agentHost: AgentHost) {
         // TouchArgs.contact 是 v5.12.3 起 fw 才填的合约字段，旧 fw 那 4 字节是栈残值，
         // 不过闸直接读会得到幻影手指；低于配对版本一律压 0（等价旧 bridge 单指行为）
         NativeBridgeLib.setContactSupport(MaaFwVersion.fillsTouchContact(lib.MaaVersion()))
+        ActivityUtils.forceRestartOnVirtualDisplay = payload.forceRestartApp
 
         val displayId = when (payload.displayMode) {
             DisplayMode.PRIMARY ->
@@ -484,8 +486,8 @@ class MaaRunner(private val agentHost: AgentHost) {
      * screen_resolution 必须与帧缓冲、触摸坐标空间三者一致，不一致时 screencap 立即失败
      * library_path 用裸名：bridge 已在本进程加载，控制单元 dlopen 同名即命中同一份
      *
-     * 虚拟屏模式下 force_stop 必须为 true：目标应用若已在主屏上跑着，startActivity 会复用它在主屏的
-     * 既有 task，虚拟屏上拿不到画面。先杀掉再拉起，进程才会落到虚拟屏上
+     * 虚拟屏模式下 controller 继续请求 force_stop：目标应用若已在主屏上跑着，startActivity 会复用
+     * 它在主屏的既有 task，虚拟屏上拿不到画面。是否真的强停由 ActivityUtils 按用户设置判定
      * 主屏模式反过来——目标就在主屏，杀掉只会把用户已经摆好的现场清空
      */
     private fun buildControllerConfig(payload: RunPlanPayload, displayId: Int): String {

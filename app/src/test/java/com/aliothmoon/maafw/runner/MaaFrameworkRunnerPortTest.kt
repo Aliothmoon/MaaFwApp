@@ -20,8 +20,10 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.decodeFromString
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -67,6 +69,7 @@ class MaaFrameworkRunnerPortTest {
         scope: TestScope,
         service: FakePrivilegedService = FakePrivilegedService(),
         servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(service),
+        forceRestartApp: () -> Boolean = { false },
     ): Pair<MaaFrameworkRunnerPort, FakePrivilegedServicePort> {
         val installer = mockk<PiInstaller>()
         every { installer.installedDir() } returns temp.newFolder("pi")
@@ -76,6 +79,7 @@ class MaaFrameworkRunnerPortTest {
             nativeLibraryDir = "/lib",
             runMode = { RunMode.BACKGROUND },
             resolutionPreference = { ResolutionPreference.P720 },
+            forceRestartApp = forceRestartApp,
             debugMode = { false },
             scope = scope.backgroundScope,
             servicePort = servicePort,
@@ -83,6 +87,18 @@ class MaaFrameworkRunnerPortTest {
         // JVM 单测构造不了 AIDL Stub；本文件只测 phase，不测回调转发
         runner.bindRunnerCallback = {}
         return runner to servicePort
+    }
+
+    @Test
+    fun `force restart preference is carried in run payload`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+
+        runner.start(plan())
+        advanceUntilIdle()
+
+        val payload = runPlanWireJson.decodeFromString<RunPlanPayload>(service.startRunJsons.single())
+        assertFalse(payload.forceRestartApp)
     }
 
     @Test
