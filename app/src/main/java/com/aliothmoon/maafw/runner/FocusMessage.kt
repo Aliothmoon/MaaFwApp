@@ -91,6 +91,9 @@ object FocusParser {
     private const val CONTENT_KEY = "content"
     private const val DISPLAY_KEY = "display"
     private const val TRACE_KEY = "trace"
+    private const val ACTION_STARTING = "Node.Action.Starting"
+    private const val ACTION_SUCCEEDED = "Node.Action.Succeeded"
+    private const val ACTION_FAILED = "Node.Action.Failed"
 
     /** `trace` 缺省时唯一按 true 算的事件（协议 v2.9.1） */
     private const val TRACED_BY_DEFAULT = "Node.PipelineNode.Failed"
@@ -110,24 +113,40 @@ object FocusParser {
 
         val details = runCatching { json.parseToJsonElement(detailsJson) }.getOrNull() as? JsonObject
             ?: return null
-        val entry = (details[FOCUS_KEY] as? JsonObject)?.get(message) ?: return null
+        val focusField = details[FOCUS_KEY]
+        if (focusField is JsonObject && message in focusField.keys) {
+            return parseModernEntry(message, focusField[message], details)
+        }
+        return parseLegacyEntry(message, focusField, details)
+    }
 
-        val (rawContent, channels, trace) = when (entry) {
+    private fun parseModernEntry(
+        message: String,
+        entry: JsonElement?,
+        details: JsonObject,
+    ): FocusMessage? {
+        val modernEntry = entry ?: return null
+
+        val (rawContent, channels, trace) = when (modernEntry) {
             // 简写：等价于 display: "log"
             is JsonPrimitive -> Triple(
-                entry.contentOrNullIfNotString(),
+                modernEntry.contentOrNullIfNotString(),
                 setOf(FocusChannel.Log),
                 message == TRACED_BY_DEFAULT,
             )
 
             is JsonObject -> Triple(
-                (entry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString(),
-                parseChannels(entry[DISPLAY_KEY]),
-                (entry[TRACE_KEY] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+                (modernEntry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString(),
+                parseChannels(modernEntry[DISPLAY_KEY]),
+                (modernEntry[TRACE_KEY] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
                     ?: (message == TRACED_BY_DEFAULT),
             )
 
-            else -> return null
+            is JsonArray -> Triple(
+                modernEntry.contentLines().joinToString("\n"),
+                setOf(FocusChannel.Log),
+                message == TRACED_BY_DEFAULT,
+            )
         }
         // content 缺省而 trace 为假的条目什么都不做，不必往下游发
         if (rawContent.isNullOrBlank() && !trace) return null
@@ -141,9 +160,47 @@ object FocusParser {
         )
     }
 
-    /** `focus` 自己是对象，不会混进来；其余非标量同样取不出可比的文本 */
+    /** MFAAvalonia 兼容的旧协议：顶层字符串与 start/succeeded/failed 只进任务日志 */
+    private fun parseLegacyEntry(
+        message: String,
+        focusField: JsonElement?,
+        details: JsonObject,
+    ): FocusMessage? {
+        val lines = when {
+            message == ACTION_STARTING && focusField !is JsonObject ->
+                focusField.contentLines()
+
+            focusField is JsonObject -> when (message) {
+                ACTION_STARTING -> focusField["start"].contentLines()
+                ACTION_SUCCEEDED -> focusField["succeeded"].contentLines()
+                ACTION_FAILED -> focusField["failed"].contentLines()
+                else -> emptyList()
+            }
+
+            else -> emptyList()
+        }.filter(String::isNotBlank)
+        if (lines.isEmpty()) return null
+
+        return FocusMessage(
+            message = message,
+            content = lines.joinToString("\n"),
+            channels = setOf(FocusChannel.Log),
+            trace = false,
+            placeholders = scalarFields(details),
+        )
+    }
+
+    private fun JsonElement?.contentLines(): List<String> = when (this) {
+        null -> emptyList()
+        is JsonPrimitive -> listOfNotNull(contentOrNullIfNotString())
+        is JsonArray -> mapNotNull { (it as? JsonPrimitive)?.contentOrNullIfNotString() }
+        else -> emptyList()
+    }
+
+    /** `focus` 是消息本体，不管标量还是对象都不收；其余非标量取不出可比的文本 */
     private fun scalarFields(details: JsonObject): Map<String, String> = buildMap {
         details.forEach { (key, value) ->
+            if (key == FOCUS_KEY) return@forEach
             (value as? JsonPrimitive)?.contentOrNullIfNotString()?.let { put(key, it) }
         }
     }

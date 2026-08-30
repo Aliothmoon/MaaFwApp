@@ -64,6 +64,37 @@ class FocusParserTest {
     }
 
     @Test
+    fun `modern array form emits all lines to the log channel`() {
+        val details = """{"focus":{"Node.Action.Starting":["第一行","第二行"]}}"""
+        val focus = FocusParser.parse("Node.Action.Starting", details)
+        assertEquals("第一行\n第二行", focus?.content)
+        assertEquals(setOf(FocusChannel.Log), focus?.channels)
+    }
+
+    @Test
+    fun `legacy string focus is treated as start text`() {
+        val details = """{"name":"NodeA","focus":"开始 {name}"}"""
+        val focus = FocusParser.parse("Node.Action.Starting", details)
+        assertEquals("开始 {name}", focus?.content)
+        assertEquals(setOf(FocusChannel.Log), focus?.channels)
+        assertEquals(mapOf("name" to "NodeA"), focus?.placeholders)
+    }
+
+    @Test
+    fun `legacy focus fields are selected by callback message`() {
+        val details = """{"focus":{"start":["开始"],"succeeded":"完成","failed":["失败","看详情"]}}"""
+
+        assertEquals("开始", FocusParser.parse("Node.Action.Starting", details)?.content)
+        assertEquals("完成", FocusParser.parse("Node.Action.Succeeded", details)?.content)
+        assertEquals("失败\n看详情", FocusParser.parse("Node.Action.Failed", details)?.content)
+    }
+
+    @Test
+    fun `legacy toast does not become a task log entry`() {
+        assertNull(FocusParser.parse("Node.Action.Starting", """{"focus":{"toast":["标题"]}}"""))
+    }
+
+    @Test
     fun `single display string is accepted`() {
         val details = """{"focus":{"M":{"content":"x","display":"notification"}}}"""
         assertEquals(setOf(FocusChannel.Notification), FocusParser.parse("M", details)?.channels)

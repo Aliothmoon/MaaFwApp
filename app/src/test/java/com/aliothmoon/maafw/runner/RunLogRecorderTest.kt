@@ -133,6 +133,23 @@ class RunLogRecorderTest {
     }
 
     @Test
+    fun `legacy focus reaches the user-facing run log`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+        val focus = FocusParser.parse(
+            "Node.Action.Succeeded",
+            """{"name":"NodeA","focus":{"succeeded":["刷到第3关","体力不足"]}}""",
+        )!!
+
+        runner.emit(RunnerEvent.Focus(focus))
+        settleRunLog()
+
+        val line = recorder.runLog.value.single()
+        assertEquals(RunLogKind.Focus, line.kind)
+        assertEquals("刷到第3关\n体力不足", (line.text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value)
+    }
+
+    @Test
     fun `dialog and modal focus reaches the run log while toast and notification do not`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
