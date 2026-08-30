@@ -25,6 +25,10 @@ class RecordingEventRunnerPort : RunnerPort {
         check(_events.tryEmit(event)) { "事件缓冲满了，调大 extraBufferCapacity" }
     }
 
+    fun updatePhase(phase: RunnerPhase) {
+        _state.value = _state.value.copy(phase = phase)
+    }
+
     override suspend fun start(plan: RunPlan): RunnerCommandResult = RunnerCommandResult.Accepted
 
     override suspend fun stop(): RunnerCommandResult = RunnerCommandResult.Accepted

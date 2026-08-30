@@ -363,8 +363,10 @@
     <string name="quick_settings_title">Automation</string>
     <string name="quick_action_screen_saver">Screen off</string>
     <string name="quick_action_close_app">Close target app</string>
+    <string name="quick_action_screenshot">Screenshot</string>
     <string name="quick_setting_close_app_after_task">Close the target app when task ends</string>
     <string name="quick_setting_touch_preview">Show touch preview</string>
+    <string name="msg_screenshot_failed">Screenshot failed. Try again later</string>
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>

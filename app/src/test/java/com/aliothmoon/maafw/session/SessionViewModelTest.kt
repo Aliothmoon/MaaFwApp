@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.session
 
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
+import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
@@ -19,6 +20,7 @@ import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
+import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
@@ -69,6 +71,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonObject
+import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 import kotlin.io.path.createTempDirectory
@@ -175,14 +178,15 @@ class SessionViewModelTest {
     private fun TestScope.createVm(
         store: InMemoryUserConfigurationStore = readyStore(),
         project: FakeProjectRepository = FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
-        runner: StubRunnerPort = StubRunnerPort(
+        runner: RunnerPort = StubRunnerPort(
             scope = kotlinx.coroutines.CoroutineScope(mainDispatcher),
             scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 0),
         ),
         permissions: FakePermissionGateway = FakePermissionGateway(),
+        servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
-    ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
+    ): Triple<SessionViewModel, InMemoryUserConfigurationStore, RunnerPort> {
         val focusDispatcher = idleFocusDispatcher()
         val vm = SessionViewModel(
             projectRepository = project,
@@ -191,7 +195,7 @@ class SessionViewModelTest {
             runLauncher = launcherFor(project, store, runner, settings),
             previewPort = RecordingPreviewPort(),
             permissionGateway = permissions,
-            servicePort = FakePrivilegedServicePort(),
+            servicePort = servicePort,
             displaySize = displaySize,
             appSettings = settings,
             focusDispatcher = focusDispatcher,
@@ -406,6 +410,80 @@ class SessionViewModelTest {
                     it.message.isResource(R.string.msg_locked_while_running)
             },
         )
+    }
+
+    @Test
+    fun `manual screenshot saves a virtual display frame and opens log export`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val runner = RecordingEventRunnerPort()
+        val (vm, _, _) = createVm(
+            runner = runner,
+            servicePort = FakePrivilegedServicePort(service),
+        )
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        runner.updatePhase(RunnerPhase.Running)
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertEquals(1, service.savedImagePaths.size)
+        val path = service.savedImagePaths.single()
+        val expectedDir = File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR)
+        assertTrue(path.startsWith("${expectedDir.absolutePath}${File.separator}"))
+        assertTrue(path.endsWith(".png"))
+        assertTrue(SessionEffect.OpenLogExport in effects)
+    }
+
+    @Test
+    fun `manual screenshot failure keeps log export closed`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService().apply { saveCachedImageResult = false }
+        val runner = RecordingEventRunnerPort()
+        val (vm, _, _) = createVm(
+            runner = runner,
+            servicePort = FakePrivilegedServicePort(service),
+        )
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        runner.updatePhase(RunnerPhase.Running)
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.msg_screenshot_failed)
+            },
+        )
+        assertFalse(SessionEffect.OpenLogExport in effects)
+    }
+
+    @Test
+    fun `manual screenshot rejects foreground runs before ipc`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val runner = RecordingEventRunnerPort()
+        val settings = FakeAppSettingsGateway().apply { runMode.value = RunMode.FOREGROUND }
+        val (vm, _, _) = createVm(
+            runner = runner,
+            servicePort = FakePrivilegedServicePort(service),
+            settings = settings,
+        )
+        advanceUntilIdle()
+
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        runner.updatePhase(RunnerPhase.Running)
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(service.savedImagePaths.isEmpty())
+        assertFalse(SessionEffect.OpenLogExport in effects)
     }
 
     @Test
