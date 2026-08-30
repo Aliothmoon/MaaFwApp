@@ -64,7 +64,7 @@ data class SessionUiState(
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
     /** 后台模式 StartApp 前是否无条件强停目标应用 */
-    val forceRestartApp: Boolean = false,
+    val forceRestartApp: Boolean = true,
     /** 定时任务的亮屏解锁；逐条规则的收尾选项在 ScheduleStrategy 上，不在这 */
     val wakeUnlockEnabled: Boolean = false,
     val wakeCredential: String = "",

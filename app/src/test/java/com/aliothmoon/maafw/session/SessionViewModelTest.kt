@@ -573,13 +573,13 @@ class SessionViewModelTest {
         backgroundScope.launch { vm.uiState.collect {} }
         advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.forceRestartApp)
+        assertTrue(vm.uiState.value.forceRestartApp)
 
-        vm.onIntent(SessionIntent.SetForceRestartApp(true))
+        vm.onIntent(SessionIntent.SetForceRestartApp(false))
         advanceUntilIdle()
 
-        assertTrue(settings.forceRestartApp.value)
-        assertTrue(vm.uiState.value.forceRestartApp)
+        assertFalse(settings.forceRestartApp.value)
+        assertFalse(vm.uiState.value.forceRestartApp)
     }
 
     @Test

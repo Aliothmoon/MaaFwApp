@@ -72,7 +72,7 @@ private data class SettingsSnapshot(
     val resolutionPreference: ResolutionPreference,
     val debugMode: Boolean,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
-    val forceRestartApp: Boolean = false,
+    val forceRestartApp: Boolean = true,
     val env: EnvSnapshot = EnvSnapshot(),
     val quick: QuickSnapshot = QuickSnapshot(),
 )

@@ -23,7 +23,7 @@ data class RunPlanPayload(
     val displayMode: Int = DisplayMode.BACKGROUND,
     /**
      * 后台模式 StartApp 前是否无条件强停目标应用。
-     * 线格式默认 true 是为了旧 payload 解码后保持既有行为；用户设置本身默认 false。
+     * 线格式默认 true 是为了旧 payload 解码后保持既有行为；用户设置本身默认 true。
      */
     val forceRestartApp: Boolean = true,
     val tasks: List<RuntimeTaskPayload>,
