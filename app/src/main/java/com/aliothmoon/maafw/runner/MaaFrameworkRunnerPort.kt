@@ -145,6 +145,17 @@ class MaaFrameworkRunnerPort(
             _events.tryEmit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
 
+        override fun onModalFocus(
+            executionId: String?,
+            focusId: String?,
+            message: String?,
+            detailsJson: String?,
+        ) {
+            _events.tryEmit(
+                modalFocusEvent(executionId, focusId, message.orEmpty(), detailsJson.orEmpty()),
+            )
+        }
+
         override fun onAgentOutput(line: String?, fromStderr: Boolean) {
             _events.tryEmit(RunnerEvent.AgentOutput(line.orEmpty(), fromStderr))
         }
@@ -267,6 +278,12 @@ class MaaFrameworkRunnerPort(
         }
     }
 
+    override suspend fun acknowledgeModalFocus(focusId: String): Boolean =
+        withContext(MaaDispatchers.IO) {
+            runCatching { servicePort.serviceOrNull()?.acknowledgeModalFocus(focusId) == true }
+                .getOrDefault(false)
+        }
+
     /**
      * 返回 null 表示已受理，否则返回拒绝原因
      * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
@@ -320,6 +337,7 @@ class MaaFrameworkRunnerPort(
         bindRunnerCallback(service)
 
         val payload = RunPlanPayload(
+            executionId = executionId,
             resourcePaths = plan.resource.paths.map { File(piRoot, it).absolutePath },
             screenWidth = width,
             screenHeight = height,
@@ -380,6 +398,20 @@ class MaaFrameworkRunnerPort(
         if (message.isEmpty()) return RunnerEvent.MalformedCallback(detailsJson)
         FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it) }
         return RunnerEvent.Callback(message, detailsJson)
+    }
+
+    internal fun modalFocusEvent(
+        executionId: String?,
+        focusId: String?,
+        message: String,
+        detailsJson: String,
+    ): RunnerEvent {
+        val focus = FocusParser.parse(message, detailsJson)
+        val event = focus?.copy(
+            modalId = focusId?.takeIf(String::isNotBlank),
+            executionId = executionId?.takeIf(String::isNotBlank),
+        )
+        return event?.let(RunnerEvent::Focus) ?: toRunnerEvent(message, detailsJson)
     }
 
     private companion object {

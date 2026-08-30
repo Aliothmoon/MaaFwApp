@@ -28,19 +28,31 @@ data class FocusMessage(
     val trace: Boolean,
     /** 同一条回调 details 里的标量字段；非标量取不出可比的文本，不收 */
     val placeholders: Map<String, String> = emptyMap(),
+    /** 特权进程为 blocking modal 生成的确认句柄；普通事件与旧通道事件没有这个值 */
+    val modalId: String? = null,
+    /** 产生这条消息的执行轮次；blocking modal 展示前用它拒绝晚到的旧请求 */
+    val executionId: String? = null,
 ) {
     val displayable: Boolean get() = content.isNotBlank()
 }
 
+/** 只有仍属于当前执行轮次的 blocking modal 才允许进入可操作 UI */
+fun FocusMessage.isActionableModalFor(state: RunnerState): Boolean {
+    val activeExecutionId = state.activeExecution?.executionId
+        ?.takeIf(String::isNotBlank)
+        ?: return false
+    val sourceExecutionId = executionId?.takeIf(String::isNotBlank) ?: return false
+    return sourceExecutionId == activeExecutionId &&
+        modalId?.takeIf(String::isNotBlank) != null
+}
+
 /**
- * 协议的 `display` 有五档，Android 外壳只落地三档
+ * 协议的 `display` 五档全部落地
  *
- * `dialog` / `modal` 一并归到 [Log]：modal 的语义是「弹出后任务暂停等待用户确认」，
- * 而回调是 oneway 单向通知，没有让外壳把 pipeline 卡住再放行的通道。dialog 协议上是
- * 非阻塞的，本可以做成弹窗，只是外壳还没有这一档展示面，先跟着降级（见 pi-compatibility.md）
- * 认不出的档也落 [Log]——协议加档时少显示一处，好过整条丢掉
+ * [Dialog] 是非阻塞弹窗；[Modal] 由特权进程 gate 阻塞 native 回调，app 确认后才放行。
+ * 认不出的档仍落 [Log]——协议加档时少显示一处，好过整条丢掉
  */
-enum class FocusChannel { Log, Toast, Notification }
+enum class FocusChannel { Log, Toast, Notification, Dialog, Modal }
 
 /**
  * 把 `{key}` 换成 [placeholders] 里的值
@@ -79,6 +91,9 @@ object FocusParser {
     private const val CONTENT_KEY = "content"
     private const val DISPLAY_KEY = "display"
     private const val TRACE_KEY = "trace"
+    private const val ACTION_STARTING = "Node.Action.Starting"
+    private const val ACTION_SUCCEEDED = "Node.Action.Succeeded"
+    private const val ACTION_FAILED = "Node.Action.Failed"
 
     /** `trace` 缺省时唯一按 true 算的事件（协议 v2.9.1） */
     private const val TRACED_BY_DEFAULT = "Node.PipelineNode.Failed"
@@ -98,24 +113,40 @@ object FocusParser {
 
         val details = runCatching { json.parseToJsonElement(detailsJson) }.getOrNull() as? JsonObject
             ?: return null
-        val entry = (details[FOCUS_KEY] as? JsonObject)?.get(message) ?: return null
+        val focusField = details[FOCUS_KEY]
+        if (focusField is JsonObject && message in focusField.keys) {
+            return parseModernEntry(message, focusField[message], details)
+        }
+        return parseLegacyEntry(message, focusField, details)
+    }
 
-        val (rawContent, channels, trace) = when (entry) {
+    private fun parseModernEntry(
+        message: String,
+        entry: JsonElement?,
+        details: JsonObject,
+    ): FocusMessage? {
+        val modernEntry = entry ?: return null
+
+        val (rawContent, channels, trace) = when (modernEntry) {
             // 简写：等价于 display: "log"
             is JsonPrimitive -> Triple(
-                entry.contentOrNullIfNotString(),
+                modernEntry.contentOrNullIfNotString(),
                 setOf(FocusChannel.Log),
                 message == TRACED_BY_DEFAULT,
             )
 
             is JsonObject -> Triple(
-                (entry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString(),
-                parseChannels(entry[DISPLAY_KEY]),
-                (entry[TRACE_KEY] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+                (modernEntry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString(),
+                parseChannels(modernEntry[DISPLAY_KEY]),
+                (modernEntry[TRACE_KEY] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
                     ?: (message == TRACED_BY_DEFAULT),
             )
 
-            else -> return null
+            is JsonArray -> Triple(
+                modernEntry.contentLines().joinToString("\n"),
+                setOf(FocusChannel.Log),
+                message == TRACED_BY_DEFAULT,
+            )
         }
         // content 缺省而 trace 为假的条目什么都不做，不必往下游发
         if (rawContent.isNullOrBlank() && !trace) return null
@@ -129,9 +160,47 @@ object FocusParser {
         )
     }
 
-    /** `focus` 自己是对象，不会混进来；其余非标量同样取不出可比的文本 */
+    /** MFAAvalonia 兼容的旧协议：顶层字符串与 start/succeeded/failed 只进任务日志 */
+    private fun parseLegacyEntry(
+        message: String,
+        focusField: JsonElement?,
+        details: JsonObject,
+    ): FocusMessage? {
+        val lines = when {
+            message == ACTION_STARTING && focusField !is JsonObject ->
+                focusField.contentLines()
+
+            focusField is JsonObject -> when (message) {
+                ACTION_STARTING -> focusField["start"].contentLines()
+                ACTION_SUCCEEDED -> focusField["succeeded"].contentLines()
+                ACTION_FAILED -> focusField["failed"].contentLines()
+                else -> emptyList()
+            }
+
+            else -> emptyList()
+        }.filter(String::isNotBlank)
+        if (lines.isEmpty()) return null
+
+        return FocusMessage(
+            message = message,
+            content = lines.joinToString("\n"),
+            channels = setOf(FocusChannel.Log),
+            trace = false,
+            placeholders = scalarFields(details),
+        )
+    }
+
+    private fun JsonElement?.contentLines(): List<String> = when (this) {
+        null -> emptyList()
+        is JsonPrimitive -> listOfNotNull(contentOrNullIfNotString())
+        is JsonArray -> mapNotNull { (it as? JsonPrimitive)?.contentOrNullIfNotString() }
+        else -> emptyList()
+    }
+
+    /** `focus` 是消息本体，不管标量还是对象都不收；其余非标量取不出可比的文本 */
     private fun scalarFields(details: JsonObject): Map<String, String> = buildMap {
         details.forEach { (key, value) ->
+            if (key == FOCUS_KEY) return@forEach
             (value as? JsonPrimitive)?.contentOrNullIfNotString()?.let { put(key, it) }
         }
     }
@@ -149,6 +218,8 @@ object FocusParser {
             when (name.lowercase()) {
                 "toast" -> FocusChannel.Toast
                 "notification" -> FocusChannel.Notification
+                "dialog" -> FocusChannel.Dialog
+                "modal" -> FocusChannel.Modal
                 else -> FocusChannel.Log
             }
         }

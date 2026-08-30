@@ -181,6 +181,10 @@
     <string name="notification_channel_focus">Project messages</string>
     <string name="notification_channel_focus_desc">Alerts the PI project asks to push to you during a run</string>
     <string name="notification_focus_title">Project message</string>
+    <string name="focus_modal_title">Run is waiting for confirmation</string>
+    <string name="focus_modal_continue">Continue</string>
+    <string name="focus_modal_notification_title">Run is waiting for confirmation</string>
+    <string name="msg_modal_ack_failed">Could not confirm it yet. Try again.</string>
     <string name="notification_run_preparing">Preparing</string>
     <string name="notification_run_running">Running</string>
     <string name="notification_run_stopping">Stopping</string>

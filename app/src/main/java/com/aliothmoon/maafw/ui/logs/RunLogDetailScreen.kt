@@ -42,6 +42,7 @@ import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
+import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.runLogColor
 import org.koin.androidx.compose.koinViewModel
 
@@ -206,13 +207,21 @@ private fun LineRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = line.text,
-                style = MaterialTheme.typography.labelSmall,
-                // 与运行日志面板同一条规矩：原始转储保持等宽，合成过的按正文排版
-                fontFamily = if (line.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
-                color = runLogColor(line.kind),
-            )
+            if (line.kind == RunLogKind.Focus) {
+                MaaMarkdown(
+                    text = line.text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = runLogColor(line.kind),
+                )
+            } else {
+                Text(
+                    text = line.text,
+                    style = MaterialTheme.typography.labelSmall,
+                    // 与运行日志面板同一条规矩：原始转储保持等宽，合成过的按正文排版
+                    fontFamily = if (line.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
+                    color = runLogColor(line.kind),
+                )
+            }
             if (expanded) {
                 Text(
                     text = line.detail.orEmpty(),

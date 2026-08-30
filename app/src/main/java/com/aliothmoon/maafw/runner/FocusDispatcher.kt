@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
  * 1. `$i18n` 查表——译文本身可能是个文件路径，所以要最先
  * 2. `{image}` 与文件路径形态（要 IO）
  * 3. 占位符替换——译文与读进来的正文都可能带着 `{name}`，先替换就轮不到它们
+ * 4. MFA 富文本记号转 HTML——占位符的值也可能参与颜色或字号记号
  */
 class FocusDispatcher(
     private val projectRepository: ProjectRepository,
@@ -66,7 +67,9 @@ class FocusDispatcher(
     private suspend fun complete(focus: FocusMessage): FocusMessage {
         val translated = resolveI18n(focus.content)
         val loaded = if (focusContentNeedsIo(translated)) resolver.resolve(translated) else translated
-        return focus.copy(content = substituteFocusPlaceholders(loaded, focus.placeholders))
+        return focus.copy(
+            content = convertCustomFocusMarkup(substituteFocusPlaceholders(loaded, focus.placeholders)),
+        )
     }
 
     /** 查无此键回落键名本身，与加载期物化 label/description 的处理一致 */
@@ -77,3 +80,15 @@ class FocusDispatcher(
         return definition?.translations?.get(key) ?: key
     }
 }
+
+private val COLOR_MARKUP = Regex("""\[color:([^]]+)]""", RegexOption.IGNORE_CASE)
+private val COLOR_MARKUP_END = Regex("""\[/color]""", RegexOption.IGNORE_CASE)
+private val SIZE_MARKUP = Regex("""\[size:(\d+)]""", RegexOption.IGNORE_CASE)
+private val SIZE_MARKUP_END = Regex("""\[/size]""", RegexOption.IGNORE_CASE)
+
+/** MFAAvalonia 的 focus 富文本记号；放在占位符替换后，值本身也能参与记号 */
+private fun convertCustomFocusMarkup(content: String): String = content
+    .replace(COLOR_MARKUP) { match -> """<span style="color: ${match.groupValues[1]};">""" }
+    .replace(COLOR_MARKUP_END, "</span>")
+    .replace(SIZE_MARKUP) { match -> """<span style="font-size: ${match.groupValues[1]}px;">""" }
+    .replace(SIZE_MARKUP_END, "</span>")

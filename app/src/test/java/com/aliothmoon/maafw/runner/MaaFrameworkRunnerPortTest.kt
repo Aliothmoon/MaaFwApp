@@ -86,6 +86,38 @@ class MaaFrameworkRunnerPortTest {
     }
 
     @Test
+    fun `run payload carries the active execution id`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+
+        val started = async { runner.start(plan()) }
+        advanceUntilIdle()
+        assertEquals(RunnerCommandResult.Accepted, started.await())
+
+        val activeExecutionId = runner.state.value.activeExecution?.executionId
+        val payload = runPlanWireJson.decodeFromString<RunPlanPayload>(service.startRunPayloads.single())
+        assertEquals(activeExecutionId, payload.executionId)
+        assertTrue(!payload.executionId.isNullOrBlank())
+    }
+
+    @Test
+    fun `modal callback keeps the source execution id`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+
+        val event = runner.modalFocusEvent(
+            executionId = "execution-1",
+            focusId = "modal-1",
+            message = "Node.Action.Starting",
+            detailsJson = """{"focus":{"Node.Action.Starting":{"content":"blocking","display":"modal"}}}""",
+        )
+
+        val focus = (event as RunnerEvent.Focus).focus
+        assertEquals("execution-1", focus.executionId)
+        assertEquals("modal-1", focus.modalId)
+    }
+
+    @Test
     fun `stop during prepare is retried after start returns`() = runTest(dispatcher) {
         val service = FakePrivilegedService()
         val hold = CompletableDeferred<Unit>()
@@ -148,5 +180,42 @@ class MaaFrameworkRunnerPortTest {
         }
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
         assertTrue(runner.state.value.latestResult is ExecutionResult.Failed)
+    }
+
+    @Test
+    fun `modal acknowledgement is forwarded to the service`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+
+        assertTrue(runner.acknowledgeModalFocus("modal-1"))
+
+        assertEquals(listOf("modal-1"), service.acknowledgeModalFocusCalls)
+    }
+
+    @Test
+    fun `modal acknowledgement failure is returned to the caller`() = runTest(dispatcher) {
+        val service = FakePrivilegedService().apply { acknowledgeModalFocusResult = false }
+        val (runner, _) = port(this, service)
+
+        assertEquals(false, runner.acknowledgeModalFocus("modal-1"))
+
+        assertEquals(listOf("modal-1"), service.acknowledgeModalFocusCalls)
+    }
+
+    @Test
+    fun `modal acknowledgement fails without a service`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort(service = null)
+        val (runner, _) = port(this, servicePort = servicePort)
+
+        assertEquals(false, runner.acknowledgeModalFocus("modal-1"))
+    }
+
+    @Test
+    fun `modal acknowledgement catches service failure`() = runTest(dispatcher) {
+        val service = FakePrivilegedService().apply { acknowledgeModalFocusThrows = true }
+        val (runner, _) = port(this, service)
+
+        assertEquals(false, runner.acknowledgeModalFocus("modal-1"))
+        assertTrue(service.acknowledgeModalFocusCalls.isEmpty())
     }
 }

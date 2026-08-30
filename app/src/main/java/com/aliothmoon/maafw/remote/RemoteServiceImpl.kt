@@ -281,6 +281,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun saveCachedImage(path: String?): Boolean =
         !path.isNullOrBlank() && runner.saveCachedImage(path)
 
+    override fun acknowledgeModalFocus(focusId: String?): Boolean =
+        !focusId.isNullOrBlank() && runner.acknowledgeModalFocus(focusId)
+
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
 
     /**

@@ -12,6 +12,7 @@ interface RunnerPort {
 
     suspend fun start(plan: RunPlan): RunnerCommandResult
     suspend fun stop(): RunnerCommandResult
+    suspend fun acknowledgeModalFocus(focusId: String): Boolean
 }
 
 data class RunnerState(

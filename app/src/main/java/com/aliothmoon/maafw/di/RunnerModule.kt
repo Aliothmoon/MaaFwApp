@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.runner.CloseTargetAppHook
 import com.aliothmoon.maafw.runner.CountdownHook
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
+import com.aliothmoon.maafw.runner.FocusDialogController
 import com.aliothmoon.maafw.telemetry.TelemetryController
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
@@ -62,6 +63,14 @@ val runnerModule = module {
         FocusDispatcher(
             projectRepository = get(),
             resolver = get(),
+            runnerPort = get(),
+            scope = get(named<AppCoroutineScope>()),
+        )
+    }
+
+    single {
+        FocusDialogController(
+            focusDispatcher = get(),
             runnerPort = get(),
             scope = get(named<AppCoroutineScope>()),
         )
