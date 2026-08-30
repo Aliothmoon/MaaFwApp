@@ -56,6 +56,8 @@ interface MaaFrameworkLibrary : Library {
 
     fun MaaTaskerAddSink(tasker: Pointer?, sink: MaaEventCallback?, transArg: Pointer?): Long
 
+    fun MaaTaskerAddContextSink(tasker: Pointer?, sink: MaaEventCallback?, transArg: Pointer?): Long
+
     fun MaaTaskerBindResource(tasker: Pointer?, res: Pointer?): Byte
 
     fun MaaTaskerBindController(tasker: Pointer?, ctrl: Pointer?): Byte

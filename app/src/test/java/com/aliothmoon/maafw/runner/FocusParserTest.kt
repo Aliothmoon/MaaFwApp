@@ -81,6 +81,15 @@ class FocusParserTest {
     }
 
     @Test
+    fun `pipeline node legacy string focus is not replayed as action text`() {
+        val details =
+            """{"name":"Activity","focus":"[color:DeepSkyBlue]进入活动任务[/color]"}"""
+        val focus = FocusParser.parse("Node.PipelineNode.Starting", details)
+
+        assertNull(focus)
+    }
+
+    @Test
     fun `legacy focus fields are selected by callback message`() {
         val details = """{"focus":{"start":["开始"],"succeeded":"完成","failed":["失败","看详情"]}}"""
 

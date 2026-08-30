@@ -398,6 +398,7 @@ class MaaRunner(private val agentHost: AgentHost) {
         if (needsTasker) {
             val tsk = lib.MaaTaskerCreate() ?: return "MaaTaskerCreate 失败"
             lib.MaaTaskerAddSink(tsk, eventSink, null)
+            lib.MaaTaskerAddContextSink(tsk, eventSink, null)
             if (lib.MaaTaskerBindResource(tsk, resource).toInt() == 0 ||
                 lib.MaaTaskerBindController(tsk, controller).toInt() == 0 ||
                 lib.MaaTaskerInited(tsk).toInt() == 0
