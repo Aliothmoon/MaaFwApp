@@ -30,6 +30,10 @@ interface AppSettingsGateway {
     val touchPreviewEnabled: StateFlow<Boolean>
     suspend fun setTouchPreviewEnabled(enabled: Boolean)
 
+    /** 后台模式 StartApp 前是否无条件强停目标应用 */
+    val forceRestartApp: StateFlow<Boolean>
+    suspend fun setForceRestartApp(enabled: Boolean)
+
     val resolutionPreference: StateFlow<ResolutionPreference>
     suspend fun setResolutionPreference(preference: ResolutionPreference)
 

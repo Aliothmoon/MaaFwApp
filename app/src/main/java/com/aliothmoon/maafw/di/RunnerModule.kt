@@ -44,6 +44,7 @@ val runnerModule = module {
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
             runMode = get<AppSettingsManager>().runMode::value,
             resolutionPreference = get<AppSettingsManager>().resolutionPreference::value,
+            forceRestartApp = get<AppSettingsManager>().forceRestartApp::value,
             debugMode = get<AppSettingsManager>().debugMode::value,
             scope = get(named<AppCoroutineScope>()),
             servicePort = get(),

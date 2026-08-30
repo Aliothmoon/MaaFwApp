@@ -567,6 +567,22 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun `force restart setting is persisted and projected into ui state`() = runTest(mainDispatcher) {
+        val settings = FakeAppSettingsGateway()
+        val (vm, _, _) = createVm(settings = settings)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.forceRestartApp)
+
+        vm.onIntent(SessionIntent.SetForceRestartApp(true))
+        advanceUntilIdle()
+
+        assertTrue(settings.forceRestartApp.value)
+        assertTrue(vm.uiState.value.forceRestartApp)
+    }
+
+    @Test
     fun `theme change is allowed while busy`() = runTest(mainDispatcher) {
         val runner = StubRunnerPort(
             scope = backgroundScope,

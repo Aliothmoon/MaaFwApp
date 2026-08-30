@@ -125,6 +125,8 @@
     <string name="settings_run_mode_foreground">前台模式</string>
     <string name="settings_run_mode_hint_background">在独立的虚拟屏幕上运行任务，手机可正常使用；分辨率由项目声明推导</string>
     <string name="settings_run_mode_hint_foreground">直接操作当前屏幕，运行期间手机被占用；不会重启目标应用，预览里也不接管触摸</string>
+    <string name="settings_force_restart_app">强制重启目标应用</string>
+    <string name="settings_force_restart_app_desc">无法正常启动目标app时可尝试开启此项</string>
     <string name="settings_resource">服务器选择</string>
     <string name="settings_no_resources">项目未提供可选服务器</string>
     <string name="settings_current_resource">当前资源</string>
