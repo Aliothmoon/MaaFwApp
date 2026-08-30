@@ -153,8 +153,6 @@
     <string name="settings_update_source_github">GitHub</string>
     <string name="settings_update_mirror_cdk">MirrorChyan CDK</string>
     <string name="settings_update_mirror_cdk_required">Required when MirrorChyan is selected</string>
-    <string name="settings_update_github_token">GitHub token</string>
-    <string name="settings_update_github_token_hint">Optional; used only for GitHub update downloads</string>
     <string name="settings_update_channel">Update channel</string>
     <string name="settings_update_channel_stable">Stable</string>
     <string name="settings_update_channel_beta">Beta</string>
@@ -173,6 +171,31 @@
     <string name="settings_update_notification_denied">Notification permission is off; download progress will not show in the notification bar</string>
     <string name="settings_update_notification_open_settings">Open settings</string>
     <string name="settings_update_notification_error">Notification permission is required to show download progress in the notification bar</string>
+    <string name="settings_update_notification_service_failed">Failed to start the download notification service</string>
+    <string name="settings_update_no_downloadable_apk">The selected update source has no downloadable APK</string>
+    <string name="update_detail_http_status">HTTP %1$d</string>
+    <string name="update_download_detail_bytes">%1$s of %2$s downloaded</string>
+    <string name="update_download_detail_digest">expected %1$s, got %2$s</string>
+    <string name="update_fail_with_detail">%1$s: %2$s</string>
+    <string name="update_fail_missing_configuration">Update source is not configured</string>
+    <string name="update_fail_network">Network error</string>
+    <string name="update_fail_http">Server error</string>
+    <string name="update_fail_rate_limited">Rate limited; too many requests</string>
+    <string name="update_fail_resource_not_found">Resource not found on this update source</string>
+    <string name="update_fail_invalid_response">The update source returned an unparsable response</string>
+    <string name="update_fail_no_matching_asset">No matching package</string>
+    <string name="update_fail_version_invalid">Version string cannot be parsed</string>
+    <string name="update_fail_unknown">Unknown error</string>
+    <string name="update_download_fail_invalid_url">Invalid download URL</string>
+    <string name="update_download_fail_network">Download interrupted</string>
+    <string name="update_download_fail_http">Download server error</string>
+    <string name="update_download_fail_storage">Storage unavailable</string>
+    <string name="update_download_fail_invalid_digest">Package is missing its checksum</string>
+    <string name="update_download_fail_digest_mismatch">Package checksum mismatch</string>
+    <string name="update_download_fail_unknown">Download failed</string>
+    <string name="update_install_fail_file_invalid">Package file is not usable</string>
+    <string name="update_install_fail_installer_not_found">No system installer found</string>
+    <string name="update_install_fail_unknown">Failed to start installation</string>
     <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->

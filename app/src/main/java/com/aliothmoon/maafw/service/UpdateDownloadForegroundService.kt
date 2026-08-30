@@ -17,7 +17,8 @@ import androidx.core.graphics.drawable.IconCompat
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.notification.DownloadState
-import com.aliothmoon.maafw.notification.UpdateDownloadNotification
+import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
+import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.notification.UpdateDownloadProgressSnapshot
 import com.aliothmoon.maafw.notification.UpdateDownloadProgressSnapshots
 import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
@@ -38,7 +39,7 @@ import timber.log.Timber
  * 跟 [com.aliothmoon.maafw.service.RunForegroundService] 同型:
  *  - 进程保活:app 进后台后,OkHttp 拉到一半不至于被 system 整个回收
  *  - Live Update:Android 16+ 用 [NotificationCompat.ProgressStyle] + `setRequestPromotedOngoing`
- *    走 Live Update;状态来自 [UpdateDownloadNotification.state]
+ *    走 Live Update;状态来自 [UpdateDownloadProgressState.state]
  *
  * `Idle` / `Complete` / `Failed` 三态会刷新一次然后 `stopForeground + stopSelf`:
  *  - Idle:用户取消 / 立刻 finish
@@ -46,7 +47,7 @@ import timber.log.Timber
  */
 class UpdateDownloadForegroundService : Service() {
 
-    private val notification: UpdateDownloadNotification by inject()
+    private val notification: UpdateDownloadProgressState by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var observeJob: Job? = null
@@ -120,16 +121,20 @@ class UpdateDownloadForegroundService : Service() {
             state = DownloadState.Downloading("", 0L, -1L),
             versionLabel = { "" },
             sizeLabel = { "" },
+            resolve = { "" },
             errorMessage = null,
         )
 
-    private fun snapshotFromState(): UpdateDownloadProgressSnapshot =
-        UpdateDownloadProgressSnapshots.from(
-            state = notification.state.value,
+    private fun snapshotFromState(): UpdateDownloadProgressSnapshot {
+        val state = notification.state.value
+        return UpdateDownloadProgressSnapshots.from(
+            state = state,
             versionLabel = { v -> v },
             sizeLabel = { bytes -> Formatter.formatShortFileSize(this, bytes.coerceAtLeast(0L)) },
-            errorMessage = (notification.state.value as? DownloadState.Failed)?.message,
+            resolve = { it.resolve(this) },
+            errorMessage = (state as? DownloadState.Failed)?.message,
         )
+    }
 
     private fun ensureChannel() {
         if (channelReady) return

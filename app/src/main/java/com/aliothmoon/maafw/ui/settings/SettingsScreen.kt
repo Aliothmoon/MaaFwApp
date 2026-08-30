@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 import com.aliothmoon.maafw.session.SessionUiState
@@ -68,6 +69,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.errorMessage
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
 import timber.log.Timber
@@ -407,34 +409,21 @@ private fun UpdateCard(
         MaaFieldLabel(stringResource(R.string.settings_update_download_source))
         MaaSingleChoiceFlow(
             options = listOf(
-                UpdateSource.MIRROR_CHYAN to stringResource(R.string.settings_update_source_mirror),
+                UpdateSource.MIRRORCHYAN to stringResource(R.string.settings_update_source_mirror),
                 UpdateSource.GITHUB to stringResource(R.string.settings_update_source_github),
             ),
             selected = update.downloadSource,
             onSelect = { onSettingsIntent(SettingsIntent.SetUpdateDownloadSource(it)) },
         )
-        if (update.downloadSource == UpdateSource.MIRROR_CHYAN) {
+        if (update.downloadSource == UpdateSource.MIRRORCHYAN) {
             ITextFieldWithFocus(
-                value = update.mirrorChyanCdk,
-                onValueChange = { onSettingsIntent(SettingsIntent.SetMirrorChyanCdk(it)) },
+                value = update.mirrorchyanCdk,
+                onValueChange = { onSettingsIntent(SettingsIntent.SetMirrorchyanCdk(it)) },
                 onFocusLost = {},
                 label = stringResource(R.string.settings_update_mirror_cdk),
                 supportingText = {
                     Text(
                         text = stringResource(R.string.settings_update_mirror_cdk_required),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                },
-            )
-        } else {
-            ITextFieldWithFocus(
-                value = update.githubToken,
-                onValueChange = { onSettingsIntent(SettingsIntent.SetGithubToken(it)) },
-                onFocusLost = {},
-                label = stringResource(R.string.settings_update_github_token),
-                supportingText = {
-                    Text(
-                        text = stringResource(R.string.settings_update_github_token_hint),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 },
@@ -511,7 +500,7 @@ private fun UpdateStatus(update: UpdatePanelState) {
     when (val result = update.checkResult) {
         is UpdateCheckResult.UpdateAvailable -> MaaInfoRow(
             label = stringResource(R.string.settings_update_available),
-            value = "${result.version} · ${result.source.updateSourceLabel()}",
+            value = "${result.info.version} · ${result.source.updateSourceLabel()}",
         )
 
         is UpdateCheckResult.UpToDate -> MaaInfoRow(
@@ -520,7 +509,7 @@ private fun UpdateStatus(update: UpdatePanelState) {
         )
 
         is UpdateCheckResult.SourceFailed -> Text(
-            text = stringResource(R.string.settings_update_failed, result.errorMessage()),
+            text = stringResource(R.string.settings_update_failed, result.errorMessage().asString()),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
@@ -529,7 +518,7 @@ private fun UpdateStatus(update: UpdatePanelState) {
     }
     update.errorMessage?.let {
         Text(
-            text = it,
+            text = it.asString(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
@@ -573,12 +562,9 @@ private fun UpdateStatus(update: UpdatePanelState) {
 
 @Composable
 private fun UpdateSource.updateSourceLabel(): String = when (this) {
-    UpdateSource.MIRROR_CHYAN -> stringResource(R.string.settings_update_source_mirror)
+    UpdateSource.MIRRORCHYAN -> stringResource(R.string.settings_update_source_mirror)
     UpdateSource.GITHUB -> stringResource(R.string.settings_update_source_github)
 }
-
-private fun UpdateCheckResult.SourceFailed.errorMessage(): String =
-    message?.let { "$source: $it" } ?: "$source: $reason"
 
 /**
  * 启动模式与后台模式分辨率：都是「跑起来之前得先定」的环境选项（对齐 MaaMeow 的「其他设置」）

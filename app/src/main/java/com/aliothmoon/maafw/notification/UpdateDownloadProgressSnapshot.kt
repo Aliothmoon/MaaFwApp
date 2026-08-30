@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.notification
 
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.UiText
 
 /** 与 `RunnerState -> RunProgressSnapshot` 一档:从 [DownloadState] 派生通知一帧所需的字段 */
 data class UpdateDownloadProgressSnapshot(
@@ -24,13 +25,15 @@ object UpdateDownloadProgressSnapshots {
     /**
      * 与 [DownloadState] 一一对应,穷尽 [DownloadState] 子类型
      *
-     * 1Hz 节流在 [UpdateDownloadForegroundService] 一侧做,这里只算一帧
+     * 1Hz 节流在 [UpdateDownloadForegroundService] 一侧做,这里只算一帧;
+     * 文案统一走 [UiText]，由调用方用 [resolve] 拿着 Context 展开成 String
      */
     fun from(
         state: DownloadState,
         versionLabel: (String) -> String,
         sizeLabel: (Long) -> String,
-        errorMessage: String?,
+        resolve: (UiText) -> String,
+        errorMessage: UiText? = null,
     ): UpdateDownloadProgressSnapshot = when (state) {
         DownloadState.Idle -> UpdateDownloadProgressSnapshot(
             // 不会到这里:_observe 里 Idle 直接 stopSelf
@@ -66,8 +69,7 @@ object UpdateDownloadProgressSnapshots {
 
         is DownloadState.Complete -> UpdateDownloadProgressSnapshot(
             titleRes = R.string.notification_update_download_complete_title,
-            contentText = errorMessage  // reuse param as a static line via caller; usually empty
-                ?: "",
+            contentText = errorMessage?.let(resolve) ?: "",
             shortCriticalText = versionLabel(state.version),
             progress = PROGRESS_MAX,
             indeterminate = false,
@@ -79,7 +81,7 @@ object UpdateDownloadProgressSnapshots {
 
         is DownloadState.Failed -> UpdateDownloadProgressSnapshot(
             titleRes = R.string.notification_update_download_failed_title,
-            contentText = errorMessage ?: state.message,
+            contentText = resolve(errorMessage ?: state.message),
             shortCriticalText = state.version?.let(versionLabel),
             progress = 0,
             indeterminate = true,

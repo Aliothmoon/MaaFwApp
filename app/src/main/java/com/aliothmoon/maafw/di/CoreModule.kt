@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.SystemApkInstaller
 import com.aliothmoon.maafw.config.DataStoreUserConfigurationStore
 import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
@@ -25,6 +26,8 @@ import timber.log.Timber
 object AppCoroutineScope
 
 val coreModule = module {
+    single { SystemApkInstaller(androidContext()) }
+
     single(named<AppCoroutineScope>()) {
         val handler = CoroutineExceptionHandler { _, throwable ->
             Timber.e(throwable, "AppCoroutineScope uncaught")

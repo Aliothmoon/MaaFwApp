@@ -67,21 +67,7 @@ class OkHttpUpdateDownloaderTest {
     }
 
     @Test
-    fun `github token authorizes download request`() = runTest(dispatcher) {
-        val requests = mutableListOf<okhttp3.Request>()
-        val downloader = downloader("update-apk".toByteArray(), requests)
-
-        val result = downloader.download(
-            update = update(sha256 = sha256("update-apk".toByteArray())),
-            credentials = UpdateDownloadCredentials(githubToken = "github-token"),
-        )
-
-        assertEquals(UpdateDownloadResult.Downloaded::class, result::class)
-        assertEquals("Bearer github-token", requests.single().header("Authorization"))
-    }
-
-    @Test
-    fun `mirror cdk is not sent as a download header`() = runTest(dispatcher) {
+    fun `download carries no authorization header`() = runTest(dispatcher) {
         val requests = mutableListOf<okhttp3.Request>()
         val bytes = "mirror-apk".toByteArray()
         val downloader = downloader(bytes, requests)
@@ -90,11 +76,7 @@ class OkHttpUpdateDownloaderTest {
             update = update(
                 url = "https://mirror.example.com/app.apk",
                 sha256 = sha256(bytes),
-                source = UpdateSource.MIRROR_CHYAN,
-            ),
-            credentials = UpdateDownloadCredentials(
-                githubToken = "github-token",
-                mirrorChyanCdk = "cdk",
+                source = UpdateSource.MIRRORCHYAN,
             ),
         )
 
@@ -315,13 +297,11 @@ class OkHttpUpdateDownloaderTest {
         url: String = "https://example.com/app.apk",
         sha256: String? = sha256("update-apk".toByteArray()),
         source: UpdateSource = UpdateSource.GITHUB,
-    ) = UpdateCheckResult.UpdateAvailable(
+    ) = ResolvedUpdate(
         source = source,
         version = "1.2.3",
         downloadUrl = url,
         sha256 = sha256,
-        releaseNotesUrl = null,
-        releaseNotes = null,
     )
 
     private fun sha256(value: ByteArray): String =

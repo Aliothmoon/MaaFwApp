@@ -37,9 +37,9 @@ val viewModelModule = module {
             permissionGateway = get(),
             appSettings = get(),
             projectRepository = get(),
-            updateCheckApi = get(),
+            updateService = get(),
             updateDownloader = get(),
-            updateInstaller = get(),
+            apkInstaller = get(),
             updateDownloadNotifier = get(),
             notificationPermissionRequester = get(),
         )

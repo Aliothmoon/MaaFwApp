@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.notification
 
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextFormatted
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -10,6 +12,9 @@ class UpdateDownloadProgressSnapshotTest {
 
     private val noopVersion: (String) -> String = { v -> "v$v" }
     private val noopSize: (Long) -> String = { bytes -> "${bytes}B" }
+    private val resolveText: (UiText) -> String = {
+        (it as? UiText.Verbatim)?.value ?: ""
+    }
 
     @Test
     fun `downloading with known total is determinate and sets progress to exact fraction`() {
@@ -17,6 +22,7 @@ class UpdateDownloadProgressSnapshotTest {
             state = DownloadState.Downloading("1.4.0", downloadedBytes = 250L, totalBytes = 1000L),
             versionLabel = noopVersion,
             sizeLabel = noopSize,
+            resolve = resolveText,
             errorMessage = null,
         )
         // 250/1000 = 25% → 0.25 * PROGRESS_MAX(1000) = 250
@@ -35,6 +41,7 @@ class UpdateDownloadProgressSnapshotTest {
             state = DownloadState.Downloading("1.4.0", downloadedBytes = 300L, totalBytes = -1L),
             versionLabel = noopVersion,
             sizeLabel = noopSize,
+            resolve = resolveText,
             errorMessage = null,
         )
         assertEquals(0, snap.progress)
@@ -49,6 +56,7 @@ class UpdateDownloadProgressSnapshotTest {
             state = DownloadState.Complete("2.0.0"),
             versionLabel = noopVersion,
             sizeLabel = noopSize,
+            resolve = resolveText,
             errorMessage = null,
         )
         assertEquals(UpdateDownloadProgressSnapshots.PROGRESS_MAX, snap.progress)
@@ -61,9 +69,10 @@ class UpdateDownloadProgressSnapshotTest {
     @Test
     fun `failed state surfaces error message and version when present`() {
         val snap = UpdateDownloadProgressSnapshots.from(
-            state = DownloadState.Failed(version = "1.4.0", message = "Cannot truncate stale partial update download"),
+            state = DownloadState.Failed(version = "1.4.0", message = uiTextFormatted("Cannot truncate stale partial update download")),
             versionLabel = noopVersion,
             sizeLabel = noopSize,
+            resolve = resolveText,
             errorMessage = null,
         )
         assertTrue(snap.autoCancel)
@@ -76,9 +85,10 @@ class UpdateDownloadProgressSnapshotTest {
     @Test
     fun `failed state without version drops shortCriticalText`() {
         val snap = UpdateDownloadProgressSnapshots.from(
-            state = DownloadState.Failed(version = null, message = "Update SHA-256 digest is missing or invalid"),
+            state = DownloadState.Failed(version = null, message = uiTextFormatted("Update SHA-256 digest is missing or invalid")),
             versionLabel = noopVersion,
             sizeLabel = noopSize,
+            resolve = resolveText,
             errorMessage = null,
         )
         assertNull(snap.shortCriticalText)
@@ -92,6 +102,7 @@ class UpdateDownloadProgressSnapshotTest {
             state = DownloadState.Downloading("1.4.0", downloadedBytes = 1500L, totalBytes = 1000L),
             versionLabel = noopVersion,
             sizeLabel = noopSize,
+            resolve = resolveText,
             errorMessage = null,
         )
         assertEquals(UpdateDownloadProgressSnapshots.PROGRESS_MAX, snap.progress)

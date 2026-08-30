@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.notification
 
+import com.aliothmoon.maafw.i18n.UiText
+
 /**
  * 应用更新下载进度的状态机
  *
@@ -25,5 +27,5 @@ sealed interface DownloadState {
     data class Complete(val version: String) : DownloadState
 
     /** 下载失败,通知里留一条静态错误条目 */
-    data class Failed(val version: String?, val message: String) : DownloadState
+    data class Failed(val version: String?, val message: UiText) : DownloadState
 }

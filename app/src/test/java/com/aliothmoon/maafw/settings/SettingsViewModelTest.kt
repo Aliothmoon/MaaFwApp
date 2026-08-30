@@ -6,25 +6,27 @@ import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.SystemApkInstaller
 import com.aliothmoon.maafw.update.DownloadedUpdate
-import com.aliothmoon.maafw.update.UpdateCheckApi
+import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
+import com.aliothmoon.maafw.update.ResolvedUpdate
+import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateCheckRequest
 import com.aliothmoon.maafw.update.UpdateCheckResult
-import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.UpdateDownloadApi
-import com.aliothmoon.maafw.update.UpdateDownloadCredentials
 import com.aliothmoon.maafw.update.UpdateDownloadResult
-import com.aliothmoon.maafw.update.UpdateInstallApi
-import com.aliothmoon.maafw.update.UpdateInstallResult
+import com.aliothmoon.maafw.update.UpdateDownloadFailure
+import com.aliothmoon.maafw.update.UpdateInfo
+import com.aliothmoon.maafw.update.UpdateResolveRequest
+import com.aliothmoon.maafw.update.UpdateResolveResult
+import com.aliothmoon.maafw.update.UpdateService
 import com.aliothmoon.maafw.update.UpdateSource
-import com.aliothmoon.maafw.notification.DownloadState
-import com.aliothmoon.maafw.notification.UpdateDownloadNotification
 import com.aliothmoon.maafw.notification.NotificationPermissionRequester
+import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -59,134 +61,148 @@ class SettingsViewModelTest {
 
     @Test
     fun `manual check keeps default sources and download resolves selected source`() = runTest {
-        val mirrorUpdate = availableUpdate(source = UpdateSource.MIRROR_CHYAN)
-        val githubUpdate = availableUpdate(
+        val githubResolved = ResolvedUpdate(
             source = UpdateSource.GITHUB,
-            url = "https://github.com/app.apk",
+            version = "2.0.0",
+            downloadUrl = "https://github.com/app.apk",
+            sha256 = "a".repeat(64),
         )
-        val checkApi = RecordingUpdateCheckApi(mirrorUpdate, githubUpdate)
-        val downloader = RecordingUpdateDownloader()
-        val settings = FakeAppSettingsGateway()
-        val viewModel = viewModel(checkApi, downloader, settings)
+        val checkRequests = mutableListOf<UpdateCheckRequest>()
+        val resolveRequests = mutableListOf<UpdateResolveRequest>()
+        var downloaded: ResolvedUpdate? = null
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { checkUpdate(any(), any(), any()) } coAnswers {
+                    checkRequests += firstArg<UpdateCheckRequest>()
+                    UpdateCheckResult.UpdateAvailable(
+                        UpdateSource.MIRRORCHYAN,
+                        UpdateInfo(version = "2.0.0"),
+                    )
+                }
+                coEvery { resolveDownload(any()) } coAnswers {
+                    resolveRequests += firstArg<UpdateResolveRequest>()
+                    UpdateResolveResult.Resolved(githubResolved)
+                }
+            },
+            downloader = mockk {
+                coEvery { download(any(), any()) } coAnswers {
+                    downloaded = firstArg<ResolvedUpdate>()
+                    UpdateDownloadResult.Downloaded(
+                        DownloadedUpdate(
+                            source = githubResolved.source,
+                            version = githubResolved.version,
+                            file = File("update.apk"),
+                            sha256 = githubResolved.sha256.orEmpty(),
+                        ),
+                    )
+                }
+            },
+        )
 
-        settings.setUpdateChannel(UpdateChannel.BETA)
-        settings.setUpdateDownloadSource(UpdateSource.GITHUB)
-        settings.setGithubToken("github-token")
-        settings.setMirrorChyanCdk("mirror-cdk")
+        viewModel.onIntent(SettingsIntent.SetUpdateChannel(UpdateChannel.BETA))
+        viewModel.onIntent(SettingsIntent.SetUpdateDownloadSource(UpdateSource.GITHUB))
+        viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk("mirror-cdk"))
         viewModel.onIntent(SettingsIntent.CheckUpdate)
         viewModel.onIntent(SettingsIntent.DownloadUpdate)
+        advanceUntilIdle()
 
-        assertEquals(2, checkApi.requests.size)
-        val manualCheck = checkApi.requests[0]
-        assertEquals(UpdateSource.MIRROR_CHYAN, manualCheck.preferredSource)
-        assertEquals(UpdateSource.GITHUB, manualCheck.alternativeSource)
+        // 检查固定 MirrorChyan 优先 + GitHub 兜底，不看下载源设置
+        val manualCheck = checkRequests.single()
         assertEquals(UpdateChannel.BETA, manualCheck.channel)
-        assertNull(manualCheck.githubToken)
-        assertNull(manualCheck.mirrorChyanCdk)
 
-        val downloadCheck = checkApi.requests[1]
-        assertEquals(UpdateSource.GITHUB, downloadCheck.preferredSource)
-        assertNull(downloadCheck.alternativeSource)
-        assertEquals(UpdateChannel.BETA, downloadCheck.channel)
-        assertEquals("github-token", downloadCheck.githubToken)
-        assertNull(downloadCheck.mirrorChyanCdk)
+        // 解析只用用户选的源，CDK 只在这一步带上
+        val resolveRequest = resolveRequests.single()
+        assertEquals(UpdateSource.GITHUB, resolveRequest.source)
+        assertEquals(UpdateChannel.BETA, resolveRequest.channel)
+        assertNull(resolveRequest.mirrorchyanCdk)
 
-        assertEquals(githubUpdate, downloader.update)
-        assertEquals(UpdateDownloadCredentials(githubToken = "github-token"), downloader.credentials)
+        assertEquals(githubResolved, downloaded)
     }
 
     @Test
-    fun `download submits notification service before network recheck`() = runTest {
+    fun `download submits notification service before network resolve`() = runTest {
         val events = mutableListOf<String>()
-        val checkApi = object : UpdateCheckApi {
-            override suspend fun check(request: UpdateCheckRequest): UpdateCheckResult {
-                events += "check"
-                return availableUpdate()
-            }
-        }
-        val downloader = object : UpdateDownloadApi {
-            override suspend fun download(
-                update: UpdateCheckResult.UpdateAvailable,
-                credentials: UpdateDownloadCredentials,
-                onProgress: (Long, Long) -> Unit,
-            ): UpdateDownloadResult {
-                events += "download"
-                return UpdateDownloadResult.Downloaded(
-                    DownloadedUpdate(
-                        source = update.source,
-                        version = update.version,
-                        file = File("update.apk"),
-                        sha256 = update.sha256.orEmpty(),
-                    ),
-                )
-            }
-        }
-        val notifier = RecordingUpdateDownloadNotification(events)
         val viewModel = viewModel(
-            checkApi = checkApi,
-            downloader = downloader,
+            service = mockk {
+                coEvery { checkUpdate(any(), any(), any()) } coAnswers {
+                    events += "check"
+                    UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("2.0.0"))
+                }
+                coEvery { resolveDownload(any()) } coAnswers {
+                    events += "resolve"
+                    UpdateResolveResult.Resolved(
+                        ResolvedUpdate(UpdateSource.GITHUB, "2.0.0", "https://github.com/app.apk", null),
+                    )
+                }
+            },
+            downloader = mockk {
+                coEvery { download(any(), any()) } coAnswers {
+                    events += "download"
+                    UpdateDownloadResult.Failed(UpdateDownloadFailure.UNKNOWN)
+                }
+            },
+            notifier = mockk(relaxed = true) {
+                every { start(any(), any()) } answers {
+                    events += "start"
+                    true
+                }
+            },
             settings = FakeAppSettingsGateway().also { it.setUpdateDownloadSource(UpdateSource.GITHUB) },
-            notifier = notifier,
         )
 
         viewModel.onIntent(SettingsIntent.CheckUpdate)
         viewModel.onIntent(SettingsIntent.DownloadUpdate)
         advanceUntilIdle()
 
-        assertEquals(listOf("check", "start", "check", "start", "download"), events)
+        // start 在 resolve 之前提交：FGS 要趁 Activity 在前台时启动；
+        // resolve 落地后再 start 一次，把通知版本号同步成实际要下的那个
+        assertEquals(listOf("check", "start", "resolve", "start", "download"), events)
     }
 
     @Test
-    fun `download update surfaces error and skips notifier when notification permission denied`() = runTest {
-        val checkApi = RecordingUpdateCheckApi(availableUpdate())
-        val downloader = RecordingUpdateDownloader()
-        val notifier = NoopUpdateDownloadNotification()
-        val settings = FakeAppSettingsGateway()
+    fun `download update surfaces error and skips downloader when notification permission denied`() = runTest {
+        var resolved = false
         val viewModel = viewModel(
-            checkApi = checkApi,
-            downloader = downloader,
-            settings = settings,
-            notificationPermissionRequester = FakeNotificationPermissionRequester(granted = false),
+            service = mockk {
+                coEvery { checkUpdate(any(), any(), any()) } returns
+                    UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("2.0.0"))
+                coEvery { resolveDownload(any()) } coAnswers {
+                    resolved = true
+                    UpdateResolveResult.Resolved(
+                        ResolvedUpdate(UpdateSource.GITHUB, "2.0.0", "https://github.com/app.apk", null),
+                    )
+                }
+            },
+            notificationPermissionRequester = mockk { every { isGranted() } returns false },
+            settings = FakeAppSettingsGateway().also { it.setUpdateDownloadSource(UpdateSource.GITHUB) },
         )
 
-        settings.setUpdateDownloadSource(UpdateSource.GITHUB)
         viewModel.onIntent(SettingsIntent.CheckUpdate)
         viewModel.onIntent(SettingsIntent.DownloadUpdate)
         advanceUntilIdle()
 
-        // 重检照常跑（拿到 UpdateAvailable），但 downloader 不该被调到——permission 拦在前面
-        assertEquals(1, checkApi.requests.size)
-        assertTrue(downloader.updates.isEmpty())
+        // 检查照常拿到 UpdateAvailable，但权限拦在解析之前——resolver 不该被调到
+        assertFalse(resolved)
         val panel = latestPanel(viewModel)
         assertTrue(panel.notificationPermissionDenied)
         assertNotNull(panel.errorMessage)
         assertFalse(panel.downloading)
     }
 
-    private suspend fun latestPanel(viewModel: SettingsViewModel): UpdatePanelState {
-        // uiState 用 stateIn(WhileSubscribed)；直接 .value 会拿 initialValue。订阅一次
-        // 等 combine 跑完，再读才有最新 updateOperation
-        val first = viewModel.uiState.first().update
-        return first
-    }
-
     @Test
     fun `notification permission result clears denial flag when granted`() = runTest {
-        val checkApi = RecordingUpdateCheckApi(availableUpdate(), availableUpdate())
-        val settings = FakeAppSettingsGateway()
-        val permissionRequester = FakeNotificationPermissionRequester(granted = false)
+        val permissionRequester = mockk<NotificationPermissionRequester> { every { isGranted() } returns false }
         val viewModel = viewModel(
-            checkApi = checkApi,
-            settings = settings,
             notificationPermissionRequester = permissionRequester,
+            settings = FakeAppSettingsGateway().also { it.setUpdateDownloadSource(UpdateSource.GITHUB) },
         )
-        settings.setUpdateDownloadSource(UpdateSource.GITHUB)
+
         viewModel.onIntent(SettingsIntent.CheckUpdate)
         viewModel.onIntent(SettingsIntent.DownloadUpdate)
         advanceUntilIdle()
         assertTrue(latestPanel(viewModel).notificationPermissionDenied)
 
-        permissionRequester.granted = true
+        every { permissionRequester.isGranted() } returns true
         viewModel.onIntent(SettingsIntent.NotificationPermissionResult(granted = true))
         advanceUntilIdle()
 
@@ -197,39 +213,73 @@ class SettingsViewModelTest {
 
     @Test
     fun `mirror download requires cdk`() = runTest {
-        val checkApi = RecordingUpdateCheckApi(availableUpdate())
-        val downloader = RecordingUpdateDownloader()
-        val viewModel = viewModel(checkApi, downloader)
+        var resolved = false
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { checkUpdate(any(), any(), any()) } returns
+                    UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
+                coEvery { resolveDownload(any()) } coAnswers {
+                    resolved = true
+                    UpdateResolveResult.Resolved(
+                        ResolvedUpdate(UpdateSource.MIRRORCHYAN, "2.0.0", "https://mirror.example.com/app.apk", null),
+                    )
+                }
+            },
+        )
 
         viewModel.onIntent(SettingsIntent.CheckUpdate)
         viewModel.onIntent(SettingsIntent.DownloadUpdate)
+        advanceUntilIdle()
 
-        assertEquals(1, checkApi.requests.size)
-        assertTrue(downloader.updates.isEmpty())
+        assertFalse(resolved)
     }
 
     @Test
     fun `changing settings during check does not allow duplicate check`() = runTest {
         val gate = CompletableDeferred<Unit>()
-        val checkApi = GatedUpdateCheckApi(availableUpdate(), gate)
-        val settings = FakeAppSettingsGateway()
-        val viewModel = viewModel(checkApi = checkApi, settings = settings)
+        var requests = 0
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { checkUpdate(any(), any(), any()) } coAnswers {
+                    requests++
+                    gate.await()
+                    UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0")
+                }
+            },
+        )
 
         viewModel.onIntent(SettingsIntent.CheckUpdate)
-        settings.setGithubToken("github-token")
+        viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk("mirror-cdk"))
         viewModel.onIntent(SettingsIntent.CheckUpdate)
 
-        assertEquals(1, checkApi.requests)
+        assertEquals(1, requests)
         gate.complete(Unit)
     }
 
+    // uiState 用 stateIn(WhileSubscribed)；直接 .value 会拿 initialValue。订阅一次
+    // 等 combine 跑完，再读才有最新 updateOperation
+    private suspend fun latestPanel(viewModel: SettingsViewModel): UpdatePanelState =
+        viewModel.uiState.first().update
+
     private fun viewModel(
-        checkApi: UpdateCheckApi = RecordingUpdateCheckApi(availableUpdate()),
-        downloader: UpdateDownloadApi = RecordingUpdateDownloader(),
+        service: UpdateService = mockk {
+            coEvery { checkUpdate(any(), any(), any()) } returns
+                UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
+            coEvery { resolveDownload(any()) } returns UpdateResolveResult.Resolved(
+                ResolvedUpdate(UpdateSource.MIRRORCHYAN, "2.0.0", "https://mirror.example.com/app.apk", "a".repeat(64)),
+            )
+        },
+        downloader: OkHttpUpdateDownloader = mockk {
+            coEvery { download(any(), any()) } returns UpdateDownloadResult.Downloaded(
+                DownloadedUpdate(UpdateSource.MIRRORCHYAN, "2.0.0", File("update.apk"), "a".repeat(64)),
+            )
+        },
         settings: AppSettingsGateway = FakeAppSettingsGateway(),
-        notifier: UpdateDownloadNotification = NoopUpdateDownloadNotification(),
+        notifier: UpdateDownloadProgressState = mockk(relaxed = true) {
+            every { start(any(), any()) } returns true
+        },
         notificationPermissionRequester: NotificationPermissionRequester =
-            FakeNotificationPermissionRequester(granted = true),
+            mockk { every { isGranted() } returns true },
     ): SettingsViewModel {
         val definition = ProjectDefinition(
             name = "demo",
@@ -242,121 +292,22 @@ class SettingsViewModelTest {
             templates = emptyList(),
             metadata = ProjectMetadata(
                 githubRepository = "owner/repo",
-                mirrorChyanRid = "mirror-rid",
+                mirrorchyanRid = "mirror-rid",
             ),
         )
         return SettingsViewModel(
             permissionGateway = FakePermissionGateway(),
             appSettings = settings,
             projectRepository = FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
-            updateCheckApi = checkApi,
+            updateService = service,
             updateDownloader = downloader,
-            updateInstaller = RecordingUpdateInstaller(),
+            apkInstaller = mockk {
+                coEvery { install(any()) } returns SystemApkInstaller.Result.Started
+            },
             updateDownloadNotifier = notifier,
             notificationPermissionRequester = notificationPermissionRequester,
             currentVersion = "1.0.0",
             supportedAbis = listOf("arm64-v8a"),
         )
     }
-
-    private fun availableUpdate(
-        source: UpdateSource = UpdateSource.MIRROR_CHYAN,
-        url: String = "https://mirror.example.com/app.apk",
-    ) = UpdateCheckResult.UpdateAvailable(
-        source = source,
-        version = "2.0.0",
-        downloadUrl = url,
-        sha256 = "a".repeat(64),
-        releaseNotesUrl = null,
-        releaseNotes = null,
-    )
-
-    private class RecordingUpdateCheckApi(
-        vararg results: UpdateCheckResult,
-    ) : UpdateCheckApi {
-        val requests = mutableListOf<UpdateCheckRequest>()
-        private val pendingResults = ArrayDeque(results.toList())
-
-        override suspend fun check(request: UpdateCheckRequest): UpdateCheckResult {
-            requests += request
-            return pendingResults.removeFirstOrNull() ?: error("No queued update result")
-        }
-    }
-
-    private class GatedUpdateCheckApi(
-        private val result: UpdateCheckResult,
-        private val gate: CompletableDeferred<Unit>,
-    ) : UpdateCheckApi {
-        var requests = 0
-            private set
-
-        override suspend fun check(request: UpdateCheckRequest): UpdateCheckResult {
-            requests++
-            gate.await()
-            return result
-        }
-    }
-
-    private class RecordingUpdateDownloader : UpdateDownloadApi {
-        val updates = mutableListOf<UpdateCheckResult.UpdateAvailable>()
-        var update: UpdateCheckResult.UpdateAvailable? = null
-            private set
-        var credentials: UpdateDownloadCredentials? = null
-            private set
-
-        override suspend fun download(
-            update: UpdateCheckResult.UpdateAvailable,
-            credentials: UpdateDownloadCredentials,
-            onProgress: (Long, Long) -> Unit,
-        ): UpdateDownloadResult {
-            updates += update
-            this.update = update
-            this.credentials = credentials
-            return UpdateDownloadResult.Downloaded(
-                DownloadedUpdate(
-                    source = update.source,
-                    version = update.version,
-                    file = File("update.apk"),
-                    sha256 = update.sha256.orEmpty(),
-                ),
-            )
-        }
-    }
-
-    private class RecordingUpdateInstaller : UpdateInstallApi {
-        override suspend fun install(update: DownloadedUpdate) = UpdateInstallResult.InstallerStarted
-    }
-}
-
-private class NoopUpdateDownloadNotification : UpdateDownloadNotification {
-    private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
-    override val state: StateFlow<DownloadState> = _state.asStateFlow()
-    override fun start(version: String, totalBytes: Long) = true
-    override fun progress(version: String, downloadedBytes: Long, totalBytes: Long) = Unit
-    override fun complete(version: String) = Unit
-    override fun failed(message: String) = Unit
-    override fun cancel() = Unit
-}
-
-
-private class RecordingUpdateDownloadNotification(
-    private val events: MutableList<String>,
-) : UpdateDownloadNotification {
-    private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
-    override val state: StateFlow<DownloadState> = _state.asStateFlow()
-    override fun start(version: String, totalBytes: Long): Boolean {
-        events += "start"
-        return true
-    }
-    override fun progress(version: String, downloadedBytes: Long, totalBytes: Long) = Unit
-    override fun complete(version: String) = Unit
-    override fun failed(message: String) = Unit
-    override fun cancel() = Unit
-}
-
-
-private class FakeNotificationPermissionRequester(
-    var granted: Boolean = true,
-) : NotificationPermissionRequester {
-    override fun isGranted(): Boolean = granted
 }

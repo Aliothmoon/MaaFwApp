@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
@@ -19,10 +20,9 @@ data class SettingsUiState(
 )
 
 data class UpdatePanelState(
-    val downloadSource: UpdateSource = UpdateSource.MIRROR_CHYAN,
+    val downloadSource: UpdateSource = UpdateSource.MIRRORCHYAN,
     val channel: UpdateChannel = UpdateChannel.STABLE,
-    val githubToken: String = "",
-    val mirrorChyanCdk: String = "",
+    val mirrorchyanCdk: String = "",
     val checking: Boolean = false,
     val checkResult: UpdateCheckResult? = null,
     val downloading: Boolean = false,
@@ -30,7 +30,7 @@ data class UpdatePanelState(
     val totalBytes: Long = -1L,
     val downloadedVersion: String? = null,
     val installerStarted: Boolean = false,
-    val errorMessage: String? = null,
+    val errorMessage: UiText? = null,
     /**
      * 通知权限被拒：启动下载前先看 [com.aliothmoon.maafw.notification.NotificationPermissionRequester]，
      * 拒了就置 true + 抛 [SettingsEffect.RequestNotificationPermission] 让 UI 层弹系统对话框
@@ -41,7 +41,7 @@ data class UpdatePanelState(
         get() = checkResult as? UpdateCheckResult.UpdateAvailable
 
     val credentialMissing: Boolean
-        get() = downloadSource == UpdateSource.MIRROR_CHYAN && mirrorChyanCdk.isBlank()
+        get() = downloadSource == UpdateSource.MIRRORCHYAN && mirrorchyanCdk.isBlank()
 
     val canDownload: Boolean
         get() = availableUpdate != null && !checking && !downloading && !credentialMissing
@@ -53,8 +53,7 @@ sealed interface SettingsIntent {
 
     data class SetUpdateDownloadSource(val source: UpdateSource) : SettingsIntent
     data class SetUpdateChannel(val channel: UpdateChannel) : SettingsIntent
-    data class SetGithubToken(val token: String) : SettingsIntent
-    data class SetMirrorChyanCdk(val cdk: String) : SettingsIntent
+    data class SetMirrorchyanCdk(val cdk: String) : SettingsIntent
     data object CheckUpdate : SettingsIntent
     data object DownloadUpdate : SettingsIntent
 

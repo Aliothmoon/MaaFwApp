@@ -147,8 +147,6 @@
     <string name="settings_update_source_github">GitHub</string>
     <string name="settings_update_mirror_cdk">Mirror酱 CDK</string>
     <string name="settings_update_mirror_cdk_required">选择 Mirror酱 下载源时必填</string>
-    <string name="settings_update_github_token">GitHub Token</string>
-    <string name="settings_update_github_token_hint">可选；仅用于 GitHub 更新下载</string>
     <string name="settings_update_channel">更新渠道</string>
     <string name="settings_update_channel_stable">正式版</string>
     <string name="settings_update_channel_beta">公测版</string>
@@ -167,6 +165,31 @@
     <string name="settings_update_notification_denied">通知权限未开启，无法在通知栏显示下载进度</string>
     <string name="settings_update_notification_open_settings">前往开启</string>
     <string name="settings_update_notification_error">需要授予通知权限才能在通知栏显示下载进度</string>
+    <string name="settings_update_notification_service_failed">无法启动下载通知服务</string>
+    <string name="settings_update_no_downloadable_apk">所选更新源没有可下载的安装包</string>
+    <string name="update_detail_http_status">HTTP %1$d</string>
+    <string name="update_download_detail_bytes">已下载 %1$s / %2$s</string>
+    <string name="update_download_detail_digest">期望 %1$s，实际 %2$s</string>
+    <string name="update_fail_with_detail">%1$s：%2$s</string>
+    <string name="update_fail_missing_configuration">更新源缺少配置</string>
+    <string name="update_fail_network">网络错误</string>
+    <string name="update_fail_http">服务端错误</string>
+    <string name="update_fail_rate_limited">请求过于频繁，已被限流</string>
+    <string name="update_fail_resource_not_found">更新源上没有这个资源</string>
+    <string name="update_fail_invalid_response">更新源返回了无法解析的内容</string>
+    <string name="update_fail_no_matching_asset">没有匹配的安装包</string>
+    <string name="update_fail_version_invalid">版本号无法解析</string>
+    <string name="update_fail_unknown">未知错误</string>
+    <string name="update_download_fail_invalid_url">下载地址无效</string>
+    <string name="update_download_fail_network">下载中断</string>
+    <string name="update_download_fail_http">下载服务端错误</string>
+    <string name="update_download_fail_storage">存储不可用</string>
+    <string name="update_download_fail_invalid_digest">安装包缺少校验值</string>
+    <string name="update_download_fail_digest_mismatch">安装包校验失败</string>
+    <string name="update_download_fail_unknown">下载失败</string>
+    <string name="update_install_fail_file_invalid">安装包不可用</string>
+    <string name="update_install_fail_installer_not_found">找不到系统安装器</string>
+    <string name="update_install_fail_unknown">无法启动安装</string>
     <string name="welcome_title">欢迎</string>
 
     <!-- 通知 -->

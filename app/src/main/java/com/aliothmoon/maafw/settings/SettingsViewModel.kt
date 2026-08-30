@@ -5,22 +5,25 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.domain.ProjectMetadata
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.SystemApkInstaller
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationPermissionRequester
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.update.AndroidAbi
-import com.aliothmoon.maafw.update.UpdateCheckApi
+import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
+
 import com.aliothmoon.maafw.update.UpdateCheckRequest
-import com.aliothmoon.maafw.update.UpdateCheckResult
+import com.aliothmoon.maafw.update.UpdateResolveRequest
+import com.aliothmoon.maafw.update.UpdateResolveResult
+import com.aliothmoon.maafw.update.UpdateService
+import com.aliothmoon.maafw.update.errorMessage
 import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.UpdateDownloadApi
-import com.aliothmoon.maafw.update.UpdateDownloadCredentials
 import com.aliothmoon.maafw.update.UpdateDownloadResult
-import com.aliothmoon.maafw.update.UpdateInstallApi
-import com.aliothmoon.maafw.update.UpdateInstallResult
 import com.aliothmoon.maafw.update.UpdateSource
-import com.aliothmoon.maafw.notification.UpdateDownloadNotification
+import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -43,10 +46,10 @@ class SettingsViewModel(
     private val permissionGateway: PermissionGateway,
     private val appSettings: AppSettingsGateway,
     private val projectRepository: ProjectRepository,
-    private val updateCheckApi: UpdateCheckApi,
-    private val updateDownloader: UpdateDownloadApi,
-    private val updateInstaller: UpdateInstallApi,
-    private val updateDownloadNotifier: UpdateDownloadNotification,
+    private val updateService: UpdateService,
+    private val updateDownloader: OkHttpUpdateDownloader,
+    private val apkInstaller: SystemApkInstaller,
+    private val updateDownloadNotifier: UpdateDownloadProgressState,
     private val notificationPermissionRequester: NotificationPermissionRequester,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     supportedAbis: List<String> = Build.SUPPORTED_ABIS.orEmpty().toList(),
@@ -55,8 +58,7 @@ class SettingsViewModel(
     private data class UpdateSettingsSnapshot(
         val source: UpdateSource,
         val channel: UpdateChannel,
-        val githubToken: String,
-        val mirrorChyanCdk: String,
+        val mirrorchyanCdk: String,
     )
 
     private val abi = supportedAbis.firstNotNullOfOrNull(::androidAbi) ?: AndroidAbi.ARM64
@@ -74,8 +76,7 @@ class SettingsViewModel(
     private val updateSettings = combine(
         appSettings.updateDownloadSource,
         appSettings.updateChannel,
-        appSettings.githubToken,
-        appSettings.mirrorChyanCdk,
+        appSettings.mirrorchyanCdk,
         ::UpdateSettingsSnapshot,
     )
 
@@ -90,8 +91,7 @@ class SettingsViewModel(
             update = operation.copy(
                 downloadSource = settings.source,
                 channel = settings.channel,
-                githubToken = settings.githubToken,
-                mirrorChyanCdk = settings.mirrorChyanCdk,
+                mirrorchyanCdk = settings.mirrorchyanCdk,
             ),
         )
     }.stateIn(
@@ -114,12 +114,8 @@ class SettingsViewModel(
                 appSettings.setUpdateChannel(intent.channel)
             }
 
-            is SettingsIntent.SetGithubToken -> viewModelScope.launch {
-                appSettings.setGithubToken(intent.token)
-            }
-
-            is SettingsIntent.SetMirrorChyanCdk -> viewModelScope.launch {
-                appSettings.setMirrorChyanCdk(intent.cdk)
+            is SettingsIntent.SetMirrorchyanCdk -> viewModelScope.launch {
+                appSettings.setMirrorchyanCdk(intent.cdk)
             }
 
             SettingsIntent.CheckUpdate -> viewModelScope.launch { checkUpdate() }
@@ -146,14 +142,12 @@ class SettingsViewModel(
         }
         val metadata = projectMetadata()
         try {
-            val result = updateCheckApi.check(
+            val result = updateService.checkUpdate(
                 UpdateCheckRequest(
                     currentVersion = currentVersion,
-                    preferredSource = UpdateSource.MIRROR_CHYAN,
-                    alternativeSource = UpdateSource.GITHUB,
                     channel = settings.channel,
                     abi = abi,
-                    mirrorChyanRid = metadata?.mirrorChyanRid,
+                    mirrorchyanRid = metadata?.mirrorchyanRid,
                     githubRepository = metadata?.githubRepository,
                 ),
             )
@@ -162,8 +156,10 @@ class SettingsViewModel(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
-            updateOperation.update { it.copy(checking = false, errorMessage = e.message) }
+        } catch (_: Exception) {
+            updateOperation.update {
+                it.copy(checking = false, errorMessage = uiTextOf(R.string.update_fail_unknown))
+            }
         }
     }
 
@@ -171,8 +167,8 @@ class SettingsViewModel(
         val current = updateOperation.value
         val requestedUpdate = current.availableUpdate ?: return
         val settings = currentSettings()
-        val credentialMissing = settings.source == UpdateSource.MIRROR_CHYAN && settings.mirrorChyanCdk.isBlank()
-        if (current.availableUpdate == null || current.checking || current.downloading || credentialMissing) return
+        val credentialMissing = settings.source == UpdateSource.MIRRORCHYAN && settings.mirrorchyanCdk.isBlank()
+        if (current.checking || current.downloading || credentialMissing) return
 
         // 通知权限守卫：Android 13+ 上 POST_NOTIFICATIONS 是运行时权限，拒了之后
         // FGS 起来也只会被系统悄悄吞掉通知。这里在动 notifier 之前先看一眼；拒了就把
@@ -181,7 +177,7 @@ class SettingsViewModel(
             updateOperation.update {
                 it.copy(
                     notificationPermissionDenied = true,
-                    errorMessage = "需要授予通知权限才能在通知栏显示下载进度",
+                    errorMessage = uiTextOf(R.string.settings_update_notification_error),
                 )
             }
             _effects.tryEmit(SettingsEffect.RequestNotificationPermission)
@@ -202,51 +198,42 @@ class SettingsViewModel(
 
         // FGS 必须趁 Activity 还在前台时提交；下面的二次解析是网络请求，用户点完
         // 下载就退后台后再启动会被系统按后台 FGS 限制拒绝。
-        if (!updateDownloadNotifier.start(requestedUpdate.version, totalBytes = -1L)) {
-            updateOperation.update {
-                it.copy(
-                    downloading = false,
-                    errorMessage = "无法启动下载通知服务",
-                )
-            }
+        if (!updateDownloadNotifier.start(requestedUpdate.info.version, totalBytes = -1L)) {
+            abortDownloadStart()
             return
         }
         try {
             val metadata = projectMetadata()
-            val credentials = UpdateDownloadCredentials(
-                githubToken = settings.githubToken.takeIf { settings.source == UpdateSource.GITHUB },
-                mirrorChyanCdk = settings.mirrorChyanCdk.takeIf { settings.source == UpdateSource.MIRROR_CHYAN },
-            )
 
-            // 下载前按用户选择源重新解析一次：检查结果可能来自另一个源，且下载凭据不能带入首次检查。
-            val resolved = updateCheckApi.check(
-                UpdateCheckRequest(
-                    currentVersion = currentVersion,
-                    preferredSource = settings.source,
-                    alternativeSource = null,
+            // 下载前按用户选择的源解析端点：检查结果可能来自另一个源，CDK 只在这一步带上
+            val update = when (val resolved = updateService.resolveDownload(
+                UpdateResolveRequest(
+                    source = settings.source,
                     channel = settings.channel,
                     abi = abi,
-                    mirrorChyanRid = metadata?.mirrorChyanRid,
-                    mirrorChyanCdk = credentials.mirrorChyanCdk,
+                    currentVersion = currentVersion,
+                    mirrorchyanRid = metadata?.mirrorchyanRid,
+                    mirrorchyanCdk = settings.mirrorchyanCdk
+                        .takeIf { settings.source == UpdateSource.MIRRORCHYAN },
                     githubRepository = metadata?.githubRepository,
-                    githubToken = credentials.githubToken,
                 ),
-            )
-            val update = resolved as? UpdateCheckResult.UpdateAvailable
-                ?: error(resolved.errorMessage() ?: "Selected update source has no downloadable APK")
+            )) {
+                is UpdateResolveResult.Resolved -> resolved.update
+                is UpdateResolveResult.Failed -> {
+                    val message = resolved.errorMessage()
+                        ?: uiTextOf(R.string.settings_update_no_downloadable_apk)
+                    updateOperation.update { it.copy(downloading = false, errorMessage = message) }
+                    updateDownloadNotifier.failed(message)
+                    return
+                }
+            }
 
             if (!updateDownloadNotifier.start(update.version, totalBytes = -1L)) {
-                updateOperation.update {
-                    it.copy(
-                        downloading = false,
-                        errorMessage = "无法启动下载通知服务",
-                    )
-                }
+                abortDownloadStart()
                 return
             }
             val downloadResult = updateDownloader.download(
                 update = update,
-                credentials = credentials,
                 onProgress = { downloaded, total ->
                     updateDownloadNotifier.progress(update.version, downloaded, total)
                     updateOperation.update {
@@ -270,14 +257,15 @@ class SettingsViewModel(
             updateDownloadNotifier.cancel()
             throw e
         } catch (e: Exception) {
-            updateDownloadNotifier.failed(e.message ?: "未知错误")
-            updateOperation.update { it.copy(downloading = false, errorMessage = e.message) }
+            val message = uiTextOf(R.string.update_fail_unknown)
+            updateDownloadNotifier.failed(message)
+            updateOperation.update { it.copy(downloading = false, errorMessage = message) }
         }
     }
 
     private suspend fun install(result: UpdateDownloadResult.Downloaded) {
-        when (val installResult = updateInstaller.install(result.update)) {
-            UpdateInstallResult.InstallerStarted -> updateOperation.update {
+        when (val installResult = apkInstaller.install(result.update.file)) {
+            SystemApkInstaller.Result.Started -> updateOperation.update {
                 it.copy(
                     downloading = false,
                     downloadedVersion = result.update.version,
@@ -285,20 +273,28 @@ class SettingsViewModel(
                 )
             }
 
-            is UpdateInstallResult.Failed -> updateOperation.update {
+            is SystemApkInstaller.Result.Failed -> updateOperation.update {
                 it.copy(downloading = false, errorMessage = installResult.errorMessage())
             }
         }
     }
 
-    private fun currentSettings(): UpdateSettingsSnapshot {
-        return UpdateSettingsSnapshot(
+    /** 通知服务提交失败：下载中止并提示，两处 start 调用点共用 */
+    private fun abortDownloadStart() {
+        updateOperation.update {
+            it.copy(
+                downloading = false,
+                errorMessage = uiTextOf(R.string.settings_update_notification_service_failed),
+            )
+        }
+    }
+
+    private fun currentSettings(): UpdateSettingsSnapshot =
+        UpdateSettingsSnapshot(
             source = appSettings.updateDownloadSource.value,
             channel = appSettings.updateChannel.value,
-            githubToken = appSettings.githubToken.value,
-            mirrorChyanCdk = appSettings.mirrorChyanCdk.value,
+            mirrorchyanCdk = appSettings.mirrorchyanCdk.value,
         )
-    }
 
     private suspend fun projectMetadata(): ProjectMetadata? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition?.metadata
@@ -311,16 +307,4 @@ class SettingsViewModel(
         else -> null
     }
 
-    private fun UpdateCheckResult.errorMessage(): String? = when (this) {
-        is UpdateCheckResult.UpdateAvailable -> null
-        is UpdateCheckResult.UpToDate -> null
-        is UpdateCheckResult.SourceFailed ->
-            message?.let { "$source: $it" } ?: "$source: ${reason.name}"
-    }
-
-    private fun UpdateInstallResult.Failed.errorMessage(): String =
-        message?.let { "${reason.name}: $it" } ?: reason.name
-
-    private fun UpdateDownloadResult.Failed.errorMessage(): String =
-        message?.let { "${reason.name}: $it" } ?: reason.name
 }

@@ -103,16 +103,12 @@ data class AppSettings(
     val telemetryEnabled: String = "false",
 
     /** [UpdateSource] 的 name；只决定更新 APK 从哪解析/下载，不改变检查更新的默认源 */
-    @PrefKey(default = "MIRROR_CHYAN")
-    val updateDownloadSource: String = "MIRROR_CHYAN",
+    @PrefKey(default = "MIRRORCHYAN")
+    val updateDownloadSource: String = "MIRRORCHYAN",
 
     /** [UpdateChannel] 的 name */
     @PrefKey(default = "STABLE")
     val updateChannel: String = "STABLE",
-
-    /** GitHub API token；可为空，只在下载前解析 GitHub 下载地址与下载请求时使用 */
-    @PrefKey(default = "")
-    val githubToken: String = "",
 
     /**
      * Mirror酱 CDK；选择 Mirror酱 下载时必填。
@@ -121,5 +117,5 @@ data class AppSettings(
      * 加 Keystore 也只能推迟明文出现，不能阻止能读私有目录的攻击者拿到它
      */
     @PrefKey(default = "")
-    val mirrorChyanCdk: String = "",
+    val mirrorchyanCdk: String = "",
 )

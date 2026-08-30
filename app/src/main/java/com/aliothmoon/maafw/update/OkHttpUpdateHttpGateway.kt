@@ -16,13 +16,19 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+/** HTTP GET 边界：检查源只跟这个具体类打交道；测试用 mockk 桩 get 方法 */
+data class UpdateHttpResponse(
+    val statusCode: Int,
+    val body: String,
+)
+
 internal class OkHttpUpdateHttpGateway(
     okHttpClient: OkHttpClient = defaultClient(),
-) : UpdateHttpGateway {
+) {
 
     private val client = okHttpClient.newBuilder().build()
 
-    override suspend fun get(url: String, headers: Map<String, String>): UpdateHttpResponse {
+    suspend fun get(url: String, headers: Map<String, String> = emptyMap()): UpdateHttpResponse {
         return withContext(Dispatchers.IO) {
             val request = Request.Builder()
                 .url(url.toHttpUrl())

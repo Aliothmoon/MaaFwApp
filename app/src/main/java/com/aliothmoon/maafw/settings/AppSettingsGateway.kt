@@ -59,12 +59,8 @@ interface AppSettingsGateway {
     val updateChannel: StateFlow<UpdateChannel>
     suspend fun setUpdateChannel(channel: UpdateChannel)
 
-    /** GitHub 下载源可用；匿名 GitHub 检查不携带它 */
-    val githubToken: StateFlow<String>
-    suspend fun setGithubToken(token: String)
-
     /** Mirror酱 下载源必填；匿名检查不携带它 */
-    val mirrorChyanCdk: StateFlow<String>
-    suspend fun setMirrorChyanCdk(cdk: String)
+    val mirrorchyanCdk: StateFlow<String>
+    suspend fun setMirrorchyanCdk(cdk: String)
 
 }

@@ -1,24 +1,20 @@
 package com.aliothmoon.maafw.di
 
 import com.aliothmoon.maafw.update.OkHttpUpdateHttpGateway
-import com.aliothmoon.maafw.update.UpdateCheckApi
-import com.aliothmoon.maafw.update.UpdateHttpGateway
-import org.junit.Assert.assertTrue
+import com.aliothmoon.maafw.update.UpdateService
 import org.junit.Test
 import org.koin.dsl.koinApplication
 
 class UpdateModuleTest {
     @Test
-    fun updateCheckApiResolvesThroughUpdateHttpGatewayBinding() {
+    fun updateDependenciesResolve() {
         val koin = koinApplication {
             modules(updateModule)
         }.koin
 
         try {
-            val gateway = koin.get<UpdateHttpGateway>()
-
-            assertTrue(gateway is OkHttpUpdateHttpGateway)
-            koin.get<UpdateCheckApi>()
+            koin.get<OkHttpUpdateHttpGateway>()
+            koin.get<UpdateService>()
         } finally {
             koin.close()
         }

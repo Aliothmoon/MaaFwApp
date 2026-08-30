@@ -71,7 +71,7 @@ class PiMetadataTest {
             MapTextResolver(emptyMap()),
         )
 
-        assertEquals("M9A", metadata.mirrorChyanRid)
+        assertEquals("M9A", metadata.mirrorchyanRid)
     }
 
     /** 指纹算在原始声明上，否则切一次语言就会让同一份 welcome 再弹一次 */

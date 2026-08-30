@@ -3,7 +3,7 @@ package com.aliothmoon.maafw.privileged
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import androidx.core.content.FileProvider
+import com.aliothmoon.maafw.SystemApkInstaller
 import rikka.sui.Sui
 import timber.log.Timber
 import java.io.File
@@ -38,21 +38,13 @@ object ShizukuInstallHelper {
     }
 
     /**
-     * 装随包带的 shizuku.apk
-     *
-     * 走 FileProvider 而非 file:// —— API 24 起后者直接抛 FileUriExposedException
+     * 装随包带的 shizuku.apk，复用 [SystemApkInstaller]（同样走 FileProvider，
+     * API 24 起 file:// 直接抛 FileUriExposedException）
      */
-    fun installShizuku(context: Context): Boolean = runCatching {
+    suspend fun installShizuku(context: Context): Boolean {
         val apk = copyApkFromAssets(context) ?: return false
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apk)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-        true
-    }.onFailure { Timber.e(it, "Failed to install Shizuku") }.getOrDefault(false)
+        return SystemApkInstaller(context).install(apk) is SystemApkInstaller.Result.Started
+    }
 
     fun openShizuku(context: Context, launchPackage: String = SHIZUKU_PACKAGE): Boolean {
         if (launchPackage.isBlank()) return false

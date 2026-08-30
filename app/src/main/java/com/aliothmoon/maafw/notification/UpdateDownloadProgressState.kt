@@ -2,6 +2,9 @@ package com.aliothmoon.maafw.notification
 
 import android.content.Context
 import android.content.Intent
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
 import androidx.core.app.NotificationManagerCompat
 import com.aliothmoon.maafw.service.UpdateDownloadForegroundService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,18 +30,18 @@ import kotlinx.coroutines.flow.update
  * 这样 SettingsViewModel 即便被绕过（比如未来直接复用 start 的别处入口），通知栏至少不会
  * 出现「FGS 在跑、通知栏啥都没有」的诡异状态。
  */
-class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification {
+class UpdateDownloadProgressState(context: Context) {
 
     private val appContext: Context = context.applicationContext
 
     private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
-    override val state: StateFlow<DownloadState> = _state.asStateFlow()
+    val state: StateFlow<DownloadState> = _state.asStateFlow()
 
-    override fun start(version: String, totalBytes: Long): Boolean {
+    fun start(version: String, totalBytes: Long): Boolean {
         if (!NotificationManagerCompat.from(appContext).areNotificationsEnabled()) {
             _state.value = DownloadState.Failed(
                 version = null,
-                message = NOTIFICATION_DISABLED_MESSAGE,
+                message = uiTextOf(R.string.settings_update_notification_denied),
             )
             return false
         }
@@ -52,16 +55,16 @@ class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification
                 Intent(appContext, UpdateDownloadForegroundService::class.java),
             )
         }
-        submitted.onFailure { e ->
+        submitted.onFailure {
             _state.value = DownloadState.Failed(
                 version = version,
-                message = e.message ?: NOTIFICATION_SERVICE_FAILED_MESSAGE,
+                message = uiTextOf(R.string.settings_update_notification_service_failed),
             )
         }
         return submitted.isSuccess
     }
 
-    override fun progress(version: String, downloadedBytes: Long, totalBytes: Long) {
+    fun progress(version: String, downloadedBytes: Long, totalBytes: Long) {
         _state.update { current ->
             if (current is DownloadState.Downloading && current.version == version) {
                 current.copy(
@@ -72,15 +75,14 @@ class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification
         }
     }
 
-    override fun complete(version: String) {
+    fun complete(version: String) {
         _state.update { current ->
-            // 已经走了的话不重复置位——避免 progress() 重新跑进来的尾巴覆盖 Complete
             if (current is DownloadState.Complete && current.version == version) current
             else DownloadState.Complete(version)
         }
     }
 
-    override fun failed(message: String) {
+    fun failed(message: UiText) {
         _state.update { current ->
             when (current) {
                 is DownloadState.Downloading -> DownloadState.Failed(current.version, message)
@@ -89,14 +91,7 @@ class UpdateDownloadProgressState(context: Context) : UpdateDownloadNotification
         }
     }
 
-    override fun cancel() {
+    fun cancel() {
         _state.value = DownloadState.Idle
-    }
-
-    private companion object {
-        const val NOTIFICATION_DISABLED_MESSAGE =
-            "通知未授权，无法在通知栏显示下载进度"
-        const val NOTIFICATION_SERVICE_FAILED_MESSAGE =
-            "无法启动下载通知服务"
     }
 }

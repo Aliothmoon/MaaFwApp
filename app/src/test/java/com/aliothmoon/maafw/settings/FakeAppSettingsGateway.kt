@@ -76,7 +76,7 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         telemetryEnabled.value = enabled
     }
 
-    override val updateDownloadSource = MutableStateFlow(UpdateSource.MIRROR_CHYAN)
+    override val updateDownloadSource = MutableStateFlow(UpdateSource.MIRRORCHYAN)
 
     override suspend fun setUpdateDownloadSource(source: UpdateSource) {
         updateDownloadSource.value = source
@@ -88,15 +88,9 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         updateChannel.value = channel
     }
 
-    override val githubToken = MutableStateFlow("")
+    override val mirrorchyanCdk = MutableStateFlow("")
 
-    override suspend fun setGithubToken(token: String) {
-        githubToken.value = token.trim()
-    }
-
-    override val mirrorChyanCdk = MutableStateFlow("")
-
-    override suspend fun setMirrorChyanCdk(cdk: String) {
-        mirrorChyanCdk.value = cdk.trim()
+    override suspend fun setMirrorchyanCdk(cdk: String) {
+        mirrorchyanCdk.value = cdk.trim()
     }
 }

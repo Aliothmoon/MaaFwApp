@@ -110,11 +110,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _updateChannel = MutableStateFlow(parseUpdateChannel(defaults.updateChannel))
     override val updateChannel: StateFlow<UpdateChannel> = _updateChannel.asStateFlow()
 
-    private val _githubToken = MutableStateFlow(defaults.githubToken)
-    override val githubToken: StateFlow<String> = _githubToken.asStateFlow()
-
-    private val _mirrorChyanCdk = MutableStateFlow(defaults.mirrorChyanCdk)
-    override val mirrorChyanCdk: StateFlow<String> = _mirrorChyanCdk.asStateFlow()
+    private val _mirrorchyanCdk = MutableStateFlow(defaults.mirrorchyanCdk)
+    override val mirrorchyanCdk: StateFlow<String> = _mirrorchyanCdk.asStateFlow()
 
     init {
         // 一处 collect 铺开到各字段，而不是每个字段各起一条 stateIn：
@@ -139,8 +136,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _telemetryEnabled.value = s.telemetryEnabled.toBoolean()
                 _updateDownloadSource.value = parseUpdateSource(s.updateDownloadSource)
                 _updateChannel.value = parseUpdateChannel(s.updateChannel)
-                _githubToken.value = s.githubToken
-                _mirrorChyanCdk.value = s.mirrorChyanCdk
+                _mirrorchyanCdk.value = s.mirrorchyanCdk
                 // 必须是最后一行：置位即宣告上面全部就位
                 _loaded.value = true
             }
@@ -221,12 +217,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[updateChannel] = channel.name }
     }
 
-    override suspend fun setGithubToken(token: String): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[githubToken] = token.trim() }
-    }
-
-    override suspend fun setMirrorChyanCdk(cdk: String): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[mirrorChyanCdk] = cdk.trim() }
+    override suspend fun setMirrorchyanCdk(cdk: String): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[mirrorchyanCdk] = cdk.trim() }
     }
 
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
@@ -249,7 +241,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)
 
     private fun parseUpdateSource(raw: String): UpdateSource =
-        runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRROR_CHYAN)
+        runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRRORCHYAN)
 
     private fun parseUpdateChannel(raw: String): UpdateChannel =
         runCatching { UpdateChannel.valueOf(raw) }.getOrDefault(UpdateChannel.STABLE)
