@@ -73,6 +73,7 @@
             android:exported="true"
             android:label="${appLabel}"
             android:launchMode="singleTop"
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.MaaFwApp.Starting"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
