@@ -1,11 +1,14 @@
 package com.aliothmoon.maafw.update
 
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.constant.MiscConstants
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.util.HttpClientHelper
 import com.aliothmoon.maafw.util.boolean
 import com.aliothmoon.maafw.util.parseJsonArray
 import com.aliothmoon.maafw.util.parseJsonObject
+import com.aliothmoon.maafw.util.readBody
 import com.aliothmoon.maafw.util.string
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -16,8 +19,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * GitHub releases 的 API 取数与解析：分页拉全量 release 列表，检查与解析在其上各取所需
  */
 internal class GitHubReleasesApi(
-    private val gateway: OkHttpUpdateHttpGateway,
-    private val apiBaseUrl: String = "https://api.github.com",
+    private val helper: HttpClientHelper,
 ) {
     internal data class Release(
         val tag: String,
@@ -42,19 +44,24 @@ internal class GitHubReleasesApi(
     suspend fun releases(repository: String): UpdateSourceOutcome<List<Release>> {
         val releases = mutableListOf<Release>()
         for (page in 1..MAX_PAGES) {
-            val response = gateway.get(buildApiUrl(repository, page), API_HEADERS)
-            if (response.truncated) {
-                return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
-            }
-            if (!response.statusCode.isSuccess()) {
-                val serverMessage = parseJsonObject(response.body)?.string("message")
+            val response = helper.get(
+                buildApiUrl(repository),
+                buildMap {
+                    put("per_page", PAGE_SIZE.toString())
+                    put("page", page.toString())
+                }, API_HEADERS
+            )
+            val sc = response.code
+            val body = response.readBody()
+            if (!sc.isSuccess()) {
+                val serverMessage = parseJsonObject(body)?.string("message")
                 return UpdateSourceOutcome.Failed(
-                    apiFailureReason(response.statusCode),
+                    apiFailureReason(sc),
                     detail = serverMessage?.let(::uiTextFromFramework)
-                        ?: uiTextOf(R.string.update_detail_http_status, response.statusCode),
+                        ?: uiTextOf(R.string.update_detail_http_status, sc),
                 )
             }
-            val parsed = parseJsonArray(response.body)
+            val parsed = parseJsonArray(body)
                 ?: return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
             if (parsed.isEmpty()) break
             releases += parsed.filterIsInstance<JsonObject>().mapNotNull(::release)
@@ -125,8 +132,8 @@ internal class GitHubReleasesApi(
         RegexOption.IGNORE_CASE,
     ).containsMatchIn(this)
 
-    private fun buildApiUrl(repository: String, page: Int): String =
-        "${apiBaseUrl.trimEnd('/')}/repos/$repository/releases?per_page=$PAGE_SIZE&page=$page"
+    private fun buildApiUrl(repository: String): String =
+        "https://api.github.com/repos/$repository/releases"
 
     /** 429 与 403 都按限流归类：不带 token 的匿名额度被这两者覆盖 */
     private fun apiFailureReason(statusCode: Int): UpdateCheckFailure =
@@ -146,7 +153,7 @@ internal class GitHubReleasesApi(
         val API_HEADERS = mapOf(
             "Accept" to "application/vnd.github+json",
             "X-GitHub-Api-Version" to "2022-11-28",
-            "User-Agent" to "MaaFwApp",
+            "User-Agent" to MiscConstants.BROWSER_UA,
         )
         val REPOSITORY_PATTERN = Regex("""^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$""")
         val DIGEST_PATTERN = Regex("""^sha256:[0-9a-fA-F]{64}$""")

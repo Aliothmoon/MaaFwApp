@@ -67,17 +67,22 @@ import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
+import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
- * 首页版面对齐 MaaMeow：概览 -> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
- * 资源选择与运行模式从设置页迁来，避免与任务页重复
+ * 首页版面对齐 MaaMeow：概览（含更新区块）-> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
+ * 资源选择、运行模式与更新源/渠道从设置页迁来，避免与任务页重复；
+ * 启动自检与自动下载开关仍在设置页
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
+    update: UpdatePanelState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 取 app 标签（profile 的 app.label）而非 PI 的 name：后者是 PI 自己的标识符，不是对外呈现的名字
@@ -114,9 +119,9 @@ fun HomeScreen(
                     top = MaaDesignTokens.Spacing.sm,
                     bottom = MaaDesignTokens.Spacing.lg,
                 ),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            OverviewCard(state)
+            OverviewCard(state, update, onSettingsIntent)
             ResourceCard(state, onIntent)
             RunModeCard(state, onIntent)
             PermissionCard(state, onIntent)
@@ -127,7 +132,11 @@ fun HomeScreen(
 }
 
 @Composable
-private fun OverviewCard(state: SessionUiState) {
+private fun OverviewCard(
+    state: SessionUiState,
+    update: UpdatePanelState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
     // 分辨率展示用设备真实屏幕尺寸（Misc.getScreenSize），与前后台 / 虚拟屏偏好无关
     val context = LocalContext.current
     val screen = remember(context) { screenSize(context) }
@@ -136,17 +145,14 @@ private fun OverviewCard(state: SessionUiState) {
             stringResource(R.string.home_display_resolution),
             "${screen.width} × ${screen.height}",
         )
-        MaaInfoRow(
-            stringResource(R.string.home_resource),
-            state.environment?.resource?.label ?: stringResource(R.string.home_none),
-        )
         MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
         MaaLabeledControlRow(
             label = stringResource(R.string.home_service_status),
             labelStyle = MaterialTheme.typography.bodyMedium,
-            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurface,
             trailing = { ServiceStatusIndicator(status = state.serviceStatus) },
         )
+        UpdateSection(update, onSettingsIntent)
     }
 }
 
@@ -534,7 +540,12 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
  */
 @Composable
 private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_resource)) {
+    MaaCard(
+        title = stringResource(R.string.settings_resource),
+        collapsible = true,
+        initiallyExpanded = false,
+        summary = state.environment?.resource?.label,
+    ) {
         val environment = state.environment
         val candidates = environment?.resourceCandidates.orEmpty()
         if (candidates.isEmpty()) {

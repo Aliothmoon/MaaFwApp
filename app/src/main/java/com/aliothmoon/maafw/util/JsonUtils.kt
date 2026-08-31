@@ -7,8 +7,15 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-private val JSON = Json {
-    ignoreUnknownKeys = true
+object JsonUtils {
+    val common = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        isLenient = true
+        decodeEnumsCaseInsensitive = true
+        allowTrailingComma = true
+        allowComments = true
+    }
 }
 
 /** 解析失败返回 null，不抛异常 */
@@ -19,7 +26,7 @@ fun parseJsonArray(body: String): JsonArray? =
     parseJsonElement(body) as? JsonArray
 
 private fun parseJsonElement(body: String): JsonElement? = try {
-    JSON.parseToJsonElement(body)
+    JsonUtils.common.parseToJsonElement(body)
 } catch (_: Exception) {
     null
 }

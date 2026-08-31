@@ -8,15 +8,14 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.SystemApkInstaller
 import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.i18n.uiTextOf
-import com.aliothmoon.maafw.notification.NotificationPermissionRequester
-import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
-import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.UpdateCheckFailure
 import com.aliothmoon.maafw.update.UpdateCheckRequest
+import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateDownloadResult
 import com.aliothmoon.maafw.update.UpdateResolveRequest
 import com.aliothmoon.maafw.update.UpdateResolveResult
@@ -24,24 +23,31 @@ import com.aliothmoon.maafw.update.UpdateService
 import com.aliothmoon.maafw.update.UpdateSource
 import com.aliothmoon.maafw.update.message
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import kotlin.coroutines.coroutineContext
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 设置页的 Activity 作用域会话
  *
  * 后端与 app 级设置在这里；运行配置仍由 SessionViewModel 持有，避免两颗状态互相抢写。
  */
+@OptIn(FlowPreview::class)
 class SettingsViewModel(
     private val permissionGateway: PermissionGateway,
     private val appSettings: AppSettingsGateway,
@@ -49,51 +55,60 @@ class SettingsViewModel(
     private val updateService: UpdateService,
     private val updateDownloader: OkHttpUpdateDownloader,
     private val apkInstaller: SystemApkInstaller,
-    private val updateDownloadNotifier: UpdateDownloadProgressState,
-    private val notificationPermissionRequester: NotificationPermissionRequester,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     supportedAbis: List<String> = Build.SUPPORTED_ABIS.orEmpty().toList(),
 ) : ViewModel() {
 
-    private data class UpdateSettingsSnapshot(
-        val source: UpdateSource,
-        val channel: UpdateChannel,
-        val mirrorchyanCdk: String,
-    )
-
-    private val abi = supportedAbis.firstNotNullOfOrNull(::androidAbi) ?: AndroidAbi.ARM64
+    private val abi = supportedAbis.firstNotNullOfOrNull(::androidAbi) ?: AndroidAbi.ANY
     private val updateOperation = MutableStateFlow(UpdatePanelState())
 
-    // 用 SharedFlow 当一次性 effect：UI 层 LaunchedEffect 收一次即消费；不让任何 effect 被覆盖
-    // 也用 BufferOverflow.DROP_OLDEST 防 UI 层还没挂上 collect 时的丢消息
-    private val _effects = MutableSharedFlow<SettingsEffect>(
-        replay = 0,
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
-    val effects: Flow<SettingsEffect> = _effects.asSharedFlow()
+    /** 只在 CAS 抢到 downloading 位后登记，取消不会误伤没抢到位的空跑协程 */
+    private var downloadJob: Job? = null
 
-    private val updateSettings = combine(
-        appSettings.updateDownloadSource,
+    init {
+        viewModelScope.launch { startupUpdateCheck() }
+        // 对齐 MaaMeow：填写 CDK 时静默触发一次检查，结果丢弃、不弹任何窗
+        viewModelScope.launch {
+            appSettings.loaded.first { it }
+            appSettings.mirrorchyanCdk.drop(1).filter(String::isNotBlank)
+                .debounce(CDK_CHECK_DEBOUNCE_MS.milliseconds).collect {
+                    val metadata = projectMetadata()
+                    updateService.check(
+                        UpdateCheckRequest(
+                            source = appSettings.updateSource.value,
+                            currentVersion = currentVersion,
+                            channel = appSettings.updateChannel.value,
+                            abi = abi,
+                            mirrorchyanRid = metadata?.mirrorchyanRid,
+                            githubRepository = metadata?.githubRepository,
+                        ),
+                    )
+                }
+        }
+    }
+
+    private val updatePanel = combine(
+        updateOperation,
         appSettings.updateChannel,
+        appSettings.updateSource,
         appSettings.mirrorchyanCdk,
-        ::UpdateSettingsSnapshot,
-    )
+        appSettings.autoCheckUpdate,
+    ) { operation, channel, source, cdk, autoCheck ->
+        operation.copy(
+            channel = channel,
+            updateSource = source,
+            mirrorchyanCdk = cdk,
+            autoCheckUpdate = autoCheck,
+        )
+    }.combine(appSettings.autoDownloadUpdate) { base, autoDownload ->
+        base.copy(autoDownloadUpdate = autoDownload)
+    }
 
     val uiState: StateFlow<SettingsUiState> = combine(
         permissionGateway.state,
-        projectRepository.state,
-        updateSettings,
-        updateOperation,
-    ) { remote, project, settings, operation ->
-        SettingsUiState(
-            remoteAccess = remote,
-            update = operation.copy(
-                downloadSource = settings.source,
-                channel = settings.channel,
-                mirrorchyanCdk = settings.mirrorchyanCdk,
-            ),
-        )
+        updatePanel,
+    ) { remote, update ->
+        SettingsUiState(remoteAccess = remote, update = update)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -106,108 +121,156 @@ class SettingsViewModel(
                 permissionGateway.setBackend(intent.backend)
             }
 
-            is SettingsIntent.SetUpdateDownloadSource -> viewModelScope.launch {
-                appSettings.setUpdateDownloadSource(intent.source)
-            }
-
+            // 下载过程中锁死更新设置：UI 已禁用控件，这里是写入口的二次校验（锁定两层惯例）
             is SettingsIntent.SetUpdateChannel -> viewModelScope.launch {
+                if (updateSettingsLocked()) return@launch
                 appSettings.setUpdateChannel(intent.channel)
             }
 
+            is SettingsIntent.SetUpdateSource -> viewModelScope.launch {
+                if (updateSettingsLocked()) return@launch
+                appSettings.setUpdateSource(intent.source)
+            }
+
             is SettingsIntent.SetMirrorchyanCdk -> viewModelScope.launch {
+                if (updateSettingsLocked()) return@launch
                 appSettings.setMirrorchyanCdk(intent.cdk)
+            }
+
+            is SettingsIntent.SetAutoCheckUpdate -> viewModelScope.launch {
+                if (updateSettingsLocked()) return@launch
+                appSettings.setAutoCheckUpdate(intent.enabled)
+            }
+
+            is SettingsIntent.SetAutoDownloadUpdate -> viewModelScope.launch {
+                if (updateSettingsLocked()) return@launch
+                appSettings.setAutoDownloadUpdate(intent.enabled)
             }
 
             SettingsIntent.CheckUpdate -> viewModelScope.launch { checkUpdate() }
             SettingsIntent.DownloadUpdate -> viewModelScope.launch { downloadUpdate() }
+            SettingsIntent.CancelDownload -> downloadJob?.cancel()
+            SettingsIntent.DismissUpdatePrompt -> updateOperation.update { it.copy(updatePrompt = null) }
+            SettingsIntent.DismissUpdateError -> updateOperation.update { it.copy(errorPrompt = null) }
+        }
+    }
 
-            is SettingsIntent.NotificationPermissionResult -> {
-                updateOperation.update {
-                    it.copy(
-                        notificationPermissionDenied = !intent.granted,
-                        // 用户刚授权过，清掉「需要通知权限」的红字 errorMessage
-                        errorMessage = if (intent.granted) null else it.errorMessage,
-                    )
-                }
-                if (intent.granted) viewModelScope.launch { downloadUpdate() }
-            }
+    /**
+     * 启动自检：等设置读盘与 PI 就绪后查一次；VM 存活期内只跑这一回。
+     * 不写 checkResult（首页不出现结果行）；失败照弹错误窗，发现新版本按自动下载开关走
+     * 静默下载或弹「发现新版本」dialog
+     */
+    private suspend fun startupUpdateCheck() {
+        appSettings.loaded.first { it }
+        if (!appSettings.autoCheckUpdate.value) return
+        val metadata = projectRepository.state.filterIsInstance<ProjectState.Ready>()
+            .first().definition.metadata
+        if (updateOperation.value.checking || updateOperation.value.downloading) return
+        updateOperation.update { it.copy(checking = true) }
+        val result = updateService.check(
+            UpdateCheckRequest(
+                source = appSettings.updateSource.value,
+                currentVersion = currentVersion,
+                channel = appSettings.updateChannel.value,
+                abi = abi,
+                mirrorchyanRid = metadata.mirrorchyanRid,
+                githubRepository = metadata.githubRepository,
+            ),
+        )
+        val available = result as? UpdateCheckResult.UpdateAvailable
+        if (available == null) {
+            Timber.tag("UpdateCheck")
+                .w("startup check found no update: %s", result::class.simpleName)
+            updateOperation.update { it.copy(checking = false, errorPrompt = result.message()) }
+            return
+        }
+        updateOperation.update { it.copy(checking = false, checkResult = result) }
+        if (appSettings.autoDownloadUpdate.value) {
+            downloadUpdate()
+        } else {
+            updateOperation.update { it.copy(updatePrompt = available) }
         }
     }
 
     private suspend fun checkUpdate() {
         if (updateOperation.value.checking || updateOperation.value.downloading) return
-        val settings = currentSettings()
         updateOperation.update {
-            it.copy(checking = true, checkResult = null, errorMessage = null)
+            it.copy(checking = true, checkResult = null, errorMessage = null, errorPrompt = null)
         }
         val metadata = projectMetadata()
         // checker 内部已把非取消异常吞成 SourceFailed，这里不需要再兜一层
-        val result = updateService.checkUpdate(
+        val result = updateService.check(
             UpdateCheckRequest(
+                source = appSettings.updateSource.value,
                 currentVersion = currentVersion,
-                channel = settings.channel,
+                channel = appSettings.updateChannel.value,
                 abi = abi,
                 mirrorchyanRid = metadata?.mirrorchyanRid,
                 githubRepository = metadata?.githubRepository,
             ),
         )
+        // 错误与更新走同一种呈现（弹窗），二者天然互斥：失败不可能同时是 UpdateAvailable
         updateOperation.update {
-            it.copy(checking = false, checkResult = result, errorMessage = null)
+            it.copy(
+                checking = false,
+                checkResult = result,
+                errorPrompt = result.message(),
+                updatePrompt = result as? UpdateCheckResult.UpdateAvailable,
+            )
         }
     }
 
-    private suspend fun downloadUpdate() {
+    /** CAS 占 downloading 位；连点与启动自检/手动并发抢不到位就静默放弃 */
+    private fun claimDownload(): UpdateCheckResult.UpdateAvailable? {
         val current = updateOperation.value
-        val requestedUpdate = current.availableUpdate ?: return
-        val settings = currentSettings()
-        val credentialMissing = settings.source == UpdateSource.MIRRORCHYAN && settings.mirrorchyanCdk.isBlank()
-        if (current.checking || current.downloading || credentialMissing) return
+        val requested = current.availableUpdate ?: return null
+        if (current.checking || current.downloading) return null
+        val claimed = current.copy(
+            downloading = true,
+            downloadedBytes = -1L,
+            totalBytes = -1L,
+            errorMessage = null,
+        )
+        return if (updateOperation.compareAndSet(current, claimed)) requested else null
+    }
 
-        // 通知权限守卫：Android 13+ 上 POST_NOTIFICATIONS 是运行时权限，拒了之后
-        // FGS 起来也只会被系统悄悄吞掉通知。这里在动 notifier 之前先看一眼；拒了就把
-        // 状态打上「需开启通知」+ 把请求抛给 UI 层弹系统对话框，下载流程不启动
-        if (!notificationPermissionRequester.isGranted()) {
+    private fun updateSettingsLocked(): Boolean = updateOperation.value.downloading
+
+    private suspend fun downloadUpdate() {
+        // 二次触发（连点、启动自检与手动并发）不上错，CAS 抢不到位就静默快速返回
+        claimDownload() ?: return
+        downloadJob = coroutineContext.job
+
+        val source = appSettings.updateSource.value
+        val cdk = appSettings.mirrorchyanCdk.value
+        // Mirror酱 无 CDK 必然解析失败；发请求前就地拦下，
+        // 免得用户对着一个网络错误猜原因（MirrorChyanUpdateClient.resolve 有同款类型化校验兜其它调用方）
+        if (source == UpdateSource.MIRRORCHYAN && cdk.isBlank()) {
             updateOperation.update {
                 it.copy(
-                    notificationPermissionDenied = true,
-                    errorMessage = uiTextOf(R.string.settings_update_notification_error),
+                    downloading = false,
+                    updatePrompt = null,
+                    errorPrompt = UpdateCheckFailure.CDK_REQUIRED.message,
                 )
             }
-            _effects.tryEmit(SettingsEffect.RequestNotificationPermission)
             return
         }
 
-        updateOperation.update {
-            it.copy(
-                downloading = true,
-                downloadedBytes = -1L,
-                totalBytes = -1L,
-                downloadedVersion = null,
-                installerStarted = false,
-                errorMessage = null,
-                notificationPermissionDenied = false,
-            )
-        }
+        updateOperation.update { it.copy(updatePrompt = null) }
 
-        // FGS 必须趁 Activity 还在前台时提交；下面的二次解析是网络请求，用户点完
-        // 下载就退后台后再启动会被系统按后台 FGS 限制拒绝。
-        if (!updateDownloadNotifier.start(requestedUpdate.info.version, totalBytes = -1L)) {
-            abortDownloadStart()
-            return
-        }
         try {
             val metadata = projectMetadata()
 
-            // 下载前按用户选择的源解析端点：检查结果可能来自另一个源，CDK 只在这一步带上
-            val update = when (val resolved = updateService.resolveDownload(
+            // 按所选更新源现场解析下载端点，CDK 只在这一步带上；
+            // CDK 业务错误（7xxx）也只会在这里暴露，与检查错误同走弹窗
+            val update = when (val resolved = updateService.resolve(
                 UpdateResolveRequest(
-                    source = settings.source,
-                    channel = settings.channel,
+                    source = source,
+                    channel = appSettings.updateChannel.value,
                     abi = abi,
                     currentVersion = currentVersion,
                     mirrorchyanRid = metadata?.mirrorchyanRid,
-                    mirrorchyanCdk = settings.mirrorchyanCdk
-                        .takeIf { settings.source == UpdateSource.MIRRORCHYAN },
+                    mirrorchyanCdk = cdk.takeIf(String::isNotBlank),
                     githubRepository = metadata?.githubRepository,
                 ),
             )) {
@@ -215,56 +278,41 @@ class SettingsViewModel(
                 is UpdateResolveResult.Failed -> {
                     val message = resolved.message()
                         ?: uiTextOf(R.string.settings_update_no_downloadable_apk)
-                    updateOperation.update { it.copy(downloading = false, errorMessage = message) }
-                    updateDownloadNotifier.failed(message)
+                    updateOperation.update { it.copy(downloading = false, errorPrompt = message) }
                     return
                 }
             }
 
-            if (!updateDownloadNotifier.start(update.version, totalBytes = -1L)) {
-                abortDownloadStart()
-                return
-            }
-            val downloadResult = updateDownloader.download(
+            val result = updateDownloader.download(
                 update = update,
                 onProgress = { downloaded, total ->
-                    updateDownloadNotifier.progress(update.version, downloaded, total)
                     updateOperation.update {
                         it.copy(downloadedBytes = downloaded, totalBytes = total)
                     }
                 },
             )
-            when (downloadResult) {
-                is UpdateDownloadResult.Downloaded -> {
-                    updateDownloadNotifier.complete(downloadResult.update.version)
-                    install(downloadResult)
-                }
-                is UpdateDownloadResult.Failed -> {
-                    updateDownloadNotifier.failed(downloadResult.message())
-                    updateOperation.update {
-                        it.copy(downloading = false, errorMessage = downloadResult.message())
-                    }
+            when (result) {
+                is UpdateDownloadResult.Downloaded -> install(result)
+                is UpdateDownloadResult.Failed -> updateOperation.update {
+                    it.copy(downloading = false, errorMessage = result.message())
                 }
             }
         } catch (e: CancellationException) {
-            updateDownloadNotifier.cancel()
+            // 用户主动中断：放开 downloading 位，不上任何错误
+            updateOperation.update { it.copy(downloading = false) }
             throw e
         } catch (e: Exception) {
             Timber.e(e, "download update error")
-            val message = uiTextOf(R.string.update_fail_unknown)
-            updateDownloadNotifier.failed(message)
-            updateOperation.update { it.copy(downloading = false, errorMessage = message) }
+            updateOperation.update {
+                it.copy(downloading = false, errorMessage = uiTextOf(R.string.update_fail_unknown))
+            }
         }
     }
 
     private suspend fun install(result: UpdateDownloadResult.Downloaded) {
         when (val installResult = apkInstaller.install(result.update.file)) {
             SystemApkInstaller.Result.Started -> updateOperation.update {
-                it.copy(
-                    downloading = false,
-                    downloadedVersion = result.update.version,
-                    installerStarted = true,
-                )
+                it.copy(downloading = false)
             }
 
             is SystemApkInstaller.Result.Failed -> updateOperation.update {
@@ -273,24 +321,7 @@ class SettingsViewModel(
         }
     }
 
-    /** 通知服务提交失败：下载中止并提示，两处 start 调用点共用 */
-    private fun abortDownloadStart() {
-        updateOperation.update {
-            it.copy(
-                downloading = false,
-                errorMessage = uiTextOf(R.string.settings_update_notification_service_failed),
-            )
-        }
-    }
-
-    private fun currentSettings(): UpdateSettingsSnapshot =
-        UpdateSettingsSnapshot(
-            source = appSettings.updateDownloadSource.value,
-            channel = appSettings.updateChannel.value,
-            mirrorchyanCdk = appSettings.mirrorchyanCdk.value,
-        )
-
-    private suspend fun projectMetadata(): ProjectMetadata? =
+    private fun projectMetadata(): ProjectMetadata? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition?.metadata
 
     private fun androidAbi(raw: String): AndroidAbi? = when (raw) {
@@ -301,4 +332,7 @@ class SettingsViewModel(
         else -> null
     }
 
+    private companion object {
+        const val CDK_CHECK_DEBOUNCE_MS = 1_000L
+    }
 }

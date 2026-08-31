@@ -17,19 +17,51 @@ enum class UpdateChannel {
 }
 
 enum class AndroidAbi(val mirrorArch: String) {
+    ANY(""),
     ARM64("arm64"),
     X86_64("amd64"),
     ARM("arm"),
     X86("386"),
 }
 
-/** 失败原因自带文案；动态细节由 [UpdateMessages] 拼接 */
+/** 失败原因自带文案；动态细节由 [UpdateMessages] 拼接。CDK_* 与 INVALID_* 对应 MirrorChyan 业务码 */
 enum class UpdateCheckFailure(val message: UiText) {
     MISSING_CONFIGURATION(uiTextOf(R.string.update_fail_missing_configuration)),
     NETWORK(uiTextOf(R.string.update_fail_network)),
     HTTP(uiTextOf(R.string.update_fail_http)),
+
+    /** GitHub 403/429；MirrorChyan 的次数上限走 [CDK_QUOTA_EXHAUSTED] */
     RATE_LIMITED(uiTextOf(R.string.update_fail_rate_limited)),
+
+    /** 7001 */
+    CDK_EXPIRED(uiTextOf(R.string.update_fail_cdk_expired)),
+
+    /** 7002 */
+    CDK_INVALID(uiTextOf(R.string.update_fail_cdk_invalid)),
+
+    /** 7003 */
+    CDK_QUOTA_EXHAUSTED(uiTextOf(R.string.update_fail_cdk_quota_exhausted)),
+
+    /** 7004 */
+    CDK_MISMATCHED(uiTextOf(R.string.update_fail_cdk_mismatched)),
+
+    /** 7005 */
+    CDK_BLOCKED(uiTextOf(R.string.update_fail_cdk_blocked)),
+
+    /** 客户端前置校验，非服务端业务码：Mirror酱 无 CDK 解析不出下载地址，resolve 前拦下 */
+    CDK_REQUIRED(uiTextOf(R.string.update_fail_cdk_required)),
+
+    /** 8001；仅 Mirror酱 业务码产生，文案可点名引导切到 GitHub 源 */
     RESOURCE_NOT_FOUND(uiTextOf(R.string.update_fail_resource_not_found)),
+
+    /** 8002 */
+    INVALID_OS(uiTextOf(R.string.update_fail_invalid_os)),
+
+    /** 8003 */
+    INVALID_ARCH(uiTextOf(R.string.update_fail_invalid_arch)),
+
+    /** 8004 */
+    INVALID_CHANNEL(uiTextOf(R.string.update_fail_invalid_channel)),
     INVALID_RESPONSE(uiTextOf(R.string.update_fail_invalid_response)),
     NO_MATCHING_ASSET(uiTextOf(R.string.update_fail_no_matching_asset)),
     VERSION_INVALID(uiTextOf(R.string.update_fail_version_invalid)),
@@ -40,6 +72,7 @@ enum class UpdateCheckFailure(val message: UiText) {
  * 版本检查的输入；检查永远是匿名的——CDK 只属于下载地址解析（[UpdateResolveRequest]）
  */
 data class UpdateCheckRequest(
+    val source: UpdateSource,
     val currentVersion: String,
     val abi: AndroidAbi,
     val channel: UpdateChannel = UpdateChannel.STABLE,
@@ -104,8 +137,8 @@ sealed interface UpdateResolveResult {
 }
 
 /**
- * 每源一个实现，编排见 [UpdateService]；「检查匿名、CDK 只在解析带上」的约束
- * 长在两个请求类型上，与实现无关
+ * 每源一个实现；[source] 是路由键，只被 [UpdateService] 消费，实现自身不读 request.source。
+ * 「检查匿名、CDK 只在解析带上」的约束长在两个请求类型上，与实现无关
  */
 interface UpdateSourceClient {
     val source: UpdateSource
@@ -138,12 +171,6 @@ sealed interface UpdateDownloadResult {
         val reason: UpdateDownloadFailure,
         val detail: UiText? = null,
     ) : UpdateDownloadResult
-}
-
-internal object UpdateDownloadFiles {
-    const val DIRECTORY_NAME = "updates"
-
-    fun directory(cacheDir: File): File = File(cacheDir, DIRECTORY_NAME)
 }
 
 /** 只把 `.apk` 结尾的 URL 视为可安装产物；查询串与并段不参与判断 */

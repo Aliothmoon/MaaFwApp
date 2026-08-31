@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.update
 
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.constant.MiscConstants
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -12,9 +13,9 @@ import org.junit.Test
 
 class GitHubUpdateTest {
 
-    private fun api(gateway: RecordingUpdateHttpGateway) = GitHubReleasesApi(gateway.mock)
+    private fun api(gateway: RecordingHttpClientHelper) = GitHubReleasesApi(gateway.mock)
 
-    private fun client(gateway: RecordingUpdateHttpGateway) = GitHubUpdateClient(api(gateway))
+    private fun client(gateway: RecordingHttpClientHelper) = GitHubUpdateClient(api(gateway))
 
     private fun checkRequest(
         repository: String? = "maaxyz/example",
@@ -22,6 +23,7 @@ class GitHubUpdateTest {
         abi: AndroidAbi = AndroidAbi.ARM64,
         channel: UpdateChannel = UpdateChannel.STABLE,
     ) = UpdateCheckRequest(
+        source = UpdateSource.GITHUB,
         currentVersion = currentVersion,
         githubRepository = repository,
         abi = abi,
@@ -43,8 +45,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `check picks highest channel eligible release and ignores assets`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
                 200,
                 releases(
                     release("v2.0.0-beta.1", prerelease = true),
@@ -76,20 +78,22 @@ class GitHubUpdateTest {
 
     @Test
     fun `check request is anonymous`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(200, releases(release("v1.1.0", assets = assets(asset("app.apk"))))),
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, releases(release("v1.1.0", assets = assets(asset("app.apk"))))),
         )
 
         client(gateway).check(checkRequest())
 
         assertNull(gateway.requests.single().second["Authorization"])
         assertEquals("2022-11-28", gateway.requests.single().second["X-GitHub-Api-Version"])
+        // 非 MirrorChyan 的请求不暴露应用身份
+        assertEquals(MiscConstants.BROWSER_UA, gateway.requests.single().second["User-Agent"])
     }
 
     @Test
     fun `api 429 is reported as rate limited without fallback`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(429, """{"message":"rate limited"}"""),
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(429, """{"message":"rate limited"}"""),
         )
 
         assertEquals(
@@ -105,8 +109,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `api 403 is rate limited`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(403, """{"message":"rate limited"}"""),
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(403, """{"message":"rate limited"}"""),
         )
 
         assertEquals(
@@ -121,8 +125,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `check without eligible release has no matching asset`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(200, releases(release("v1.1.0", prerelease = true))),
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, releases(release("v1.1.0", prerelease = true))),
         )
 
         assertEquals(
@@ -136,7 +140,7 @@ class GitHubUpdateTest {
 
     @Test
     fun `repository must be owner slash repo`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway()
+        val gateway = RecordingHttpClientHelper()
 
         assertEquals(
             UpdateCheckResult.SourceFailed(
@@ -150,10 +154,10 @@ class GitHubUpdateTest {
 
     @Test
     fun `pagination stops after three pages`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(200, page(0)),
-            UpdateHttpResponse(200, page(100)),
-            UpdateHttpResponse(200, page(200)),
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, page(0)),
+            FakeHttpResponse(200, page(100)),
+            FakeHttpResponse(200, page(200)),
         )
 
         client(gateway).check(checkRequest(currentVersion = "0.0.1"))
@@ -164,8 +168,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `resolve prefers the asset for the device abi`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
                 200,
                 releases(
                     release(
@@ -199,8 +203,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `resolve falls back to universal when device abi variant is missing`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
                 200,
                 releases(
                     release(
@@ -233,8 +237,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `resolve without device abi variant nor universal has no matching asset`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
                 200,
                 releases(
                     release(
@@ -253,8 +257,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `a single apk without abi marker is universal`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
                 200,
                 releases(
                     release("v2.0.0", assets = assets(asset("MaaFwApp.apk", "https://example.com/universal"))),
@@ -271,8 +275,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `resolve without apk asset has no matching asset`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
                 200,
                 releases(
                     release("v1.1.0", assets = assets(asset("app.zip", "https://example.com/app.zip"))),
@@ -288,8 +292,8 @@ class GitHubUpdateTest {
 
     @Test
     fun `resolve picks beta channel release`() = runBlocking {
-        val gateway = RecordingUpdateHttpGateway(
-            UpdateHttpResponse(200, releases(release("v2.0.0-beta.1", prerelease = true, assets = assets(asset("app.apk"))))),
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, releases(release("v2.0.0-beta.1", prerelease = true, assets = assets(asset("app.apk"))))),
         )
 
         assertEquals(

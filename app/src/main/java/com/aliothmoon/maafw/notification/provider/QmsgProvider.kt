@@ -1,13 +1,14 @@
 package com.aliothmoon.maafw.notification.provider
 
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.util.HttpClientHelper
 import kotlinx.serialization.Serializable
 import timber.log.Timber
 
 class QmsgProvider(
-    private val httpClient: NotificationHttpClient,
+    private val httpClient: HttpClientHelper,
     private val settingsManager: NotificationSettingsManager,
 ) : NotificationProvider {
 

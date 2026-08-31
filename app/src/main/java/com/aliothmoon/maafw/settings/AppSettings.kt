@@ -2,7 +2,6 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.UpdateSource
 import com.aliothmoon.preferences.PrefKey
 import com.aliothmoon.preferences.PrefSchema
 
@@ -102,20 +101,23 @@ data class AppSettings(
     @PrefKey(default = "false")
     val telemetryEnabled: String = "false",
 
-    /** [UpdateSource] 的 name；只决定更新 APK 从哪解析/下载，不改变检查更新的默认源 */
-    @PrefKey(default = "MIRRORCHYAN")
-    val updateDownloadSource: String = "MIRRORCHYAN",
+    /** 启动时自动检查更新；只控启动自检，设置页手动检查不受它影响 */
+    @PrefKey(default = "true")
+    val autoCheckUpdate: String = "true",
+
+    /** 启动自检发现新版本时自动下载并拉起安装器；关闭则弹窗询问。默认关，静默下载近 200MB 要用户先点头 */
+    @PrefKey(default = "false")
+    val autoDownloadUpdate: String = "false",
 
     /** [UpdateChannel] 的 name */
     @PrefKey(default = "STABLE")
     val updateChannel: String = "STABLE",
 
-    /**
-     * Mirror酱 CDK；选择 Mirror酱 下载时必填。
-     *
-     * 与解锁 PIN 一样明文落在 app 私有 DataStore；这里没有服务端会话可复用，
-     * 加 Keystore 也只能推迟明文出现，不能阻止能读私有目录的攻击者拿到它
-     */
+    /** [com.aliothmoon.maafw.update.UpdateSource] 的 name；检查与下载都只走这一个源 */
+    @PrefKey(default = "MIRRORCHYAN")
+    val updateSource: String = "MIRRORCHYAN",
+
+    /** Mirror酱 CDK；只在更新源为 Mirror酱 时有意义，下载解析时带上 */
     @PrefKey(default = "")
     val mirrorchyanCdk: String = "",
 )

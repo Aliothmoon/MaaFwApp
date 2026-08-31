@@ -10,6 +10,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeAppSettingsGateway : AppSettingsGateway {
 
+    override val loaded = MutableStateFlow(true)
+
+    // 生产默认是 true；fake 默认关掉，让既有手动流程测试不被 VM init 的启动自检抢跑，
+    // 启动自检的用例显式置 true
+    override val autoCheckUpdate = MutableStateFlow(false)
+
+    override suspend fun setAutoCheckUpdate(enabled: Boolean) {
+        autoCheckUpdate.value = enabled
+    }
+
+    override val autoDownloadUpdate = MutableStateFlow(false)
+
+    override suspend fun setAutoDownloadUpdate(enabled: Boolean) {
+        autoDownloadUpdate.value = enabled
+    }
+
     override val runMode = MutableStateFlow(RunMode.BACKGROUND)
 
     override suspend fun setRunMode(mode: RunMode) {
@@ -76,12 +92,6 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         telemetryEnabled.value = enabled
     }
 
-    override val updateDownloadSource = MutableStateFlow(UpdateSource.MIRRORCHYAN)
-
-    override suspend fun setUpdateDownloadSource(source: UpdateSource) {
-        updateDownloadSource.value = source
-    }
-
     override val updateChannel = MutableStateFlow(UpdateChannel.STABLE)
 
     override suspend fun setUpdateChannel(channel: UpdateChannel) {
@@ -92,5 +102,11 @@ class FakeAppSettingsGateway : AppSettingsGateway {
 
     override suspend fun setMirrorchyanCdk(cdk: String) {
         mirrorchyanCdk.value = cdk.trim()
+    }
+
+    override val updateSource = MutableStateFlow(UpdateSource.MIRRORCHYAN)
+
+    override suspend fun setUpdateSource(source: UpdateSource) {
+        updateSource.value = source
     }
 }

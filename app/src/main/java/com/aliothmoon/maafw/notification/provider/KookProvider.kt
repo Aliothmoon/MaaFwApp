@@ -1,18 +1,19 @@
 package com.aliothmoon.maafw.notification.provider
 
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.toPrefBoolean
-import kotlinx.serialization.SerialName
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.util.HttpClientHelper
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import timber.log.Timber
 
 /**
  * KOOK 机器人推送；频道与私聊只差一个接口地址与 target_id 的含义
  */
 class KookProvider(
-    private val httpClient: NotificationHttpClient,
+    private val httpClient: HttpClientHelper,
     private val settingsManager: NotificationSettingsManager,
 ) : NotificationProvider {
 

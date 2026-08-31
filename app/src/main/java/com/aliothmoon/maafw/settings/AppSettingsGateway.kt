@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.StateFlow
  * 而不必把 DataStore 一起拖进来
  */
 interface AppSettingsGateway {
+    /** 首次读盘是否已落到各 StateFlow；启动早期同步读 `.value` 必须先等它置位 */
+    val loaded: StateFlow<Boolean>
+
     val runMode: StateFlow<RunMode>
     suspend fun setRunMode(mode: RunMode)
 
@@ -52,14 +55,22 @@ interface AppSettingsGateway {
     val telemetryEnabled: StateFlow<Boolean>
     suspend fun setTelemetryEnabled(enabled: Boolean)
 
-    /** 只影响更新下载，不影响检查更新的默认源行为 */
-    val updateDownloadSource: StateFlow<UpdateSource>
-    suspend fun setUpdateDownloadSource(source: UpdateSource)
+    /** 启动时自动检查更新；只控启动自检 */
+    val autoCheckUpdate: StateFlow<Boolean>
+    suspend fun setAutoCheckUpdate(enabled: Boolean)
+
+    /** 启动自检发现新版本时自动下载并拉起安装器；关闭则弹窗询问 */
+    val autoDownloadUpdate: StateFlow<Boolean>
+    suspend fun setAutoDownloadUpdate(enabled: Boolean)
 
     val updateChannel: StateFlow<UpdateChannel>
     suspend fun setUpdateChannel(channel: UpdateChannel)
 
-    /** Mirror酱 下载源必填；匿名检查不携带它 */
+    /** 检查与下载共用的更新源；默认 Mirror酱 */
+    val updateSource: StateFlow<UpdateSource>
+    suspend fun setUpdateSource(source: UpdateSource)
+
+    /** 只在更新源为 Mirror酱 时有意义；匿名检查不携带它，下载解析时带上 */
     val mirrorchyanCdk: StateFlow<String>
     suspend fun setMirrorchyanCdk(cdk: String)
 

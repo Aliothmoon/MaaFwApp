@@ -1,12 +1,14 @@
 package com.aliothmoon.maafw.update
 
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.constant.MiscConstants
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.util.HttpClientHelper
 import com.aliothmoon.maafw.util.int
 import com.aliothmoon.maafw.util.parseJsonObject
+import com.aliothmoon.maafw.util.readBody
 import com.aliothmoon.maafw.util.string
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import timber.log.Timber
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -15,12 +17,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * 但各自是小用例——检查只比版本，解析只出下载端点
  */
 internal class MirrorChyanLatestApi(
-    private val gateway: OkHttpUpdateHttpGateway,
-    private val userAgent: String,
+    private val helper: HttpClientHelper,
 ) {
-    companion object {
-        private const val BASE_URL = "https://mirrorchyan.com"
-    }
 
     internal data class Latest(
         val version: String,
@@ -40,39 +38,40 @@ internal class MirrorChyanLatestApi(
         currentVersion: String,
         cdk: String?,
     ): UpdateSourceOutcome<Latest> {
-        val url = BASE_URL.toHttpUrl().newBuilder()
-            .addPathSegments("api/resources")
-            .addPathSegment(rid)
-            .addPathSegment("latest")
-            .addQueryParameter("channel", channel.name.lowercase())
-            .addQueryParameter("current_version", currentVersion)
-            .addQueryParameter("os", "android")
-            .addQueryParameter("arch", abi.mirrorArch)
-            .addQueryParameter("user_agent", userAgent)
-            .apply {
-                cdk?.trim()?.takeIf(String::isNotBlank)?.let { addQueryParameter("cdk", it) }
+        val resp = helper.get(
+            apiUrl(rid),
+            buildMap {
+                put("channel", channel.name.lowercase())
+                put("current_version", currentVersion)
+                put("os", "android")
+                put("arch", abi.mirrorArch)
+                put("user_agent", MiscConstants.UA)
+                cdk?.trim()?.takeIf(String::isNotBlank)?.let {
+                    put("cdk", it)
+                }
             }
-            .build()
-            .toString()
-        val response = gateway.get(url, mapOf("User-Agent" to userAgent, "Accept" to "application/json"))
-        if (response.truncated) {
-            return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
-        }
-        val root = parseJsonObject(response.body)
+        )
+        val sc = resp.code
+        val body = resp.readBody()
+        val root = parseJsonObject(body)
         val bodyCode = root?.int("code")
         if (bodyCode != null && bodyCode != 0) {
-            val serverMessage = root.string("msg")
+            val reason = businessFailure(bodyCode)
+            Timber.e("latest api error code=%d msg=%s", bodyCode, root.string("msg"))
+            // 已知业务码用固定文案；未知码把服务端 msg 原样透出
             return UpdateSourceOutcome.Failed(
-                businessFailure(bodyCode),
-                detail = serverMessage?.let(::uiTextFromFramework),
+                reason,
+                detail = root.string("msg")
+                    .takeIf { reason == UpdateCheckFailure.UNKNOWN }
+                    ?.let(::uiTextFromFramework),
             )
         }
-        if (!response.statusCode.isSuccess()) {
+        if (!sc.isSuccess()) {
             val serverMessage = root?.string("msg")
             return UpdateSourceOutcome.Failed(
                 UpdateCheckFailure.HTTP,
                 detail = serverMessage?.let(::uiTextFromFramework)
-                    ?: uiTextOf(R.string.update_detail_http_status, response.statusCode),
+                    ?: uiTextOf(R.string.update_detail_http_status, sc),
             )
         }
         if (root == null || bodyCode == null) {
@@ -92,14 +91,23 @@ internal class MirrorChyanLatestApi(
         )
     }
 
-    // 错误检查缺失
+    /** 业务码全集对齐 MaaMeow 的 UpdateError.fromCode；7xxx 只会出现在带 CDK 的 resolve 阶段 */
     private fun businessFailure(code: Int): UpdateCheckFailure = when (code) {
-        7003 -> UpdateCheckFailure.RATE_LIMITED
+        7001 -> UpdateCheckFailure.CDK_EXPIRED
+        7002 -> UpdateCheckFailure.CDK_INVALID
+        7003 -> UpdateCheckFailure.CDK_QUOTA_EXHAUSTED
+        7004 -> UpdateCheckFailure.CDK_MISMATCHED
+        7005 -> UpdateCheckFailure.CDK_BLOCKED
         8001 -> UpdateCheckFailure.RESOURCE_NOT_FOUND
+        8002 -> UpdateCheckFailure.INVALID_OS
+        8003 -> UpdateCheckFailure.INVALID_ARCH
+        8004 -> UpdateCheckFailure.INVALID_CHANNEL
         else -> UpdateCheckFailure.UNKNOWN
     }
 
     private fun Int.isSuccess(): Boolean = this in 200..299
+
+    private fun apiUrl(rid: String): String = "https://mirrorchyan.com/api/resources/$rid/latest"
 }
 
 internal class MirrorChyanUpdateClient(
@@ -142,8 +150,20 @@ internal class MirrorChyanUpdateClient(
     override suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult = try {
         val rid = request.mirrorchyanRid?.trim()?.takeIf(String::isNotBlank)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
-        val latest = when (val outcome = api.latest(rid, request.channel, request.abi, request.currentVersion, cdk = request.mirrorchyanCdk)) {
-            is UpdateSourceOutcome.Failed -> return UpdateResolveResult.Failed(source, outcome.reason, outcome.detail)
+        // 无 CDK 时服务端不回 url，会被误报成 NO_MATCHING_ASSET，发请求前拦下
+        if (request.mirrorchyanCdk.isNullOrBlank()) {
+            return UpdateResolveResult.Failed(source, UpdateCheckFailure.CDK_REQUIRED)
+        }
+        val outcome = api.latest(
+            rid,
+            request.channel,
+            request.abi,
+            request.currentVersion,
+            cdk = request.mirrorchyanCdk
+        )
+        val latest = when (outcome) {
+            is UpdateSourceOutcome.Failed ->
+                return UpdateResolveResult.Failed(source, outcome.reason, outcome.detail)
             is UpdateSourceOutcome.Ok -> outcome.value
         }
         val url = latest.url

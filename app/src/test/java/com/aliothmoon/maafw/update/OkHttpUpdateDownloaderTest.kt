@@ -1,6 +1,9 @@
 package com.aliothmoon.maafw.update
 
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.constant.MiscConstants
+import com.aliothmoon.maafw.util.HttpClientHelper
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
@@ -36,13 +39,13 @@ class OkHttpUpdateDownloaderTest {
 
     @Before
     fun mockDispatchers() {
-        mockkObject(MaaDispatchers)
+        mockkObject(MaaDispatchers, AppPaths)
         every { MaaDispatchers.IO } returns dispatcher
     }
 
     @After
     fun unmockDispatchers() {
-        unmockkObject(MaaDispatchers)
+        unmockkObject(MaaDispatchers, AppPaths)
     }
 
     @Test
@@ -62,7 +65,7 @@ class OkHttpUpdateDownloaderTest {
         assertTrue(downloaded.update.file.name.endsWith(".apk"))
         assertEquals(sha256(bytes), downloaded.update.sha256)
         assertEquals(listOf(0L to bytes.size.toLong(), bytes.size.toLong() to bytes.size.toLong()), progress)
-        assertEquals("MaaFwApp Android", requests.single().header("User-Agent"))
+        assertEquals(MiscConstants.BROWSER_UA, requests.single().header("User-Agent"))
         assertEquals(1, downloaded.update.file.parentFile!!.list()!!.size)
     }
 
@@ -149,7 +152,8 @@ class OkHttpUpdateDownloaderTest {
         val client = OkHttpClient.Builder()
             .addInterceptor { throw IOException("offline") }
             .build()
-        val downloader = OkHttpUpdateDownloader(directory, client)
+        stubUpdatesDir(directory)
+        val downloader = OkHttpUpdateDownloader(HttpClientHelper(client))
 
         val result = downloader.download(update(sha256 = "0".repeat(64)))
 
@@ -176,7 +180,10 @@ class OkHttpUpdateDownloaderTest {
                 },
             )
             .build()
-            .let { OkHttpUpdateDownloader(temp.newFolder("updates"), it) }
+            .let {
+                stubUpdatesDir(temp.newFolder("updates"))
+                OkHttpUpdateDownloader(HttpClientHelper(it))
+            }
 
         downloader.download(update(sha256 = sha256(bytes)))
 
@@ -204,7 +211,13 @@ class OkHttpUpdateDownloaderTest {
                 },
             )
             .build()
-        return OkHttpUpdateDownloader(directory, client)
+        stubUpdatesDir(directory)
+        return OkHttpUpdateDownloader(HttpClientHelper(client))
+    }
+
+    // AppPaths 由 Application.onCreate 定值，JVM 单测里没有——按仓库约定 mockkObject 替换
+    private fun stubUpdatesDir(directory: File) {
+        every { AppPaths.UPDATES_CACHE_DIR } returns directory
     }
 
     private fun update(

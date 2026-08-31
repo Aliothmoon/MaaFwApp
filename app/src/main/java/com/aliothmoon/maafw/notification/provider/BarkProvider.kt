@@ -1,15 +1,16 @@
 package com.aliothmoon.maafw.notification.provider
 
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import timber.log.Timber
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.util.HttpClientHelper
 import java.net.URI
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import timber.log.Timber
 
 class BarkProvider(
-    private val httpClient: NotificationHttpClient,
+    private val httpClient: HttpClientHelper,
     private val settingsManager: NotificationSettingsManager,
 ) : NotificationProvider {
 

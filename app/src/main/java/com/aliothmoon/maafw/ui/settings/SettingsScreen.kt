@@ -1,57 +1,73 @@
 package com.aliothmoon.maafw.ui.settings
 
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.core.net.toUri
-import android.content.Intent
-import android.provider.Settings
-import android.text.format.Formatter
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
-import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.ResolutionPreference
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.session.SessionIntent
-import com.aliothmoon.maafw.ui.options.OptionEditorList
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
-import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.settings.SettingsUiState
+import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.ThemeStyle
-import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaButton
+import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaFieldLabel
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
@@ -59,15 +75,12 @@ import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
-import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
-import com.aliothmoon.maafw.ui.components.MaaSwitchRow
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaSwitch
+import com.aliothmoon.maafw.ui.components.MaaSwitchRow
+import com.aliothmoon.maafw.ui.components.updateSourceLabel
+import com.aliothmoon.maafw.ui.options.OptionEditorList
 import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.message
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
 import timber.log.Timber
@@ -116,8 +129,9 @@ fun SettingsScreen(
                     top = MaaDesignTokens.Spacing.sm,
                     bottom = MaaDesignTokens.Spacing.lg,
                 ),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
+            UpdateCard(settingsState, onSettingsIntent)
             GlobalOptionCard(state, onIntent)
             ResourceOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
@@ -125,7 +139,6 @@ fun SettingsScreen(
             NotificationCard(onOpenNotificationSettings)
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
-            UpdateCard(settingsState, onSettingsIntent)
             OtherCard(state, settingsState, onIntent, onSettingsIntent)
             AboutCard(state)
         }
@@ -397,6 +410,7 @@ private fun PiCard(onIntent: (SessionIntent) -> Unit) {
     }
 }
 
+/** 只剩启动自检与自动下载两个开关；源/渠道/CDK 与检查、下载入口在首页的更新卡 */
 @Composable
 private fun UpdateCard(
     state: SettingsUiState,
@@ -404,165 +418,28 @@ private fun UpdateCard(
 ) {
     val update = state.update
     MaaCard(title = stringResource(R.string.settings_section_update), collapsible = true) {
-        MaaFieldLabel(stringResource(R.string.settings_update_download_source))
-        MaaSingleChoiceFlow(
-            options = listOf(
-                UpdateSource.MIRRORCHYAN to stringResource(R.string.settings_update_source_mirror),
-                UpdateSource.GITHUB to stringResource(R.string.settings_update_source_github),
-            ),
-            selected = update.downloadSource,
-            onSelect = { onSettingsIntent(SettingsIntent.SetUpdateDownloadSource(it)) },
+        // 下载过程中更新设置锁死，防止改到进行中那一轮的语义；VM 写入口有二次校验
+        val settingsEnabled = !update.downloading
+        MaaSwitchRow(
+            label = stringResource(R.string.settings_update_auto_check),
+            checked = update.autoCheckUpdate,
+            enabled = settingsEnabled,
+            onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoCheckUpdate(it)) },
         )
-        if (update.downloadSource == UpdateSource.MIRRORCHYAN) {
-            ITextFieldWithFocus(
-                value = update.mirrorchyanCdk,
-                onValueChange = { onSettingsIntent(SettingsIntent.SetMirrorchyanCdk(it)) },
-                onFocusLost = {},
-                label = stringResource(R.string.settings_update_mirror_cdk),
-                supportingText = {
-                    Text(
-                        text = stringResource(R.string.settings_update_mirror_cdk_required),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                },
-            )
-        }
-        Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
-        MaaFieldLabel(stringResource(R.string.settings_update_channel))
-        MaaSingleChoiceFlow(
-            options = listOf(
-                UpdateChannel.STABLE to stringResource(R.string.settings_update_channel_stable),
-                UpdateChannel.BETA to stringResource(R.string.settings_update_channel_beta),
-            ),
-            selected = update.channel,
-            onSelect = { onSettingsIntent(SettingsIntent.SetUpdateChannel(it)) },
+        MaaSwitchRow(
+            label = stringResource(R.string.settings_update_auto_download),
+            checked = update.autoDownloadUpdate,
+            enabled = update.autoCheckUpdate && settingsEnabled,
+            onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoDownloadUpdate(it)) },
         )
-        UpdateStatus(update)
-        if (update.notificationPermissionDenied) {
-            val context = LocalContext.current
-            Column(
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_update_notification_denied),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        runCatching { context.startActivity(intent) }
-                    },
-                ) {
-                    Text(stringResource(R.string.settings_update_notification_open_settings))
-                }
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
-            MaaOutlinedButton(
-                onClick = { onSettingsIntent(SettingsIntent.CheckUpdate) },
-                enabled = !update.checking && !update.downloading,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(
-                        if (update.checking) R.string.settings_update_checking
-                        else R.string.settings_update_check,
-                    ),
-                )
-            }
-            MaaButton(
-                onClick = { onSettingsIntent(SettingsIntent.DownloadUpdate) },
-                enabled = update.canDownload,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(
-                        if (update.downloading) R.string.settings_update_downloading
-                        else R.string.settings_update_download,
-                    ),
-                )
-            }
-        }
         Text(
-            text = stringResource(R.string.settings_update_source_hint),
+            text = stringResource(R.string.settings_update_auto_download_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-@Composable
-private fun UpdateStatus(update: UpdatePanelState) {
-    when (val result = update.checkResult) {
-        is UpdateCheckResult.UpdateAvailable -> MaaInfoRow(
-            label = stringResource(R.string.settings_update_available),
-            value = "${result.info.version} · ${result.source.updateSourceLabel()}",
-        )
-
-        is UpdateCheckResult.UpToDate -> MaaInfoRow(
-            label = stringResource(R.string.settings_update_result),
-            value = stringResource(R.string.settings_update_up_to_date),
-        )
-
-        is UpdateCheckResult.SourceFailed -> Text(
-            text = stringResource(R.string.settings_update_failed, result.message().asString()),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
-
-        null -> Unit
-    }
-    update.errorMessage?.let {
-        Text(
-            text = it.asString(),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
-    }
-    if (update.downloading) {
-        if (update.totalBytes > 0) {
-            LinearProgressIndicator(
-                progress = { update.downloadedBytes.toFloat() / update.totalBytes },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        }
-        val context = LocalContext.current
-        val downloaded = Formatter.formatShortFileSize(
-            context,
-            update.downloadedBytes.coerceAtLeast(0L),
-        )
-        Text(
-            text = if (update.totalBytes > 0) {
-                stringResource(
-                    R.string.settings_update_progress_known,
-                    downloaded,
-                    Formatter.formatShortFileSize(context, update.totalBytes),
-                )
-            } else {
-                stringResource(R.string.settings_update_progress_unknown, downloaded)
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    if (update.installerStarted) {
-        Text(
-            text = stringResource(R.string.settings_update_installer_started),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun UpdateSource.updateSourceLabel(): String = when (this) {
-    UpdateSource.MIRRORCHYAN -> stringResource(R.string.settings_update_source_mirror)
-    UpdateSource.GITHUB -> stringResource(R.string.settings_update_source_github)
-}
 
 /**
  * 启动模式与后台模式分辨率：都是「跑起来之前得先定」的环境选项（对齐 MaaMeow 的「其他设置」）

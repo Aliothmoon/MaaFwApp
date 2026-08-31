@@ -4,6 +4,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
+import androidx.annotation.StringRes
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -11,8 +16,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +37,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
@@ -54,23 +60,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.annotation.StringRes
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -80,38 +81,38 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
-import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
-import com.aliothmoon.maafw.settings.SettingsEffect
-import com.aliothmoon.maafw.settings.SettingsIntent
-import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
-import com.aliothmoon.maafw.util.Misc
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
+import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
-import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
-import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
+import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.PiInstallDialog
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
+import com.aliothmoon.maafw.ui.components.UpdatePromptDialog
+import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.home.HomeScreen
-import com.aliothmoon.maafw.ui.navigation.Routes
 import com.aliothmoon.maafw.ui.logs.AppLogDetailScreen
 import com.aliothmoon.maafw.ui.logs.AppLogScreen
-import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.logs.LogExportController
 import com.aliothmoon.maafw.ui.logs.RunLogArchiveScreen
 import com.aliothmoon.maafw.ui.logs.RunLogDetailScreen
+import com.aliothmoon.maafw.ui.navigation.Routes
+import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
@@ -119,6 +120,7 @@ import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
 import com.aliothmoon.maafw.ui.tasks.rememberMovablePreview
+import com.aliothmoon.maafw.util.Misc
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -279,27 +281,6 @@ fun AppRoot(
             }
         }
 
-        LaunchedEffect(Unit) {
-            settingsViewModel.effects.collect { effect ->
-                when (effect) {
-                    SettingsEffect.RequestNotificationPermission -> {
-                        // POST_NOTIFICATIONS 走运行时弹窗；拒了也别在后台反复 retry，
-                        // SettingsScreen 顶上会显示一条「未授权」+ 跳系统通知详情页的入口
-                        val activity = context.findActivity()
-                        val granted = if (activity != null) {
-                            SystemPermissionRequester.request(
-                                activity,
-                                SystemPermission.Notification,
-                            )
-                        } else false
-                        settingsViewModel.onIntent(
-                            SettingsIntent.NotificationPermissionResult(granted),
-                        )
-                    }
-                }
-            }
-        }
-
         // Activity 进出都会走这里；系统精确闹钟页没有结果回调
         val scheduleLifecycleOwner = LocalLifecycleOwner.current
         DisposableEffect(scheduleLifecycleOwner) {
@@ -334,6 +315,24 @@ fun AppRoot(
             body = state.welcomePrompt,
             onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
         )
+
+        UpdatePromptDialog(
+            update = settingsState.update,
+            onDownload = { settingsViewModel.onIntent(SettingsIntent.DownloadUpdate) },
+            onDismiss = { settingsViewModel.onIntent(SettingsIntent.DismissUpdatePrompt) },
+        )
+
+        // 检查错误（含 CDK 业务错误）与更新提示同级同形态，都走弹窗
+        settingsState.update.errorPrompt?.let { error ->
+            MaaPromptDialog(
+                title = stringResource(R.string.dialog_update_error_title),
+                message = error.asString(),
+                icon = Icons.Outlined.ErrorOutline,
+                confirmText = stringResource(R.string.dialog_confirm),
+                onConfirm = { settingsViewModel.onIntent(SettingsIntent.DismissUpdateError) },
+                onDismissRequest = { settingsViewModel.onIntent(SettingsIntent.DismissUpdateError) },
+            )
+        }
 
         // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂
         Box(
@@ -413,7 +412,13 @@ fun AppRoot(
                     .consumeWindowInsets(padding),
             ) { page ->
                 when (TopDestination.entries[page]) {
-                    TopDestination.Home -> HomeScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
+                    TopDestination.Home -> HomeScreen(
+                        state = state,
+                        onIntent = viewModel::onIntent,
+                        update = settingsState.update,
+                        onSettingsIntent = settingsViewModel::onIntent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                     TopDestination.Tasks -> TasksScreen(
                         state = state,
                         previewSurfaceReady = previewSurfaceReady,

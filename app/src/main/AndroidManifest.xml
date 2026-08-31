@@ -105,20 +105,6 @@
                 android:value="Keeps the app process alive while the privileged service drives a MaaFramework run" />
         </service>
 
-        <!--
-          应用更新下载进度的前台服务
-          同 RunForegroundService 用 specialUse:App update download 也不是 dataSync 的
-          常见用例(版本会在下载中替换自己),硬套 dataSync 在 Play 上架的时候会挑剔
-        -->
-        <service
-            android:name=".service.UpdateDownloadForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the app process alive while an APK update is being downloaded" />
-        </service>
-
         <!-- 只过滤按键，不读窗口内容；用途见 AccessibilityHelperService -->
         <service
             android:name=".service.AccessibilityHelperService"

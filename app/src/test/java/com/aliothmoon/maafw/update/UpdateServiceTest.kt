@@ -9,93 +9,46 @@ import org.junit.Test
 class UpdateServiceTest {
 
     @Test
-    fun `mirror missing package falls back to github`() = runBlocking {
-        val mirror = FakeClient(UpdateSource.MIRRORCHYAN, checkResult = failed(UpdateCheckFailure.RESOURCE_NOT_FOUND))
+    fun `check dispatches to the selected source only`() = runBlocking {
+        val mirror = FakeClient(
+            UpdateSource.MIRRORCHYAN,
+            checkResult = UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("1.1.0")),
+        )
         val github = FakeClient(
             UpdateSource.GITHUB,
-            checkResult = UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("1.1.0")),
+            checkResult = UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("9.9.9")),
         )
         val service = UpdateService(listOf(mirror, github))
 
         assertEquals(
-            UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("1.1.0")),
-            service.checkUpdate(checkRequest()),
-        )
-        assertTrue(mirror.checkInvoked)
-        assertTrue(github.checkInvoked)
-    }
-
-    @Test
-    fun `mirror missing apk asset also falls back to github`() = runBlocking {
-        val mirror = FakeClient(UpdateSource.MIRRORCHYAN, checkResult = failed(UpdateCheckFailure.NO_MATCHING_ASSET))
-        val github = FakeClient(
-            UpdateSource.GITHUB,
-            checkResult = UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0"),
-        )
-        val service = UpdateService(listOf(mirror, github))
-
-        assertEquals(
-            UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0"),
-            service.checkUpdate(checkRequest()),
-        )
-        assertTrue(github.checkInvoked)
-    }
-
-    @Test
-    fun `mirror missing configuration falls back to github`() = runBlocking {
-        val mirror = FakeClient(UpdateSource.MIRRORCHYAN, checkResult = failed(UpdateCheckFailure.MISSING_CONFIGURATION))
-        val github = FakeClient(
-            UpdateSource.GITHUB,
-            checkResult = UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0"),
-        )
-        val service = UpdateService(listOf(mirror, github))
-
-        assertEquals(
-            UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0"),
-            service.checkUpdate(checkRequest()),
-        )
-        assertTrue(github.checkInvoked)
-    }
-
-    @Test
-    fun `mirror non-fallback failure does not query github`() = runBlocking {
-        val mirror = FakeClient(UpdateSource.MIRRORCHYAN, checkResult = failed(UpdateCheckFailure.NETWORK))
-        val github = FakeClient(
-            UpdateSource.GITHUB,
-            checkResult = UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "1.0.0"),
-        )
-        val service = UpdateService(listOf(mirror, github))
-
-        assertEquals(
-            UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.NETWORK),
-            service.checkUpdate(checkRequest()),
+            UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("1.1.0")),
+            service.check(checkRequest(UpdateSource.MIRRORCHYAN)),
         )
         assertTrue(mirror.checkInvoked)
         assertFalse(github.checkInvoked)
     }
 
     @Test
-    fun `mirror up-to-date cross-checks github and keeps preferred when alt agrees up-to-date`() = runBlocking {
+    fun `check failure is returned as-is without querying the other source`() = runBlocking {
         val mirror = FakeClient(
             UpdateSource.MIRRORCHYAN,
-            checkResult = UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0"),
+            checkResult = UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.RESOURCE_NOT_FOUND),
         )
         val github = FakeClient(
             UpdateSource.GITHUB,
-            checkResult = UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "0.9.0"),
+            checkResult = UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("1.1.0")),
         )
         val service = UpdateService(listOf(mirror, github))
 
         assertEquals(
-            UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0"),
-            service.checkUpdate(checkRequest()),
+            UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.RESOURCE_NOT_FOUND),
+            service.check(checkRequest(UpdateSource.MIRRORCHYAN)),
         )
-        assertTrue(mirror.checkInvoked)
-        assertTrue(github.checkInvoked)
+        assertFalse(github.checkInvoked)
     }
 
     @Test
-    fun `mirror up-to-date takes github update when alt has a newer version`() = runBlocking {
+    fun `up to date is trusted without cross-checking the other source`() = runBlocking {
         val mirror = FakeClient(
             UpdateSource.MIRRORCHYAN,
             checkResult = UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0"),
@@ -107,31 +60,10 @@ class UpdateServiceTest {
         val service = UpdateService(listOf(mirror, github))
 
         assertEquals(
-            UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("1.1.0")),
-            service.checkUpdate(checkRequest()),
-        )
-        assertTrue(mirror.checkInvoked)
-        assertTrue(github.checkInvoked)
-    }
-
-    @Test
-    fun `mirror up-to-date keeps preferred when alt check fails`() = runBlocking {
-        val mirror = FakeClient(
-            UpdateSource.MIRRORCHYAN,
-            checkResult = UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0"),
-        )
-        val github = FakeClient(
-            UpdateSource.GITHUB,
-            checkResult = UpdateCheckResult.SourceFailed(UpdateSource.GITHUB, UpdateCheckFailure.NETWORK),
-        )
-        val service = UpdateService(listOf(mirror, github))
-
-        assertEquals(
             UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0"),
-            service.checkUpdate(checkRequest()),
+            service.check(checkRequest(UpdateSource.MIRRORCHYAN)),
         )
-        assertTrue(mirror.checkInvoked)
-        assertTrue(github.checkInvoked)
+        assertFalse(github.checkInvoked)
     }
 
     @Test
@@ -149,32 +81,17 @@ class UpdateServiceTest {
         )
         val service = UpdateService(listOf(mirror, github))
 
-        val result = service.resolveDownload(
-            resolveRequest(UpdateSource.GITHUB),
-        )
+        val result = service.resolve(resolveRequest(UpdateSource.GITHUB))
 
         assertEquals(UpdateResolveResult.Resolved(resolved), result)
         assertTrue(github.resolveInvoked)
         assertFalse(mirror.resolveInvoked)
     }
 
-    @Test
-    fun `resolve without registered client reports missing configuration`() = runBlocking {
-        val service = UpdateService(emptyList())
-
-        assertEquals(
-            UpdateResolveResult.Failed(UpdateSource.GITHUB, UpdateCheckFailure.MISSING_CONFIGURATION),
-            service.resolveDownload(resolveRequest(UpdateSource.GITHUB)),
-        )
-    }
-
-    private fun checkRequest() = UpdateCheckRequest(currentVersion = "1.0.0", abi = AndroidAbi.ARM64)
+    private fun checkRequest(source: UpdateSource) = UpdateCheckRequest(source = source, currentVersion = "1.0.0", abi = AndroidAbi.ARM64)
 
     private fun resolveRequest(source: UpdateSource) =
         UpdateResolveRequest(source = source, currentVersion = "1.0.0", abi = AndroidAbi.ARM64)
-
-    private fun failed(reason: UpdateCheckFailure) =
-        UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, reason)
 
     private class FakeClient(
         override val source: UpdateSource,

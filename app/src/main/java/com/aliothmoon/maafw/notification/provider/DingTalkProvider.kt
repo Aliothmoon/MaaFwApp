@@ -1,14 +1,15 @@
 package com.aliothmoon.maafw.notification.provider
 
 import android.util.Base64
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
-import kotlinx.serialization.Serializable
-import timber.log.Timber
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.util.HttpClientHelper
 import java.net.URLEncoder
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlinx.serialization.Serializable
+import timber.log.Timber
 
 /**
  * 钉钉自定义机器人
@@ -17,7 +18,7 @@ import javax.crypto.spec.SecretKeySpec
  * HmacSHA256，再 Base64 + URL 编码挂到查询串上。选「关键词」或「IP 白名单」的留空
  */
 class DingTalkProvider(
-    private val httpClient: NotificationHttpClient,
+    private val httpClient: HttpClientHelper,
     private val settingsManager: NotificationSettingsManager,
 ) : NotificationProvider {
 

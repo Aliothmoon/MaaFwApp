@@ -3,10 +3,8 @@ package com.aliothmoon.maafw.di
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.notification.ExternalNotificationService
 import com.aliothmoon.maafw.notification.NotificationCenter
-import com.aliothmoon.maafw.notification.NotificationPermissionRequester
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.RunEventNotifier
-import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
 import com.aliothmoon.maafw.notification.provider.BarkProvider
 import com.aliothmoon.maafw.notification.provider.CustomWebhookProvider
 import com.aliothmoon.maafw.notification.provider.DingTalkProvider
@@ -14,12 +12,11 @@ import com.aliothmoon.maafw.notification.provider.DiscordProvider
 import com.aliothmoon.maafw.notification.provider.DiscordWebhookProvider
 import com.aliothmoon.maafw.notification.provider.GotifyProvider
 import com.aliothmoon.maafw.notification.provider.KookProvider
-import com.aliothmoon.maafw.notification.provider.NotificationHttpClient
 import com.aliothmoon.maafw.notification.provider.QmsgProvider
 import com.aliothmoon.maafw.notification.provider.ServerChanProvider
 import com.aliothmoon.maafw.notification.provider.SmtpProvider
 import com.aliothmoon.maafw.notification.provider.TelegramProvider
-import okhttp3.OkHttpClient
+import com.aliothmoon.maafw.util.HttpClientHelper
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -27,12 +24,9 @@ import org.koin.dsl.module
 val notificationModule = module {
     single { NotificationSettingsManager(androidContext()) }
     single { RunEventNotifier(androidContext(), get()) }
-    single { UpdateDownloadProgressState(androidContext()) }
-    single { NotificationPermissionRequester(androidContext()) }
-    single { NotificationHttpClient(OkHttpClient.Builder().build()) }
 
     single {
-        val http = get<NotificationHttpClient>()
+        val http = get<HttpClientHelper>()
         val settings = get<NotificationSettingsManager>()
         ExternalNotificationService(
             settingsManager = settings,

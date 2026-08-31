@@ -52,7 +52,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
      * 现有三个等待点：启动首屏（`MainActivity`）、`MaaFwApp.postCreate`（`RemoteAccessCoordinator`
      * 一初始化就同步读 startupBackend）、`ScheduleExecutionService.handleTrigger`（投递前要 runMode）
      */
-    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+    override val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
     private val _startupBackend = MutableStateFlow(parseBackend(defaults.startupBackend))
     val startupBackend: StateFlow<RemoteBackend> = _startupBackend.asStateFlow()
@@ -103,12 +103,17 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _telemetryEnabled = MutableStateFlow(defaults.telemetryEnabled.toBoolean())
     override val telemetryEnabled: StateFlow<Boolean> = _telemetryEnabled.asStateFlow()
 
-    private val _updateDownloadSource =
-        MutableStateFlow(parseUpdateSource(defaults.updateDownloadSource))
-    override val updateDownloadSource: StateFlow<UpdateSource> = _updateDownloadSource.asStateFlow()
+    private val _autoCheckUpdate = MutableStateFlow(defaults.autoCheckUpdate.toBoolean())
+    override val autoCheckUpdate: StateFlow<Boolean> = _autoCheckUpdate.asStateFlow()
+
+    private val _autoDownloadUpdate = MutableStateFlow(defaults.autoDownloadUpdate.toBoolean())
+    override val autoDownloadUpdate: StateFlow<Boolean> = _autoDownloadUpdate.asStateFlow()
 
     private val _updateChannel = MutableStateFlow(parseUpdateChannel(defaults.updateChannel))
     override val updateChannel: StateFlow<UpdateChannel> = _updateChannel.asStateFlow()
+
+    private val _updateSource = MutableStateFlow(parseUpdateSource(defaults.updateSource))
+    override val updateSource: StateFlow<UpdateSource> = _updateSource.asStateFlow()
 
     private val _mirrorchyanCdk = MutableStateFlow(defaults.mirrorchyanCdk)
     override val mirrorchyanCdk: StateFlow<String> = _mirrorchyanCdk.asStateFlow()
@@ -134,8 +139,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
                 _wakeCredential.value = s.wakeCredential
                 _telemetryEnabled.value = s.telemetryEnabled.toBoolean()
-                _updateDownloadSource.value = parseUpdateSource(s.updateDownloadSource)
+                _autoCheckUpdate.value = s.autoCheckUpdate.toBoolean()
+                _autoDownloadUpdate.value = s.autoDownloadUpdate.toBoolean()
                 _updateChannel.value = parseUpdateChannel(s.updateChannel)
+                _updateSource.value = parseUpdateSource(s.updateSource)
                 _mirrorchyanCdk.value = s.mirrorchyanCdk
                 // 必须是最后一行：置位即宣告上面全部就位
                 _loaded.value = true
@@ -209,12 +216,20 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[telemetryEnabled] = enabled.toString() }
     }
 
-    override suspend fun setUpdateDownloadSource(source: UpdateSource): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[updateDownloadSource] = source.name }
+    override suspend fun setAutoCheckUpdate(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[autoCheckUpdate] = enabled.toString() }
+    }
+
+    override suspend fun setAutoDownloadUpdate(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[autoDownloadUpdate] = enabled.toString() }
     }
 
     override suspend fun setUpdateChannel(channel: UpdateChannel): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[updateChannel] = channel.name }
+    }
+
+    override suspend fun setUpdateSource(source: UpdateSource): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[updateSource] = source.name }
     }
 
     override suspend fun setMirrorchyanCdk(cdk: String): Unit = with(AppSettingsSchema) {
@@ -240,9 +255,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private fun parseEventNotificationLevel(raw: String): EventNotificationLevel =
         runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)
 
-    private fun parseUpdateSource(raw: String): UpdateSource =
-        runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRRORCHYAN)
-
     private fun parseUpdateChannel(raw: String): UpdateChannel =
         runCatching { UpdateChannel.valueOf(raw) }.getOrDefault(UpdateChannel.STABLE)
+
+    private fun parseUpdateSource(raw: String): UpdateSource =
+        runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRRORCHYAN)
 }

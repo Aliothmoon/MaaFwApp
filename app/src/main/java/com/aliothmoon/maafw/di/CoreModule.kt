@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.SystemApkInstaller
 import com.aliothmoon.maafw.config.DataStoreUserConfigurationStore
@@ -14,19 +15,32 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.util.HttpClientHelper
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 
 /** 进程级 scope 限定符，避免与其它 CoroutineScope 绑定冲突 */
 object AppCoroutineScope
 
 val coreModule = module {
     single { SystemApkInstaller(androidContext()) }
+
+    // 进程级共享 OkHttpClient：update 与 notification 共用连接池
+    single {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+    }
+    single { HttpClientHelper(get()) }
 
     single(named<AppCoroutineScope>()) {
         val handler = CoroutineExceptionHandler { _, throwable ->

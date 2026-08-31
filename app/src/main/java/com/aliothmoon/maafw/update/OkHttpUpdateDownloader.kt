@@ -1,16 +1,21 @@
 package com.aliothmoon.maafw.update
 
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.constant.MiscConstants
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.util.HttpClientHelper
+import com.aliothmoon.maafw.util.await
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.Call
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
-import com.aliothmoon.maafw.MaaDispatchers
-import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.i18n.UiText
-import com.aliothmoon.maafw.i18n.uiTextOf
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
@@ -20,17 +25,11 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.coroutines.coroutineContext
 
 class OkHttpUpdateDownloader(
-    private val directory: File,
-    okHttpClient: OkHttpClient = defaultClient(),
-    private val userAgent: String = "MaaFwApp Android",
+    private val helper: HttpClientHelper,
 ) {
-
-    private val client = okHttpClient.newBuilder()
-        .callTimeout(0, TimeUnit.MILLISECONDS)
-        .build()
 
     private val mutex = Mutex()
 
@@ -60,6 +59,7 @@ class OkHttpUpdateDownloader(
             ?: return failed(UpdateDownloadFailure.INVALID_DIGEST)
         val target = targetFile(update, expectedDigest)
         val part = File(target.path + PART_EXTENSION)
+        var call: Call? = null
         try {
             if (target.isFile && digestOf(target) == expectedDigest) {
                 return downloaded(update, target, expectedDigest)
@@ -71,7 +71,8 @@ class OkHttpUpdateDownloader(
                 return failed(UpdateDownloadFailure.STORAGE)
             }
 
-            client.newCall(buildRequest(url)).await().use { response ->
+            val activeCall = helper.rawClient().newCall(buildRequest(url)).also { call = it }
+            activeCall.await().use { response ->
                 val code = response.code
                 if (code != HTTP_OK) {
                     throw UpdateDownloadException(
@@ -90,6 +91,9 @@ class OkHttpUpdateDownloader(
                 FileOutputStream(part).use { out ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     while (true) {
+                        // 阻塞 read 不感知协程取消：逐块自检退出，配合 catch 里的 call.cancel()
+                        // 让还阻塞在 socket 上的 read 立刻抛出
+                        coroutineContext.ensureActive()
                         val read = input.read(buffer)
                         if (read < 0) break
                         if (read == 0) continue
@@ -137,6 +141,7 @@ class OkHttpUpdateDownloader(
                 return downloaded(update, target, actualDigest)
             }
         } catch (e: CancellationException) {
+            call?.cancel()
             throw e
         } catch (e: UpdateDownloadException) {
             return failed(e.failure, e.detail, e.message)
@@ -155,13 +160,13 @@ class OkHttpUpdateDownloader(
     private fun buildRequest(url: okhttp3.HttpUrl): Request =
         Request.Builder()
             .url(url)
-            .header("User-Agent", userAgent)
+            .header("User-Agent", MiscConstants.BROWSER_UA)
             .header("Accept-Encoding", "identity")
             .get()
             .build()
 
     private fun prepareDirectory(): Boolean = try {
-        directory.mkdirs() || directory.isDirectory
+        with(AppPaths.UPDATES_CACHE_DIR) { mkdirs() || isDirectory }
     } catch (_: SecurityException) {
         false
     }
@@ -206,7 +211,7 @@ class OkHttpUpdateDownloader(
         val safeVersion = update.version.replace(UNSAFE_FILE_NAME, "_")
             .take(MAX_VERSION_LENGTH)
             .ifBlank { "unknown" }
-        return File(directory, "maafw-${safeVersion}-${identity}.apk")
+        return File(AppPaths.UPDATES_CACHE_DIR, "maafw-${safeVersion}-${identity}.apk")
     }
 
     private fun digestOf(file: File): String = try {
@@ -278,10 +283,5 @@ class OkHttpUpdateDownloader(
         val DIGEST_PREFIX_PATTERN = Regex("""^sha256:""", RegexOption.IGNORE_CASE)
         val DIGEST_PATTERN = Regex("""^[0-9a-f]{64}$""")
         val UNSAFE_FILE_NAME = Regex("""[^A-Za-z0-9._-]""")
-
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
     }
 }
