@@ -3,8 +3,11 @@ package com.aliothmoon.maafw.update
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.util.int
+import com.aliothmoon.maafw.util.parseJsonObject
+import com.aliothmoon.maafw.util.string
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.io.IOException
+import timber.log.Timber
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -13,9 +16,12 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 internal class MirrorChyanLatestApi(
     private val gateway: OkHttpUpdateHttpGateway,
-    private val baseUrl: String = "https://mirrorchyan.com",
-    private val userAgent: String = "MaaFwApp Android",
+    private val userAgent: String,
 ) {
+    companion object {
+        private const val BASE_URL = "https://mirrorchyan.com"
+    }
+
     internal data class Latest(
         val version: String,
         val url: String?,
@@ -33,8 +39,8 @@ internal class MirrorChyanLatestApi(
         abi: AndroidAbi,
         currentVersion: String,
         cdk: String?,
-    ): Latest {
-        val url = baseUrl.toHttpUrl().newBuilder()
+    ): UpdateSourceOutcome<Latest> {
+        val url = BASE_URL.toHttpUrl().newBuilder()
             .addPathSegments("api/resources")
             .addPathSegment(rid)
             .addPathSegment("latest")
@@ -49,40 +55,44 @@ internal class MirrorChyanLatestApi(
             .build()
             .toString()
         val response = gateway.get(url, mapOf("User-Agent" to userAgent, "Accept" to "application/json"))
+        if (response.truncated) {
+            return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
+        }
         val root = parseJsonObject(response.body)
         val bodyCode = root?.int("code")
         if (bodyCode != null && bodyCode != 0) {
             val serverMessage = root.string("msg")
-            throw UpdateSourceException(
+            return UpdateSourceOutcome.Failed(
                 businessFailure(bodyCode),
-                serverMessage,
                 detail = serverMessage?.let(::uiTextFromFramework),
             )
         }
         if (!response.statusCode.isSuccess()) {
             val serverMessage = root?.string("msg")
-            throw UpdateSourceException(
+            return UpdateSourceOutcome.Failed(
                 UpdateCheckFailure.HTTP,
-                serverMessage ?: "HTTP ${response.statusCode}",
                 detail = serverMessage?.let(::uiTextFromFramework)
                     ?: uiTextOf(R.string.update_detail_http_status, response.statusCode),
             )
         }
         if (root == null || bodyCode == null) {
-            throw UpdateSourceException(UpdateCheckFailure.INVALID_RESPONSE, null)
+            return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
         }
         val data = root["data"] as? kotlinx.serialization.json.JsonObject
-            ?: throw UpdateSourceException(UpdateCheckFailure.INVALID_RESPONSE, null)
+            ?: return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
         val version = data.string("version_name")
-            ?: throw UpdateSourceException(UpdateCheckFailure.INVALID_RESPONSE, null)
-        return Latest(
-            version = version,
-            url = data.string("url"),
-            sha256 = data.string("sha256"),
-            releaseNote = data.string("release_note"),
+            ?: return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
+        return UpdateSourceOutcome.Ok(
+            Latest(
+                version = version,
+                url = data.string("url"),
+                sha256 = data.string("sha256"),
+                releaseNote = data.string("release_note"),
+            ),
         )
     }
 
+    // 错误检查缺失
     private fun businessFailure(code: Int): UpdateCheckFailure = when (code) {
         7003 -> UpdateCheckFailure.RATE_LIMITED
         8001 -> UpdateCheckFailure.RESOURCE_NOT_FOUND
@@ -99,20 +109,6 @@ internal class MirrorChyanUpdateVersionChecker(
     override val source: UpdateSource = UpdateSource.MIRRORCHYAN
 
     override suspend fun check(request: UpdateCheckRequest): UpdateCheckResult = try {
-        checkInternal(request)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: UpdateSourceException) {
-        UpdateCheckResult.SourceFailed(source, e.reason, detail = e.detail)
-    } catch (_: IllegalArgumentException) {
-        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
-    } catch (_: IOException) {
-        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
-    } catch (e: Exception) {
-        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.UNKNOWN)
-    }
-
-    private suspend fun checkInternal(request: UpdateCheckRequest): UpdateCheckResult {
         val rid = request.mirrorchyanRid?.trim()?.takeIf(String::isNotBlank)
             ?: return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
         val currentVersion = UpdateVersion.parse(request.currentVersion)
@@ -121,18 +117,26 @@ internal class MirrorChyanUpdateVersionChecker(
                 UpdateCheckFailure.VERSION_INVALID,
                 detail = uiTextFromFramework(request.currentVersion),
             )
-        val latest = api.latest(rid, request.channel, request.abi, request.currentVersion, cdk = null)
+        val latest = when (val outcome = api.latest(rid, request.channel, request.abi, request.currentVersion, cdk = null)) {
+            is UpdateSourceOutcome.Failed -> return UpdateCheckResult.SourceFailed(source, outcome.reason, detail = outcome.detail)
+            is UpdateSourceOutcome.Ok -> outcome.value
+        }
         val latestVersion = UpdateVersion.parse(latest.version)
             ?: return UpdateCheckResult.SourceFailed(
                 source,
                 UpdateCheckFailure.VERSION_INVALID,
                 detail = uiTextFromFramework(latest.version),
             )
-        return if (latestVersion <= currentVersion) {
+        if (latestVersion <= currentVersion) {
             UpdateCheckResult.UpToDate(source, latest.version)
         } else {
             UpdateCheckResult.UpdateAvailable(source, UpdateInfo(version = latest.version, releaseNotes = latest.releaseNote))
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.tag("UpdateCheck").w(e, "%s check failed", source)
+        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
     }
 }
 
@@ -143,29 +147,23 @@ internal class MirrorChyanUpdateUrlResolver(
     override val source: UpdateSource = UpdateSource.MIRRORCHYAN
 
     override suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult = try {
-        resolveInternal(request)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: UpdateSourceException) {
-        UpdateResolveResult.Failed(source, e.reason, e.detail)
-    } catch (_: IllegalArgumentException) {
-        UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
-    } catch (_: IOException) {
-        UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
-    } catch (e: Exception) {
-        UpdateResolveResult.Failed(source, UpdateCheckFailure.UNKNOWN)
-    }
-
-    private suspend fun resolveInternal(request: UpdateResolveRequest): UpdateResolveResult {
         val rid = request.mirrorchyanRid?.trim()?.takeIf(String::isNotBlank)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
-        val latest = api.latest(rid, request.channel, request.abi, request.currentVersion, cdk = request.mirrorchyanCdk)
+        val latest = when (val outcome = api.latest(rid, request.channel, request.abi, request.currentVersion, cdk = request.mirrorchyanCdk)) {
+            is UpdateSourceOutcome.Failed -> return UpdateResolveResult.Failed(source, outcome.reason, outcome.detail)
+            is UpdateSourceOutcome.Ok -> outcome.value
+        }
         val url = latest.url
         if (url == null || !url.isApkUrl()) {
             return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
         }
-        return UpdateResolveResult.Resolved(
+        UpdateResolveResult.Resolved(
             ResolvedUpdate(source = source, version = latest.version, downloadUrl = url, sha256 = latest.sha256),
         )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.tag("UpdateResolve").w(e, "%s resolve failed", source)
+        UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
     }
 }

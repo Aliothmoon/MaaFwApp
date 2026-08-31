@@ -4,26 +4,25 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.BuildConfig
-import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.SystemApkInstaller
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationPermissionRequester
+import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
-
+import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateCheckRequest
+import com.aliothmoon.maafw.update.UpdateDownloadResult
 import com.aliothmoon.maafw.update.UpdateResolveRequest
 import com.aliothmoon.maafw.update.UpdateResolveResult
 import com.aliothmoon.maafw.update.UpdateService
-import com.aliothmoon.maafw.update.errorMessage
-import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.UpdateDownloadResult
 import com.aliothmoon.maafw.update.UpdateSource
-import com.aliothmoon.maafw.notification.UpdateDownloadProgressState
+import com.aliothmoon.maafw.update.message
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -36,6 +35,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * 设置页的 Activity 作用域会话
@@ -220,7 +220,7 @@ class SettingsViewModel(
             )) {
                 is UpdateResolveResult.Resolved -> resolved.update
                 is UpdateResolveResult.Failed -> {
-                    val message = resolved.errorMessage()
+                    val message = resolved.message()
                         ?: uiTextOf(R.string.settings_update_no_downloadable_apk)
                     updateOperation.update { it.copy(downloading = false, errorMessage = message) }
                     updateDownloadNotifier.failed(message)
@@ -247,9 +247,9 @@ class SettingsViewModel(
                     install(downloadResult)
                 }
                 is UpdateDownloadResult.Failed -> {
-                    updateDownloadNotifier.failed(downloadResult.errorMessage())
+                    updateDownloadNotifier.failed(downloadResult.message())
                     updateOperation.update {
-                        it.copy(downloading = false, errorMessage = downloadResult.errorMessage())
+                        it.copy(downloading = false, errorMessage = downloadResult.message())
                     }
                 }
             }
@@ -257,6 +257,7 @@ class SettingsViewModel(
             updateDownloadNotifier.cancel()
             throw e
         } catch (e: Exception) {
+            Timber.e(e, "download update error")
             val message = uiTextOf(R.string.update_fail_unknown)
             updateDownloadNotifier.failed(message)
             updateOperation.update { it.copy(downloading = false, errorMessage = message) }
@@ -274,7 +275,7 @@ class SettingsViewModel(
             }
 
             is SystemApkInstaller.Result.Failed -> updateOperation.update {
-                it.copy(downloading = false, errorMessage = installResult.errorMessage())
+                it.copy(downloading = false, errorMessage = installResult.message())
             }
         }
     }

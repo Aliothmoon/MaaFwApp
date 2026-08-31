@@ -3,10 +3,13 @@ package com.aliothmoon.maafw.update
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.util.boolean
+import com.aliothmoon.maafw.util.parseJsonArray
+import com.aliothmoon.maafw.util.parseJsonObject
+import com.aliothmoon.maafw.util.string
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import java.io.IOException
+import timber.log.Timber
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -38,26 +41,28 @@ internal class GitHubReleasesApi(
         return repository
     }
 
-    suspend fun releases(repository: String): List<Release> {
+    suspend fun releases(repository: String): UpdateSourceOutcome<List<Release>> {
         val releases = mutableListOf<Release>()
         for (page in 1..MAX_PAGES) {
             val response = gateway.get(buildApiUrl(repository, page), API_HEADERS)
+            if (response.truncated) {
+                return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
+            }
             if (!response.statusCode.isSuccess()) {
                 val serverMessage = parseJsonObject(response.body)?.string("message")
-                throw UpdateSourceException(
+                return UpdateSourceOutcome.Failed(
                     apiFailureReason(response.statusCode),
-                    serverMessage ?: "HTTP ${response.statusCode}",
                     detail = serverMessage?.let(::uiTextFromFramework)
                         ?: uiTextOf(R.string.update_detail_http_status, response.statusCode),
                 )
             }
             val parsed = parseJsonArray(response.body)
-                ?: throw UpdateSourceException(UpdateCheckFailure.INVALID_RESPONSE, null)
+                ?: return UpdateSourceOutcome.Failed(UpdateCheckFailure.INVALID_RESPONSE)
             if (parsed.isEmpty()) break
             releases += parsed.filterIsInstance<JsonObject>().mapNotNull(::release)
             if (parsed.size < PAGE_SIZE) break
         }
-        return releases
+        return UpdateSourceOutcome.Ok(releases)
     }
 
     /** 渠道过滤 + 版本解析；无一条合格返回 null */
@@ -122,18 +127,8 @@ internal class GitHubReleasesApi(
         RegexOption.IGNORE_CASE,
     ).containsMatchIn(this)
 
-    private fun buildApiUrl(repository: String, page: Int): String {
-        val (owner, repo) = repository.split('/')
-        return apiBaseUrl.toHttpUrl().newBuilder()
-            .addPathSegments("repos")
-            .addPathSegment(owner)
-            .addPathSegment(repo)
-            .addPathSegment("releases")
-            .addQueryParameter("per_page", PAGE_SIZE.toString())
-            .addQueryParameter("page", page.toString())
-            .build()
-            .toString()
-    }
+    private fun buildApiUrl(repository: String, page: Int): String =
+        "${apiBaseUrl.trimEnd('/')}/repos/$repository/releases?per_page=$PAGE_SIZE&page=$page"
 
     /** 429 与 403 都按限流归类：不带 token 的匿名额度被这两者覆盖 */
     private fun apiFailureReason(statusCode: Int): UpdateCheckFailure =
@@ -178,20 +173,6 @@ internal class GitHubUpdateVersionChecker(
     override val source: UpdateSource = UpdateSource.GITHUB
 
     override suspend fun check(request: UpdateCheckRequest): UpdateCheckResult = try {
-        checkInternal(request)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: UpdateSourceException) {
-        UpdateCheckResult.SourceFailed(source, e.reason, detail = e.detail)
-    } catch (_: IllegalArgumentException) {
-        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
-    } catch (_: IOException) {
-        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
-    } catch (e: Exception) {
-        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.UNKNOWN)
-    }
-
-    private suspend fun checkInternal(request: UpdateCheckRequest): UpdateCheckResult {
         val currentVersion = UpdateVersion.parse(request.currentVersion)
             ?: return UpdateCheckResult.SourceFailed(
                 source,
@@ -200,10 +181,19 @@ internal class GitHubUpdateVersionChecker(
             )
         val repository = api.parseRepository(request.githubRepository)
             ?: return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
-        val candidate = api.latestEligible(api.releases(repository), request.channel)
+        val releases = when (val outcome = api.releases(repository)) {
+            is UpdateSourceOutcome.Failed -> return UpdateCheckResult.SourceFailed(
+                source,
+                outcome.reason,
+                detail = outcome.detail
+            )
+
+            is UpdateSourceOutcome.Ok -> outcome.value
+        }
+        val candidate = api.latestEligible(releases, request.channel)
             ?: return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
         val (release, version) = candidate
-        return if (version <= currentVersion) {
+        if (version <= currentVersion) {
             UpdateCheckResult.UpToDate(source, release.tag)
         } else {
             UpdateCheckResult.UpdateAvailable(
@@ -211,6 +201,12 @@ internal class GitHubUpdateVersionChecker(
                 UpdateInfo(version = release.tag, releaseNotesUrl = release.htmlUrl, releaseNotes = release.body),
             )
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // 非业务异常一律按网络错误给用户，真实原因只进日志
+        Timber.tag("UpdateCheck").w(e, "%s check failed", source)
+        UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
     }
 }
 
@@ -221,27 +217,22 @@ internal class GitHubUpdateUrlResolver(
     override val source: UpdateSource = UpdateSource.GITHUB
 
     override suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult = try {
-        resolveInternal(request)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: UpdateSourceException) {
-        UpdateResolveResult.Failed(source, e.reason, e.detail)
-    } catch (_: IllegalArgumentException) {
-        UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
-    } catch (_: IOException) {
-        UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
-    } catch (e: Exception) {
-        UpdateResolveResult.Failed(source, UpdateCheckFailure.UNKNOWN)
-    }
-
-    private suspend fun resolveInternal(request: UpdateResolveRequest): UpdateResolveResult {
         val repository = api.parseRepository(request.githubRepository)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
-        val (release, _) = api.latestEligible(api.releases(repository), request.channel)
+        val releases = when (val outcome = api.releases(repository)) {
+            is UpdateSourceOutcome.Failed -> return UpdateResolveResult.Failed(
+                source,
+                outcome.reason,
+                outcome.detail
+            )
+
+            is UpdateSourceOutcome.Ok -> outcome.value
+        }
+        val (release, _) = api.latestEligible(releases, request.channel)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
         val asset = api.selectAsset(release.assets, request.abi)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
-        return UpdateResolveResult.Resolved(
+        UpdateResolveResult.Resolved(
             ResolvedUpdate(
                 source = source,
                 version = release.tag,
@@ -249,5 +240,11 @@ internal class GitHubUpdateUrlResolver(
                 sha256 = asset.sha256,
             ),
         )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // 非业务异常一律按网络错误给用户，真实原因只进日志
+        Timber.tag("UpdateResolve").w(e, "%s resolve failed", source)
+        UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
     }
 }

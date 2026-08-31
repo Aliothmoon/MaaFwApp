@@ -17,7 +17,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,7 +53,6 @@ import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
-import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaFieldLabel
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
@@ -69,7 +67,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.errorMessage
+import com.aliothmoon.maafw.update.message
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
 import timber.log.Timber
@@ -509,7 +507,7 @@ private fun UpdateStatus(update: UpdatePanelState) {
         )
 
         is UpdateCheckResult.SourceFailed -> Text(
-            text = stringResource(R.string.settings_update_failed, result.errorMessage().asString()),
+            text = stringResource(R.string.settings_update_failed, result.message().asString()),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )

@@ -17,9 +17,8 @@ import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import timber.log.Timber
 import java.io.File
-import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
-import java.io.RandomAccessFile
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -78,69 +77,28 @@ class OkHttpUpdateDownloader(
                 return failed(UpdateDownloadFailure.STORAGE)
             }
 
-            // 断点续传:上一次失败的 .part 字节数,会作为 Range 起点
-            val resumeOffset = part.length()
-            val request = buildRequest(url, resumeOffset)
-            client.newCall(request).await().use { response ->
+            client.newCall(buildRequest(url)).await().use { response ->
                 val code = response.code
-                if (code != HTTP_OK && code != HTTP_PARTIAL) {
+                if (code != HTTP_OK) {
                     throw UpdateDownloadException(
                         UpdateDownloadFailure.HTTP,
                         "HTTP $code",
                         detail = uiTextOf(R.string.update_detail_http_status, code),
                     )
                 }
-                val partial = code == HTTP_PARTIAL
-                // 服务器不认 Range:重置 .part,从 0 重新下载
-                val effectiveOffset = if (partial) {
-                    resumeOffset
-                } else if (resumeOffset > 0L) {
-                    Timber.tag("UpdateDownload").w(
-                        "Server returned HTTP %d despite Range header; dropping stale %d-byte .part",
-                        code, resumeOffset,
-                    )
-                    if (!part.delete()) {
-                        throw UpdateDownloadException(
-                            UpdateDownloadFailure.STORAGE,
-                            "Cannot truncate stale partial update download",
-                        )
-                    }
-                    0L
-                } else 0L
-
-                val body = response.body
-                val responseLength = body.contentLength()
-                val totalLength = if (effectiveOffset > 0L) {
-                    if (responseLength < 0L) -1L else responseLength + effectiveOffset
-                } else responseLength
-
+                val totalLength = response.body.contentLength()
                 val digest = MessageDigest.getInstance(SHA_256)
-                // 续传时把已落盘的字节先增量喂给 digest,避免最终验证时再扫一遍整个文件
-                if (effectiveOffset > 0L) {
-                    FileInputStream(part).buffered().use { ins ->
-                        val buffer = ByteArray(BUFFER_SIZE)
-                        while (true) {
-                            val n = ins.read(buffer)
-                            if (n < 0) break
-                            digest.update(buffer, 0, n)
-                        }
-                    }
-                }
+                var downloadedBytes = 0L
+                var lastProgressBytes = -PROGRESS_INTERVAL.toLong()
+                onProgress(0L, totalLength)
 
-                var downloadedBytes = effectiveOffset
-                var lastProgressBytes: Long = -PROGRESS_INTERVAL.toLong()
-                onProgress(downloadedBytes, totalLength)
-
-                RandomAccessFile(part, "rw").use { raf ->
-                    if (effectiveOffset > 0L) raf.seek(raf.length())
-                    else raf.setLength(0L)
+                FileOutputStream(part).use { out ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     while (true) {
-                        val read = body.byteStream().read(buffer)
+                        val read = response.body.byteStream().read(buffer)
                         if (read < 0) break
                         if (read == 0) continue
-
-                        raf.write(buffer, 0, read)
+                        out.write(buffer, 0, read)
                         digest.update(buffer, 0, read)
                         downloadedBytes += read
                         if (
@@ -171,8 +129,6 @@ class OkHttpUpdateDownloader(
                         expectedDigest.toByteArray(Charsets.US_ASCII),
                     )
                 ) {
-                    // digest 不匹配:.part 的字节是坏的,留它就会污染下次下载
-                    part.delete()
                     throw UpdateDownloadException(
                         UpdateDownloadFailure.DIGEST_MISMATCH,
                         "SHA-256 mismatch: expected $expectedDigest, got $actualDigest",
@@ -192,7 +148,6 @@ class OkHttpUpdateDownloader(
         } catch (e: CancellationException) {
             throw e
         } catch (e: UpdateDownloadException) {
-            // 失败时保留 .part,下次重试时通过 Range 头从断点继续
             return failed(e.failure, e.detail, e.message)
         } catch (_: SecurityException) {
             return failed(UpdateDownloadFailure.STORAGE)
@@ -200,23 +155,18 @@ class OkHttpUpdateDownloader(
             return failed(UpdateDownloadFailure.NETWORK)
         } catch (e: Exception) {
             return failed(UpdateDownloadFailure.UNKNOWN, logMessage = e.message)
+        } finally {
+            // 不支持续传：成功路径 move 后 part 已不存在，失败/取消一律清掉
+            part.delete()
         }
-        // 显式不提 finally { part.delete() }: 成功路径 move() 已经改名,失败路径故意保留 .part
     }
 
-    private fun buildRequest(url: okhttp3.HttpUrl, resumeOffset: Long): Request =
+    private fun buildRequest(url: okhttp3.HttpUrl): Request =
         Request.Builder()
             .url(url)
-            .apply {
-                header("User-Agent", userAgent)
-                if (resumeOffset > 0L) {
-                    header("Range", "bytes=$resumeOffset-")
-                    Timber.tag("UpdateDownload").w(
-                        "Resuming download from offset %d (existing .part)",
-                        resumeOffset,
-                    )
-                }
-            }
+            .header("User-Agent", userAgent)
+            // 禁透明 gzip：字节流与 Content-Length 一致，进度与 sha256 才对得上
+            .header("Accept-Encoding", "identity")
             .get()
             .build()
 
@@ -336,7 +286,6 @@ class OkHttpUpdateDownloader(
         const val DIGEST_FILE_SUFFIX_LENGTH = 16
         const val MAX_VERSION_LENGTH = 48
         const val HTTP_OK = 200
-        const val HTTP_PARTIAL = 206
         val DIGEST_PREFIX_PATTERN = Regex("""^sha256:""", RegexOption.IGNORE_CASE)
         val DIGEST_PATTERN = Regex("""^[0-9a-f]{64}$""")
         val UNSAFE_FILE_NAME = Regex("""[^A-Za-z0-9._-]""")

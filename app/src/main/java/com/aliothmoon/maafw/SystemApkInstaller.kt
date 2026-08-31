@@ -3,9 +3,10 @@ package com.aliothmoon.maafw
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import androidx.annotation.StringRes
 import androidx.core.content.FileProvider
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -22,10 +23,10 @@ class SystemApkInstaller(
     private val context: Context,
 ) {
 
-    enum class Failure(@param:StringRes val messageRes: Int) {
-        FILE_INVALID(R.string.update_install_fail_file_invalid),
-        INSTALLER_NOT_FOUND(R.string.update_install_fail_installer_not_found),
-        UNKNOWN(R.string.update_install_fail_unknown),
+    enum class Failure(val message: UiText) {
+        FILE_INVALID(uiTextOf(R.string.update_install_fail_file_invalid)),
+        INSTALLER_NOT_FOUND(uiTextOf(R.string.update_install_fail_installer_not_found)),
+        UNKNOWN(uiTextOf(R.string.update_install_fail_unknown)),
     }
 
     sealed interface Result {

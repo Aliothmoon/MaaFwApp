@@ -1,8 +1,8 @@
 package com.aliothmoon.maafw.update
 
-import androidx.annotation.StringRes
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
 import java.io.File
 
 /** Update metadata sources. The API never silently switches between them. */
@@ -23,16 +23,17 @@ enum class AndroidAbi(val mirrorArch: String) {
     X86("386"),
 }
 
-enum class UpdateCheckFailure(@param:StringRes val message: Int) {
-    MISSING_CONFIGURATION(R.string.update_fail_missing_configuration),
-    NETWORK(R.string.update_fail_network),
-    HTTP(R.string.update_fail_http),
-    RATE_LIMITED(R.string.update_fail_rate_limited),
-    RESOURCE_NOT_FOUND(R.string.update_fail_resource_not_found),
-    INVALID_RESPONSE(R.string.update_fail_invalid_response),
-    NO_MATCHING_ASSET(R.string.update_fail_no_matching_asset),
-    VERSION_INVALID(R.string.update_fail_version_invalid),
-    UNKNOWN(R.string.update_fail_unknown),
+/** 失败原因自带文案；动态细节由 [UpdateMessages] 拼接 */
+enum class UpdateCheckFailure(val message: UiText) {
+    MISSING_CONFIGURATION(uiTextOf(R.string.update_fail_missing_configuration)),
+    NETWORK(uiTextOf(R.string.update_fail_network)),
+    HTTP(uiTextOf(R.string.update_fail_http)),
+    RATE_LIMITED(uiTextOf(R.string.update_fail_rate_limited)),
+    RESOURCE_NOT_FOUND(uiTextOf(R.string.update_fail_resource_not_found)),
+    INVALID_RESPONSE(uiTextOf(R.string.update_fail_invalid_response)),
+    NO_MATCHING_ASSET(uiTextOf(R.string.update_fail_no_matching_asset)),
+    VERSION_INVALID(uiTextOf(R.string.update_fail_version_invalid)),
+    UNKNOWN(uiTextOf(R.string.update_fail_unknown)),
 }
 
 /**
@@ -118,14 +119,14 @@ interface UpdateDownloadUrlResolver {
     suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult
 }
 
-enum class UpdateDownloadFailure(@param:StringRes val messageRes: Int) {
-    INVALID_URL(R.string.update_download_fail_invalid_url),
-    NETWORK(R.string.update_download_fail_network),
-    HTTP(R.string.update_download_fail_http),
-    STORAGE(R.string.update_download_fail_storage),
-    INVALID_DIGEST(R.string.update_download_fail_invalid_digest),
-    DIGEST_MISMATCH(R.string.update_download_fail_digest_mismatch),
-    UNKNOWN(R.string.update_download_fail_unknown),
+enum class UpdateDownloadFailure(val message: UiText) {
+    INVALID_URL(uiTextOf(R.string.update_download_fail_invalid_url)),
+    NETWORK(uiTextOf(R.string.update_download_fail_network)),
+    HTTP(uiTextOf(R.string.update_download_fail_http)),
+    STORAGE(uiTextOf(R.string.update_download_fail_storage)),
+    INVALID_DIGEST(uiTextOf(R.string.update_download_fail_invalid_digest)),
+    DIGEST_MISMATCH(uiTextOf(R.string.update_download_fail_digest_mismatch)),
+    UNKNOWN(uiTextOf(R.string.update_download_fail_unknown)),
 }
 
 data class DownloadedUpdate(
@@ -150,10 +151,15 @@ internal object UpdateDownloadFiles {
     fun directory(cacheDir: File): File = File(cacheDir, DIRECTORY_NAME)
 }
 
-internal class UpdateSourceException(
-    val reason: UpdateCheckFailure,
-    /** 技术细节，仅进日志；用户可见的动态细节走 [detail] */
-    override val message: String?,
-    val detail: UiText? = null,
-    override val cause: Throwable? = null,
-) : Exception(message, cause)
+/** 只把 `.apk` 结尾的 URL 视为可安装产物；查询串与并段不参与判断 */
+internal fun String.isApkUrl(): Boolean =
+    substringBefore('#').substringBefore('?').endsWith(".apk", ignoreCase = true)
+
+/** api 层到用例层的浅结果：失败即 (reason, detail)，不走异常通道 */
+sealed interface UpdateSourceOutcome<out T> {
+    data class Ok<out T>(val value: T) : UpdateSourceOutcome<T>
+    data class Failed(
+        val reason: UpdateCheckFailure,
+        val detail: UiText? = null,
+    ) : UpdateSourceOutcome<Nothing>
+}

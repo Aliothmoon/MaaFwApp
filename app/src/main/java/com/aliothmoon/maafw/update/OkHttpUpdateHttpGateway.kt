@@ -20,6 +20,8 @@ import kotlin.coroutines.resumeWithException
 data class UpdateHttpResponse(
     val statusCode: Int,
     val body: String,
+    /** 响应体超过上限被截断；api 层按 INVALID_RESPONSE 处理，不当完整响应用 */
+    val truncated: Boolean = false,
 )
 
 internal class OkHttpUpdateHttpGateway(
@@ -36,7 +38,7 @@ internal class OkHttpUpdateHttpGateway(
                 .get()
                 .build()
             client.newCall(request).await().use { response ->
-                val body = try {
+                val (body, truncated) = try {
                     response.readBody()
                 } catch (e: Throwable) {
                     Timber.tag("UpdateHttp").w(
@@ -46,37 +48,36 @@ internal class OkHttpUpdateHttpGateway(
                     throw e
                 }
                 Timber.tag("UpdateHttp").w(
-                    "HTTP %d GET %s bytes=%d head=%s",
-                    response.code, url, body.length,
+                    "HTTP %d GET %s bytes=%d truncated=%b head=%s",
+                    response.code, url, body.length, truncated,
                     body.take(200).replace("\n", " ").replace("\r", " "),
                 )
-                UpdateHttpResponse(response.code, body)
+                UpdateHttpResponse(response.code, body, truncated)
             }
         }
     }
 
-    private fun okhttp3.Response.readBody(): String {
+    private fun okhttp3.Response.readBody(): Pair<String, Boolean> {
         val charset = body.contentType()?.charset(StandardCharsets.UTF_8)
             ?: StandardCharsets.UTF_8
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(READ_BUFFER_SIZE)
         var total = 0L
+        var truncated = false
         body.byteStream().use { stream ->
-            while (total <= MAX_RESPONSE_BODY_BYTES) {
+            while (true) {
                 val remaining = (MAX_RESPONSE_BODY_BYTES + 1 - total).toInt()
+                if (remaining <= 0) {
+                    truncated = true
+                    break
+                }
                 val read = stream.read(buffer, 0, minOf(buffer.size, remaining))
                 if (read < 0) break
                 output.write(buffer, 0, read)
                 total += read
             }
         }
-        if (total > MAX_RESPONSE_BODY_BYTES) {
-            throw UpdateSourceException(
-                reason = UpdateCheckFailure.INVALID_RESPONSE,
-                message = "Update response exceeds ${MAX_RESPONSE_BODY_BYTES} bytes",
-            )
-        }
-        return String(output.toByteArray(), charset)
+        return String(output.toByteArray(), charset) to truncated
     }
 
     private companion object {

@@ -14,7 +14,6 @@ import okio.ForwardingSource
 import okio.Timeout
 import okio.buffer
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.Executors
@@ -44,15 +43,13 @@ class OkHttpUpdateHttpGatewayTest {
     }
 
     @Test
-    fun `response body larger than the limit fails`() {
+    fun `response body larger than the limit is truncated`() {
         val gateway = gateway(::oversizedBody)
 
-        val exception = assertThrows(UpdateSourceException::class.java) {
-            runBlocking { gateway.get("https://example.com/api") }
-        }
+        val response = runBlocking { gateway.get("https://example.com/api") }
 
-        assertEquals(UpdateCheckFailure.INVALID_RESPONSE, exception.reason)
-        assertEquals("Update response exceeds 2097152 bytes", exception.message)
+        assertTrue(response.truncated)
+        assertEquals(2 * 1024 * 1024 + 1, response.body.toByteArray().size)
     }
 
     private fun gateway(
