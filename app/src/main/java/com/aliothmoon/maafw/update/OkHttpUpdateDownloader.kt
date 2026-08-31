@@ -1,16 +1,12 @@
 package com.aliothmoon.maafw.update
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.UiText
@@ -25,8 +21,6 @@ import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 class OkHttpUpdateDownloader(
     private val directory: File,
@@ -92,10 +86,11 @@ class OkHttpUpdateDownloader(
                 var lastProgressBytes = -PROGRESS_INTERVAL.toLong()
                 onProgress(0L, totalLength)
 
+                val input = response.body.byteStream()
                 FileOutputStream(part).use { out ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     while (true) {
-                        val read = response.body.byteStream().read(buffer)
+                        val read = input.read(buffer)
                         if (read < 0) break
                         if (read == 0) continue
                         out.write(buffer, 0, read)
@@ -124,11 +119,7 @@ class OkHttpUpdateDownloader(
                 }
 
                 val actualDigest = hex(digest.digest())
-                if (!MessageDigest.isEqual(
-                        actualDigest.toByteArray(Charsets.US_ASCII),
-                        expectedDigest.toByteArray(Charsets.US_ASCII),
-                    )
-                ) {
+                if (actualDigest != expectedDigest) {
                     throw UpdateDownloadException(
                         UpdateDownloadFailure.DIGEST_MISMATCH,
                         "SHA-256 mismatch: expected $expectedDigest, got $actualDigest",
@@ -165,7 +156,6 @@ class OkHttpUpdateDownloader(
         Request.Builder()
             .url(url)
             .header("User-Agent", userAgent)
-            // 禁透明 gzip：字节流与 Content-Length 一致，进度与 sha256 才对得上
             .header("Accept-Encoding", "identity")
             .get()
             .build()
@@ -251,7 +241,6 @@ class OkHttpUpdateDownloader(
         sha256: String,
     ): UpdateDownloadResult.Downloaded = UpdateDownloadResult.Downloaded(
         DownloadedUpdate(
-            source = update.source,
             version = update.version,
             file = file,
             sha256 = sha256,
@@ -295,17 +284,4 @@ class OkHttpUpdateDownloader(
             .readTimeout(60, TimeUnit.SECONDS)
             .build()
     }
-}
-
-private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
-    enqueue(object : Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            if (continuation.isActive) continuation.resumeWithException(e)
-        }
-
-        override fun onResponse(call: Call, response: Response) {
-            continuation.resume(response) { _, _, _ -> response.close() }
-        }
-    })
-    continuation.invokeOnCancellation { cancel() }
 }

@@ -2,11 +2,9 @@ package com.aliothmoon.maafw.di
 
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.update.GitHubReleasesApi
-import com.aliothmoon.maafw.update.GitHubUpdateUrlResolver
-import com.aliothmoon.maafw.update.GitHubUpdateVersionChecker
+import com.aliothmoon.maafw.update.GitHubUpdateClient
 import com.aliothmoon.maafw.update.MirrorChyanLatestApi
-import com.aliothmoon.maafw.update.MirrorChyanUpdateUrlResolver
-import com.aliothmoon.maafw.update.MirrorChyanUpdateVersionChecker
+import com.aliothmoon.maafw.update.MirrorChyanUpdateClient
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
 import com.aliothmoon.maafw.update.OkHttpUpdateHttpGateway
 import com.aliothmoon.maafw.update.UpdateDownloadFiles
@@ -23,19 +21,13 @@ val updateModule = module {
         )
     }
     single { GitHubReleasesApi(get()) }
-    single { MirrorChyanUpdateVersionChecker(get()) }
-    single { GitHubUpdateVersionChecker(get()) }
-    single { MirrorChyanUpdateUrlResolver(get()) }
-    single { GitHubUpdateUrlResolver(get()) }
+    single { MirrorChyanUpdateClient(get()) }
+    single { GitHubUpdateClient(get()) }
     single {
         UpdateService(
-            checkers = listOf(
-                get<MirrorChyanUpdateVersionChecker>(),
-                get<GitHubUpdateVersionChecker>(),
-            ),
-            resolvers = listOf(
-                get<MirrorChyanUpdateUrlResolver>(),
-                get<GitHubUpdateUrlResolver>(),
+            clients = listOf(
+                get<MirrorChyanUpdateClient>(),
+                get<GitHubUpdateClient>(),
             ),
         )
     }

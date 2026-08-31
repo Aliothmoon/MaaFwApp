@@ -141,25 +141,18 @@ class SettingsViewModel(
             it.copy(checking = true, checkResult = null, errorMessage = null)
         }
         val metadata = projectMetadata()
-        try {
-            val result = updateService.checkUpdate(
-                UpdateCheckRequest(
-                    currentVersion = currentVersion,
-                    channel = settings.channel,
-                    abi = abi,
-                    mirrorchyanRid = metadata?.mirrorchyanRid,
-                    githubRepository = metadata?.githubRepository,
-                ),
-            )
-            updateOperation.update {
-                it.copy(checking = false, checkResult = result, errorMessage = null)
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            updateOperation.update {
-                it.copy(checking = false, errorMessage = uiTextOf(R.string.update_fail_unknown))
-            }
+        // checker 内部已把非取消异常吞成 SourceFailed，这里不需要再兜一层
+        val result = updateService.checkUpdate(
+            UpdateCheckRequest(
+                currentVersion = currentVersion,
+                channel = settings.channel,
+                abi = abi,
+                mirrorchyanRid = metadata?.mirrorchyanRid,
+                githubRepository = metadata?.githubRepository,
+            ),
+        )
+        updateOperation.update {
+            it.copy(checking = false, checkResult = result, errorMessage = null)
         }
     }
 

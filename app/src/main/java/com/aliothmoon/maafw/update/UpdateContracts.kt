@@ -47,7 +47,7 @@ data class UpdateCheckRequest(
     val githubRepository: String? = null,
 )
 
-/** 检查产物：只回答「有没有新版本」，下载端点由 [UpdateDownloadUrlResolver] 在下载时解析 */
+/** 检查产物：只回答「有没有新版本」，下载端点由 [UpdateSourceClient.resolve] 在下载时解析 */
 data class UpdateInfo(
     val version: String,
     val releaseNotesUrl: String? = null,
@@ -68,8 +68,6 @@ sealed interface UpdateCheckResult {
     data class SourceFailed(
         val source: UpdateSource,
         val reason: UpdateCheckFailure,
-        /** 由编排层补上的兜底提示；单源检查不填 */
-        val alternativeSource: UpdateSource? = null,
         val detail: UiText? = null,
     ) : UpdateCheckResult
 }
@@ -105,16 +103,14 @@ sealed interface UpdateResolveResult {
     ) : UpdateResolveResult
 }
 
-/** 每源一个；两个生产实现，编排见 [UpdateService] */
-interface UpdateVersionChecker {
+/**
+ * 每源一个实现，编排见 [UpdateService]；「检查匿名、CDK 只在解析带上」的约束
+ * 长在两个请求类型上，与实现无关
+ */
+interface UpdateSourceClient {
     val source: UpdateSource
 
     suspend fun check(request: UpdateCheckRequest): UpdateCheckResult
-}
-
-/** 每源一个；只在下载前调用，检查阶段不出下载端点 */
-interface UpdateDownloadUrlResolver {
-    val source: UpdateSource
 
     suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult
 }
@@ -130,7 +126,6 @@ enum class UpdateDownloadFailure(val message: UiText) {
 }
 
 data class DownloadedUpdate(
-    val source: UpdateSource,
     val version: String,
     val file: File,
     val sha256: String,

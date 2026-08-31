@@ -25,10 +25,8 @@ data class UpdateHttpResponse(
 )
 
 internal class OkHttpUpdateHttpGateway(
-    okHttpClient: OkHttpClient = defaultClient(),
+    private val client: OkHttpClient = defaultClient(),
 ) {
-
-    private val client = okHttpClient.newBuilder().build()
 
     suspend fun get(url: String, headers: Map<String, String> = emptyMap()): UpdateHttpResponse {
         return withContext(Dispatchers.IO) {
@@ -92,7 +90,8 @@ internal class OkHttpUpdateHttpGateway(
     }
 }
 
-private suspend fun Call.await() = suspendCancellableCoroutine { continuation ->
+/** 网关与下载器共用；取消时同步 cancel 底层 Call */
+internal suspend fun Call.await(): okhttp3.Response = suspendCancellableCoroutine { continuation ->
     enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
             if (continuation.isActive) continuation.resumeWithException(e)

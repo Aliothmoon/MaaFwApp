@@ -14,9 +14,7 @@ class MirrorChyanUpdateTest {
     private fun api(gateway: RecordingUpdateHttpGateway) =
         MirrorChyanLatestApi(gateway = gateway.mock, userAgent = "MaaFwApp/1.2.3 Android")
 
-    private fun checker(gateway: RecordingUpdateHttpGateway) = MirrorChyanUpdateVersionChecker(api(gateway))
-
-    private fun resolver(gateway: RecordingUpdateHttpGateway) = MirrorChyanUpdateUrlResolver(api(gateway))
+    private fun client(gateway: RecordingUpdateHttpGateway) = MirrorChyanUpdateClient(api(gateway))
 
     private fun checkRequest(
         currentVersion: String = "1.0.0",
@@ -65,7 +63,7 @@ class MirrorChyanUpdateTest {
                 source = UpdateSource.MIRRORCHYAN,
                 info = UpdateInfo(version = "v1.1.0", releaseNotes = "Fixed things"),
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
         // 检查永远匿名：cdk 不进 query
         assertEquals(null, gateway.requests.single().first.toHttpUrl().queryParameter("cdk"))
@@ -77,7 +75,7 @@ class MirrorChyanUpdateTest {
             UpdateHttpResponse(200, """{"code":0,"data":{"version_name":"1.0.0"}}"""),
         )
 
-        checker(gateway).check(checkRequest())
+        client(gateway).check(checkRequest())
 
         val parsedUrl = gateway.requests.single().first.toHttpUrl()
         assertEquals("M9A", parsedUrl.pathSegments[2])
@@ -97,7 +95,7 @@ class MirrorChyanUpdateTest {
 
         assertEquals(
             UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0"),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
     }
 
@@ -105,7 +103,7 @@ class MirrorChyanUpdateTest {
     fun `missing rid fails before network`() = runBlocking {
         val gateway = RecordingUpdateHttpGateway()
 
-        val result = checker(gateway).check(checkRequest().copy(mirrorchyanRid = " "))
+        val result = client(gateway).check(checkRequest().copy(mirrorchyanRid = " "))
 
         assertEquals(
             UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.MISSING_CONFIGURATION),
@@ -126,7 +124,7 @@ class MirrorChyanUpdateTest {
                 UpdateCheckFailure.RESOURCE_NOT_FOUND,
                 detail = uiTextFromFramework("resource not found"),
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
     }
 
@@ -142,7 +140,7 @@ class MirrorChyanUpdateTest {
                 UpdateCheckFailure.RESOURCE_NOT_FOUND,
                 detail = uiTextFromFramework("resource not found"),
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
     }
 
@@ -156,7 +154,7 @@ class MirrorChyanUpdateTest {
                 UpdateCheckFailure.HTTP,
                 detail = uiTextOf(R.string.update_detail_http_status, 502),
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
     }
 
@@ -173,7 +171,7 @@ class MirrorChyanUpdateTest {
                     sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 ),
             ),
-            resolver(gateway).resolve(resolveRequest(mirrorchyanCdk = " cdk-value ")),
+            client(gateway).resolve(resolveRequest(mirrorchyanCdk = " cdk-value ")),
         )
         assertEquals(
             "cdk-value",
@@ -195,7 +193,7 @@ class MirrorChyanUpdateTest {
                 UpdateSource.MIRRORCHYAN,
                 UpdateCheckFailure.NO_MATCHING_ASSET,
             ),
-            resolver(gateway).resolve(resolveRequest()),
+            client(gateway).resolve(resolveRequest()),
         )
     }
 
@@ -208,7 +206,7 @@ class MirrorChyanUpdateTest {
                 UpdateSource.MIRRORCHYAN,
                 UpdateCheckFailure.INVALID_RESPONSE,
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
     }
 }

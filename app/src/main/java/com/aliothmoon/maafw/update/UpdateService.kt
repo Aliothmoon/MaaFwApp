@@ -9,12 +9,10 @@ import timber.log.Timber
  * 「API never silently switches between sources」
  */
 class UpdateService(
-    checkers: Collection<UpdateVersionChecker>,
-    resolvers: Collection<UpdateDownloadUrlResolver>,
+    clients: Collection<UpdateSourceClient>,
 ) {
 
-    private val checkersBySource = checkers.associateBy(UpdateVersionChecker::source)
-    private val resolversBySource = resolvers.associateBy(UpdateDownloadUrlResolver::source)
+    private val clientsBySource = clients.associateBy(UpdateSourceClient::source)
 
     suspend fun checkUpdate(
         request: UpdateCheckRequest,
@@ -28,12 +26,11 @@ class UpdateService(
             request.mirrorchyanRid, request.githubRepository,
         )
         val alternativeSource = alternative?.takeIf { it != preferred }
-        val checker = checkersBySource[preferred] ?: run {
-            Timber.tag("UpdateCheck").w("no checker registered for preferred=%s", preferred)
+        val checker = clientsBySource[preferred] ?: run {
+            Timber.tag("UpdateCheck").w("no client registered for preferred=%s", preferred)
             return UpdateCheckResult.SourceFailed(
                 source = preferred,
                 reason = UpdateCheckFailure.MISSING_CONFIGURATION,
-                alternativeSource = alternativeSource,
             )
         }
 
@@ -64,16 +61,16 @@ class UpdateService(
                     )
                     checkUpdate(request, preferred = alternativeSource, alternative = null)
                 } else {
-                    result.copy(alternativeSource = alternativeSource)
+                    result
                 }
             }
         }
     }
 
     suspend fun resolveDownload(request: UpdateResolveRequest): UpdateResolveResult {
-        val resolver = resolversBySource[request.source]
+        val client = clientsBySource[request.source]
             ?: return UpdateResolveResult.Failed(request.source, UpdateCheckFailure.MISSING_CONFIGURATION)
-        return resolver.resolve(request)
+        return client.resolve(request)
     }
 
     /**
@@ -86,7 +83,7 @@ class UpdateService(
         primary: UpdateCheckResult.UpToDate,
         request: UpdateCheckRequest,
     ): UpdateCheckResult {
-        val altChecker = alternativeSource?.let(checkersBySource::get)
+        val altChecker = alternativeSource?.let(clientsBySource::get)
         if (altChecker == null) {
             Timber.tag("UpdateCheck").w(
                 "source=%s UP_TO_DATE; no alternative checker registered, keeping latest=%s",

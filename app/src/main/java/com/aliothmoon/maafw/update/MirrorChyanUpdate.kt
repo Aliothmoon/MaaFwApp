@@ -102,9 +102,9 @@ internal class MirrorChyanLatestApi(
     private fun Int.isSuccess(): Boolean = this in 200..299
 }
 
-internal class MirrorChyanUpdateVersionChecker(
+internal class MirrorChyanUpdateClient(
     private val api: MirrorChyanLatestApi,
-) : UpdateVersionChecker {
+) : UpdateSourceClient {
 
     override val source: UpdateSource = UpdateSource.MIRRORCHYAN
 
@@ -138,13 +138,6 @@ internal class MirrorChyanUpdateVersionChecker(
         Timber.tag("UpdateCheck").w(e, "%s check failed", source)
         UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
     }
-}
-
-internal class MirrorChyanUpdateUrlResolver(
-    private val api: MirrorChyanLatestApi,
-) : UpdateDownloadUrlResolver {
-
-    override val source: UpdateSource = UpdateSource.MIRRORCHYAN
 
     override suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult = try {
         val rid = request.mirrorchyanRid?.trim()?.takeIf(String::isNotBlank)

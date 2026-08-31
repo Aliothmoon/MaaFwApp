@@ -35,11 +35,9 @@ internal class GitHubReleasesApi(
         val isApk: Boolean get() = name.isApkUrl() || downloadUrl.isApkUrl()
     }
 
-    /** 只认 `owner/repo`；`https://github.com/owner/repo/releases` 这类 URL 截到前两段 */
-    fun parseRepository(rawUrl: String?): String? {
-        val repository = rawUrl?.trim()?.takeIf(REPOSITORY_PATTERN::matches) ?: return null
-        return repository
-    }
+    /** 只认 `owner/repo`；URL 形式在 PiParser.parseMetadata 里已截成这两段，这里只兜异常输入 */
+    fun parseRepository(rawUrl: String?): String? =
+        rawUrl?.trim()?.takeIf(REPOSITORY_PATTERN::matches)
 
     suspend fun releases(repository: String): UpdateSourceOutcome<List<Release>> {
         val releases = mutableListOf<Release>()
@@ -166,9 +164,9 @@ internal class GitHubReleasesApi(
     }
 }
 
-internal class GitHubUpdateVersionChecker(
+internal class GitHubUpdateClient(
     private val api: GitHubReleasesApi,
-) : UpdateVersionChecker {
+) : UpdateSourceClient {
 
     override val source: UpdateSource = UpdateSource.GITHUB
 
@@ -208,13 +206,6 @@ internal class GitHubUpdateVersionChecker(
         Timber.tag("UpdateCheck").w(e, "%s check failed", source)
         UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NETWORK)
     }
-}
-
-internal class GitHubUpdateUrlResolver(
-    private val api: GitHubReleasesApi,
-) : UpdateDownloadUrlResolver {
-
-    override val source: UpdateSource = UpdateSource.GITHUB
 
     override suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult = try {
         val repository = api.parseRepository(request.githubRepository)

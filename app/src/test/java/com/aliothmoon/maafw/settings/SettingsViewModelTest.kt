@@ -89,7 +89,6 @@ class SettingsViewModelTest {
                     downloaded = firstArg<ResolvedUpdate>()
                     UpdateDownloadResult.Downloaded(
                         DownloadedUpdate(
-                            source = githubResolved.source,
                             version = githubResolved.version,
                             file = File("update.apk"),
                             sha256 = githubResolved.sha256.orEmpty(),
@@ -271,7 +270,7 @@ class SettingsViewModelTest {
         },
         downloader: OkHttpUpdateDownloader = mockk {
             coEvery { download(any(), any()) } returns UpdateDownloadResult.Downloaded(
-                DownloadedUpdate(UpdateSource.MIRRORCHYAN, "2.0.0", File("update.apk"), "a".repeat(64)),
+                DownloadedUpdate("2.0.0", File("update.apk"), "a".repeat(64)),
             )
         },
         settings: AppSettingsGateway = FakeAppSettingsGateway(),

@@ -14,9 +14,7 @@ class GitHubUpdateTest {
 
     private fun api(gateway: RecordingUpdateHttpGateway) = GitHubReleasesApi(gateway.mock)
 
-    private fun checker(gateway: RecordingUpdateHttpGateway) = GitHubUpdateVersionChecker(api(gateway))
-
-    private fun resolver(gateway: RecordingUpdateHttpGateway) = GitHubUpdateUrlResolver(api(gateway))
+    private fun client(gateway: RecordingUpdateHttpGateway) = GitHubUpdateClient(api(gateway))
 
     private fun checkRequest(
         repository: String? = "maaxyz/example",
@@ -68,7 +66,7 @@ class GitHubUpdateTest {
                     releaseNotes = "Release 1.5.0",
                 ),
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
         val url = gateway.requests.single().first.toHttpUrl()
         assertEquals("/repos/maaxyz/example/releases", url.encodedPath)
@@ -82,7 +80,7 @@ class GitHubUpdateTest {
             UpdateHttpResponse(200, releases(release("v1.1.0", assets = assets(asset("app.apk"))))),
         )
 
-        checker(gateway).check(checkRequest())
+        client(gateway).check(checkRequest())
 
         assertNull(gateway.requests.single().second["Authorization"])
         assertEquals("2022-11-28", gateway.requests.single().second["X-GitHub-Api-Version"])
@@ -100,7 +98,7 @@ class GitHubUpdateTest {
                 UpdateCheckFailure.RATE_LIMITED,
                 detail = uiTextFromFramework("rate limited"),
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
         assertEquals(1, gateway.requests.size)
     }
@@ -117,7 +115,7 @@ class GitHubUpdateTest {
                 UpdateCheckFailure.RATE_LIMITED,
                 detail = uiTextFromFramework("rate limited"),
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
     }
 
@@ -132,7 +130,7 @@ class GitHubUpdateTest {
                 UpdateSource.GITHUB,
                 UpdateCheckFailure.NO_MATCHING_ASSET,
             ),
-            checker(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest()),
         )
     }
 
@@ -145,7 +143,7 @@ class GitHubUpdateTest {
                 UpdateSource.GITHUB,
                 UpdateCheckFailure.MISSING_CONFIGURATION,
             ),
-            checker(gateway).check(checkRequest(repository = "https://github.com/owner/repo")),
+            client(gateway).check(checkRequest(repository = "https://github.com/owner/repo")),
         )
         assertTrue(gateway.requests.isEmpty())
     }
@@ -158,7 +156,7 @@ class GitHubUpdateTest {
             UpdateHttpResponse(200, page(200)),
         )
 
-        checker(gateway).check(checkRequest(currentVersion = "0.0.1"))
+        client(gateway).check(checkRequest(currentVersion = "0.0.1"))
 
         assertEquals(3, gateway.requests.size)
         assertEquals("3", gateway.requests.last().first.toHttpUrl().queryParameter("page"))
@@ -195,7 +193,7 @@ class GitHubUpdateTest {
                     sha256 = "sha256:" + "a".repeat(64),
                 ),
             ),
-            resolver(gateway).resolve(resolveRequest()),
+            client(gateway).resolve(resolveRequest()),
         )
     }
 
@@ -229,7 +227,7 @@ class GitHubUpdateTest {
                     sha256 = "sha256:" + "a".repeat(64),
                 ),
             ),
-            resolver(gateway).resolve(resolveRequest()),
+            client(gateway).resolve(resolveRequest()),
         )
     }
 
@@ -249,7 +247,7 @@ class GitHubUpdateTest {
 
         assertEquals(
             UpdateResolveResult.Failed(UpdateSource.GITHUB, UpdateCheckFailure.NO_MATCHING_ASSET),
-            resolver(gateway).resolve(resolveRequest()),
+            client(gateway).resolve(resolveRequest()),
         )
     }
 
@@ -266,7 +264,7 @@ class GitHubUpdateTest {
 
         assertEquals(
             "https://example.com/MaaFwApp.apk",
-            (resolver(gateway).resolve(resolveRequest(abi = AndroidAbi.X86)) as UpdateResolveResult.Resolved)
+            (client(gateway).resolve(resolveRequest(abi = AndroidAbi.X86)) as UpdateResolveResult.Resolved)
                 .update.downloadUrl,
         )
     }
@@ -284,7 +282,7 @@ class GitHubUpdateTest {
 
         assertEquals(
             UpdateResolveResult.Failed(UpdateSource.GITHUB, UpdateCheckFailure.NO_MATCHING_ASSET),
-            resolver(gateway).resolve(resolveRequest()),
+            client(gateway).resolve(resolveRequest()),
         )
     }
 
@@ -296,7 +294,7 @@ class GitHubUpdateTest {
 
         assertEquals(
             "v2.0.0-beta.1",
-            (resolver(gateway).resolve(resolveRequest(channel = UpdateChannel.BETA)) as UpdateResolveResult.Resolved)
+            (client(gateway).resolve(resolveRequest(channel = UpdateChannel.BETA)) as UpdateResolveResult.Resolved)
                 .update.version,
         )
     }
