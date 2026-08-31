@@ -10,13 +10,7 @@ plugins {
     alias(libs.plugins.androidx.baselineprofile) apply false
 }
 
-val spotlessRatchetFrom =
-    providers.gradleProperty("spotlessRatchetFrom").orElse("origin/main")
-
 spotless {
-    // 旧代码不做一次性全量格式化，只检查相对基准提交变更过的文件。
-    ratchetFrom(spotlessRatchetFrom.get())
-
     val excludedPaths = listOf(
         "**/build/**",
         ".gradle/**",
