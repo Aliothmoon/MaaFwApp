@@ -18,9 +18,9 @@
     <!-- Tasks screen -->
     <string name="tasks_project_load_failed">Project failed to load. Check diagnostics on Home.</string>
     <string name="tasks_reload">Reload</string>
-    <string name="tasks_empty_config_title">No configurations yet</string>
+    <string name="tasks_empty_config_title">No configurations</string>
     <string name="tasks_empty_config_hint">Tap the selector above to create an empty configuration, or start from a template</string>
-    <string name="tasks_empty_task_title">No tasks yet</string>
+    <string name="tasks_empty_task_title">No tasks</string>
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
     <string name="tasks_run_order">Task list</string>
@@ -229,7 +229,6 @@
     <string name="overlay_tab_tasks">Tasks</string>
     <string name="overlay_tab_log">Log</string>
     <string name="overlay_task_running">Running</string>
-    <string name="overlay_tasks_empty">No run in progress</string>
     <string name="overlay_hide">Hide</string>
     <string name="overlay_back_to_app">Back to app</string>
     <string name="overlay_lock">Lock position</string>
@@ -274,7 +273,7 @@
 
     <string name="schedule_title">Schedules</string>
     <string name="schedule_add">New rule</string>
-    <string name="schedule_empty">No schedules yet</string>
+    <string name="schedule_empty">No schedules</string>
     <string name="schedule_empty_hint">Once a rule is added, its bound run configuration runs automatically at the scheduled time</string>
     <string name="schedule_next_trigger">Next %1$s</string>
     <string name="schedule_next_none">Incomplete rule, will not fire</string>
@@ -313,7 +312,7 @@
     <string name="schedule_edit_total_hours">= %1$d hours</string>
 
     <string name="schedule_log_title">Trigger log</string>
-    <string name="schedule_log_empty">No triggers recorded</string>
+    <string name="schedule_log_empty">No triggers</string>
     <string name="schedule_log_clear">Clear</string>
     <string name="schedule_log_delay">%1$s late</string>
     <string name="schedule_result_triggered">Triggered</string>
@@ -461,9 +460,9 @@
     <string name="run_log_count">%1$d entries</string>
     <string name="run_log_export">Export</string>
     <string name="run_log_clear">Clear</string>
-    <string name="run_log_empty">No entries yet. MaaFramework output appears here once a run starts.</string>
+    <string name="run_log_empty">No logs</string>
     <string name="tasks_log">Log</string>
-    <string name="run_log_filter_essential">Key</string>
+    <string name="run_log_filter_progress">Progress</string>
     <string name="run_log_filter_all">All</string>
     <string name="run_log_connecting">Connecting to device…</string>
     <string name="run_log_connected">Device connected</string>
@@ -483,7 +482,7 @@
 
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>
-    <string name="log_archive_empty">No history yet. Each finished run is recorded here.</string>
+    <string name="log_archive_empty">No run history</string>
     <string name="log_archive_meta">%1$d tasks · %2$s</string>
     <string name="log_archive_cleanup">Clean up old</string>
     <string name="log_archive_delete_title">Delete this record</string>
@@ -501,7 +500,7 @@
 
     <!-- Error log: the app's own warnings and errors, written by AppLogWriter -->
     <string name="app_log_title">Error log</string>
-    <string name="app_log_empty">No error log yet</string>
+    <string name="app_log_empty">No error logs</string>
     <string name="app_log_clear">Clear all</string>
     <!-- size · last written -->
     <string name="app_log_meta">%1$s · %2$s</string>

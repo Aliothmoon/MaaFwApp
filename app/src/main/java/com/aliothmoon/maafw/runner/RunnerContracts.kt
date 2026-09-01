@@ -95,7 +95,7 @@ sealed interface RunnerEvent {
     /**
      * 一个 agent child 已经 MaaAgentClientConnect 成功（或本轮复用了还活着的）
      *
-     * 不是 child 自己 print 的，也不是 MaaFramework 回调——编排层的事实，单独一档才能进关键档
+     * 不是 child 自己 print 的，也不是 MaaFramework 回调——编排层的事实，单独一档才能进进度档
      *
      * [exec] 是特权进程真正 exec 的那条路径（来自 `agent-runtime.json`），不是 PI 的 child_exec：
      * 后者按桌面端整条命令行写，设备上根本没跑那个东西，显示出来只会误导排障

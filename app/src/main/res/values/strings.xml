@@ -18,9 +18,9 @@
     <!-- 任务页 -->
     <string name="tasks_project_load_failed">项目加载失败，请查看首页诊断</string>
     <string name="tasks_reload">重新加载</string>
-    <string name="tasks_empty_config_title">还没有配置</string>
+    <string name="tasks_empty_config_title">暂无配置</string>
     <string name="tasks_empty_config_hint">点击上方选择器新建空配置，或从模板快速创建</string>
-    <string name="tasks_empty_task_title">还没有任务</string>
+    <string name="tasks_empty_task_title">暂无任务</string>
     <string name="tasks_empty_task_hint">从任务目录选择要执行的任务</string>
     <string name="tasks_add_task">添加任务</string>
     <string name="tasks_run_order">任务列表</string>
@@ -223,7 +223,6 @@
     <string name="overlay_tab_tasks">任务</string>
     <string name="overlay_tab_log">日志</string>
     <string name="overlay_task_running">进行中</string>
-    <string name="overlay_tasks_empty">暂无执行中的任务</string>
     <string name="overlay_hide">隐藏</string>
     <string name="overlay_back_to_app">回到应用</string>
     <string name="overlay_lock">锁定位置</string>
@@ -268,7 +267,7 @@
 
     <string name="schedule_title">定时任务</string>
     <string name="schedule_add">新建规则</string>
-    <string name="schedule_empty">还没有定时规则</string>
+    <string name="schedule_empty">暂无定时规则</string>
     <string name="schedule_empty_hint">新建规则后，到达设定时间会自动执行绑定的运行配置</string>
     <string name="schedule_next_trigger">下次 %1$s</string>
     <string name="schedule_next_none">规则不完整，不会触发</string>
@@ -307,7 +306,7 @@
     <string name="schedule_edit_total_hours">= %1$d 小时</string>
 
     <string name="schedule_log_title">触发日志</string>
-    <string name="schedule_log_empty">还没有触发记录</string>
+    <string name="schedule_log_empty">暂无触发记录</string>
     <string name="schedule_log_clear">清空</string>
     <string name="schedule_log_delay">延迟 %1$s</string>
     <string name="schedule_result_triggered">已触发</string>
@@ -455,9 +454,9 @@
     <string name="run_log_count">%1$d 条</string>
     <string name="run_log_export">导出</string>
     <string name="run_log_clear">清空</string>
-    <string name="run_log_empty">还没有日志；开始任务后 MaaFramework 的运行输出会显示在这里</string>
+    <string name="run_log_empty">暂无日志</string>
     <string name="tasks_log">日志</string>
-    <string name="run_log_filter_essential">关键</string>
+    <string name="run_log_filter_progress">进度</string>
     <string name="run_log_filter_all">全部</string>
     <string name="run_log_connecting">正在连接设备…</string>
     <string name="run_log_connected">设备连接成功</string>
@@ -477,7 +476,7 @@
 
     <!-- 历史日志：每轮运行落盘一份 -->
     <string name="log_archive_title">运行历史</string>
-    <string name="log_archive_empty">还没有历史记录；每次运行结束后会记录在这里</string>
+    <string name="log_archive_empty">暂无运行记录</string>
     <string name="log_archive_meta">%1$d 个任务 · %2$s</string>
     <string name="log_archive_cleanup">清理过期</string>
     <string name="log_archive_delete_title">删除这份记录</string>
@@ -495,7 +494,7 @@
 
     <!-- 错误日志：app 自身的警告与错误，由 AppLogWriter 落盘 -->
     <string name="app_log_title">错误日志</string>
-    <string name="app_log_empty">还没有错误日志</string>
+    <string name="app_log_empty">暂无错误日志</string>
     <string name="app_log_clear">全部清除</string>
     <!-- 大小 · 最后写入时间 -->
     <string name="app_log_meta">%1$s · %2$s</string>
