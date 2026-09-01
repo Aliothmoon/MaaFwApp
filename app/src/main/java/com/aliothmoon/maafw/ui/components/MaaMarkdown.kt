@@ -47,6 +47,14 @@ import io.noties.markwon.html.TagHandler
 import io.noties.markwon.image.ImagesPlugin
 import io.noties.markwon.image.file.FileSchemeHandler
 import io.noties.markwon.linkify.LinkifyPlugin
+import org.commonmark.node.Block
+import org.commonmark.node.BlockQuote
+import org.commonmark.node.FencedCodeBlock
+import org.commonmark.node.Heading
+import org.commonmark.node.HtmlBlock
+import org.commonmark.node.ListBlock
+import org.commonmark.node.ThematicBreak
+import org.commonmark.parser.Parser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Cache
@@ -186,8 +194,25 @@ private fun buildMarkwon(
         override fun configureTheme(builder: MarkwonTheme.Builder) {
             builder.linkColor(linkColor)
         }
+
+        override fun configureParser(builder: Parser.Builder) {
+            builder.enabledBlockTypes(BLOCK_TYPES)
+        }
     })
     .build()
+
+/**
+ * commonmark 默认块类型去掉 IndentedCodeBlock：PI 的 LICENSE 这类纯文本靠前导空格居中标题，
+ * 四个空格就被当成缩进代码块，渲染成灰底等宽还照搬缩进。围栏代码块不受影响
+ */
+private val BLOCK_TYPES: Set<Class<out Block>> = setOf(
+    Heading::class.java,
+    HtmlBlock::class.java,
+    ThematicBreak::class.java,
+    FencedCodeBlock::class.java,
+    BlockQuote::class.java,
+    ListBlock::class.java,
+)
 
 private val MARKDOWN_RELATIVE_IMAGE = Regex("""(!\[[^\]]*]\()(?!https?://|file:|data:)([^)\s]+)""")
 private val HTML_RELATIVE_IMAGE = Regex("""(<img[^>]*\bsrc=")(?!https?://|file:|data:)([^"]+)""", RegexOption.IGNORE_CASE)
