@@ -2,7 +2,6 @@ package com.aliothmoon.maafw.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +62,7 @@ import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
@@ -348,19 +348,15 @@ private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent
         val connected = state.privilegedServiceConnected
         // 连接中图标位换转圈；颜色跟 LocalContentColor 才能吃到禁用态透明度
         val connecting = state.privilegedService == PrivilegedServiceState.Connecting
-        // 对齐 MaaMeow：描边跟内容同语义色，不用默认灰描边
+        // 对齐 MaaMeow：描边跟内容同语义色，不用默认灰描边；断开是破坏性动作压一档透明度
         val semantic = if (connected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-        MaaOutlinedButton(
+        MaaSemanticOutlinedButton(
             onClick = { onIntent(SessionIntent.TogglePrivilegedService) },
             // 连接中不给点：这时候再发一次 bind 只会把状态搅乱
             enabled = !connecting,
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = if (connected) semantic.copy(alpha = 0.82f) else semantic,
-            ),
-            border = BorderStroke(
-                MaaDesignTokens.Border.selected,
-                semantic.copy(alpha = if (connected) 0.45f else 0.55f),
-            ),
+            semantic = semantic,
+            contentAlpha = if (connected) 0.82f else 1f,
+            borderAlpha = if (connected) 0.45f else 0.55f,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(MaaDesignTokens.ButtonHeight.prominent),
@@ -388,15 +384,11 @@ private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent
             )
         }
         if (state.remoteAccess.configuredBackend == RemoteBackend.SHIZUKU) {
-            MaaOutlinedButton(
+            MaaSemanticOutlinedButton(
                 onClick = { onIntent(SessionIntent.OpenShizuku) },
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.secondary,
-                ),
-                border = BorderStroke(
-                    MaaDesignTokens.Border.selected,
-                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f),
-                ),
+                semantic = MaterialTheme.colorScheme.secondary,
+                contentAlpha = 1f,
+                borderAlpha = 0.55f,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(MaaDesignTokens.ButtonHeight.prominent),

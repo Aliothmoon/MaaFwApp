@@ -289,6 +289,41 @@ fun MaaOutlinedButton(
 }
 
 /**
+ * 语义色描边按钮：描边跟内容同语义色（error / secondary…），不用默认灰描边
+ *
+ * 语义色给足时太抢，内容压 [contentAlpha]（默认 0.82）、描边压 [borderAlpha]（默认 0.45）——
+ * 品牌主色等要给足的场景传 1f / 0.55f；描边宽度固定 `Border.selected`，与选中态同档
+ */
+@Composable
+fun MaaSemanticOutlinedButton(
+    onClick: () -> Unit,
+    semantic: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentAlpha: Float = 0.82f,
+    borderAlpha: Float = 0.45f,
+    shape: Shape = RoundedCornerShape(MaaTheme.style.radii.button),
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) {
+    MaaOutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = semantic.copy(alpha = contentAlpha),
+        ),
+        border = BorderStroke(
+            MaaDesignTokens.Border.selected,
+            semantic.copy(alpha = borderAlpha),
+        ),
+        contentPadding = contentPadding,
+        content = content,
+    )
+}
+
+/**
  * 最常见的那种设置行：标签 + 开关
  *
  * [MaaLabeledControlRow] 的尾部什么控件都能放，这个只固定成开关——省掉每处再写一遍
