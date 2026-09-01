@@ -383,7 +383,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             agents.size == payload.agents.size &&
             agents.all { it.session.isAlive() && agentLib.MaaAgentClientAlive(it.client).toInt() != 0 }
         if (reusable) {
-            notifyAgentsConnected(payload.agents)
+            notifyAgentsConnected()
             return null
         }
 
@@ -428,7 +428,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 return failAgents(started, "agent 连接超时：${agent.childExec}")
             }
             Ln.i("MaaRunner: agent[$index] connected, identifier=$identifier")
-            notify { onAgentConnected(index, payload.agents.size, agent.childExec) }
+            notify { onAgentConnected(index, payload.agents.size, session.executable) }
             started += ActiveAgent(client, session)
         }
 
@@ -440,10 +440,11 @@ class MaaRunner(private val agentHost: AgentHost) {
     }
 
     /** 复用还活着的 child 时也回投：新一轮会话日志不能因为没重新 connect 就缺这行 */
-    private fun notifyAgentsConnected(declared: List<AgentPayload>) {
-        declared.forEachIndexed { index, agent ->
-            Ln.i("MaaRunner: agent[$index] reused, exec=${agent.childExec}")
-            notify { onAgentConnected(index, declared.size, agent.childExec) }
+    private fun notifyAgentsConnected() {
+        val alive = agents
+        alive.forEachIndexed { index, active ->
+            Ln.i("MaaRunner: agent[$index] reused, exec=${active.session.executable}")
+            notify { onAgentConnected(index, alive.size, active.session.executable) }
         }
     }
 

@@ -21,6 +21,9 @@ data class AgentLaunchRequest(
 
 /** child 的句柄；[close] 之后进程必须已终止 */
 interface AgentSession : AutoCloseable {
+    /** 真正 exec 的那个可执行体，来自 `agent-runtime.json`；PI 的 child_exec 不是它 */
+    val executable: String
+
     fun isAlive(): Boolean
 }
 
