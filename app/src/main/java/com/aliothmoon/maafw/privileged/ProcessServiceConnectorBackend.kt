@@ -97,6 +97,10 @@ abstract class ProcessServiceConnectorBackend(
             }
             if (activeLaunch?.token != token) {
                 registry.unregister(token)
+                result.getOrNull()?.let { binder ->
+                    runCatching { destroyRemote(binder) }
+                        .onFailure { Timber.w(it, "destroy superseded %s binder failed", backend) }
+                }
                 return@launch
             }
             result.onSuccess { binder ->
