@@ -45,6 +45,10 @@ agent:
         PYTHONHOME: "{bundle}/prefix"
         LD_LIBRARY_PATH: "{bundle}/prefix/lib:{nativeLibs}"
 
+# Mirror酱 的项目 id；写了就压过 PI 的 mirrorchyan_rid，不写仍取 PI 声明的那个
+update:
+  mirrorchyanRid: YourPI
+
 # 整段可省略 = 用本仓库自己的包名与图标
 app:
   # 包名后缀，拼成 com.aliothmoon.maafw.yourpi；只收小写包段

@@ -71,6 +71,11 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 )
                 buildConfigField("String", "MAFW_APP_VERSION", "\"" + gitOwnVersionName() + "\"")
                 buildConfigField("String", "MAFW_FRAMEWORK_VERSION", "\"" + maaFrameworkVersion() + "\"")
+                buildConfigField(
+                    "String",
+                    "MAFW_MIRRORCHYAN_RID",
+                    "\"" + profile.mirrorchyanRid.orEmpty() + "\"",
+                )
 
                 // Placeholders rather than resValue: with no profile the value stays a resource
                 // reference and the checked-in label and icon keep working untouched

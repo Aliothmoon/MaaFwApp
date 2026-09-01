@@ -79,7 +79,7 @@ class SettingsViewModel(
                             currentVersion = currentVersion,
                             channel = appSettings.updateChannel.value,
                             abi = abi,
-                            mirrorchyanRid = metadata?.mirrorchyanRid,
+                            mirrorchyanRid = mirrorchyanRid(metadata),
                             githubRepository = metadata?.githubRepository,
                         ),
                     )
@@ -178,7 +178,7 @@ class SettingsViewModel(
                 currentVersion = currentVersion,
                 channel = appSettings.updateChannel.value,
                 abi = abi,
-                mirrorchyanRid = metadata.mirrorchyanRid,
+                mirrorchyanRid = mirrorchyanRid(metadata),
                 githubRepository = metadata.githubRepository,
             ),
         )
@@ -212,7 +212,7 @@ class SettingsViewModel(
                 currentVersion = currentVersion,
                 channel = appSettings.updateChannel.value,
                 abi = abi,
-                mirrorchyanRid = metadata?.mirrorchyanRid,
+                mirrorchyanRid = mirrorchyanRid(metadata),
                 githubRepository = metadata?.githubRepository,
             ),
         )
@@ -276,7 +276,7 @@ class SettingsViewModel(
                     channel = appSettings.updateChannel.value,
                     abi = abi,
                     currentVersion = currentVersion,
-                    mirrorchyanRid = metadata?.mirrorchyanRid,
+                    mirrorchyanRid = mirrorchyanRid(metadata),
                     mirrorchyanCdk = cdk.takeIf(String::isNotBlank),
                     githubRepository = metadata?.githubRepository,
                 ),
@@ -329,6 +329,10 @@ class SettingsViewModel(
             }
         }
     }
+
+    /** profile 钉的压过 PI 声明的：出包方知道自己发到哪个项目，PI 作者不一定知道 */
+    private fun mirrorchyanRid(metadata: ProjectMetadata?): String? =
+        BuildConfig.MAFW_MIRRORCHYAN_RID.takeIf(String::isNotBlank) ?: metadata?.mirrorchyanRid
 
     private fun projectMetadata(): ProjectMetadata? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition?.metadata
