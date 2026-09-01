@@ -14,10 +14,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -137,14 +136,13 @@ internal fun LivePreview(
     /** 卡片在 window 中的位置，给画中画的进入动画用 */
     onBoundsChanged: ((Rect?) -> Unit)? = null,
 ) {
-    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+    // 尺寸靠 aspectRatio 算而不是 BoxWithConstraints：后者是 SubcomposeLayout，
+    // 测量期的首次组合撞上 movableContent 搬家会拿到已停用的节点（Apply is called on
+    // deactivated node），翻页动画强制 remeasure 时必崩。matchHeightConstraintsFirst
+    // 先按高度定、放不下再回退按宽度，与原先那个分支等价
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
         val aspect = resolution?.aspectRatio ?: (16f / 9f)
-        val widthFromHeight = maxHeight * aspect
-        val cardModifier = if (widthFromHeight <= maxWidth) {
-            Modifier.width(widthFromHeight).height(maxHeight)
-        } else {
-            Modifier.width(maxWidth).height(maxWidth / aspect)
-        }
+        val cardModifier = Modifier.aspectRatio(aspect, matchHeightConstraintsFirst = true)
         val boundsReporting = Modifier.onGloballyPositioned {
             onBoundsChanged?.invoke(it.boundsInWindow().let { rect ->
                 Rect(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt())
@@ -152,7 +150,7 @@ internal fun LivePreview(
         }
         if (content == null) {
             MaaCardSurface(modifier = cardModifier.then(boundsReporting)) { LivePreviewIdleArt() }
-            return@BoxWithConstraints
+            return@Box
         }
         MaaCardSurface(modifier = cardModifier.then(boundsReporting).maaClickable(onClick = onEnterFullscreen)) {
             Box(Modifier.fillMaxSize()) {
