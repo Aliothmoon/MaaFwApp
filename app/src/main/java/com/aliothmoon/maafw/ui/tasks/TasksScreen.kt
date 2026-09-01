@@ -169,7 +169,9 @@ private fun TasksContent(
                     .padding(horizontal = MaaDesignTokens.Spacing.lg),
             ) {
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(top = MaaDesignTokens.Spacing.md),
                     verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
                 ) {
                     LivePreview(
