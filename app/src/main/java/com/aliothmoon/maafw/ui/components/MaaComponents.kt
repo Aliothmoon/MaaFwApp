@@ -576,17 +576,17 @@ fun MaaInfoRow(label: String, value: String) {
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
         verticalAlignment = Alignment.Top,
     ) {
+        // 标签按内容量宽：固定四六分会让「MaaFramework 版本」这类长标签在右侧还空着时就换行
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(0.4f),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.End,
-            modifier = Modifier.weight(0.6f),
+            modifier = Modifier.weight(1f),
         )
     }
 }

@@ -5,7 +5,6 @@ import android.util.Log
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
-import com.aliothmoon.maafw.log.DeviceInfoText.formatGitValue
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -40,16 +39,10 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
         append("Version  : ").append(BuildConfig.VERSION_NAME)
         append(" (").append(BuildConfig.VERSION_CODE).append(") ")
         append(BuildConfig.BUILD_TYPE).append('\n')
-        append("Git      : ")
-            .append(formatGitValue(BuildConfig.MAFW_GIT_TAG, BuildConfig.MAFW_GIT_COMMIT))
+        append("MaaFwApp : ").append(BuildConfig.MAFW_APP_VERSION).append('\n')
+        append("Framework: ")
+            .append(BuildConfig.MAFW_FRAMEWORK_VERSION.ifEmpty { UNKNOWN })
             .append('\n')
-        append("Parent   : ").append(
-            formatGitValue(
-                BuildConfig.MAFW_PARENT_GIT_TAG,
-                BuildConfig.MAFW_PARENT_GIT_COMMIT,
-                notSubmodule = BuildConfig.MAFW_PARENT_GIT_COMMIT.isEmpty(),
-            ),
-        ).append('\n')
         append("Device   : ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
             .append('\n')
         append("System   : Android ").append(Build.VERSION.RELEASE)

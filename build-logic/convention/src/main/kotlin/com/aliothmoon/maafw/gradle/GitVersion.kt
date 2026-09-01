@@ -39,50 +39,33 @@ internal fun Project.gitVersionCode(): Int {
 }
 
 /**
- * A tag on HEAD gives x.y.z; a tag further back bumps patch by one and appends alpha.<distance>
- * A describe output that does not match degrades to itself instead of blocking the build
+ * A tag on HEAD gives x.y.z, keeping any prerelease suffix; a tag further back bumps patch by one
+ * and appends alpha.<distance>. A describe output that does not match degrades to itself instead
+ * of blocking the build, so a repository without a single tag versions itself by short hash
  */
-internal fun Project.gitVersionName(): String {
-    val gitWorkingDir = versionGitWorkingDir()
+internal fun Project.gitVersionName(workingDir: File): String {
     val desc = providers.exec {
-        workingDir(gitWorkingDir)
+        workingDir(workingDir)
         commandLine("git", "describe", "--tags", "--always")
         isIgnoreExitValue = true
     }.standardOutput.asText.get().trim()
-    val match = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-(\d+)-g[0-9a-f]+)?$""").matchEntire(desc)
-        ?: return desc.removePrefix("v").ifEmpty { "0.0.0-dev" }
-    val (major, minor, patch, distance) = match.destructured
-    return if (distance.isEmpty()) "$major.$minor.$patch"
-    else "$major.$minor.${patch.toInt() + 1}-alpha.$distance"
+    val match = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?(?:-(\d+)-g[0-9a-f]+)?$""")
+        .matchEntire(desc) ?: return desc.removePrefix("v").ifEmpty { "0.0.0-dev" }
+    val (major, minor, patch, pre, distance) = match.destructured
+    return when {
+        distance.isNotEmpty() -> "$major.$minor.${patch.toInt() + 1}-alpha.$distance"
+        pre.isNotEmpty() -> "$major.$minor.$patch-$pre"
+        else -> "$major.$minor.$patch"
+    }
 }
 
-/** Empty string on failure rather than a build error; the app side renders that as "(unknown)" */
-internal fun Project.gitHeadShort(workingDir: File): String =
-    providers.exec {
-        workingDir(workingDir)
-        commandLine("git", "rev-parse", "--short", "HEAD")
-        isIgnoreExitValue = true
-    }.standardOutput.asText.get().trim()
+internal fun Project.gitVersionName(): String = gitVersionName(versionGitWorkingDir())
 
-/** `--exact-match` unlike [gitVersionName], which reaches for the nearest reachable tag */
-internal fun Project.gitHeadExactTag(workingDir: File): String =
-    providers.exec {
-        workingDir(workingDir)
-        commandLine("git", "describe", "--tags", "--exact-match")
-        isIgnoreExitValue = true
-    }.standardOutput.asText.get().trim()
+/** The shell's own version, told apart from the packaged project's in the about card */
+internal fun Project.gitOwnVersionName(): String = gitVersionName(rootProject.projectDir)
 
-internal fun Project.gitOwnHeadShort(): String = gitHeadShort(rootProject.projectDir)
-
-internal fun Project.gitOwnHeadExactTag(): String = gitHeadExactTag(rootProject.projectDir)
-
-/** Empty string when this checkout is not a submodule */
-internal fun Project.gitParentHeadShort(): String {
+/** Empty when this checkout is not a submodule: there is no project around it to version */
+internal fun Project.gitParentVersionName(): String {
     val parent = versionGitWorkingDir()
-    return if (parent == rootProject.projectDir) "" else gitHeadShort(parent)
-}
-
-internal fun Project.gitParentHeadExactTag(): String {
-    val parent = versionGitWorkingDir()
-    return if (parent == rootProject.projectDir) "" else gitHeadExactTag(parent)
+    return if (parent == rootProject.projectDir) "" else gitVersionName(parent)
 }

@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.log
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
@@ -18,8 +17,8 @@ class DeviceInfoTextTest {
         assertEquals("Export Time : 2026-08-26 10:30:00.000 (+0800)", text.lines()[2])
         assertTrue("App         : com.example.app" in text.lines())
         assertTrue("Version     : 1.2.3 (45) debug" in text.lines())
-        assertTrue("Git         : abc1234" in text.lines())
-        assertTrue("Parent      : (not a submodule)" in text.lines())
+        assertTrue("MaaFwApp    : 0.9.2-alpha.7" in text.lines())
+        assertTrue("Framework   : v5.12.3" in text.lines())
         assertTrue("Device      : Google Pixel" in text.lines())
         assertTrue("Android     : 16 (API 36)" in text.lines())
         assertTrue("Screen      : 1920 x 1080 @ 120Hz (density 480dpi)" in text.lines())
@@ -37,46 +36,25 @@ class DeviceInfoTextTest {
     }
 
     @Test
-    fun `submodule parent renders hash and tag together when both present`() {
-        val text = DeviceInfoText.render(
-            info(
-                gitTag = "v1.2.3",
-                parentGitCommit = "def5678",
-                parentGitTag = "v0.5.0",
-            ),
-        )
+    fun `build without the framework version lock still renders the row`() {
+        val text = DeviceInfoText.render(info(frameworkVersion = ""))
 
-        assertTrue("Git         : v1.2.3 (abc1234)" in text.lines())
-        assertTrue("Parent      : v0.5.0 (def5678)" in text.lines())
-        assertFalse("(not a submodule)" in text)
-    }
-
-    @Test
-    fun `submodule parent without tag shows bare hash without marker`() {
-        val text = DeviceInfoText.render(info(parentGitCommit = "def5678"))
-
-        assertTrue("Parent      : def5678" in text.lines())
-        assertFalse("(not a submodule)" in text)
+        assertTrue("Framework   : unknown" in text.lines())
     }
 
     private fun info(
         screen: String = "1920 x 1080 @ 120Hz (density 480dpi)",
         memory: String = "8.0 GB total, 1.5 GB free",
         selinux: String = "enforcing",
-        gitCommit: String = "abc1234",
-        gitTag: String = "",
-        parentGitCommit: String = "",
-        parentGitTag: String = "",
+        frameworkVersion: String = "v5.12.3",
     ) = DeviceInfo(
         exportTime = ZonedDateTime.of(2026, 8, 26, 10, 30, 0, 0, ZoneId.of("+08:00")),
         applicationId = "com.example.app",
         versionName = "1.2.3",
         versionCode = 45,
         buildType = "debug",
-        gitCommit = gitCommit,
-        gitTag = gitTag,
-        parentGitCommit = parentGitCommit,
-        parentGitTag = parentGitTag,
+        appVersion = "0.9.2-alpha.7",
+        frameworkVersion = frameworkVersion,
         device = "Google Pixel",
         android = "16 (API 36)",
         securityPatch = "2026-08-05",

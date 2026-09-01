@@ -4,6 +4,8 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+internal const val UNKNOWN = "unknown"
+
 /** 日志导出时的设备快照；字段先采集成字符串，渲染保持纯函数便于单测 */
 data class DeviceInfo(
     val exportTime: ZonedDateTime,
@@ -11,10 +13,8 @@ data class DeviceInfo(
     val versionName: String,
     val versionCode: Long,
     val buildType: String,
-    val gitCommit: String,
-    val gitTag: String,
-    val parentGitCommit: String,
-    val parentGitTag: String,
+    val appVersion: String,
+    val frameworkVersion: String,
     val device: String,
     val android: String,
     val securityPatch: String,
@@ -39,14 +39,8 @@ object DeviceInfoText {
         append("Version     : ").append(info.versionName)
             .append(" (").append(info.versionCode).append(") ")
             .append(info.buildType).append('\n')
-        append("Git         : ").append(formatGitValue(info.gitTag, info.gitCommit)).append('\n')
-        append("Parent      : ").append(
-            formatGitValue(
-                info.parentGitTag,
-                info.parentGitCommit,
-                notSubmodule = info.parentGitCommit.isEmpty(),
-            ),
-        ).append('\n')
+        append("MaaFwApp    : ").append(info.appVersion).append('\n')
+        append("Framework   : ").append(info.frameworkVersion.ifEmpty { UNKNOWN }).append('\n')
         append("Device      : ").append(info.device).append('\n')
         append("Android     : ").append(info.android).append('\n')
         append("Security    : ").append(info.securityPatch).append('\n')
@@ -58,13 +52,5 @@ object DeviceInfoText {
         append("Battery Opt : ").append(info.batteryOptimization).append('\n')
         append("SELinux     : ").append(info.selinux).append('\n')
         append(line).append('\n')
-    }
-
-    /** 只出值不出标签：三处调用点的列宽是 9 / 12 / 12，带上标签必然对不齐一处 */
-    fun formatGitValue(tag: String, commit: String, notSubmodule: Boolean = false): String = when {
-        notSubmodule -> "(not a submodule)"
-        commit.isEmpty() -> "(unknown)"
-        tag.isNotEmpty() -> "$tag ($commit)"
-        else -> commit
     }
 }

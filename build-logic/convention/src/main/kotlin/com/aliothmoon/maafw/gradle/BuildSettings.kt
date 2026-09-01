@@ -26,6 +26,13 @@ internal fun Project.textSetting(key: String, envName: String): String? =
 internal fun Project.signingSetting(envName: String, key: String): String =
     System.getenv(envName) ?: loadLocalProperties().getProperty(key, "")
 
+/**
+ * The MaaFramework release the jniLibs were laid out from, written by setup_maa_framework.py
+ * Absent until that script has run here, and the about card hides the row rather than guess
+ */
+internal fun Project.maaFrameworkVersion(): String =
+    rootProject.file(".maafwversion").takeIf { it.isFile }?.readText()?.trim().orEmpty()
+
 /** Comma separated list switch, read from local.properties only */
 internal fun Project.listSetting(key: String): List<String> =
     (loadLocalProperties().getProperty(key) ?: "").split(',')

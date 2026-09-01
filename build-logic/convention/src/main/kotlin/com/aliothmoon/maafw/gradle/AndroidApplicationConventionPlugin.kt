@@ -59,14 +59,18 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 applicationId = maafwApplicationId()
                 targetSdk = TARGET_SDK
                 versionCode = gitVersionCode()
-                versionName = textSetting("build.versionName", "BUILD_VERSION_NAME") ?: gitVersionName()
+                val pinnedVersionName = textSetting("build.versionName", "BUILD_VERSION_NAME")
+                versionName = pinnedVersionName ?: gitVersionName()
                 println("Build version: applicationId=$applicationId, versionCode=$versionCode, versionName=$versionName")
 
-                // Empty string is the "not a submodule" / "no tag" signal, rendered app-side
-                buildConfigField("String", "MAFW_GIT_COMMIT", "\"" + gitOwnHeadShort() + "\"")
-                buildConfigField("String", "MAFW_GIT_TAG", "\"" + gitOwnHeadExactTag() + "\"")
-                buildConfigField("String", "MAFW_PARENT_GIT_COMMIT", "\"" + gitParentHeadShort() + "\"")
-                buildConfigField("String", "MAFW_PARENT_GIT_TAG", "\"" + gitParentHeadExactTag() + "\"")
+                // Empty string is the "nothing to show" signal, rendered app-side as a missing row
+                buildConfigField(
+                    "String",
+                    "MAFW_PROJECT_VERSION",
+                    "\"" + (pinnedVersionName ?: gitParentVersionName()) + "\"",
+                )
+                buildConfigField("String", "MAFW_APP_VERSION", "\"" + gitOwnVersionName() + "\"")
+                buildConfigField("String", "MAFW_FRAMEWORK_VERSION", "\"" + maaFrameworkVersion() + "\"")
 
                 // Placeholders rather than resValue: with no profile the value stays a resource
                 // reference and the checked-in label and icon keep working untouched

@@ -20,10 +20,8 @@ object DeviceInfoCollector {
         versionName = BuildConfig.VERSION_NAME,
         versionCode = BuildConfig.VERSION_CODE.toLong(),
         buildType = BuildConfig.BUILD_TYPE,
-        gitCommit = BuildConfig.MAFW_GIT_COMMIT,
-        gitTag = BuildConfig.MAFW_GIT_TAG,
-        parentGitCommit = BuildConfig.MAFW_PARENT_GIT_COMMIT,
-        parentGitTag = BuildConfig.MAFW_PARENT_GIT_TAG,
+        appVersion = BuildConfig.MAFW_APP_VERSION,
+        frameworkVersion = BuildConfig.MAFW_FRAMEWORK_VERSION,
         device = "${Build.MANUFACTURER} ${Build.MODEL}",
         android = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
         securityPatch = Build.VERSION.SECURITY_PATCH,
@@ -75,6 +73,4 @@ object DeviceInfoCollector {
 
     private fun formatGb(bytes: Long): String =
         "%.1f GB".format(Locale.US, bytes / 1024f / 1024f / 1024f)
-
-    private const val UNKNOWN = "unknown"
 }

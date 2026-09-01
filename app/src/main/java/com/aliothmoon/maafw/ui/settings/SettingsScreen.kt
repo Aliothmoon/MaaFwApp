@@ -56,7 +56,6 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.asString
-import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
@@ -512,60 +511,36 @@ private data class AboutSheet(val titleRes: Int, val body: String)
 private fun AboutCard(state: SessionUiState) {
     val context = LocalContext.current
     val metadata = state.projectMetadata
-    val definition = (state.projectState as? ProjectState.Ready)?.definition
     var sheet by remember { mutableStateOf<AboutSheet?>(null) }
+    val appLabel = remember(context) {
+        context.applicationInfo.loadLabel(context.packageManager).toString()
+    }
 
     MaaCard(title = stringResource(R.string.settings_about), collapsible = true) {
-        definition?.let {
-            MaaInfoRow(stringResource(R.string.settings_project), it.name)
-            it.version?.let { version ->
-                MaaInfoRow(stringResource(R.string.settings_project_version), version)
-            }
+        MaaInfoRow(stringResource(R.string.settings_project), appLabel)
+        // 空串 = 非子模块又没钉版本名，此时它和下面那行同值，不重复显示
+        if (BuildConfig.MAFW_PROJECT_VERSION.isNotEmpty()) {
+            MaaInfoRow(
+                label = stringResource(R.string.settings_version_of, appLabel),
+                value = BuildConfig.MAFW_PROJECT_VERSION,
+            )
         }
-        MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
-        MaaInfoRow(stringResource(R.string.settings_build), BuildConfig.VERSION_CODE.toString())
         MaaInfoRow(
             label = stringResource(
-                R.string.settings_git_tag,
-                stringResource(R.string.settings_git_source_maafwapp),
+                R.string.settings_version_of,
+                stringResource(R.string.app_name),
             ),
-            value = BuildConfig.MAFW_GIT_TAG.ifBlank {
-                stringResource(R.string.settings_git_no_tag)
-            },
+            value = BuildConfig.MAFW_APP_VERSION,
         )
-        MaaInfoRow(
-            label = stringResource(
-                R.string.settings_git_hash,
-                stringResource(R.string.settings_git_source_maafwapp),
-            ),
-            value = BuildConfig.MAFW_GIT_COMMIT.ifBlank {
-                stringResource(R.string.settings_git_unknown)
-            },
-        )
-        val isSubmodule = BuildConfig.MAFW_PARENT_GIT_COMMIT.isNotEmpty()
-        val noTagText = stringResource(R.string.settings_git_no_tag)
-        val unknownText = stringResource(R.string.settings_git_unknown)
-        val notSubmoduleText = stringResource(R.string.settings_git_not_submodule)
-        val parentTag =
-            if (isSubmodule) BuildConfig.MAFW_PARENT_GIT_TAG.ifBlank { noTagText }
-            else notSubmoduleText
-        val parentHash =
-            if (isSubmodule) BuildConfig.MAFW_PARENT_GIT_COMMIT.ifBlank { unknownText }
-            else notSubmoduleText
-        MaaInfoRow(
-            label = stringResource(
-                R.string.settings_git_tag,
-                stringResource(R.string.settings_git_source_main),
-            ),
-            value = parentTag,
-        )
-        MaaInfoRow(
-            label = stringResource(
-                R.string.settings_git_hash,
-                stringResource(R.string.settings_git_source_main),
-            ),
-            value = parentHash,
-        )
+        if (BuildConfig.MAFW_FRAMEWORK_VERSION.isNotEmpty()) {
+            MaaInfoRow(
+                label = stringResource(
+                    R.string.settings_version_of,
+                    stringResource(R.string.settings_framework),
+                ),
+                value = BuildConfig.MAFW_FRAMEWORK_VERSION,
+            )
+        }
 
         metadata.description?.let {
             MaaDescriptionPanel {
