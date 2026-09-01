@@ -9,8 +9,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.ui.AppRoot
@@ -18,9 +19,6 @@ import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 import com.aliothmoon.maafw.ui.pip.PipController
 import com.aliothmoon.maafw.ui.pip.PipHost
 import com.aliothmoon.maafw.ui.pip.PipRequest
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import org.koin.android.ext.android.inject
 
 class MainActivity : AppCompatActivity(), PipHost {
@@ -30,8 +28,7 @@ class MainActivity : AppCompatActivity(), PipHost {
     @Volatile
     override var pipRequest: PipRequest? = null
 
-    private val _isInPictureInPicture = MutableStateFlow(false)
-    override val isInPictureInPicture: StateFlow<Boolean> = _isInPictureInPicture.asStateFlow()
+    private var isInPip by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -39,7 +36,6 @@ class MainActivity : AppCompatActivity(), PipHost {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val isInPip by _isInPictureInPicture.collectAsState()
             CompositionLocalProvider(LocalIsInPip provides isInPip) {
                 AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
             }
@@ -57,7 +53,7 @@ class MainActivity : AppCompatActivity(), PipHost {
         newConfig: Configuration,
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        _isInPictureInPicture.value = isInPictureInPictureMode
+        isInPip = isInPictureInPictureMode
     }
 
     private fun applyEdgeToEdge(darkMode: Boolean) {

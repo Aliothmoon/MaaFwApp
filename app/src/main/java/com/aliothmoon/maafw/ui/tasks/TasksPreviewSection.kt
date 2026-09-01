@@ -78,11 +78,13 @@ internal fun rememberMovablePreview(
     resolution: DisplayResolution,
     /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
     markers: () -> List<PreviewTouchMarker>,
+    onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
 ): @Composable () -> Unit {
     val currentResolution by rememberUpdatedState(resolution)
     val currentMarkers by rememberUpdatedState(markers)
+    val currentCreated by rememberUpdatedState(onSurfaceCreated)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
     var lastSentSurface by remember { mutableStateOf<PlatformSurface?>(null) }
@@ -90,6 +92,7 @@ internal fun rememberMovablePreview(
         movableContentOf {
             MaaPreviewSurface(
                 resolution = currentResolution,
+                onSurfaceCreated = { currentCreated() },
                 onSurfaceAvailable = { surface ->
                     // surfaceChanged 会重复触发，同一个 Surface 不重复跨进程上报
                     if (lastSentSurface != surface) {

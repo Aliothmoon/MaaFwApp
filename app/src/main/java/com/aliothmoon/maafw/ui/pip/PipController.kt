@@ -7,9 +7,8 @@ import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.os.Build
 import android.util.Rational
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 import com.aliothmoon.maafw.runner.DisplayResolution
-import kotlinx.coroutines.flow.StateFlow
 import timber.log.Timber
 
 /** [sourceRect] 是预览区在 window 中的位置，给进入小窗的过渡动画用，拿不到传 null */
@@ -21,15 +20,21 @@ data class PipRequest(
 /** 任务页写 [pipRequest]，API 28~30 的 onUserLeaveHint 兜底读它；只存参数不存 Activity 引用 */
 interface PipHost {
     var pipRequest: PipRequest?
-
-    val isInPictureInPicture: StateFlow<Boolean>
 }
 
 /** 不直接用 [Rational]：它在纯 JVM 单测里是抛异常的 stub，clamp 逻辑就没法测了 */
 data class PipAspectRatio(val numerator: Int, val denominator: Int)
 
-/** 小窗里只该有预览画面，其余 UI 一律不渲染；由 MainActivity 在最外层提供，判断 PIP 的唯一来源 */
-val LocalIsInPip = staticCompositionLocalOf { false }
+/**
+ * 判断 PIP 的唯一来源，由 MainActivity 在最外层提供
+ *
+ * **不能用 `staticCompositionLocalOf`**：它一改值就把整棵子树无条件重组、跳过优化直接失效，
+ * 而提供点在 Activity 最外层——实测进出小窗各触发一次全树重组，展开那一帧 404ms、掉 51 帧
+ *
+ * 背后也必须是 snapshot state 而不是 StateFlow：`collectAsState` 要等 `AndroidUiDispatcher`
+ * 排到下一帧，窗口尺寸变化会抢在它前面落到测量里，AppRoot 那个钉尺寸的 layout 就记错了
+ */
+val LocalIsInPip = compositionLocalOf { false }
 
 /**
  * 系统画中画：后台模式任务运行中，回桌面时自动缩为小窗继续显示虚拟屏画面

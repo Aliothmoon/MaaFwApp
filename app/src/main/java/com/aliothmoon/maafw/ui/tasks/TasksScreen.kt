@@ -41,6 +41,7 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 import com.aliothmoon.maafw.ui.pip.PipController
 import com.aliothmoon.maafw.ui.pip.PipHost
 import com.aliothmoon.maafw.ui.pip.PipRequest
@@ -123,6 +124,10 @@ private fun TasksContent(
 ) {
     var showQuickOptions by rememberSaveable { mutableStateOf(false) }
 
+    // 小窗里只让出画面，本页其余部分照常组合——拆掉的话展开时要整页重组，
+    // 列表滚动与面板开合也跟着丢
+    val pipActive = LocalIsInPip.current
+
     // 全屏态不用显式排除：预览搬去全屏宿主后 previewContent == null，天然不在武装范围
     val context = LocalContext.current
     val pipHost = context as? PipHost
@@ -172,12 +177,13 @@ private fun TasksContent(
                         surfaceReady = previewSurfaceReady,
                         running = state.runner.phase.isBusy,
                         watchdogState = state.watchdogState,
-                        content = previewContent,
+                        content = previewContent.takeUnless { pipActive },
                         onEnterFullscreen = onEnterFullscreen,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(3f),
-                        onBoundsChanged = { previewBounds = it },
+                        // 小窗里这张卡缩成了巴掌大，别拿它的坐标覆盖 sourceRectHint
+                        onBoundsChanged = { if (!pipActive) previewBounds = it },
                     )
                     TaskWorkspace(
                         state = state,

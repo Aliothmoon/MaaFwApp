@@ -64,10 +64,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -212,8 +214,9 @@ fun AppRoot(
         rememberMovablePreview(
             resolution = resolution,
             markers = { previewMarkersState.value },
+            // 不等 setFixedSize 那一轮：搬一次家要 50ms+ 才对上尺寸，期间遮罩会盖住刚回来的画面
+            onSurfaceCreated = { previewSurfaceReady = true },
             onSurfaceAvailable = {
-                previewSurfaceReady = true
                 viewModel.onIntent(SessionIntent.AttachPreviewSurface(it))
             },
             onSurfaceDestroyed = {
@@ -228,22 +231,12 @@ fun AppRoot(
     }
 
     MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
-        // 小窗独占渲染：只留预览画面，其余 UI 一律不组合（对齐 MaaMeow 的 isInPip 分支）；
-        // 主题内的原因是 movableContent 会继承调用点的 CompositionLocal，拿到完整色板
+        // 小窗与全屏同一套路数：主树原样留着，只把 movableContent 借给下面的小窗宿主
         val isInPip = LocalIsInPip.current
         // pipEligible 已排除全屏态，但 setPictureInPictureParams 要跨进程生效，
         // 点开全屏后立刻按 Home 仍可能带着全屏态进小窗，进去就退掉
         LaunchedEffect(isInPip) {
             if (isInPip) previewFullscreen = false
-        }
-        if (isInPip) {
-            Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                previewContent?.invoke()
-            }
-            return@MaaFwTheme
         }
 
         // NavHost 只承载二级页面；主 tab 仍由下面的 HorizontalPager 渲染
@@ -357,11 +350,26 @@ fun AppRoot(
             )
         }
 
+        // 刻意不进快照：只在测量里读写，做成 State 就是测量期写入引发的重组
+        val fullWindow = remember { intArrayOf(0, 0) }
+
         // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clearFocusOnBlankTap(),
+                .clearFocusOnBlankTap()
+                // 小窗期间钉在进小窗前的窗口尺寸下测量：按巴掌大重排会让任务列表丢掉视口外的行
+                .layout { measurable, constraints ->
+                    val pinned = isInPip && fullWindow[0] > 0
+                    if (!pinned) {
+                        fullWindow[0] = constraints.maxWidth
+                        fullWindow[1] = constraints.maxHeight
+                    }
+                    val placeable = measurable.measure(
+                        if (pinned) Constraints.fixed(fullWindow[0], fullWindow[1]) else constraints,
+                    )
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+                },
         ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -584,6 +592,18 @@ fun AppRoot(
                 },
                 content = previewContent,
             )
+        }
+
+        // 与全屏宿主同一层才盖得住底栏与系统栏
+        if (isInPip && !previewFullscreen && previewContent != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center,
+            ) {
+                previewContent()
+            }
         }
 
         diagnosticsDialog?.let { diagnostics ->
