@@ -393,8 +393,10 @@
     <string name="quick_settings_title">自动设置</string>
     <string name="quick_action_screen_saver">熄屏挂机</string>
     <string name="quick_action_close_app">关闭目标应用</string>
+    <string name="quick_action_screenshot">截屏</string>
     <string name="quick_setting_close_app_after_task">任务自动结束时关闭目标应用</string>
     <string name="quick_setting_touch_preview">显示触摸预览</string>
+    <string name="msg_screenshot_failed">截屏失败，请稍后重试</string>
 
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
     <string name="permission_section">权限管理</string>

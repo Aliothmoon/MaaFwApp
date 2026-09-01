@@ -257,6 +257,7 @@ fun AppRoot(
                     // 控制层挂在 WindowManager 上、跨 Activity 存活，由 Application 级单例持有
                     SessionEffect.ShowOverlay -> overlayController.show()
                     SessionEffect.ShowScreenSaver -> screenSaverManager.show()
+                    SessionEffect.OpenLogExport -> exportSheetVisible = true
 
                     SessionEffect.RestartApp -> Misc.restartApp(context)
 
