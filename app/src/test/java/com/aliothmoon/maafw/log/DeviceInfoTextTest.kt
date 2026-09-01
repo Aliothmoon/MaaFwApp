@@ -18,8 +18,8 @@ class DeviceInfoTextTest {
         assertEquals("Export Time : 2026-08-26 10:30:00.000 (+0800)", text.lines()[2])
         assertTrue("App         : com.example.app" in text.lines())
         assertTrue("Version     : 1.2.3 (45) debug" in text.lines())
-        assertTrue("Git (MaaFwApp) : abc1234" in text.lines())
-        assertTrue("Git (Parent) : (not a submodule)" in text.lines())
+        assertTrue("Git         : abc1234" in text.lines())
+        assertTrue("Parent      : (not a submodule)" in text.lines())
         assertTrue("Device      : Google Pixel" in text.lines())
         assertTrue("Android     : 16 (API 36)" in text.lines())
         assertTrue("Screen      : 1920 x 1080 @ 120Hz (density 480dpi)" in text.lines())
@@ -46,8 +46,8 @@ class DeviceInfoTextTest {
             ),
         )
 
-        assertTrue("Git (MaaFwApp) : v1.2.3 (abc1234)" in text.lines())
-        assertTrue("Git (Parent) : v0.5.0 (def5678)" in text.lines())
+        assertTrue("Git         : v1.2.3 (abc1234)" in text.lines())
+        assertTrue("Parent      : v0.5.0 (def5678)" in text.lines())
         assertFalse("(not a submodule)" in text)
     }
 
@@ -55,7 +55,7 @@ class DeviceInfoTextTest {
     fun `submodule parent without tag shows bare hash without marker`() {
         val text = DeviceInfoText.render(info(parentGitCommit = "def5678"))
 
-        assertTrue("Git (Parent) : def5678" in text.lines())
+        assertTrue("Parent      : def5678" in text.lines())
         assertFalse("(not a submodule)" in text)
     }
 

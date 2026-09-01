@@ -62,10 +62,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 versionName = textSetting("build.versionName", "BUILD_VERSION_NAME") ?: gitVersionName()
                 println("Build version: applicationId=$applicationId, versionCode=$versionCode, versionName=$versionName")
 
-                // Expose MaaFwApp and parent superproject commit + tag to BuildConfig so
-                // crash logs, app logs and the exported device snapshot can show the build's
-                // exact source. Empty string is the "not a submodule" / "no tag" signal; the
-                // renderer on the app side turns it into "(not a submodule)" / "(unknown)".
+                // Empty string is the "not a submodule" / "no tag" signal, rendered app-side
                 buildConfigField("String", "MAFW_GIT_COMMIT", "\"" + gitOwnHeadShort() + "\"")
                 buildConfigField("String", "MAFW_GIT_TAG", "\"" + gitOwnHeadExactTag() + "\"")
                 buildConfigField("String", "MAFW_PARENT_GIT_COMMIT", "\"" + gitParentHeadShort() + "\"")

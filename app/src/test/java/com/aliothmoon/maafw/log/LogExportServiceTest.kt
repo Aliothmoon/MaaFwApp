@@ -49,7 +49,7 @@ class LogExportServiceTest {
     @Test
     fun `log entries are packed and properties stay debug only`() = runTest {
         val log = File(base, "log/app.log").apply {
-            parentFile.mkdirs()
+            parentFile!!.mkdirs()
             writeText("app log")
         }
 
@@ -70,6 +70,6 @@ class LogExportServiceTest {
         baseDir = { base },
         roots = { listOf(File(base, "log"), File(base, "debug")) },
         debugMode = { false },
-        deviceInfoProvider = { "device snapshot" },
+        deviceInfo = { "device snapshot" },
     )
 }

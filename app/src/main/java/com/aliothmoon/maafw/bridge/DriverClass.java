@@ -1,9 +1,10 @@
 package com.aliothmoon.maafw.bridge;
 
 
+import android.content.pm.PackageInfo;
+
 import com.aliothmoon.maafw.remote.internal.ActivityUtils;
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager;
-import com.aliothmoon.maafw.remote.internal.TargetAppInfoLog;
 import com.aliothmoon.maafw.third.FakeContext;
 import com.aliothmoon.maafw.third.Ln;
 
@@ -47,22 +48,16 @@ public final class DriverClass {
     }
 
     private static void logTargetAppInfo(String rawSpec, int displayId, boolean forceStop) {
-        String target = ActivityUtils.packageNameOf(rawSpec);
+        String context = " displayId=" + displayId + " forceStop=" + forceStop;
         try {
-            android.content.pm.PackageInfo info = FakeContext.get().getPackageManager()
-                    .getPackageInfo(target, 0);
-            Integer uid = info.applicationInfo == null ? null : info.applicationInfo.uid;
-            Ln.i(TargetAppInfoLog.success(
-                    rawSpec,
-                    target,
-                    info.versionName,
-                    info.versionCode,
-                    uid,
-                    displayId,
-                    forceStop
-            ));
+            String target = ActivityUtils.packageNameOf(rawSpec);
+            PackageInfo info = FakeContext.get().getPackageManager().getPackageInfo(target, 0);
+            Ln.i(TAG + ": target app spec=" + rawSpec + " package=" + target
+                    + " version=" + info.versionName + " (" + info.getLongVersionCode() + ")"
+                    + " uid=" + (info.applicationInfo == null ? "unknown" : info.applicationInfo.uid)
+                    + context);
         } catch (Throwable e) {
-            Ln.w(TargetAppInfoLog.failure(rawSpec, target, e, displayId, forceStop), e);
+            Ln.w(TAG + ": target app info unavailable spec=" + rawSpec + context, e);
         }
     }
 

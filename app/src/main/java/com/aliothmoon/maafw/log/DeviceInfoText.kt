@@ -39,10 +39,9 @@ object DeviceInfoText {
         append("Version     : ").append(info.versionName)
             .append(" (").append(info.versionCode).append(") ")
             .append(info.buildType).append('\n')
-        append(formatGitLine("Git (MaaFwApp)", info.gitTag, info.gitCommit)).append('\n')
-        append(
-            formatGitLine(
-                "Git (Parent)",
+        append("Git         : ").append(formatGitValue(info.gitTag, info.gitCommit)).append('\n')
+        append("Parent      : ").append(
+            formatGitValue(
                 info.parentGitTag,
                 info.parentGitCommit,
                 notSubmodule = info.parentGitCommit.isEmpty(),
@@ -61,24 +60,11 @@ object DeviceInfoText {
         append(line).append('\n')
     }
 
-    /**
-     * Render a single `Git (...)` line shared by [render], `AppLogWriter.setup()` and
-     * `CrashHandler.report()` so the three places never drift apart.
-     *
-     * Empty `commit` and `notSubmodule == true` -> the literal "(not a submodule)" marker;
-     * non-empty `tag` -> "tag (commit)"; otherwise the bare short hash.
-     */
-    fun formatGitLine(
-        label: String,
-        tag: String,
-        commit: String,
-        notSubmodule: Boolean = false,
-    ): String = buildString {
-        append(label).append(" : ")
-        when {
-            notSubmodule -> append("(not a submodule)")
-            tag.isNotEmpty() -> append(tag).append(" (").append(commit).append(")")
-            else -> append(commit)
-        }
+    /** 只出值不出标签：三处调用点的列宽是 9 / 12 / 12，带上标签必然对不齐一处 */
+    fun formatGitValue(tag: String, commit: String, notSubmodule: Boolean = false): String = when {
+        notSubmodule -> "(not a submodule)"
+        commit.isEmpty() -> "(unknown)"
+        tag.isNotEmpty() -> "$tag ($commit)"
+        else -> commit
     }
 }
