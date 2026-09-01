@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -90,7 +91,7 @@ internal fun RunLogPanel(
                 onClick = { essentialOnly = false },
             )
             Text(
-                text = stringResource(R.string.run_log_count, visible.size),
+                text = pluralStringResource(R.plurals.run_log_count, visible.size, visible.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),

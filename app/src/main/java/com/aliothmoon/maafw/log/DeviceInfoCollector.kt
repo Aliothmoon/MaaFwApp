@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.log
 
+import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
@@ -50,6 +51,8 @@ object DeviceInfoCollector {
         "${formatGb(mi.totalMem)} total, ${formatGb(mi.availMem)} free"
     }.getOrDefault(UNKNOWN)
 
+    // 排障要的是「现在还剩多少」，不是清完缓存能腾出多少
+    @SuppressLint("UsableSpace")
     private fun storageInfo(dir: File): String = runCatching {
         "${formatGb(dir.usableSpace)} usable / ${formatGb(dir.totalSpace)} total"
     }.getOrDefault(UNKNOWN)

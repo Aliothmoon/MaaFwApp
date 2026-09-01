@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -108,7 +109,11 @@ private fun UnpackingDialog(state: PiInstallState.Unpacking) {
                             state.percent,
                         )
                     } else {
-                        stringResource(R.string.pi_install_progress_count, state.done)
+                        pluralStringResource(
+                            R.plurals.pi_install_progress_count,
+                            state.done,
+                            state.done,
+                        )
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

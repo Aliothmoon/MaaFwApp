@@ -26,6 +26,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.toColorInt
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
@@ -276,7 +277,7 @@ private class StyledSpanTagHandler(
         }
         CSS_COLORS[value]?.let { return it }
         return try {
-            android.graphics.Color.parseColor(value)
+            value.toColorInt()
         } catch (_: IllegalArgumentException) {
             Timber.w("Cannot parse CSS color: %s", raw)
             null

@@ -23,7 +23,6 @@
     <string name="tasks_empty_task_title">No tasks</string>
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
-    <string name="tasks_run_order">Task list</string>
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_preview_waiting_surface">Waiting for frames</string>
     <string name="virtual_display_game_running">Running</string>
@@ -87,7 +86,6 @@
     <string name="home_project">Project</string>
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
-    <string name="home_name">Name</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
@@ -131,13 +129,8 @@
     <string name="settings_run_mode">Run mode</string>
     <string name="settings_run_mode_background">Background mode</string>
     <string name="settings_run_mode_foreground">Foreground mode</string>
-    <string name="settings_run_mode_hint_background">Runs on a separate virtual display so the phone stays usable; resolution derived from the project declaration</string>
-    <string name="settings_run_mode_hint_foreground">Drives the current screen directly, occupying the phone while running; the target app is not restarted and preview touch is disabled</string>
     <string name="settings_resource">Server</string>
     <string name="settings_no_resources">The project provides no selectable servers</string>
-    <string name="settings_current_resource">Current resource</string>
-    <string name="settings_not_selected">Not selected</string>
-    <string name="settings_resource_hint">Switching resources affects task applicability; unavailable while running</string>
     <string name="settings_reload_project">Reload project</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
@@ -228,7 +221,6 @@
     <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
     <string name="overlay_tab_tasks">Tasks</string>
     <string name="overlay_tab_log">Log</string>
-    <string name="overlay_task_running">Running</string>
     <string name="overlay_hide">Hide</string>
     <string name="overlay_back_to_app">Back to app</string>
     <string name="overlay_lock">Lock position</string>
@@ -241,7 +233,6 @@
     <string name="overlay_pane_edit_empty_title">Select a task to manage</string>
     <string name="overlay_pane_edit_empty_hint">Rename, duplicate, or remove</string>
     <string name="overlay_pane_edit_add_hint">Tap Add to append from the catalog</string>
-    <string name="overlay_pane_reorder_hint">Long-press a task on the left to reorder</string>
     <string name="overlay_delete_task">Remove this task?</string>
     <string name="overlay_delete_config">Delete this configuration?</string>
     <string name="overlay_new_config">New</string>
@@ -258,10 +249,7 @@
     <string name="settings_overlay_show">Open control panel</string>
 
     <!-- Screen saver -->
-    <string name="settings_screen_saver">Screen off</string>
     <string name="settings_screen_saver_auto">Turn the screen off while running</string>
-    <string name="settings_screen_saver_hint">Blacks out the screen while a background run is in progress, leaving only the clock, battery and the latest log line; swipe right to unlock, and it is removed automatically when the run ends</string>
-    <string name="settings_screen_saver_show">Turn off now</string>
     <string name="screensaver_idle">Waiting for task to start…</string>
     <string name="screensaver_swipe_to_unlock">Swipe right to unlock</string>
 
@@ -309,7 +297,10 @@
     <string name="schedule_interval_days">Every %1$d d</string>
     <string name="schedule_edit_days_unit">Days</string>
     <string name="schedule_edit_hours_unit">Hours</string>
-    <string name="schedule_edit_total_hours">= %1$d hours</string>
+    <plurals name="schedule_edit_total_hours">
+        <item quantity="one">= %1$d hour</item>
+        <item quantity="other">= %1$d hours</item>
+    </plurals>
 
     <string name="schedule_log_title">Trigger log</string>
     <string name="schedule_log_empty">No triggers</string>
@@ -411,8 +402,6 @@
     <string name="permission_request">Request</string>
     <string name="permission_quick_grant">Quick grant</string>
     <string name="permission_requesting">Requesting…</string>
-    <string name="permission_service_connected">Privileged process connected</string>
-    <string name="permission_service_disconnected">Privileged process not connected</string>
     <string name="permission_open_shizuku">Shizuku shortcut</string>
     <string name="permission_expand">Show more permissions</string>
     <string name="permission_collapse">Hide more permissions</string>
@@ -456,8 +445,10 @@
     <string name="common_got_it">Got it</string>
 
     <!-- Run log -->
-    <string name="run_log_title">Run log</string>
-    <string name="run_log_count">%1$d entries</string>
+    <plurals name="run_log_count">
+        <item quantity="one">%1$d entry</item>
+        <item quantity="other">%1$d entries</item>
+    </plurals>
     <string name="run_log_export">Export</string>
     <string name="run_log_clear">Clear</string>
     <string name="run_log_empty">No logs</string>
@@ -483,7 +474,10 @@
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>
     <string name="log_archive_empty">No run history</string>
-    <string name="log_archive_meta">%1$d tasks · %2$s</string>
+    <plurals name="log_archive_meta">
+        <item quantity="one">%1$d task · %2$s</item>
+        <item quantity="other">%1$d tasks · %2$s</item>
+    </plurals>
     <string name="log_archive_cleanup">Clean up old</string>
     <string name="log_archive_delete_title">Delete this record</string>
     <string name="log_archive_delete_message">Delete the run from %1$s? This cannot be undone.</string>
@@ -575,7 +569,10 @@
     <!-- PI unpacking -->
     <string name="pi_install_title">Preparing project resources</string>
     <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
-    <string name="pi_install_progress_count">Wrote %1$d files</string>
+    <plurals name="pi_install_progress_count">
+        <item quantity="one">Wrote %1$d file</item>
+        <item quantity="other">Wrote %1$d files</item>
+    </plurals>
     <string name="pi_install_note">Extracted once on first launch and after each version update. Please wait…</string>
     <string name="pi_install_failed_title">Failed to prepare project resources</string>
     <string name="pi_install_failed_message">%1$s\n\nCheck that there is enough free space, then retry.</string>
@@ -677,13 +674,6 @@
     <string name="notification_event_channel_silent_desc">Leaves an entry in the shade when a run ends, without a sound</string>
     <string name="notification_event_channel_popup_name">Run result (banner)</string>
     <string name="notification_event_channel_popup_desc">Shows a banner with a sound when a run ends</string>
-    <string name="notification_channel_update_download">App update download</string>
-    <string name="notification_channel_update_download_desc">Shows progress in the shade while a new version is downloading, auto-cancels when done</string>
-    <string name="notification_update_download_title">Downloading %1$s</string>
-    <string name="notification_update_download_complete_title">%1$s downloaded</string>
-    <string name="notification_update_download_complete">Download complete, opening the system installer</string>
-    <string name="notification_update_download_failed_title">Download failed</string>
-    <string name="notification_update_download_failed">Download failed: %1$s</string>
 
     <string name="notification_event_run_completed">All tasks completed</string>
     <plurals name="notification_event_run_completed_body">
@@ -691,7 +681,7 @@
         <item quantity="other">%1$d tasks in total</item>
     </plurals>
     <string name="notification_event_run_partial">Run ended with failures</string>
-    <string name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
+    <string tools:ignore="PluralsCandidate" name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
     <string name="notification_event_run_failed">Run failed</string>
     <string name="notification_event_service_died">Background service stopped</string>
     <string name="notification_event_service_died_body">The background service ended unexpectedly and this run was aborted</string>

@@ -71,7 +71,6 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
             android:exported="true"
-            android:label="${appLabel}"
             android:launchMode="singleTop"
             android:supportsPictureInPicture="true"
             android:theme="@style/Theme.MaaFwApp.Starting"
@@ -119,10 +118,10 @@
                 android:resource="@xml/accessibility_helper_service_config" />
         </service>
 
-        <!-- 闹钟落点：exported 才收得到 AlarmManager 发的广播 -->
         <receiver
             android:name=".schedule.ScheduleReceiver"
-            android:exported="true">
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="${applicationId}.SCHEDULE_TRIGGER" />
             </intent-filter>
@@ -151,7 +150,8 @@
             android:authorities="${applicationId}.shizuku"
             android:enabled="true"
             android:exported="true"
-            android:multiprocess="false" />
+            android:multiprocess="false"
+            tools:ignore="ExportedContentProvider" />
 
         <!-- Root 后端的 binder 回投口：特权进程经 getContentProviderExternal 打到这里，
              provider 内按 uid ∈ {0, 2000} 与一次性 token 校验（docs/privileged-runtime.md §3） -->
@@ -160,7 +160,8 @@
             android:authorities="${applicationId}.root.bootstrap"
             android:enabled="true"
             android:exported="true"
-            android:multiprocess="false" />
+            android:multiprocess="false"
+            tools:ignore="ExportedContentProvider" />
 
         <!-- 把随包的 shizuku.apk 交给系统安装器：API 24 起 file:// 直接抛 FileUriExposedException -->
         <provider
