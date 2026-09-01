@@ -62,6 +62,12 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 versionName = textSetting("build.versionName", "BUILD_VERSION_NAME") ?: gitVersionName()
                 println("Build version: applicationId=$applicationId, versionCode=$versionCode, versionName=$versionName")
 
+                // Empty string is the "not a submodule" / "no tag" signal, rendered app-side
+                buildConfigField("String", "MAFW_GIT_COMMIT", "\"" + gitOwnHeadShort() + "\"")
+                buildConfigField("String", "MAFW_GIT_TAG", "\"" + gitOwnHeadExactTag() + "\"")
+                buildConfigField("String", "MAFW_PARENT_GIT_COMMIT", "\"" + gitParentHeadShort() + "\"")
+                buildConfigField("String", "MAFW_PARENT_GIT_TAG", "\"" + gitParentHeadExactTag() + "\"")
+
                 // Placeholders rather than resValue: with no profile the value stays a resource
                 // reference and the checked-in label and icon keep working untouched
                 manifestPlaceholders["appLabel"] = profile.appLabel ?: "@string/app_name"
