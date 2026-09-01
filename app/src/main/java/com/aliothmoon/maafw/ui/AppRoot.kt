@@ -587,8 +587,8 @@ fun AppRoot(
             FullscreenPreview(
                 resolution = fullscreenResolution,
                 onExit = { previewFullscreen = false },
-                onTouch = { x, y, action ->
-                    viewModel.onIntent(SessionIntent.PreviewTouch(x, y, action))
+                onTouch = { x, y, action, contact ->
+                    viewModel.onIntent(SessionIntent.PreviewTouch(x, y, action, contact))
                 },
                 content = previewContent,
             )

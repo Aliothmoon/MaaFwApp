@@ -525,9 +525,9 @@ class SessionViewModel(
             SessionIntent.DetachPreviewSurface -> previewPort.detachSurface()
 
             is SessionIntent.PreviewTouch -> when (intent.action) {
-                PreviewTouchAction.Down -> previewPort.touchDown(intent.x, intent.y)
-                PreviewTouchAction.Move -> previewPort.touchMove(intent.x, intent.y)
-                PreviewTouchAction.Up -> previewPort.touchUp(intent.x, intent.y)
+                PreviewTouchAction.Down -> previewPort.touchDown(intent.x, intent.y, intent.contact)
+                PreviewTouchAction.Move -> previewPort.touchMove(intent.x, intent.y, intent.contact)
+                PreviewTouchAction.Up -> previewPort.touchUp(intent.x, intent.y, intent.contact)
             }
 
             // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授

@@ -182,6 +182,7 @@ class SessionViewModelTest {
         permissions: FakePermissionGateway = FakePermissionGateway(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
+        preview: RecordingPreviewPort = RecordingPreviewPort(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val focusDispatcher = idleFocusDispatcher()
         val vm = SessionViewModel(
@@ -189,7 +190,7 @@ class SessionViewModelTest {
             configurationStore = store,
             runnerPort = runner,
             runLauncher = launcherFor(project, store, runner, settings),
-            previewPort = RecordingPreviewPort(),
+            previewPort = preview,
             permissionGateway = permissions,
             servicePort = FakePrivilegedServicePort(),
             displaySize = displaySize,
@@ -259,6 +260,27 @@ class SessionViewModelTest {
         runnerPort = runner,
         scope = backgroundScope,
     )
+
+    @Test
+    fun `preview touch carries the contact through to the port`() = runTest(mainDispatcher) {
+        val preview = RecordingPreviewPort()
+        val (vm, _, _) = createVm(preview = preview)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.PreviewTouch(10, 20, PreviewTouchAction.Down, contact = 15))
+        vm.onIntent(SessionIntent.PreviewTouch(11, 21, PreviewTouchAction.Move, contact = 15))
+        vm.onIntent(SessionIntent.PreviewTouch(12, 22, PreviewTouchAction.Up, contact = 15))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                RecordingPreviewPort.Touch(10, 20, "down", 15),
+                RecordingPreviewPort.Touch(11, 21, "move", 15),
+                RecordingPreviewPort.Touch(12, 22, "up", 15),
+            ),
+            preview.touches,
+        )
+    }
 
     @Test
     fun `run log keeps only the latest entries and clears on intent`() = runTest(mainDispatcher) {

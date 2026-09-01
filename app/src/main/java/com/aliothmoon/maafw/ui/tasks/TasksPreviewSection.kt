@@ -42,12 +42,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangedIgnoreConsumed
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -202,7 +207,7 @@ private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modif
 internal fun FullscreenPreview(
     resolution: DisplayResolution,
     onExit: () -> Unit,
-    onTouch: (x: Int, y: Int, action: PreviewTouchAction) -> Unit,
+    onTouch: (x: Int, y: Int, action: PreviewTouchAction, contact: Int) -> Unit,
     content: @Composable () -> Unit,
 ) {
     val activity = LocalContext.current.findActivity()
@@ -253,41 +258,78 @@ internal fun FullscreenPreview(
 }
 
 /**
- * 把手指位置换算到虚拟屏坐标再上报
+ * 逐个 pointer 上报，多指同时按下各走各的 contact
  *
- * 画面按 contain 方式居中缩放，两侧/上下可能有黑边，落在黑边上的点直接丢掉——
- * 那里没有对应的虚拟屏像素，硬算会得到越界坐标
+ * 不走手势识别器：它们只跟一根手指，且要等 touch slop 才认，这里要的是每次位移原样透出去
  */
 private fun Modifier.previewTouchInput(
     resolution: DisplayResolution,
-    onTouch: (x: Int, y: Int, action: PreviewTouchAction) -> Unit,
+    onTouch: (x: Int, y: Int, action: PreviewTouchAction, contact: Int) -> Unit,
 ): Modifier = pointerInput(resolution) {
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent()
-            val change = event.changes.firstOrNull() ?: continue
-            val action = when (event.type) {
-                PointerEventType.Press -> PreviewTouchAction.Down
-                PointerEventType.Move -> if (change.pressed) PreviewTouchAction.Move else null
-                PointerEventType.Release -> PreviewTouchAction.Up
-                else -> null
-            }
-            if (action != null) {
-                val scale = minOf(
-                    size.width / resolution.width.toFloat(),
-                    size.height / resolution.height.toFloat(),
-                )
-                val offsetX = (size.width - resolution.width * scale) / 2f
-                val offsetY = (size.height - resolution.height * scale) / 2f
-                val vx = ((change.position.x - offsetX) / scale).toInt()
-                val vy = ((change.position.y - offsetY) / scale).toInt()
-                if (vx in 0 until resolution.width && vy in 0 until resolution.height) {
-                    onTouch(vx, vy, action)
+    val slots = PreviewPointerSlots()
+    try {
+        awaitPointerEventScope {
+            while (true) {
+                for (change in awaitPointerEvent().changes) {
+                    val pointerId = change.id.value
+                    val down = change.changedToDownIgnoreConsumed()
+                    val up = change.changedToUpIgnoreConsumed()
+                    if (!down && !up && !change.positionChangedIgnoreConsumed()) continue
+
+                    val point = viewToVirtualDisplay(change.position, size, resolution)
+                    val contact = when {
+                        // 黑边上的按下没有对应像素，丢掉；已按下的手指拖出画面仍要跟
+                        down -> if (point.inside) slots.acquire(pointerId) else -1
+                        up -> slots.release(pointerId)
+                        else -> slots.indexOf(pointerId)
+                    }
+                    if (contact < 0) continue
+                    val action = when {
+                        down -> PreviewTouchAction.Down
+                        up -> PreviewTouchAction.Up
+                        else -> PreviewTouchAction.Move
+                    }
+                    slots.remember(contact, point.offset.x, point.offset.y)
+                    onTouch(point.offset.x, point.offset.y, action, contact)
+                    change.consume()
                 }
             }
-            change.consume()
         }
+    } finally {
+        // 退出预览时仍按着的手指逐个抬起，不发整体 CANCEL：远端那张槽位表与 MaaFramework
+        // 的注入共用，整体取消会把它正在做的手势一并丢掉
+        slots.releaseHeld { contact, x, y -> onTouch(x, y, PreviewTouchAction.Up, contact) }
     }
+}
+
+/** [offset] 已钳进虚拟屏范围；[inside] 是钳之前落没落在画面上 */
+private data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
+
+/**
+ * 把手指位置换算到虚拟屏坐标
+ *
+ * 越界钳回边缘而不是丢掉：手指拖出画面后抬起，那条 up 也得送达，否则远端以为它还按着
+ */
+private fun viewToVirtualDisplay(
+    view: Offset,
+    viewSize: IntSize,
+    resolution: DisplayResolution,
+): DisplayPoint {
+    val scale = minOf(
+        viewSize.width / resolution.width.toFloat(),
+        viewSize.height / resolution.height.toFloat(),
+    )
+    val offsetX = (viewSize.width - resolution.width * scale) / 2f
+    val offsetY = (viewSize.height - resolution.height * scale) / 2f
+    val vx = ((view.x - offsetX) / scale).toInt()
+    val vy = ((view.y - offsetY) / scale).toInt()
+    return DisplayPoint(
+        offset = IntOffset(
+            vx.coerceIn(0, resolution.width - 1),
+            vy.coerceIn(0, resolution.height - 1),
+        ),
+        inside = vx in 0 until resolution.width && vy in 0 until resolution.height,
+    )
 }
 
 /** Compose 的 LocalContext 可能是 ContextWrapper，逐层剥到 Activity */

@@ -7,6 +7,7 @@ package com.aliothmoon.maafw.bridge
  */
 object TouchPointerSequence {
 
+    /** Android MotionEvent pointer id 取值 0..15，与 MaaFramework validate_contact 一致 */
     const val MAX_CONTACTS = 16
 
     const val ACTION_DOWN = 0
@@ -44,6 +45,7 @@ object TouchPointerSequence {
         val nextPointer = Pointer(contact, x, y)
         return when (kind) {
             Kind.Down -> when {
+                // 同一手指重复按下：上一序列未正常结束，先整体 CANCEL 再开新手势
                 idx >= 0 -> Step(
                     ok = true,
                     actionMasked = ACTION_DOWN,
@@ -78,14 +80,16 @@ object TouchPointerSequence {
 
             Kind.Up -> {
                 if (idx < 0) return Step(ok = false)
+                val next = current.toMutableList()
+                next[idx] = nextPointer
                 if (current.size == 1) {
-                    Step(ok = true, actionMasked = ACTION_UP, pointers = current)
+                    Step(ok = true, actionMasked = ACTION_UP, pointers = next)
                 } else {
                     Step(
                         ok = true,
                         actionMasked = ACTION_POINTER_UP,
                         changingIndex = idx,
-                        pointers = current,
+                        pointers = next,
                     )
                 }
             }

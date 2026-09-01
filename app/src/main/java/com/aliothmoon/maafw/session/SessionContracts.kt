@@ -312,7 +312,12 @@ sealed interface SessionIntent {
      * 用户在全屏预览上的手动操作；坐标由 UI 换算到虚拟屏坐标系后传入
      * 高频（一次滑动几十条），走 oneway，不产生 Effect 也不改 UiState
      */
-    data class PreviewTouch(val x: Int, val y: Int, val action: PreviewTouchAction) : SessionIntent
+    data class PreviewTouch(
+        val x: Int,
+        val y: Int,
+        val action: PreviewTouchAction,
+        val contact: Int,
+    ) : SessionIntent
 
     /** 向当前后端发起授权；不走 guarded，运行中也允许（授权不改配置） */
     data object RequestRemoteAccess : SessionIntent
