@@ -146,6 +146,11 @@ object RemoteServiceManager : PrivilegedServicePort {
         ServiceBootLogger.init()
         ShizukuManager.initSui(context.packageName)
         RemoteAccessCoordinator.initialize(backendProvider)
+        initializeConnectors(context)
+    }
+
+    /** 连接器只要 applicationContext；PermissionManager 构造期「已授权即 bind」早于 [initialize]，须先注入 */
+    fun initializeConnectors(context: Context) {
         RootRemoteServiceConnector.initialize(context)
         ShizukuProcessServiceConnector.initialize(context)
         LogcatServiceManager.initialize(context)
