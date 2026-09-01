@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -112,6 +114,7 @@ import com.aliothmoon.maafw.ui.logs.LogExportController
 import com.aliothmoon.maafw.ui.logs.RunLogArchiveScreen
 import com.aliothmoon.maafw.ui.logs.RunLogDetailScreen
 import com.aliothmoon.maafw.ui.navigation.Routes
+import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
@@ -225,6 +228,24 @@ fun AppRoot(
     }
 
     MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
+        // 小窗独占渲染：只留预览画面，其余 UI 一律不组合（对齐 MaaMeow 的 isInPip 分支）；
+        // 主题内的原因是 movableContent 会继承调用点的 CompositionLocal，拿到完整色板
+        val isInPip = LocalIsInPip.current
+        // pipEligible 已排除全屏态，但 setPictureInPictureParams 要跨进程生效，
+        // 点开全屏后立刻按 Home 仍可能带着全屏态进小窗，进去就退掉
+        LaunchedEffect(isInPip) {
+            if (isInPip) previewFullscreen = false
+        }
+        if (isInPip) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color.Black),
+                contentAlignment = Alignment.Center,
+            ) {
+                previewContent?.invoke()
+            }
+            return@MaaFwTheme
+        }
+
         // NavHost 只承载二级页面；主 tab 仍由下面的 HorizontalPager 渲染
         val navController = rememberNavController()
         val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -426,6 +447,9 @@ fun AppRoot(
                         previewSurfaceReady = previewSurfaceReady,
                         // 全屏时这里让位，同一份 previewContent 搬到下面的全屏宿主
                         previewContent = previewContent.takeUnless { previewFullscreen },
+                        // settledPage 只在滑动落定后翻页，手势中途弹回去仍是旧页——组合≠可见
+                        isActivePage = pagerState.settledPage == page,
+                        pipOnHome = settingsState.pipOnHome,
                         runLog = { runLogState.value },
                         onEnterFullscreen = { previewFullscreen = true },
                         onExportLogs = { exportSheetVisible = true },

@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.ui.tasks
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import android.graphics.Rect
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,14 +21,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.isBusy
@@ -36,6 +41,9 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.pip.PipController
+import com.aliothmoon.maafw.ui.pip.PipHost
+import com.aliothmoon.maafw.ui.pip.PipRequest
 
 /**
  * [previewContent] 由 AppRoot 创建并持有：全屏宿主必须在 pager 之外才能盖住底部 tab 栏，
@@ -47,6 +55,9 @@ fun TasksScreen(
     state: SessionUiState,
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
+    /** 用户停留的页是否是本页；画中画只在该页武装（pager 会预组合相邻页，组合≠可见） */
+    isActivePage: Boolean,
+    pipOnHome: Boolean,
     /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
     runLog: () -> List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
@@ -86,6 +97,8 @@ fun TasksScreen(
                 state = state,
                 previewSurfaceReady = previewSurfaceReady,
                 previewContent = previewContent,
+                isActivePage = isActivePage,
+                pipOnHome = pipOnHome,
                 runLog = runLog,
                 onEnterFullscreen = onEnterFullscreen,
                 onExportLogs = onExportLogs,
@@ -100,6 +113,8 @@ private fun TasksContent(
     state: SessionUiState,
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
+    isActivePage: Boolean,
+    pipOnHome: Boolean,
     runLog: () -> List<RunLogEntry>,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
@@ -107,6 +122,33 @@ private fun TasksContent(
     modifier: Modifier = Modifier,
 ) {
     var showQuickOptions by rememberSaveable { mutableStateOf(false) }
+
+    // 全屏态不用显式排除：预览搬去全屏宿主后 previewContent == null，天然不在武装范围
+    val context = LocalContext.current
+    val pipHost = context as? PipHost
+    val previewResolution = state.previewResolution
+    var previewBounds by remember { mutableStateOf<Rect?>(null) }
+    val pipEligible = pipOnHome &&
+            isActivePage &&
+            previewContent != null &&
+            previewResolution != null &&
+            state.runMode == RunMode.BACKGROUND &&
+            state.runner.phase.isBusy &&
+            previewSurfaceReady &&
+            pipHost != null &&
+            PipController.isSupported(context)
+    DisposableEffect(pipHost, pipEligible, previewResolution, previewBounds) {
+        fun arm(enabled: Boolean, sourceRect: Rect?) {
+            val host = pipHost ?: return
+            val activity = host as? android.app.Activity ?: return
+            val resolution = previewResolution ?: return
+            val request = PipRequest(resolution, sourceRect)
+            host.pipRequest = if (enabled) request else null
+            PipController.updateParams(activity, enabled, request)
+        }
+        arm(pipEligible, previewBounds)
+        onDispose { arm(enabled = false, sourceRect = null) }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
@@ -135,6 +177,7 @@ private fun TasksContent(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(3f),
+                        onBoundsChanged = { previewBounds = it },
                     )
                     TaskWorkspace(
                         state = state,

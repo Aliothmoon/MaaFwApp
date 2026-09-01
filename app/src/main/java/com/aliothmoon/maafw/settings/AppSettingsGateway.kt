@@ -70,6 +70,9 @@ interface AppSettingsGateway {
     val updateSource: StateFlow<UpdateSource>
     suspend fun setUpdateSource(source: UpdateSource)
 
+    val pipOnHome: StateFlow<Boolean>
+    suspend fun setPipOnHome(enabled: Boolean)
+
     /** 只在更新源为 Mirror酱 时有意义；匿名检查不携带它，下载解析时带上 */
     val mirrorchyanCdk: StateFlow<String>
     suspend fun setMirrorchyanCdk(cdk: String)

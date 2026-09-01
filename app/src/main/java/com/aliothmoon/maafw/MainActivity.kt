@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw
 
+import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -7,14 +8,30 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.ui.AppRoot
+import com.aliothmoon.maafw.ui.pip.LocalIsInPip
+import com.aliothmoon.maafw.ui.pip.PipController
+import com.aliothmoon.maafw.ui.pip.PipHost
+import com.aliothmoon.maafw.ui.pip.PipRequest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.koin.android.ext.android.inject
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), PipHost {
 
     private val appSettings: AppSettingsManager by inject()
+
+    @Volatile
+    override var pipRequest: PipRequest? = null
+
+    private val _isInPictureInPicture = MutableStateFlow(false)
+    override val isInPictureInPicture: StateFlow<Boolean> = _isInPictureInPicture.asStateFlow()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -22,8 +39,25 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+            val isInPip by _isInPictureInPicture.collectAsState()
+            CompositionLocalProvider(LocalIsInPip provides isInPip) {
+                AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+            }
         }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        val request = pipRequest ?: return
+        PipController.enterNow(this, request)
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        _isInPictureInPicture.value = isInPictureInPictureMode
     }
 
     private fun applyEdgeToEdge(darkMode: Boolean) {

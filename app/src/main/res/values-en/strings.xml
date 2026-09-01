@@ -117,6 +117,8 @@
     <string name="settings_section_display">Display</string>
     <string name="settings_section_schedule">Scheduled tasks</string>
     <string name="settings_section_other">Other</string>
+    <string name="settings_pip_on_home">Auto picture-in-picture while running</string>
+    <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The game cannot be controlled inside the window</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_style">Theme style</string>
     <string name="settings_follow_system">System default</string>

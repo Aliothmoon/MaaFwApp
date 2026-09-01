@@ -115,6 +115,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _updateSource = MutableStateFlow(parseUpdateSource(defaults.updateSource))
     override val updateSource: StateFlow<UpdateSource> = _updateSource.asStateFlow()
 
+    private val _pipOnHome = MutableStateFlow(defaults.pipOnHome.toBoolean())
+    override val pipOnHome: StateFlow<Boolean> = _pipOnHome.asStateFlow()
+
     private val _mirrorchyanCdk = MutableStateFlow(defaults.mirrorchyanCdk)
     override val mirrorchyanCdk: StateFlow<String> = _mirrorchyanCdk.asStateFlow()
 
@@ -143,6 +146,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _autoDownloadUpdate.value = s.autoDownloadUpdate.toBoolean()
                 _updateChannel.value = parseUpdateChannel(s.updateChannel)
                 _updateSource.value = parseUpdateSource(s.updateSource)
+                _pipOnHome.value = s.pipOnHome.toBoolean()
                 _mirrorchyanCdk.value = s.mirrorchyanCdk
                 // 必须是最后一行：置位即宣告上面全部就位
                 _loaded.value = true
@@ -230,6 +234,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setUpdateSource(source: UpdateSource): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[updateSource] = source.name }
+    }
+
+    override suspend fun setPipOnHome(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[pipOnHome] = enabled.toString() }
     }
 
     override suspend fun setMirrorchyanCdk(cdk: String): Unit = with(AppSettingsSchema) {

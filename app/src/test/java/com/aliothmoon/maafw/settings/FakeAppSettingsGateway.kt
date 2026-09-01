@@ -109,4 +109,10 @@ class FakeAppSettingsGateway : AppSettingsGateway {
     override suspend fun setUpdateSource(source: UpdateSource) {
         updateSource.value = source
     }
+
+    override val pipOnHome = MutableStateFlow(true)
+
+    override suspend fun setPipOnHome(enabled: Boolean) {
+        pipOnHome.value = enabled
+    }
 }

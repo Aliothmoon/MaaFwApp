@@ -107,8 +107,9 @@ class SettingsViewModel(
     val uiState: StateFlow<SettingsUiState> = combine(
         permissionGateway.state,
         updatePanel,
-    ) { remote, update ->
-        SettingsUiState(remoteAccess = remote, update = update)
+        appSettings.pipOnHome,
+    ) { remote, update, pipOnHome ->
+        SettingsUiState(remoteAccess = remote, update = update, pipOnHome = pipOnHome)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -145,6 +146,10 @@ class SettingsViewModel(
             is SettingsIntent.SetAutoDownloadUpdate -> viewModelScope.launch {
                 if (updateSettingsLocked()) return@launch
                 appSettings.setAutoDownloadUpdate(intent.enabled)
+            }
+
+            is SettingsIntent.SetPipOnHome -> viewModelScope.launch {
+                appSettings.setPipOnHome(intent.enabled)
             }
 
             SettingsIntent.CheckUpdate -> viewModelScope.launch { checkUpdate() }

@@ -19,6 +19,7 @@ import com.aliothmoon.maafw.update.UpdateSource
 data class SettingsUiState(
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     val update: UpdatePanelState = UpdatePanelState(),
+    val pipOnHome: Boolean = true,
 )
 
 data class UpdatePanelState(
@@ -60,6 +61,7 @@ sealed interface SettingsIntent {
     data class SetMirrorchyanCdk(val cdk: String) : SettingsIntent
     data class SetAutoCheckUpdate(val enabled: Boolean) : SettingsIntent
     data class SetAutoDownloadUpdate(val enabled: Boolean) : SettingsIntent
+    data class SetPipOnHome(val enabled: Boolean) : SettingsIntent
     data object CheckUpdate : SettingsIntent
     data object DownloadUpdate : SettingsIntent
     data object CancelDownload : SettingsIntent

@@ -111,6 +111,8 @@
     <string name="settings_section_display">显示设置</string>
     <string name="settings_section_schedule">定时任务设置</string>
     <string name="settings_section_other">其他设置</string>
+    <string name="settings_pip_on_home">后台运行时自动画中画</string>
+    <string name="settings_pip_on_home_desc">后台模式任务运行中，停在任务页时按 Home 或手势回桌面，自动缩为画中画小窗继续显示画面。小窗内无法操作游戏</string>
     <string name="settings_theme">主题</string>
     <string name="settings_theme_style">主题风格</string>
     <string name="settings_follow_system">跟随系统</string>

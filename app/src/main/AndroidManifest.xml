@@ -69,10 +69,11 @@
              否则别的窗口也会顶着首屏底色起来 -->
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
             android:exported="true"
             android:label="${appLabel}"
             android:launchMode="singleTop"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.MaaFwApp.Starting"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

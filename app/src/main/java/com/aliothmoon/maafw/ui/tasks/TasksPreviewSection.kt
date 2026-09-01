@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
@@ -44,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
@@ -59,6 +62,7 @@ import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
 import com.aliothmoon.maafw.ui.components.MaaTouchOverlay
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 
 /**
  * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一份组合状态
@@ -99,11 +103,14 @@ internal fun rememberMovablePreview(
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                MaaTouchOverlay(
-                    markers = currentMarkers(),
-                    resolution = currentResolution,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                // 小窗内不画触摸轨迹：画面已缩到巴掌大，轨迹只会糊住画面（对齐 MaaMeow）
+                if (!LocalIsInPip.current) {
+                    MaaTouchOverlay(
+                        markers = currentMarkers(),
+                        resolution = currentResolution,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }
@@ -124,6 +131,8 @@ internal fun LivePreview(
     // 高度受限的宿主区域，由调用方用 weight 给出；卡片在其内按预览分辨率等比缩到最大并居中，
     // 横屏时不再整幅吃满宽度挤掉任务列表（对齐 MaaMeow VirtualDisplayPreview 的缩放）
     modifier: Modifier = Modifier,
+    /** 卡片在 window 中的位置，给画中画的进入动画用 */
+    onBoundsChanged: ((Rect?) -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
         val aspect = resolution?.aspectRatio ?: (16f / 9f)
@@ -133,11 +142,16 @@ internal fun LivePreview(
         } else {
             Modifier.width(maxWidth).height(maxWidth / aspect)
         }
+        val boundsReporting = Modifier.onGloballyPositioned {
+            onBoundsChanged?.invoke(it.boundsInWindow().let { rect ->
+                Rect(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt())
+            })
+        }
         if (content == null) {
-            MaaCardSurface(modifier = cardModifier) { LivePreviewIdleArt() }
+            MaaCardSurface(modifier = cardModifier.then(boundsReporting)) { LivePreviewIdleArt() }
             return@BoxWithConstraints
         }
-        MaaCardSurface(modifier = cardModifier.maaClickable(onClick = onEnterFullscreen)) {
+        MaaCardSurface(modifier = cardModifier.then(boundsReporting).maaClickable(onClick = onEnterFullscreen)) {
             Box(Modifier.fillMaxSize()) {
                 content()
                 PreviewStatusMask(surfaceReady = surfaceReady, running = running)

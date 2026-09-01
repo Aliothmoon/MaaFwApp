@@ -475,6 +475,17 @@ private fun OtherCard(
             enabled = !locked,
             onSelect = { onIntent(SessionIntent.SetResolutionPreference(it)) },
         )
+        Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
+        MaaSwitchRow(
+            label = stringResource(R.string.settings_pip_on_home),
+            checked = settingsState.pipOnHome,
+            onCheckedChange = { onSettingsIntent(SettingsIntent.SetPipOnHome(it)) },
+        )
+        Text(
+            text = stringResource(R.string.settings_pip_on_home_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         // 开发版 PI 一律不上报（TelemetryController 也照此拦），留个点不动的开关只会让人以为坏了
         if (state.telemetryDeclared && !state.telemetryLockedByVersion) {
             Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))

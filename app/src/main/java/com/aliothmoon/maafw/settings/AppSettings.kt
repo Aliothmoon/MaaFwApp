@@ -117,6 +117,10 @@ data class AppSettings(
     @PrefKey(default = "MIRRORCHYAN")
     val updateSource: String = "MIRRORCHYAN",
 
+    /** 后台模式运行中回桌面自动进画中画；只缩预览画面，小窗内无法操作 */
+    @PrefKey(default = "true")
+    val pipOnHome: String = "true",
+
     /** Mirror酱 CDK；只在更新源为 Mirror酱 时有意义，下载解析时带上 */
     @PrefKey(default = "")
     val mirrorchyanCdk: String = "",
