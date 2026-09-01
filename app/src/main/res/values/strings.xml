@@ -433,7 +433,7 @@
     <string name="home_status_stopping">任务停止中…</string>
     <string name="home_status_ready">就绪</string>
     <string name="home_service_connect">重新加载服务</string>
-    <string name="home_service_disconnect">关闭服务</string>
+    <string name="home_service_disconnect">关闭所有服务</string>
     <string name="dialog_shizuku_not_installed_title">未检测到 Shizuku</string>
     <string name="dialog_shizuku_not_installed_message">本应用依赖 Shizuku 服务运行，检测到设备未安装 Shizuku，请先安装。</string>
     <string name="dialog_shizuku_install_confirm">快捷安装 Shizuku</string>

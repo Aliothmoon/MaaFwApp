@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.ui.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
@@ -344,43 +346,72 @@ private fun ExpandToggle(expanded: Boolean, onToggle: () -> Unit) {
 private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
         val connected = state.privilegedServiceConnected
+        // 连接中图标位换转圈；颜色跟 LocalContentColor 才能吃到禁用态透明度
+        val connecting = state.privilegedService == PrivilegedServiceState.Connecting
+        // 对齐 MaaMeow：描边跟内容同语义色，不用默认灰描边
+        val semantic = if (connected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
         MaaOutlinedButton(
             onClick = { onIntent(SessionIntent.TogglePrivilegedService) },
             // 连接中不给点：这时候再发一次 bind 只会把状态搅乱
-            enabled = state.privilegedService != PrivilegedServiceState.Connecting,
+            enabled = !connecting,
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = if (connected) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
+                contentColor = if (connected) semantic.copy(alpha = 0.82f) else semantic,
             ),
-            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(
+                MaaDesignTokens.Border.selected,
+                semantic.copy(alpha = if (connected) 0.45f else 0.55f),
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(MaaDesignTokens.ButtonHeight.prominent),
         ) {
-            Icon(
-                imageVector = if (connected) Icons.Outlined.LinkOff else Icons.Outlined.Link,
-                contentDescription = null,
-                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
-            )
+            if (connecting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    strokeWidth = MaaDesignTokens.Border.marker,
+                    color = LocalContentColor.current,
+                )
+            } else {
+                Icon(
+                    imageVector = if (connected) Icons.Outlined.LinkOff else Icons.Outlined.Link,
+                    contentDescription = null,
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                )
+            }
             Box(Modifier.size(MaaDesignTokens.Spacing.sm))
             Text(
                 stringResource(
                     if (connected) R.string.home_service_disconnect else R.string.home_service_connect,
                 ),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
             )
         }
         if (state.remoteAccess.configuredBackend == RemoteBackend.SHIZUKU) {
             MaaOutlinedButton(
                 onClick = { onIntent(SessionIntent.OpenShizuku) },
-                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.secondary,
+                ),
+                border = BorderStroke(
+                    MaaDesignTokens.Border.selected,
+                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f),
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(MaaDesignTokens.ButtonHeight.prominent),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Build,
                     contentDescription = null,
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
                 )
                 Box(Modifier.size(MaaDesignTokens.Spacing.sm))
-                Text(stringResource(R.string.permission_open_shizuku))
+                Text(
+                    stringResource(R.string.permission_open_shizuku),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
             }
         }
     }

@@ -83,6 +83,11 @@ object MaaDesignTokens {
         val compact: Dp = 32.dp
     }
 
+    /** 按钮高度；首页服务操作那排主按钮的大号档，对齐 MaaMeow 的 52dp */
+    object ButtonHeight {
+        val prominent: Dp = 52.dp
+    }
+
     /** 图标外面那层圆或圆角方容器；内部图标仍取 [IconSize] */
     object IconContainer {
         /** 单选标记的圈 */
