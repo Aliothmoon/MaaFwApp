@@ -132,6 +132,9 @@ private fun TasksContent(
                         watchdogState = state.watchdogState,
                         content = previewContent,
                         onEnterFullscreen = onEnterFullscreen,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(3f),
                     )
                     TaskWorkspace(
                         state = state,
@@ -139,7 +142,7 @@ private fun TasksContent(
                         onExportLogs = onExportLogs,
                         onIntent = onIntent,
                         showLogToggle = true,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(7f),
                     )
                 }
                 Spacer(Modifier.height(MaaDesignTokens.Spacing.xs))

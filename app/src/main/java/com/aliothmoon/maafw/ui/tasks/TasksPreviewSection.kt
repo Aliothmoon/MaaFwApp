@@ -13,11 +13,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -120,25 +121,33 @@ internal fun LivePreview(
     watchdogState: WatchdogState,
     content: (@Composable () -> Unit)?,
     onEnterFullscreen: () -> Unit,
+    // 高度受限的宿主区域，由调用方用 weight 给出；卡片在其内按预览分辨率等比缩到最大并居中，
+    // 横屏时不再整幅吃满宽度挤掉任务列表（对齐 MaaMeow VirtualDisplayPreview 的缩放）
+    modifier: Modifier = Modifier,
 ) {
-    val cardModifier = Modifier
-        .fillMaxWidth()
-        .padding(top = MaaDesignTokens.Spacing.md)
-        .aspectRatio(resolution?.aspectRatio ?: (16f / 9f))
-    if (content == null) {
-        MaaCardSurface(modifier = cardModifier) { LivePreviewIdleArt() }
-        return
-    }
-    MaaCardSurface(modifier = cardModifier.maaClickable(onClick = onEnterFullscreen)) {
-        Box(Modifier.fillMaxSize()) {
-            content()
-            PreviewStatusMask(surfaceReady = surfaceReady, running = running)
-            WatchdogStatusBadge(
-                state = watchdogState,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(MaaDesignTokens.Spacing.sm),
-            )
+    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+        val aspect = resolution?.aspectRatio ?: (16f / 9f)
+        val widthFromHeight = maxHeight * aspect
+        val cardModifier = if (widthFromHeight <= maxWidth) {
+            Modifier.width(widthFromHeight).height(maxHeight)
+        } else {
+            Modifier.width(maxWidth).height(maxWidth / aspect)
+        }
+        if (content == null) {
+            MaaCardSurface(modifier = cardModifier) { LivePreviewIdleArt() }
+            return@BoxWithConstraints
+        }
+        MaaCardSurface(modifier = cardModifier.maaClickable(onClick = onEnterFullscreen)) {
+            Box(Modifier.fillMaxSize()) {
+                content()
+                PreviewStatusMask(surfaceReady = surfaceReady, running = running)
+                WatchdogStatusBadge(
+                    state = watchdogState,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(MaaDesignTokens.Spacing.sm),
+                )
+            }
         }
     }
 }
