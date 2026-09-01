@@ -8,7 +8,6 @@ import com.aliothmoon.maafw.maa.MaaAgentClientLibrary
 import com.aliothmoon.maafw.maa.MaaAgentClientLoader
 import com.aliothmoon.maafw.maa.MaaFrameworkLibrary
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
-import com.aliothmoon.maafw.maa.MaaFwVersion
 import com.aliothmoon.maafw.maa.MaaGlobalOption
 import com.aliothmoon.maafw.maa.MaaLoggingLevel
 import com.aliothmoon.maafw.maa.MaaStatus
@@ -288,10 +287,6 @@ class MaaRunner(private val agentHost: AgentHost) {
         if (!NativeBridgeLib.LOADED) {
             return "libbridge.so 未加载，无法建立 native controller"
         }
-
-        // TouchArgs.contact 是 v5.12.3 起 fw 才填的合约字段，旧 fw 那 4 字节是栈残值，
-        // 不过闸直接读会得到幻影手指；低于配对版本一律压 0（等价旧 bridge 单指行为）
-        NativeBridgeLib.setContactSupport(MaaFwVersion.fillsTouchContact(lib.MaaVersion()))
 
         val displayId = when (payload.displayMode) {
             DisplayMode.PRIMARY ->
