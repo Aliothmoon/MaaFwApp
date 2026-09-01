@@ -39,6 +39,23 @@ fun UpdatePromptDialog(
     onDismiss: () -> Unit,
 ) {
     val prompt = update.updatePrompt ?: return
+    // 没有更新说明时整个正文槽给 null：给个空 lambda 的话 AlertDialog 照样把那段留白撑出来
+    val releaseNotes: (@Composable () -> Unit)? =
+        prompt.info.releaseNotes?.takeIf(String::isNotBlank)?.let { notes ->
+            {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = ReleaseNotesMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    MaaMarkdown(
+                        text = notes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -59,21 +76,7 @@ fun UpdatePromptDialog(
                 )
             }
         },
-        text = {
-            prompt.info.releaseNotes?.takeIf(String::isNotBlank)?.let { notes ->
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = ReleaseNotesMaxHeight)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    MaaMarkdown(
-                        text = notes,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-        },
+        text = releaseNotes,
         confirmButton = {
             TextButton(onClick = onDownload) {
                 Text(stringResource(R.string.settings_update_download))
