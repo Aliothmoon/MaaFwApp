@@ -1,10 +1,11 @@
 package com.aliothmoon.maafw.notification.provider
 
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
-import kotlinx.serialization.SerialName
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.util.HttpClientHelper
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import timber.log.Timber
 
 /**
@@ -14,7 +15,7 @@ import timber.log.Timber
  * 频道 id 不缓存——用户可能换 bot 或换收件人，缓存过期时的表现是「发到了别处」
  */
 class DiscordProvider(
-    private val httpClient: NotificationHttpClient,
+    private val httpClient: HttpClientHelper,
     private val settingsManager: NotificationSettingsManager,
 ) : NotificationProvider {
 

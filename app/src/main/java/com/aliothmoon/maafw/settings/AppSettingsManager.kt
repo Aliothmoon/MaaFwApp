@@ -12,6 +12,8 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -50,7 +52,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
      * 现有三个等待点：启动首屏（`MainActivity`）、`MaaFwApp.postCreate`（`RemoteAccessCoordinator`
      * 一初始化就同步读 startupBackend）、`ScheduleExecutionService.handleTrigger`（投递前要 runMode）
      */
-    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+    override val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
     private val _startupBackend = MutableStateFlow(parseBackend(defaults.startupBackend))
     val startupBackend: StateFlow<RemoteBackend> = _startupBackend.asStateFlow()
@@ -101,6 +103,24 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _telemetryEnabled = MutableStateFlow(defaults.telemetryEnabled.toBoolean())
     override val telemetryEnabled: StateFlow<Boolean> = _telemetryEnabled.asStateFlow()
 
+    private val _autoCheckUpdate = MutableStateFlow(defaults.autoCheckUpdate.toBoolean())
+    override val autoCheckUpdate: StateFlow<Boolean> = _autoCheckUpdate.asStateFlow()
+
+    private val _autoDownloadUpdate = MutableStateFlow(defaults.autoDownloadUpdate.toBoolean())
+    override val autoDownloadUpdate: StateFlow<Boolean> = _autoDownloadUpdate.asStateFlow()
+
+    private val _updateChannel = MutableStateFlow(parseUpdateChannel(defaults.updateChannel))
+    override val updateChannel: StateFlow<UpdateChannel> = _updateChannel.asStateFlow()
+
+    private val _updateSource = MutableStateFlow(parseUpdateSource(defaults.updateSource))
+    override val updateSource: StateFlow<UpdateSource> = _updateSource.asStateFlow()
+
+    private val _pipOnHome = MutableStateFlow(defaults.pipOnHome.toBoolean())
+    override val pipOnHome: StateFlow<Boolean> = _pipOnHome.asStateFlow()
+
+    private val _mirrorchyanCdk = MutableStateFlow(defaults.mirrorchyanCdk)
+    override val mirrorchyanCdk: StateFlow<String> = _mirrorchyanCdk.asStateFlow()
+
     init {
         // 一处 collect 铺开到各字段，而不是每个字段各起一条 stateIn：
         // 那样 loaded 置位与各字段拿到首值是两件并发的事，早读的人仍可能读到默认值
@@ -122,6 +142,12 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
                 _wakeCredential.value = s.wakeCredential
                 _telemetryEnabled.value = s.telemetryEnabled.toBoolean()
+                _autoCheckUpdate.value = s.autoCheckUpdate.toBoolean()
+                _autoDownloadUpdate.value = s.autoDownloadUpdate.toBoolean()
+                _updateChannel.value = parseUpdateChannel(s.updateChannel)
+                _updateSource.value = parseUpdateSource(s.updateSource)
+                _pipOnHome.value = s.pipOnHome.toBoolean()
+                _mirrorchyanCdk.value = s.mirrorchyanCdk
                 // 必须是最后一行：置位即宣告上面全部就位
                 _loaded.value = true
             }
@@ -194,6 +220,30 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[telemetryEnabled] = enabled.toString() }
     }
 
+    override suspend fun setAutoCheckUpdate(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[autoCheckUpdate] = enabled.toString() }
+    }
+
+    override suspend fun setAutoDownloadUpdate(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[autoDownloadUpdate] = enabled.toString() }
+    }
+
+    override suspend fun setUpdateChannel(channel: UpdateChannel): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[updateChannel] = channel.name }
+    }
+
+    override suspend fun setUpdateSource(source: UpdateSource): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[updateSource] = source.name }
+    }
+
+    override suspend fun setPipOnHome(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[pipOnHome] = enabled.toString() }
+    }
+
+    override suspend fun setMirrorchyanCdk(cdk: String): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[mirrorchyanCdk] = cdk.trim() }
+    }
+
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
     private fun parseBackend(raw: String): RemoteBackend =
         runCatching { RemoteBackend.valueOf(raw) }.getOrDefault(RemoteBackend.SHIZUKU)
@@ -212,4 +262,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseEventNotificationLevel(raw: String): EventNotificationLevel =
         runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)
+
+    private fun parseUpdateChannel(raw: String): UpdateChannel =
+        runCatching { UpdateChannel.valueOf(raw) }.getOrDefault(UpdateChannel.STABLE)
+
+    private fun parseUpdateSource(raw: String): UpdateSource =
+        runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRRORCHYAN)
 }

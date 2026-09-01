@@ -51,6 +51,27 @@ class PiMetadataTest {
             MapTextResolver(emptyMap()),
         )
         assertNull(metadata.github)
+        assertNull(metadata.githubRepository)
+    }
+
+    @Test
+    fun `github 仓库页解析出 owner repo`() {
+        val metadata = PiParser.parseMetadata(
+            root("""{ "github": "https://github.com/owner/repo/releases" }"""),
+            MapTextResolver(emptyMap()),
+        )
+
+        assertEquals("owner/repo", metadata.githubRepository)
+    }
+
+    @Test
+    fun `mirrorchyan rid 原样投影`() {
+        val metadata = PiParser.parseMetadata(
+            root("""{ "mirrorchyan_rid": " M9A " }"""),
+            MapTextResolver(emptyMap()),
+        )
+
+        assertEquals("M9A", metadata.mirrorchyanRid)
     }
 
     /** 指纹算在原始声明上，否则切一次语言就会让同一份 welcome 再弹一次 */

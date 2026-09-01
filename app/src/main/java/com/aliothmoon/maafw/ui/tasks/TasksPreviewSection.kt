@@ -7,17 +7,19 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -43,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
@@ -58,6 +62,7 @@ import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
 import com.aliothmoon.maafw.ui.components.MaaTouchOverlay
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 
 /**
  * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一份组合状态
@@ -73,11 +78,13 @@ internal fun rememberMovablePreview(
     resolution: DisplayResolution,
     /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
     markers: () -> List<PreviewTouchMarker>,
+    onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
 ): @Composable () -> Unit {
     val currentResolution by rememberUpdatedState(resolution)
     val currentMarkers by rememberUpdatedState(markers)
+    val currentCreated by rememberUpdatedState(onSurfaceCreated)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
     var lastSentSurface by remember { mutableStateOf<PlatformSurface?>(null) }
@@ -85,6 +92,7 @@ internal fun rememberMovablePreview(
         movableContentOf {
             MaaPreviewSurface(
                 resolution = currentResolution,
+                onSurfaceCreated = { currentCreated() },
                 onSurfaceAvailable = { surface ->
                     // surfaceChanged 会重复触发，同一个 Surface 不重复跨进程上报
                     if (lastSentSurface != surface) {
@@ -98,11 +106,14 @@ internal fun rememberMovablePreview(
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                MaaTouchOverlay(
-                    markers = currentMarkers(),
-                    resolution = currentResolution,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                // 小窗内不画触摸轨迹：画面已缩到巴掌大，轨迹只会糊住画面（对齐 MaaMeow）
+                if (!LocalIsInPip.current) {
+                    MaaTouchOverlay(
+                        markers = currentMarkers(),
+                        resolution = currentResolution,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }
@@ -120,25 +131,40 @@ internal fun LivePreview(
     watchdogState: WatchdogState,
     content: (@Composable () -> Unit)?,
     onEnterFullscreen: () -> Unit,
+    // 高度受限的宿主区域，由调用方用 weight 给出；卡片在其内按预览分辨率等比缩到最大并居中，
+    // 横屏时不再整幅吃满宽度挤掉任务列表（对齐 MaaMeow VirtualDisplayPreview 的缩放）
+    modifier: Modifier = Modifier,
+    /** 卡片在 window 中的位置，给画中画的进入动画用 */
+    onBoundsChanged: ((Rect?) -> Unit)? = null,
 ) {
-    val cardModifier = Modifier
-        .fillMaxWidth()
-        .padding(top = MaaDesignTokens.Spacing.md)
-        .aspectRatio(resolution?.aspectRatio ?: (16f / 9f))
-    if (content == null) {
-        MaaCardSurface(modifier = cardModifier) { LivePreviewIdleArt() }
-        return
-    }
-    MaaCardSurface(modifier = cardModifier.maaClickable(onClick = onEnterFullscreen)) {
-        Box(Modifier.fillMaxSize()) {
-            content()
-            PreviewStatusMask(surfaceReady = surfaceReady, running = running)
-            WatchdogStatusBadge(
-                state = watchdogState,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(MaaDesignTokens.Spacing.sm),
-            )
+    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+        val aspect = resolution?.aspectRatio ?: (16f / 9f)
+        val widthFromHeight = maxHeight * aspect
+        val cardModifier = if (widthFromHeight <= maxWidth) {
+            Modifier.width(widthFromHeight).height(maxHeight)
+        } else {
+            Modifier.width(maxWidth).height(maxWidth / aspect)
+        }
+        val boundsReporting = Modifier.onGloballyPositioned {
+            onBoundsChanged?.invoke(it.boundsInWindow().let { rect ->
+                Rect(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt())
+            })
+        }
+        if (content == null) {
+            MaaCardSurface(modifier = cardModifier.then(boundsReporting)) { LivePreviewIdleArt() }
+            return@BoxWithConstraints
+        }
+        MaaCardSurface(modifier = cardModifier.then(boundsReporting).maaClickable(onClick = onEnterFullscreen)) {
+            Box(Modifier.fillMaxSize()) {
+                content()
+                PreviewStatusMask(surfaceReady = surfaceReady, running = running)
+                WatchdogStatusBadge(
+                    state = watchdogState,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(MaaDesignTokens.Spacing.sm),
+                )
+            }
         }
     }
 }

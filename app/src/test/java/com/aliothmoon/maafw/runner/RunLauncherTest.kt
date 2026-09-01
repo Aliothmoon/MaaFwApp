@@ -191,16 +191,18 @@ class RunLauncherTest {
     }
 
     @Test
-    fun `foreground mode precheck blocks and background passes`() = runTest(testDispatcher) {
-        suspend fun launchIn(mode: RunMode) = launcher(
+    fun `foreground mode blocks schedule trigger but passes manual`() = runTest(testDispatcher) {
+        suspend fun launchIn(mode: RunMode, trigger: RunTrigger = RunTrigger.Manual) = launcher(
             scope = backgroundScope,
             runner = fastStub(backgroundScope),
             prechecks = listOf(ForegroundModePrecheck),
             runMode = mode,
-        ).launch(RunTrigger.Manual)
+        ).launch(trigger)
 
-        assertTrue(launchIn(RunMode.FOREGROUND) is RunLaunchResult.Blocked)
+        // 悬浮窗手动开跑是前台模式的正路
+        assertEquals(RunLaunchResult.Started, launchIn(RunMode.FOREGROUND))
         assertEquals(RunLaunchResult.Started, launchIn(RunMode.BACKGROUND))
+        assertTrue(launchIn(RunMode.FOREGROUND, RunTrigger.Schedule("s1")) is RunLaunchResult.Blocked)
     }
 
     /** 确认循环：先问，带着 token 重跑就该放行 */

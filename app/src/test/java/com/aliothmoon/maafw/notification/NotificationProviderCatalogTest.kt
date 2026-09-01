@@ -7,7 +7,7 @@ import com.aliothmoon.maafw.notification.provider.DiscordProvider
 import com.aliothmoon.maafw.notification.provider.DiscordWebhookProvider
 import com.aliothmoon.maafw.notification.provider.GotifyProvider
 import com.aliothmoon.maafw.notification.provider.KookProvider
-import com.aliothmoon.maafw.notification.provider.NotificationHttpClient
+import com.aliothmoon.maafw.util.HttpClientHelper
 import com.aliothmoon.maafw.notification.provider.NotificationProvider
 import com.aliothmoon.maafw.notification.provider.QmsgProvider
 import com.aliothmoon.maafw.notification.provider.ServerChanProvider
@@ -25,7 +25,7 @@ import org.junit.Test
  */
 class NotificationProviderCatalogTest {
 
-    private val http = mockk<NotificationHttpClient>()
+    private val http = mockk<HttpClientHelper>()
     private val settings = mockk<NotificationSettingsManager>()
 
     private val allProviders: List<NotificationProvider> = listOf(

@@ -9,6 +9,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +56,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
@@ -88,12 +92,16 @@ fun MaaCard(
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     collapsible: Boolean = false,
+    /** 仅首次组合生效；折叠态随 rememberSaveable 存续，之后由用户点击决定 */
+    initiallyExpanded: Boolean = true,
+    /** 收起时贴着箭头展示的单行摘要；展开后隐藏——正文自己会说明当前选择 */
+    summary: String? = null,
     // 默认参数不能读 CompositionLocal；innerPadding 两风格同值，静态回落安全
     contentPadding: PaddingValues = PaddingValues(MaaDesignTokens.Card.innerPadding),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 不要给 rememberSaveable 传 key：运行时已废弃它，理由正是会绕开位置作用域造成状态串卡
-    var expanded by rememberSaveable { mutableStateOf(true) }
+    var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     val canCollapse = collapsible && title != null
 
     Card(
@@ -136,7 +144,14 @@ fun MaaCard(
                         ) {
                             trailing()
                             if (canCollapse) {
-                                Box(Modifier.maaClickable(indication = false) { expanded = !expanded }) {
+                                // 表头折叠开关不挂 maaClickable：0.97 缩放对整行标题太闹，
+                                // 退回无涟漪的普通 clickable
+                                Box(
+                                    Modifier.clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                    ) { expanded = !expanded },
+                                ) {
                                     chevron()
                                 }
                             }
@@ -149,11 +164,30 @@ fun MaaCard(
                     labelStyle = MaterialTheme.typography.titleMedium,
                     leading = leading,
                     modifier = if (canCollapse) {
-                        Modifier.maaClickable(indication = false) { expanded = !expanded }
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { expanded = !expanded }
                     } else {
                         Modifier
                     },
-                    trailing = { if (canCollapse) chevron() },
+                    trailing = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                        ) {
+                            if (canCollapse && !expanded && summary != null) {
+                                Text(
+                                    text = summary,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            if (canCollapse) chevron()
+                        }
+                    },
                 )
             }
             if (canCollapse) {
@@ -249,6 +283,41 @@ fun MaaOutlinedButton(
         shape = shape,
         colors = colors,
         border = border,
+        contentPadding = contentPadding,
+        content = content,
+    )
+}
+
+/**
+ * 语义色描边按钮：描边跟内容同语义色（error / secondary…），不用默认灰描边
+ *
+ * 语义色给足时太抢，内容压 [contentAlpha]（默认 0.82）、描边压 [borderAlpha]（默认 0.45）——
+ * 品牌主色等要给足的场景传 1f / 0.55f；描边宽度固定 `Border.selected`，与选中态同档
+ */
+@Composable
+fun MaaSemanticOutlinedButton(
+    onClick: () -> Unit,
+    semantic: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentAlpha: Float = 0.82f,
+    borderAlpha: Float = 0.45f,
+    shape: Shape = RoundedCornerShape(MaaTheme.style.radii.button),
+    contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
+    content: @Composable RowScope.() -> Unit,
+) {
+    MaaOutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = semantic.copy(alpha = contentAlpha),
+        ),
+        border = BorderStroke(
+            MaaDesignTokens.Border.selected,
+            semantic.copy(alpha = borderAlpha),
+        ),
         contentPadding = contentPadding,
         content = content,
     )
@@ -510,7 +579,7 @@ fun MaaInfoRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(0.4f),
         )
         Text(

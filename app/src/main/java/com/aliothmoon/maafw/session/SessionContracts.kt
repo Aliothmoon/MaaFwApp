@@ -157,6 +157,9 @@ data class ServiceStatus(
 
 enum class PreviewTouchAction { Down, Move, Up }
 
+/** 手动开始的入口；定时触发不经 Intent，不在这里 */
+enum class TaskSurface { InApp, Overlay }
+
 sealed interface SessionIntent {
     data class CreateConfiguration(val name: String) : SessionIntent
 
@@ -271,7 +274,7 @@ sealed interface SessionIntent {
     /**
      * 开启前台模式的控制层
      *
-     * 先过一道校验（特权后端 + 主屏比例），过了也**暂时只给提示**——面板本身还没实现
+     * 先过一道校验（特权后端 + 主屏比例），过了发 [SessionEffect.ShowOverlay]
      */
     data object ShowOverlay : SessionIntent
 
@@ -290,7 +293,12 @@ sealed interface SessionIntent {
     /** 无条件重解 PI 再重载；失败弹窗的重试与设置页的手动重来是同一个动作 */
     data object ReinstallPi : SessionIntent
 
-    data object Start : SessionIntent
+    /**
+     * 发起一轮执行
+     *
+     * [surface] 区分入口：应用内前台仍拦，悬浮窗放行。定时不走这条 Intent。
+     */
+    data class Start(val surface: TaskSurface = TaskSurface.InApp) : SessionIntent
     data object Stop : SessionIntent
 
     /**
@@ -342,11 +350,8 @@ sealed interface SessionEffect {
     data class RequestSystemPermission(val permission: SystemPermission) : SessionEffect
 
     /**
-     * 控制层的落点，暂时**没有发出者**
-     *
-     * 前台模式的操作面板还没实现，[SessionIntent.ShowOverlay] 校验通过后只给一句提示。
-     * 管线（Effect → AppRoot → OverlayController.show）保持接通，实现好之后把
-     * `SessionViewModel` 里那句提示换回发这条即可
+     * 控制层的落点：挂前台操作面板（悬浮球/音量键由 overlayControlMode 决定），
+     * 由 Route 层调 `OverlayController.show`
      */
     data object ShowOverlay : SessionEffect
     data object ShowScreenSaver : SessionEffect

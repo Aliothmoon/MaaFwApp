@@ -3,15 +3,22 @@ package com.aliothmoon.maafw.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
+import androidx.annotation.StringRes
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +38,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
@@ -39,8 +47,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,23 +61,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import androidx.annotation.StringRes
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -81,37 +85,39 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
-import com.aliothmoon.maafw.i18n.resolve
-import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
-import com.aliothmoon.maafw.settings.SettingsIntent
-import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.session.SessionEffect
-import com.aliothmoon.maafw.util.Misc
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
+import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
-import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
-import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
+import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.PiInstallDialog
 import com.aliothmoon.maafw.ui.components.ShizukuReadinessDialog
+import com.aliothmoon.maafw.ui.components.UpdatePromptDialog
+import com.aliothmoon.maafw.ui.components.clearFocusOnBlankTap
 import com.aliothmoon.maafw.ui.home.HomeScreen
-import com.aliothmoon.maafw.ui.navigation.Routes
 import com.aliothmoon.maafw.ui.logs.AppLogDetailScreen
 import com.aliothmoon.maafw.ui.logs.AppLogScreen
-import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.logs.LogExportController
 import com.aliothmoon.maafw.ui.logs.RunLogArchiveScreen
 import com.aliothmoon.maafw.ui.logs.RunLogDetailScreen
+import com.aliothmoon.maafw.ui.navigation.Routes
+import com.aliothmoon.maafw.ui.pip.LocalIsInPip
+import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
@@ -119,6 +125,7 @@ import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
 import com.aliothmoon.maafw.ui.tasks.rememberMovablePreview
+import com.aliothmoon.maafw.util.Misc
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -163,11 +170,11 @@ private fun Modifier.subPageOverlayInput(): Modifier = this
     // 排在截断内侧，先于它拿到 Press
     .clearFocusOnBlankTap()
 
-/** Route：收集 state、消费 Effect、承载四个主 tab 与二级页面的 NavHost；VM 为 Activity 作用域 */
+/** Route：收集 state、消费 Effect、承载四个主 tab 与二级页面的 NavHost；Session VM 是进程级单例 */
 @Composable
 fun AppRoot(
     onDarkThemeChanged: (Boolean) -> Unit,
-    viewModel: SessionViewModel = koinViewModel(),
+    viewModel: SessionViewModel = koinInject(),
     scheduleViewModel: ScheduleViewModel = koinViewModel(),
     settingsViewModel: SettingsViewModel = koinViewModel(),
     overlayController: OverlayController = koinInject(),
@@ -207,8 +214,9 @@ fun AppRoot(
         rememberMovablePreview(
             resolution = resolution,
             markers = { previewMarkersState.value },
+            // 不等 setFixedSize 那一轮：搬一次家要 50ms+ 才对上尺寸，期间遮罩会盖住刚回来的画面
+            onSurfaceCreated = { previewSurfaceReady = true },
             onSurfaceAvailable = {
-                previewSurfaceReady = true
                 viewModel.onIntent(SessionIntent.AttachPreviewSurface(it))
             },
             onSurfaceDestroyed = {
@@ -223,6 +231,14 @@ fun AppRoot(
     }
 
     MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
+        // 小窗与全屏同一套路数：主树原样留着，只把 movableContent 借给下面的小窗宿主
+        val isInPip = LocalIsInPip.current
+        // pipEligible 已排除全屏态，但 setPictureInPictureParams 要跨进程生效，
+        // 点开全屏后立刻按 Home 仍可能带着全屏态进小窗，进去就退掉
+        LaunchedEffect(isInPip) {
+            if (isInPip) previewFullscreen = false
+        }
+
         // NavHost 只承载二级页面；主 tab 仍由下面的 HorizontalPager 渲染
         val navController = rememberNavController()
         val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -231,16 +247,19 @@ fun AppRoot(
         val onSubPage = currentRoute != null && currentRoute !in Routes.mainTabs
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
         val scope = rememberCoroutineScope()
-        val snackbarHostState = remember { SnackbarHostState() }
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var exportSheetVisible by remember { mutableStateOf(false) }
 
         val context = LocalContext.current
+        // 悬浮窗面板的「导出」：先把应用拉到前面，再由这条流打开 Activity 里的导出 sheet
+        LaunchedEffect(overlayController) {
+            overlayController.exportLogRequests.collect { exportSheetVisible = true }
+        }
         LaunchedEffect(Unit) {
             viewModel.effects.collect { effect ->
                 when (effect) {
-                    is SessionEffect.ShowMessage ->
-                        snackbarHostState.showSnackbar(effect.message.resolve(context))
+                    // ShowMessage 由进程级 SessionMessagePresenter 打 Toast
+                    is SessionEffect.ShowMessage -> Unit
 
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
 
@@ -311,11 +330,46 @@ fun AppRoot(
             onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
         )
 
+        UpdatePromptDialog(
+            update = settingsState.update,
+            onDownload = { settingsViewModel.onIntent(SettingsIntent.DownloadUpdate) },
+            onDismiss = { settingsViewModel.onIntent(SettingsIntent.DismissUpdatePrompt) },
+        )
+
+        // 检查/更新失败与「发现新版本」同级同形态，都走弹窗
+        settingsState.update.errorPrompt?.let { error ->
+            MaaPromptDialog(
+                title = error.title.asString(),
+                message = error.message.asString(),
+                icon = Icons.Outlined.ErrorOutline,
+                iconTint = MaterialTheme.colorScheme.error,
+                titleColor = MaterialTheme.colorScheme.error,
+                confirmText = stringResource(R.string.dialog_confirm),
+                onConfirm = { settingsViewModel.onIntent(SettingsIntent.DismissUpdateError) },
+                onDismissRequest = { settingsViewModel.onIntent(SettingsIntent.DismissUpdateError) },
+            )
+        }
+
+        // 刻意不进快照：只在测量里读写，做成 State 就是测量期写入引发的重组
+        val fullWindow = remember { intArrayOf(0, 0) }
+
         // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clearFocusOnBlankTap(),
+                .clearFocusOnBlankTap()
+                // 小窗期间钉在进小窗前的窗口尺寸下测量：按巴掌大重排会让任务列表丢掉视口外的行
+                .layout { measurable, constraints ->
+                    val pinned = isInPip && fullWindow[0] > 0
+                    if (!pinned) {
+                        fullWindow[0] = constraints.maxWidth
+                        fullWindow[1] = constraints.maxHeight
+                    }
+                    val placeable = measurable.measure(
+                        if (pinned) Constraints.fixed(fullWindow[0], fullWindow[1]) else constraints,
+                    )
+                    layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+                },
         ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -389,12 +443,21 @@ fun AppRoot(
                     .consumeWindowInsets(padding),
             ) { page ->
                 when (TopDestination.entries[page]) {
-                    TopDestination.Home -> HomeScreen(state, viewModel::onIntent, Modifier.fillMaxSize())
+                    TopDestination.Home -> HomeScreen(
+                        state = state,
+                        onIntent = viewModel::onIntent,
+                        update = settingsState.update,
+                        onSettingsIntent = settingsViewModel::onIntent,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                     TopDestination.Tasks -> TasksScreen(
                         state = state,
                         previewSurfaceReady = previewSurfaceReady,
                         // 全屏时这里让位，同一份 previewContent 搬到下面的全屏宿主
                         previewContent = previewContent.takeUnless { previewFullscreen },
+                        // settledPage 只在滑动落定后翻页，手势中途弹回去仍是旧页——组合≠可见
+                        isActivePage = pagerState.settledPage == page,
+                        pipOnHome = settingsState.pipOnHome,
                         runLog = { runLogState.value },
                         onEnterFullscreen = { previewFullscreen = true },
                         onExportLogs = { exportSheetVisible = true },
@@ -509,21 +572,13 @@ fun AppRoot(
             }
         }
 
-        // 挂在二级页面之上，否则整屏的二级页一盖，snackbar 就没人看得见
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = if (onSubPage) 0.dp else BottomBarHeight),
-        )
         }
 
         // 无条件挂在这一层：它注册的 SAF launcher 要活得比 sheet 的显隐久
         LogExportController(
             visible = exportSheetVisible,
             onDismiss = { exportSheetVisible = false },
-            onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+            onMessage = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
         )
 
         // 挂在 Scaffold 之外，才盖得住底部 tab 栏与系统栏
@@ -537,6 +592,18 @@ fun AppRoot(
                 },
                 content = previewContent,
             )
+        }
+
+        // 与全屏宿主同一层才盖得住底栏与系统栏
+        if (isInPip && !previewFullscreen && previewContent != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center,
+            ) {
+                previewContent()
+            }
         }
 
         diagnosticsDialog?.let { diagnostics ->

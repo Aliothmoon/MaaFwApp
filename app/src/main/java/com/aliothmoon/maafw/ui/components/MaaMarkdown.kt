@@ -294,7 +294,10 @@ class DescriptionFetcher private constructor(context: Context) {
     suspend fun fetch(url: String): String = withContext(MaaDispatchers.IO) {
         try {
             client.newCall(Request.Builder().url(url).build()).execute().use { response ->
-                if (!response.isSuccessful) error("HTTP ${response.code}")
+                if (!response.isSuccessful) {
+                    Timber.w("Failed to fetch description: HTTP %d for %s", response.code, url)
+                    return@withContext url
+                }
                 response.body.string()
             }
         } catch (e: Exception) {

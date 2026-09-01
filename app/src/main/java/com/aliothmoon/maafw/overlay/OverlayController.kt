@@ -8,9 +8,6 @@ import android.graphics.Color
 import android.view.ViewGroup
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -23,6 +20,7 @@ import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.service.AccessibilityHelperService
+import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.petterp.floatingx.FloatingX
@@ -35,8 +33,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -50,6 +51,7 @@ class OverlayController(
     private val appSettings: AppSettingsGateway,
     val borderOverlayManager: BorderOverlayManager,
     private val viewModelOwner: OverlayViewModelOwner,
+    private val sessionViewModel: SessionViewModel,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -60,6 +62,10 @@ class OverlayController(
     val isActive: StateFlow<Boolean> = _isActive.asStateFlow()
 
     private val isPanelLocked = MutableStateFlow(true)
+
+    /** 面板「导出」的跨窗口通道：SAF 导出在 Activity 里（LogExportController），悬浮窗只发请求 */
+    private val _exportLogRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val exportLogRequests: SharedFlow<Unit> = _exportLogRequests.asSharedFlow()
 
     private var currentMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL
     private var phaseJob: Job? = null
@@ -193,15 +199,18 @@ class OverlayController(
             MaaFwTheme(themeStyle = themeStyle) {
                 // 不用 collectAsStateWithLifecycle：悬浮窗隐藏时 owner 停在 CREATED，
                 // 那样收不到运行态变化，再显示出来就是过期数据
-                val state by runnerPort.state.collectAsState()
+                val state by sessionViewModel.uiState.collectAsState()
+                val logEntries by sessionViewModel.runLog.collectAsState()
                 val locked by isPanelLocked.collectAsState()
                 OverlayPanel(
                     state = state,
+                    logEntries = { logEntries },
                     isLocked = locked,
-                    onStop = { scope.launch { runnerPort.stop() } },
+                    onIntent = sessionViewModel::onIntent,
                     onBackToApp = ::bringAppToFront,
+                    onExportLog = ::requestExportLog,
                     onLockToggle = { setPanelLocked(it) },
-                    onClose = ::onPanelClosed,
+                    onHide = ::onPanelClosed,
                 )
             }
         }
@@ -242,6 +251,12 @@ class OverlayController(
         }
         runCatching { context.startActivity(intent) }
             .onFailure { Timber.w(it, "Failed to return to app") }
+    }
+
+    /** Activity 被系统回收后这条会丢（无 replay）；悬浮窗活着时 Activity 基本也活着，v1 接受 */
+    fun requestExportLog() {
+        bringAppToFront()
+        _exportLogRequests.tryEmit(Unit)
     }
 
     private fun setPanelLocked(locked: Boolean) {

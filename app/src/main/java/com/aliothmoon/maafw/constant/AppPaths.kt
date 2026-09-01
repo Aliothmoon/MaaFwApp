@@ -26,6 +26,10 @@ object AppPaths {
     lateinit var DEBUG_DIR: File
         private set
 
+    /** 更新 APK 下载缓存；挂在内部 cacheDir 下，不属于 [AppFiles] 的外部私有目录树 */
+    lateinit var UPDATES_CACHE_DIR: File
+        private set
+
     fun init(context: Context) {
         val root = checkNotNull(context.getExternalFilesDir(null)) {
             "The external private directory is unavailable (the external storage is not mounted)"
@@ -34,5 +38,6 @@ object AppPaths {
         LOG_DIR = File(root, AppFiles.LOG_DIR)
         FOCUS_DIR = File(LOG_DIR, AppFiles.FOCUS_DIR)
         DEBUG_DIR = File(root, AppFiles.DEBUG_DIR)
+        UPDATES_CACHE_DIR = File(context.cacheDir, "updates")
     }
 }

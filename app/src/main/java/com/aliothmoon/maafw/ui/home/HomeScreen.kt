@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
@@ -61,23 +62,29 @@ import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
+import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
- * 首页版面对齐 MaaMeow：概览 -> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
- * 资源选择与运行模式从设置页迁来，避免与任务页重复
+ * 首页版面对齐 MaaMeow：概览（含更新区块）-> 资源 -> 运行模式 -> 权限 -> 服务入口 -> 诊断
+ * 资源选择、运行模式与更新源/渠道从设置页迁来，避免与任务页重复；
+ * 启动自检与自动下载开关仍在设置页
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
+    update: UpdatePanelState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 取 app 标签（profile 的 app.label）而非 PI 的 name：后者是 PI 自己的标识符，不是对外呈现的名字
@@ -114,9 +121,9 @@ fun HomeScreen(
                     top = MaaDesignTokens.Spacing.sm,
                     bottom = MaaDesignTokens.Spacing.lg,
                 ),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            OverviewCard(state)
+            OverviewCard(state, update, onSettingsIntent)
             ResourceCard(state, onIntent)
             RunModeCard(state, onIntent)
             PermissionCard(state, onIntent)
@@ -127,7 +134,11 @@ fun HomeScreen(
 }
 
 @Composable
-private fun OverviewCard(state: SessionUiState) {
+private fun OverviewCard(
+    state: SessionUiState,
+    update: UpdatePanelState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
     // 分辨率展示用设备真实屏幕尺寸（Misc.getScreenSize），与前后台 / 虚拟屏偏好无关
     val context = LocalContext.current
     val screen = remember(context) { screenSize(context) }
@@ -136,17 +147,14 @@ private fun OverviewCard(state: SessionUiState) {
             stringResource(R.string.home_display_resolution),
             "${screen.width} × ${screen.height}",
         )
-        MaaInfoRow(
-            stringResource(R.string.home_resource),
-            state.environment?.resource?.label ?: stringResource(R.string.home_none),
-        )
         MaaInfoRow(stringResource(R.string.settings_version), BuildConfig.VERSION_NAME)
         MaaLabeledControlRow(
             label = stringResource(R.string.home_service_status),
             labelStyle = MaterialTheme.typography.bodyMedium,
-            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurface,
             trailing = { ServiceStatusIndicator(status = state.serviceStatus) },
         )
+        UpdateSection(update, onSettingsIntent)
     }
 }
 
@@ -338,43 +346,64 @@ private fun ExpandToggle(expanded: Boolean, onToggle: () -> Unit) {
 private fun ServiceActionButtons(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md)) {
         val connected = state.privilegedServiceConnected
-        MaaOutlinedButton(
+        // 连接中图标位换转圈；颜色跟 LocalContentColor 才能吃到禁用态透明度
+        val connecting = state.privilegedService == PrivilegedServiceState.Connecting
+        // 对齐 MaaMeow：描边跟内容同语义色，不用默认灰描边；断开是破坏性动作压一档透明度
+        val semantic = if (connected) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+        MaaSemanticOutlinedButton(
             onClick = { onIntent(SessionIntent.TogglePrivilegedService) },
             // 连接中不给点：这时候再发一次 bind 只会把状态搅乱
-            enabled = state.privilegedService != PrivilegedServiceState.Connecting,
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = if (connected) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-            ),
-            modifier = Modifier.fillMaxWidth(),
+            enabled = !connecting,
+            semantic = semantic,
+            contentAlpha = if (connected) 0.82f else 1f,
+            borderAlpha = if (connected) 0.45f else 0.55f,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(MaaDesignTokens.ButtonHeight.prominent),
         ) {
-            Icon(
-                imageVector = if (connected) Icons.Outlined.LinkOff else Icons.Outlined.Link,
-                contentDescription = null,
-                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
-            )
+            if (connecting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    strokeWidth = MaaDesignTokens.Border.marker,
+                    color = LocalContentColor.current,
+                )
+            } else {
+                Icon(
+                    imageVector = if (connected) Icons.Outlined.LinkOff else Icons.Outlined.Link,
+                    contentDescription = null,
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                )
+            }
             Box(Modifier.size(MaaDesignTokens.Spacing.sm))
             Text(
                 stringResource(
                     if (connected) R.string.home_service_disconnect else R.string.home_service_connect,
                 ),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
             )
         }
         if (state.remoteAccess.configuredBackend == RemoteBackend.SHIZUKU) {
-            MaaOutlinedButton(
+            MaaSemanticOutlinedButton(
                 onClick = { onIntent(SessionIntent.OpenShizuku) },
-                modifier = Modifier.fillMaxWidth(),
+                semantic = MaterialTheme.colorScheme.secondary,
+                contentAlpha = 1f,
+                borderAlpha = 0.55f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(MaaDesignTokens.ButtonHeight.prominent),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Build,
                     contentDescription = null,
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
                 )
                 Box(Modifier.size(MaaDesignTokens.Spacing.sm))
-                Text(stringResource(R.string.permission_open_shizuku))
+                Text(
+                    stringResource(R.string.permission_open_shizuku),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
             }
         }
     }
@@ -534,7 +563,12 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
  */
 @Composable
 private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_resource)) {
+    MaaCard(
+        title = stringResource(R.string.settings_resource),
+        collapsible = true,
+        initiallyExpanded = false,
+        summary = state.environment?.resource?.label,
+    ) {
         val environment = state.environment
         val candidates = environment?.resourceCandidates.orEmpty()
         if (candidates.isEmpty()) {

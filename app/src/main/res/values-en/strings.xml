@@ -12,6 +12,8 @@
     <string name="dialog_confirm">OK</string>
     <string name="common_restart">Restart</string>
     <string name="dialog_cancel">Cancel</string>
+    <string name="common_expand_action">Expand</string>
+    <string name="common_collapse_action">Collapse</string>
 
     <!-- Tasks screen -->
     <string name="tasks_project_load_failed">Project failed to load. Check diagnostics on Home.</string>
@@ -86,8 +88,6 @@
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
     <string name="home_name">Name</string>
-    <string name="home_resource">Server</string>
-    <string name="home_none">None</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
@@ -117,6 +117,8 @@
     <string name="settings_section_display">Display</string>
     <string name="settings_section_schedule">Scheduled tasks</string>
     <string name="settings_section_other">Other</string>
+    <string name="settings_pip_on_home">Auto picture-in-picture while running</string>
+    <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The game cannot be controlled inside the window</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_style">Theme style</string>
     <string name="settings_follow_system">System default</string>
@@ -131,7 +133,7 @@
     <string name="settings_run_mode_foreground">Foreground mode</string>
     <string name="settings_run_mode_hint_background">Runs on a separate virtual display so the phone stays usable; resolution derived from the project declaration</string>
     <string name="settings_run_mode_hint_foreground">Drives the current screen directly, occupying the phone while running; the target app is not restarted and preview touch is disabled</string>
-    <string name="settings_resource">Server selection</string>
+    <string name="settings_resource">Server</string>
     <string name="settings_no_resources">The project provides no selectable servers</string>
     <string name="settings_current_resource">Current resource</string>
     <string name="settings_not_selected">Not selected</string>
@@ -154,6 +156,69 @@
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
+    <string name="settings_section_update">Updates</string>
+    <string name="settings_update_source_mirror">MirrorChyan</string>
+    <string name="settings_update_source_github">GitHub</string>
+    <string name="settings_update_mirror_cdk">MirrorChyan CDK</string>
+    <string name="settings_update_cdk_placeholder">Enter your CDK</string>
+    <string name="settings_update_cdk_subscribe">No CDK? Subscribe</string>
+    <string name="settings_update_cdk_clear">Clear CDK</string>
+    <string name="settings_update_cdk_show">Show CDK</string>
+    <string name="settings_update_cdk_hide">Hide CDK</string>
+    <string name="settings_update_cdk_unset">Not set</string>
+    <string name="settings_update_cdk_saved">Saved</string>
+    <string name="settings_update_mirror_cdk_desc">MirrorChyan is an independent third-party accelerated download service. It is paid, and the fee is not charged by "%1$s". Subscription revenue covers its operating costs, and part of the proceeds goes back to the project developers. Subscribe for a CDK to enjoy fast downloads and support continued development. Without a CDK, switch to the GitHub update source to download.</string>
+    <string name="settings_update_source">Update source</string>
+    <string name="settings_update_mirror_about">About MirrorChyan</string>
+    <string name="settings_update_cancel_download">Cancel download</string>
+    <string name="settings_update_channel">Update channel</string>
+    <string name="settings_update_channel_stable">Stable</string>
+    <string name="settings_update_channel_beta">Beta</string>
+    <string name="settings_update_check">Check for updates</string>
+    <string name="settings_update_checking">Checking…</string>
+    <string name="settings_update_download">Download update</string>
+    <string name="settings_update_result">Check result</string>
+    <string name="settings_update_up_to_date">You are up to date</string>
+    <string name="settings_update_no_downloadable_apk">The selected update source has no downloadable APK</string>
+    <string name="settings_update_auto_check">Check for updates on launch</string>
+    <string name="settings_update_auto_download">Auto-download updates</string>
+    <string name="settings_update_auto_download_desc">When a new version is found on launch, download it and open the installer automatically</string>
+    <string name="dialog_update_found_title">Update available</string>
+    <string name="dialog_update_error_title">Update check failed</string>
+    <string name="dialog_update_failed_title">Update failed</string>
+    <string name="dialog_update_later">Later</string>
+    <string name="update_detail_http_status">HTTP %1$d</string>
+    <string name="update_download_detail_bytes">%1$s of %2$s downloaded</string>
+    <string name="update_download_detail_digest">expected %1$s, got %2$s</string>
+    <string name="update_fail_with_detail">%1$s: %2$s</string>
+    <string name="update_fail_missing_configuration">Update source is not configured</string>
+    <string name="update_fail_network">Network error</string>
+    <string name="update_fail_http">Server error</string>
+    <string name="update_fail_rate_limited">Rate limited; too many requests</string>
+    <string name="update_fail_cdk_expired">CDK has expired</string>
+    <string name="update_fail_cdk_invalid">Invalid CDK</string>
+    <string name="update_fail_cdk_quota_exhausted">CDK daily download limit reached</string>
+    <string name="update_fail_cdk_mismatched">CDK type does not match the resource to download</string>
+    <string name="update_fail_cdk_blocked">CDK has been blocked</string>
+    <string name="update_fail_cdk_required">No CDK provided, so MirrorChyan cannot resolve a download; enter a CDK or switch the update source to GitHub</string>
+    <string name="update_fail_resource_not_found">This project is not available on MirrorChyan; switch the update source to GitHub</string>
+    <string name="update_fail_invalid_os">Invalid OS parameter</string>
+    <string name="update_fail_invalid_arch">Invalid architecture parameter</string>
+    <string name="update_fail_invalid_channel">Invalid update channel parameter</string>
+    <string name="update_fail_invalid_response">The update source returned an unparsable response</string>
+    <string name="update_fail_no_matching_asset">No matching package</string>
+    <string name="update_fail_version_invalid">Version string cannot be parsed</string>
+    <string name="update_fail_unknown">Unknown error</string>
+    <string name="update_download_fail_invalid_url">Invalid download URL</string>
+    <string name="update_download_fail_network">Download interrupted</string>
+    <string name="update_download_fail_http">Download server error</string>
+    <string name="update_download_fail_storage">Storage unavailable</string>
+    <string name="update_download_fail_invalid_digest">Package is missing its checksum</string>
+    <string name="update_download_fail_digest_mismatch">Package checksum mismatch</string>
+    <string name="update_download_fail_unknown">Download failed</string>
+    <string name="update_install_fail_file_invalid">Package file is not usable</string>
+    <string name="update_install_fail_installer_not_found">No system installer found</string>
+    <string name="update_install_fail_unknown">Failed to start installation</string>
     <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->
@@ -168,10 +233,26 @@
 
     <!-- Foreground control layer -->
     <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
-    <string name="overlay_panel_title">Control panel</string>
+    <string name="overlay_tab_tasks">Tasks</string>
+    <string name="overlay_tab_log">Log</string>
+    <string name="overlay_task_running">Running</string>
+    <string name="overlay_tasks_empty">No run in progress</string>
+    <string name="overlay_hide">Hide</string>
     <string name="overlay_back_to_app">Back to app</string>
     <string name="overlay_lock">Lock position</string>
     <string name="overlay_unlock">Unlock position</string>
+    <string name="overlay_edit_tasks">Edit tasks</string>
+    <string name="overlay_edit_done">Done</string>
+    <string name="overlay_manage_config">Edit configs</string>
+    <string name="overlay_pane_view_empty_title">Select a task</string>
+    <string name="overlay_pane_view_empty_hint">Tap a task on the left to edit its options</string>
+    <string name="overlay_pane_edit_empty_title">Select a task to manage</string>
+    <string name="overlay_pane_edit_empty_hint">Rename, duplicate, or remove</string>
+    <string name="overlay_pane_edit_add_hint">Tap Add to append from the catalog</string>
+    <string name="overlay_pane_reorder_hint">Long-press a task on the left to reorder</string>
+    <string name="overlay_delete_task">Remove this task?</string>
+    <string name="overlay_delete_config">Delete this configuration?</string>
+    <string name="overlay_new_config">New</string>
     <string name="overlay_ball_idle">Idle</string>
     <string name="overlay_ball_preparing">Starting</string>
     <string name="overlay_ball_running">Running</string>
@@ -367,7 +448,7 @@
     <string name="home_status_stopping">Stopping task…</string>
     <string name="home_status_ready">Ready</string>
     <string name="home_service_connect">Reload service</string>
-    <string name="home_service_disconnect">Close service</string>
+    <string name="home_service_disconnect">Close all services</string>
     <string name="dialog_shizuku_not_installed_title">Shizuku Not Installed</string>
     <string name="dialog_shizuku_not_installed_message">This app depends on the Shizuku service. Shizuku was not detected on your device; please install it first.</string>
     <string name="dialog_shizuku_install_confirm">Install Shizuku</string>
@@ -527,7 +608,6 @@
     <string name="foreground_resolution_too_small">The screen %1$s is too small to fit a 16:9 picture</string>
     <string name="foreground_resolution_required">The screen is not 16:9 yet — tap Change resolution first</string>
     <string name="foreground_service_required">Connect the Shizuku or Root backend first</string>
-    <string name="foreground_overlay_unsupported">The control panel is unavailable for now</string>
 
     <!-- Settings "Notifications" group entry -->
     <string name="settings_section_notification">Notifications</string>
@@ -605,6 +685,14 @@
     <string name="notification_event_channel_silent_desc">Leaves an entry in the shade when a run ends, without a sound</string>
     <string name="notification_event_channel_popup_name">Run result (banner)</string>
     <string name="notification_event_channel_popup_desc">Shows a banner with a sound when a run ends</string>
+    <string name="notification_channel_update_download">App update download</string>
+    <string name="notification_channel_update_download_desc">Shows progress in the shade while a new version is downloading, auto-cancels when done</string>
+    <string name="notification_update_download_title">Downloading %1$s</string>
+    <string name="notification_update_download_complete_title">%1$s downloaded</string>
+    <string name="notification_update_download_complete">Download complete, opening the system installer</string>
+    <string name="notification_update_download_failed_title">Download failed</string>
+    <string name="notification_update_download_failed">Download failed: %1$s</string>
+
     <string name="notification_event_run_completed">All tasks completed</string>
     <plurals name="notification_event_run_completed_body">
         <item quantity="one">%1$d task in total</item>

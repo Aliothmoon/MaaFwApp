@@ -7,7 +7,6 @@ import android.os.Process
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.domain.RemoteBackend
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
@@ -34,10 +33,11 @@ object RemoteServiceManager : PrivilegedServicePort {
         data class Error(val exception: Throwable) : ServiceState()
     }
 
-    private const val CONNECT_TIMEOUT_MS = 20_000L
+    // 纯兜底：连接器自带超时先行归因，此处按其最坏时长再放余量
+    private const val CONNECT_TIMEOUT_GRACE_MS = 2_000L
 
-    /** [useService] 等连接就绪的上限；比 [CONNECT_TIMEOUT_MS] 短，超时兜底仍由后者负责收敛状态 */
-    private const val USE_SERVICE_TIMEOUT_MS = 12_000L
+    // 调用方默认等待须晚于兜底：先于连接器超时就只剩裸超时，launcher 日志尾部等根因全被截胡
+    private const val CALLER_WAIT_MARGIN_MS = 1_000L
 
     // 状态迁移（boundBackend / currentBinder / _state）统一在此锁内完成
     private val lock = Any()
@@ -50,7 +50,7 @@ object RemoteServiceManager : PrivilegedServicePort {
     private val connectAttempt = AtomicInteger(0)
 
     private val connectors: Map<RemoteBackend, RemoteServiceConnectorBackend> = mapOf(
-        RemoteBackend.SHIZUKU to ShizukuRemoteServiceConnector,
+        RemoteBackend.SHIZUKU to ShizukuProcessServiceConnector,
         RemoteBackend.ROOT to RootRemoteServiceConnector
     )
 
@@ -146,7 +146,13 @@ object RemoteServiceManager : PrivilegedServicePort {
         ServiceBootLogger.init()
         ShizukuManager.initSui(context.packageName)
         RemoteAccessCoordinator.initialize(backendProvider)
+        initializeConnectors(context)
+    }
+
+    /** 连接器只要 applicationContext；PermissionManager 构造期「已授权即 bind」早于 [initialize]，须先注入 */
+    fun initializeConnectors(context: Context) {
         RootRemoteServiceConnector.initialize(context)
+        ShizukuProcessServiceConnector.initialize(context)
         LogcatServiceManager.initialize(context)
     }
 
@@ -213,10 +219,10 @@ object RemoteServiceManager : PrivilegedServicePort {
         startConnectTimeout(attempt, backend)
     }
 
-    /** 连接超时兜底，主要覆盖无超时机制的 Shizuku 路径（Root 连接器自带 15s 超时先行） */
     private fun startConnectTimeout(attempt: Int, backend: RemoteBackend) {
+        val timeoutMs = fallbackTimeoutMs(backend)
         timeoutScope.launch {
-            delay(CONNECT_TIMEOUT_MS)
+            delay(timeoutMs)
             synchronized(lock) {
                 if (connectAttempt.get() != attempt ||
                     _state.value !is ServiceState.Connecting ||
@@ -226,7 +232,7 @@ object RemoteServiceManager : PrivilegedServicePort {
                 }
                 ServiceBootLogger.event(
                     "CONNECT_TIMEOUT",
-                    "still CONNECTING after ${CONNECT_TIMEOUT_MS}ms (backend=$backend attempt=$attempt) — service process likely failed to start or did not return binder, see service_boot_debug.log"
+                    "still CONNECTING after ${timeoutMs}ms (backend=$backend attempt=$attempt) — service process likely failed to start or did not return binder, see service_boot_debug.log"
                 )
                 runCatching {
                     connectors.getValue(backend).disconnect(currentBinder.get())
@@ -236,11 +242,18 @@ object RemoteServiceManager : PrivilegedServicePort {
                 clearCurrentBinderLocked()
                 boundBackend = null
                 _state.value = ServiceState.Error(
-                    TimeoutException("connect timeout after ${CONNECT_TIMEOUT_MS}ms (backend=$backend)")
+                    TimeoutException("connect timeout after ${timeoutMs}ms (backend=$backend)")
                 )
             }
         }
     }
+
+    private fun fallbackTimeoutMs(backend: RemoteBackend): Long =
+        connectors.getValue(backend).worstCaseConnectMs + CONNECT_TIMEOUT_GRACE_MS
+
+    /** [timeoutMs] 为 null 时按当前后端推算默认等待 */
+    private fun defaultWaitMs(backend: RemoteBackend): Long =
+        fallbackTimeoutMs(backend) + CALLER_WAIT_MARGIN_MS
 
     private fun unbindLocked() {
         val backend = boundBackend ?: return
@@ -263,12 +276,14 @@ object RemoteServiceManager : PrivilegedServicePort {
         }
     }
 
-    suspend fun getInstance(timeoutMs: Long = 10_000): RemoteService {
+    suspend fun getInstance(timeoutMs: Long? = null): RemoteService {
         serviceOrNull()?.let { return it }
 
         bind()
+        val waitMs =
+            timeoutMs ?: defaultWaitMs(boundBackend ?: RemoteAccessCoordinator.configuredBackend())
         return try {
-            withTimeout(timeoutMs) {
+            withTimeout(waitMs) {
                 _state.first { it is ServiceState.Connected || it is ServiceState.Error }
                     .let { currentState ->
                         when (currentState) {
@@ -279,7 +294,7 @@ object RemoteServiceManager : PrivilegedServicePort {
                     }
             }
         } catch (e: TimeoutCancellationException) {
-            ServiceBootLogger.event("GET_INSTANCE_TIMEOUT", "after ${timeoutMs}ms state=${_state.value}")
+            ServiceBootLogger.event("GET_INSTANCE_TIMEOUT", "after ${waitMs}ms state=${_state.value}")
             throw e
         }
     }
@@ -311,7 +326,7 @@ object RemoteServiceManager : PrivilegedServicePort {
             unbind()
         }
 
-        val service = getInstance(USE_SERVICE_TIMEOUT_MS)
+        val service = getInstance()
         return action(service)
     }
 }

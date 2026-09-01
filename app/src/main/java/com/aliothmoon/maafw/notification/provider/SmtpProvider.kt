@@ -1,20 +1,20 @@
 package com.aliothmoon.maafw.notification.provider
 
 import androidx.core.text.htmlEncode
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.toPrefBoolean
+import com.aliothmoon.maafw.R
 import jakarta.mail.Authenticator
+import jakarta.mail.internet.InternetAddress
+import jakarta.mail.internet.MimeMessage
 import jakarta.mail.Message
 import jakarta.mail.PasswordAuthentication
 import jakarta.mail.Session
 import jakarta.mail.Transport
-import jakarta.mail.internet.InternetAddress
-import jakarta.mail.internet.MimeMessage
-import timber.log.Timber
 import java.util.Date
 import java.util.Properties
+import timber.log.Timber
 
 /**
  * SMTP 发信；唯一不走 HTTP 的渠道

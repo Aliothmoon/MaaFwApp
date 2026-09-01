@@ -69,13 +69,33 @@ fun AddTasksSheet(
     onConfirm: (List<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    // 有序 draft；同 taskName 跨分组共享选中态
+    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
+        AddTasksContent(
+            catalog = catalog,
+            locked = locked,
+            onConfirm = onConfirm,
+            onClose = onDismiss,
+            modifier = sheetModifier,
+        )
+    }
+}
+
+/**
+ * 添加任务的正文；任务页 sheet 用。悬浮窗有自己的紧凑目录，不走这里
+ */
+@Composable
+internal fun AddTasksContent(
+    catalog: List<TaskCatalogGroup>,
+    locked: Boolean,
+    onConfirm: (List<String>) -> Unit,
+    modifier: Modifier = Modifier,
+    onClose: (() -> Unit)? = null,
+) {
     val selected = remember(catalog) { mutableStateListOf<String>() }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedGroupName by rememberSaveable(catalog) {
         mutableStateOf(catalog.firstOrNull()?.groupName.orEmpty())
     }
-    // 色调按完整目录固定，搜索过滤时不跳色
     val accents = MaaTheme.palette.accents
     val toneByGroup = remember(catalog, accents) {
         catalog.mapIndexed { index, group -> group.groupName to accents[index % accents.size] }.toMap()
@@ -96,13 +116,14 @@ fun AddTasksSheet(
         }
     }
 
-    MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
-        Column(
-            modifier = sheetModifier,
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-        ) {
-            MaaSheetHeader(title = stringResource(R.string.tasks_add_task), onClose = onDismiss)
-            OutlinedTextField(
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+    ) {
+        if (onClose != null) {
+            MaaSheetHeader(title = stringResource(R.string.tasks_add_task), onClose = onClose)
+        }
+        OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
                 placeholder = { Text(stringResource(R.string.tasks_search_placeholder)) },
@@ -204,9 +225,7 @@ fun AddTasksSheet(
                     },
                 )
             }
-        }
     }
-
 }
 
 @Composable
@@ -328,32 +347,53 @@ fun TaskOptionSheet(
     onDismiss: () -> Unit,
 ) {
     MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
-        Column(
+        TaskOptionContent(
+            task = task,
+            locked = locked,
+            onSetOption = onSetOption,
+            onClose = onDismiss,
             modifier = sheetModifier.padding(bottom = MaaDesignTokens.Spacing.xl),
+        )
+    }
+}
+
+@Composable
+internal fun TaskOptionContent(
+    task: ResolvedConfiguredTask,
+    locked: Boolean,
+    onSetOption: (String, OptionValue) -> Unit,
+    modifier: Modifier = Modifier,
+    onClose: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+    ) {
+        if (onClose != null) {
+            MaaSheetHeader(title = task.label, onClose = onClose)
+        } else {
+            Text(text = task.label, style = MaterialTheme.typography.titleMedium)
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            MaaSheetHeader(title = task.label, onClose = onDismiss)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-            ) {
-                OptionEditorList(
-                    options = task.options,
-                    locked = locked,
-                    onSetOption = onSetOption,
-                    carded = true,
-                )
-                task.description?.takeIf { it.isNotBlank() }?.let { description ->
-                    MaaCard(title = stringResource(R.string.tasks_description_title)) {
-                        MaaDescriptionPanel {
-                            MaaMarkdown(
-                                text = description,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            )
-                        }
+            OptionEditorList(
+                options = task.options,
+                locked = locked,
+                onSetOption = onSetOption,
+                carded = true,
+            )
+            task.description?.takeIf { it.isNotBlank() }?.let { description ->
+                MaaCard(title = stringResource(R.string.tasks_description_title)) {
+                    MaaDescriptionPanel {
+                        MaaMarkdown(
+                            text = description,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
                     }
                 }
             }

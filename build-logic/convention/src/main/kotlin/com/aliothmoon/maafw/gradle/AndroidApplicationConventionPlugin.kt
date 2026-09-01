@@ -59,7 +59,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 applicationId = maafwApplicationId()
                 targetSdk = TARGET_SDK
                 versionCode = gitVersionCode()
-                versionName = gitVersionName()
+                versionName = textSetting("build.versionName", "BUILD_VERSION_NAME") ?: gitVersionName()
                 println("Build version: applicationId=$applicationId, versionCode=$versionCode, versionName=$versionName")
 
                 // Expose MaaFwApp and parent superproject commit + tag to BuildConfig so

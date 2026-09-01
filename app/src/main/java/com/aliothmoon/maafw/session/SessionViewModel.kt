@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.duplicateTask
 import com.aliothmoon.maafw.domain.renameTask
 import com.aliothmoon.maafw.domain.RunConfiguration
@@ -47,19 +48,21 @@ import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.uiTextFormatted
 import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.telemetry.isDebugProjectVersion
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.AppLocales
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -163,7 +166,7 @@ class SessionViewModel(
         .combine(piInstall.state) { base, install -> base.copy(piInstallState = install) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.Eagerly,
             initialValue = SessionUiState(),
         )
 
@@ -181,8 +184,15 @@ class SessionViewModel(
      */
     val runLog: StateFlow<List<RunLogEntry>> = recorder.runLog
 
-    private val effectChannel = Channel<SessionEffect>(Channel.BUFFERED)
-    val effects: Flow<SessionEffect> = effectChannel.receiveAsFlow()
+    private val _effects = MutableSharedFlow<SessionEffect>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val effects: SharedFlow<SessionEffect> = _effects.asSharedFlow()
+
+    private fun emitEffect(effect: SessionEffect) {
+        _effects.tryEmit(effect)
+    }
 
     // Intent 串行消费，保证配置写入不交错
     private val intents = Channel<SessionIntent>(Channel.UNLIMITED)
@@ -223,7 +233,7 @@ class SessionViewModel(
      */
     private fun dispatchFocus(focus: FocusMessage) {
         if (FocusChannel.Toast in focus.channels) {
-            effectChannel.trySend(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
+            emitEffect(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
         }
     }
 
@@ -307,7 +317,7 @@ class SessionViewModel(
                     )
                 }
                 if (created == null) {
-                    effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_template_not_found, intent.templateName)))
+                    emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_template_not_found, intent.templateName)))
                 } else {
                     appendAndActivate(created)
                 }
@@ -433,7 +443,7 @@ class SessionViewModel(
             // 没必要把用户的页面掀掉；已经起来的 logcat 抓取不去停它，多抓几行不影响什么
             is SessionIntent.SetDebugMode -> {
                 appSettings.setDebugMode(intent.enabled)
-                if (intent.enabled) effectChannel.send(SessionEffect.RestartApp)
+                if (intent.enabled) emitEffect(SessionEffect.RestartApp)
             }
 
             is SessionIntent.SetThemeStyle ->
@@ -478,7 +488,7 @@ class SessionViewModel(
             SessionIntent.ShowOverlay -> openControlOverlay()
             SessionIntent.ApplyForegroundResolution -> applyForegroundResolution()
             SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
-            SessionIntent.ShowScreenSaver -> effectChannel.send(SessionEffect.ShowScreenSaver)
+            SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
             // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
             SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
@@ -507,7 +517,7 @@ class SessionViewModel(
                 if (piInstall.reinstall()) projectRepository.reload()
             }
 
-            SessionIntent.Start -> start()
+            is SessionIntent.Start -> start(intent.surface)
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -524,8 +534,8 @@ class SessionViewModel(
             SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
             SessionIntent.TogglePrivilegedService -> togglePrivilegedService()
             SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
-            SessionIntent.InstallShizuku -> effectChannel.send(SessionEffect.InstallShizuku)
-            SessionIntent.OpenShizuku -> effectChannel.send(SessionEffect.OpenShizuku)
+            SessionIntent.InstallShizuku -> emitEffect(SessionEffect.InstallShizuku)
+            SessionIntent.OpenShizuku -> emitEffect(SessionEffect.OpenShizuku)
             is SessionIntent.RequestSystemPermission -> requestSystemPermission(intent.permission)
 
             SessionIntent.RefreshPermissions -> permissionGateway.refresh()
@@ -537,7 +547,7 @@ class SessionViewModel(
     /** Screen 禁用之外的第二层写锁：写入前再读 RunnerState */
     private suspend fun guarded(block: suspend () -> Unit) {
         if (locked()) {
-            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_locked_while_running)))
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_locked_while_running)))
             return
         }
         block()
@@ -589,7 +599,7 @@ class SessionViewModel(
      */
     private suspend fun requestSystemPermission(permission: SystemPermission) {
         if (permissionGateway.quickGrant(permission)) return
-        effectChannel.send(SessionEffect.RequestSystemPermission(permission))
+        emitEffect(SessionEffect.RequestSystemPermission(permission))
     }
 
     /**
@@ -611,7 +621,7 @@ class SessionViewModel(
 
             is ServiceBindResult.Failed -> uiTextOf(R.string.msg_bind_service_failed, result.reason)
         }
-        effectChannel.send(SessionEffect.ShowMessage(message))
+        emitEffect(SessionEffect.ShowMessage(message))
     }
 
     /**
@@ -619,19 +629,17 @@ class SessionViewModel(
      *
      * 校验放在这里而不是 `OverlayController`：那一层只管挂窗口，判不出「该不该挂」；
      * 而且拦下之后要给的是可操作的提示（去改分辨率），那是 UI 层的事
-     *
-     * 两道都过了仍只给提示——面板本身还没实现（见 [SessionEffect.ShowOverlay]）
      */
     private suspend fun openControlOverlay() {
         if (permissionGateway.serviceState.value != PrivilegedServiceState.Connected) {
-            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_service_required)))
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_service_required)))
             return
         }
         if (!displaySize.isAspectSupported()) {
-            effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_resolution_required)))
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_resolution_required)))
             return
         }
-        effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.foreground_overlay_unsupported)))
+        emitEffect(SessionEffect.ShowOverlay)
     }
 
     private suspend fun applyForegroundResolution() {
@@ -654,45 +662,58 @@ class SessionViewModel(
             DisplaySizeResult.ServiceUnavailable -> uiTextOf(R.string.foreground_service_required)
             is DisplaySizeResult.Failed -> result.reason
         }
-        effectChannel.send(SessionEffect.ShowMessage(message))
+        emitEffect(SessionEffect.ShowMessage(message))
     }
 
     /**
      * 发起本身在 [RunLauncher]（进程级，定时触发共用同一条）；这里只把结局翻成 UI 消息
      *
-     * 前台模式的拦截已下沉成 [com.aliothmoon.maafw.runner.ForegroundModePrecheck]：
-     * 留在这里只压得住任务页一个入口，定时触发那条路绕得过去
+     * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
+     * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
      */
-    private suspend fun start() {
+    private suspend fun start(surface: TaskSurface) {
+        if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
+            return
+        }
         when (val result = runLauncher.launch(RunTrigger.Manual)) {
             // 手动发起不传 requestId，这条到不了
             RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
 
             RunLaunchResult.ProjectNotReady ->
-                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
+                emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
 
             RunLaunchResult.NoExecutableTasks ->
-                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_no_executable_tasks)))
+                emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_no_executable_tasks)))
 
             // 首页只跑当前激活的配置，不点名，所以这条到不了这里；定时才会撞上
             RunLaunchResult.ConfigurationMissing ->
-                effectChannel.send(
+                emitEffect(
                     SessionEffect.ShowMessage(uiTextOf(R.string.schedule_reason_configuration_missing)),
                 )
 
-            is RunLaunchResult.Invalid ->
-                effectChannel.send(SessionEffect.ShowDiagnostics(result.diagnostics))
+            is RunLaunchResult.Invalid -> {
+                emitEffect(SessionEffect.ShowDiagnostics(result.diagnostics))
+                if (surface == TaskSurface.Overlay) {
+                    val errors = result.diagnostics.count { it.severity == DiagnosticSeverity.Error }
+                    emitEffect(
+                        SessionEffect.ShowMessage(
+                            diagnosticsSummaryUiText(result.diagnostics.size, errors),
+                        ),
+                    )
+                }
+            }
 
             is RunLaunchResult.Rejected ->
-                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_start, result.reason)))
+                emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_start, result.reason)))
 
             is RunLaunchResult.Blocked ->
-                effectChannel.send(SessionEffect.ShowMessage(result.reason))
+                emitEffect(SessionEffect.ShowMessage(result.reason))
 
             // 确认框等第一道会问的检查落地时再补；现在没有检查产生这个分支，
             // 先原样把问题呈出来，不做无人生产的 UI
             is RunLaunchResult.NeedsConfirmation ->
-                effectChannel.send(SessionEffect.ShowMessage(result.prompt))
+                emitEffect(SessionEffect.ShowMessage(result.prompt))
         }
     }
 
@@ -700,7 +721,7 @@ class SessionViewModel(
         when (val command = runnerPort.stop()) {
             is RunnerCommandResult.Accepted -> Unit
             is RunnerCommandResult.Rejected ->
-                effectChannel.send(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_stop, command.reason)))
+                emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_stop, command.reason)))
         }
     }
 }

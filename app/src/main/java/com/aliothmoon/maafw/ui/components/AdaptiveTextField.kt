@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.VisualTransformation
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.LocalFloatingWindowContext
 import com.aliothmoon.maafw.ui.rememberInputFocusManager
@@ -146,6 +146,8 @@ fun ITextFieldWithFocus(
     inputFilter: ((String) -> Boolean)? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     inputType: Int? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    trailingIcon: @Composable (() -> Unit)? = null,
 ) {
     val isInFloatingWindow = LocalFloatingWindowContext.current
     val inputFocusManager = rememberInputFocusManager()
@@ -193,6 +195,8 @@ fun ITextFieldWithFocus(
             singleLine = singleLine,
             enabled = enabled,
             supportingText = supportingText,
+            visualTransformation = visualTransformation,
+            trailingIcon = trailingIcon,
             keyboardOptions = resolvedOptions,
             keyboardActions = if (singleLine) {
                 KeyboardActions(onDone = { handleImeDone() })

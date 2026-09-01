@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.preferences.PrefKey
 import com.aliothmoon.preferences.PrefSchema
 
@@ -100,4 +101,27 @@ data class AppSettings(
     @PrefKey(default = "false")
     val telemetryEnabled: String = "false",
 
+    /** 启动时自动检查更新；只控启动自检，设置页手动检查不受它影响 */
+    @PrefKey(default = "true")
+    val autoCheckUpdate: String = "true",
+
+    /** 启动自检发现新版本时自动下载并拉起安装器；关闭则弹窗询问。默认关，静默下载近 200MB 要用户先点头 */
+    @PrefKey(default = "false")
+    val autoDownloadUpdate: String = "false",
+
+    /** [UpdateChannel] 的 name */
+    @PrefKey(default = "STABLE")
+    val updateChannel: String = "STABLE",
+
+    /** [com.aliothmoon.maafw.update.UpdateSource] 的 name；检查与下载都只走这一个源 */
+    @PrefKey(default = "MIRRORCHYAN")
+    val updateSource: String = "MIRRORCHYAN",
+
+    /** 后台模式运行中回桌面自动进画中画；只缩预览画面，小窗内无法操作 */
+    @PrefKey(default = "true")
+    val pipOnHome: String = "true",
+
+    /** Mirror酱 CDK；只在更新源为 Mirror酱 时有意义，下载解析时带上 */
+    @PrefKey(default = "")
+    val mirrorchyanCdk: String = "",
 )
