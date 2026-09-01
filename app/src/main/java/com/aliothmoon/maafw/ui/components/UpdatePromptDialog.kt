@@ -2,14 +2,21 @@ package com.aliothmoon.maafw.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -22,10 +29,8 @@ import com.aliothmoon.maafw.update.UpdateSource
 private val ReleaseNotesMaxHeight = 280.dp
 
 /**
- * 「发现新版本」弹窗：启动自检与手动检查发现新版本都从这里走
- *
- * [UpdatePanelState.updatePrompt] 非空才渲染；下载走用户所选更新源，
- * Mirror酱 源缺 CDK 由下载前置拦截（CDK_REQUIRED）弹错误
+ * 「发现新版本」弹窗；[UpdatePanelState.updatePrompt] 非空才渲染。
+ * 下载走用户所选更新源，Mirror酱 缺 CDK 由下载前置拦截（CDK_REQUIRED）弹「更新失败」
  */
 @Composable
 fun UpdatePromptDialog(
@@ -36,21 +41,36 @@ fun UpdatePromptDialog(
     val prompt = update.updatePrompt ?: return
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.dialog_update_found_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
-                Text(
-                    text = "${prompt.info.version} · ${prompt.source.updateSourceLabel()}",
-                    style = MaterialTheme.typography.bodyMedium,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.SystemUpdate,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
                 )
-                prompt.info.releaseNotes?.takeIf(String::isNotBlank)?.let { notes ->
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = ReleaseNotesMaxHeight)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        MaaMarkdown(text = notes)
-                    }
+                Text(
+                    text = "${stringResource(R.string.dialog_update_found_title)} ${prompt.info.version}",
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
+        text = {
+            prompt.info.releaseNotes?.takeIf(String::isNotBlank)?.let { notes ->
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = ReleaseNotesMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    MaaMarkdown(
+                        text = notes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
         },
@@ -61,7 +81,7 @@ fun UpdatePromptDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_update_ignore))
+                Text(stringResource(R.string.dialog_update_later))
             }
         },
     )

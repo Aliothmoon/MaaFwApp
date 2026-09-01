@@ -1,8 +1,10 @@
 package com.aliothmoon.maafw.settings
 
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
-import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
@@ -33,11 +35,11 @@ data class UpdatePanelState(
      */
     val updatePrompt: UpdateCheckResult.UpdateAvailable? = null,
     /**
-     * 非空即弹「检查更新失败」dialog，与 [updatePrompt] 互斥——检查错误（含 CDK 业务错误）
-     * 和发现新版本走同一种呈现，不做内联红字。启动自检的错误同样写入；
-     * CDK 填写触发的静默检查不写
+     * 非空即弹错误 dialog，与 [updatePrompt] 互斥——错误和发现新版本走同一种呈现，不做内联红字；
+     * 标题随阶段区分：检查失败「检查更新失败」，点了下载之后的失败「更新失败」。
+     * 启动自检的错误同样写入；CDK 填写触发的静默检查不写
      */
-    val errorPrompt: UiText? = null,
+    val errorPrompt: UpdateErrorPrompt? = null,
     val downloading: Boolean = false,
     val downloadedBytes: Long = -1L,
     val totalBytes: Long = -1L,
@@ -63,4 +65,22 @@ sealed interface SettingsIntent {
     data object CancelDownload : SettingsIntent
     data object DismissUpdatePrompt : SettingsIntent
     data object DismissUpdateError : SettingsIntent
+}
+
+/**
+ * 更新链路错误弹窗的载荷；两个工厂定标题，写入方不用各自从 strings 拼一遍
+ */
+data class UpdateErrorPrompt(
+    val title: UiText,
+    val message: UiText,
+) {
+    companion object {
+        /** 检查阶段失败（含 CDK 业务错误） */
+        fun check(message: UiText) =
+            UpdateErrorPrompt(uiTextOf(R.string.dialog_update_error_title), message)
+
+        /** 点了「下载更新」之后的失败：CDK 前置拦截与地址解析 */
+        fun download(message: UiText) =
+            UpdateErrorPrompt(uiTextOf(R.string.dialog_update_failed_title), message)
+    }
 }

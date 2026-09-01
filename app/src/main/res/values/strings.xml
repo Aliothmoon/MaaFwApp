@@ -170,7 +170,8 @@
     <string name="settings_update_auto_download_desc">启动检查发现新版本时自动下载并打开安装器</string>
     <string name="dialog_update_found_title">发现新版本</string>
     <string name="dialog_update_error_title">检查更新失败</string>
-    <string name="dialog_update_ignore">忽略</string>
+    <string name="dialog_update_failed_title">更新失败</string>
+    <string name="dialog_update_later">稍后更新</string>
     <string name="update_detail_http_status">HTTP %1$d</string>
     <string name="update_download_detail_bytes">已下载 %1$s / %2$s</string>
     <string name="update_download_detail_digest">期望 %1$s，实际 %2$s</string>

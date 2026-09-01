@@ -322,12 +322,14 @@ fun AppRoot(
             onDismiss = { settingsViewModel.onIntent(SettingsIntent.DismissUpdatePrompt) },
         )
 
-        // 检查错误（含 CDK 业务错误）与更新提示同级同形态，都走弹窗
+        // 检查/更新失败与「发现新版本」同级同形态，都走弹窗
         settingsState.update.errorPrompt?.let { error ->
             MaaPromptDialog(
-                title = stringResource(R.string.dialog_update_error_title),
-                message = error.asString(),
+                title = error.title.asString(),
+                message = error.message.asString(),
                 icon = Icons.Outlined.ErrorOutline,
+                iconTint = MaterialTheme.colorScheme.error,
+                titleColor = MaterialTheme.colorScheme.error,
                 confirmText = stringResource(R.string.dialog_confirm),
                 onConfirm = { settingsViewModel.onIntent(SettingsIntent.DismissUpdateError) },
                 onDismissRequest = { settingsViewModel.onIntent(SettingsIntent.DismissUpdateError) },

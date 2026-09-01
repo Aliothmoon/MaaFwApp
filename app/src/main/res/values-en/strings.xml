@@ -176,7 +176,8 @@
     <string name="settings_update_auto_download_desc">When a new version is found on launch, download it and open the installer automatically</string>
     <string name="dialog_update_found_title">Update available</string>
     <string name="dialog_update_error_title">Update check failed</string>
-    <string name="dialog_update_ignore">Ignore</string>
+    <string name="dialog_update_failed_title">Update failed</string>
+    <string name="dialog_update_later">Later</string>
     <string name="update_detail_http_status">HTTP %1$d</string>
     <string name="update_download_detail_bytes">%1$s of %2$s downloaded</string>
     <string name="update_download_detail_digest">expected %1$s, got %2$s</string>

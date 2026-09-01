@@ -181,7 +181,9 @@ class SettingsViewModel(
         if (available == null) {
             Timber.tag("UpdateCheck")
                 .w("startup check found no update: %s", result::class.simpleName)
-            updateOperation.update { it.copy(checking = false, errorPrompt = result.message()) }
+            updateOperation.update {
+                it.copy(checking = false, errorPrompt = result.message()?.let(UpdateErrorPrompt::check))
+            }
             return
         }
         updateOperation.update { it.copy(checking = false, checkResult = result) }
@@ -214,7 +216,7 @@ class SettingsViewModel(
             it.copy(
                 checking = false,
                 checkResult = result,
-                errorPrompt = result.message(),
+                errorPrompt = result.message()?.let(UpdateErrorPrompt::check),
                 updatePrompt = result as? UpdateCheckResult.UpdateAvailable,
             )
         }
@@ -250,7 +252,7 @@ class SettingsViewModel(
                 it.copy(
                     downloading = false,
                     updatePrompt = null,
-                    errorPrompt = UpdateCheckFailure.CDK_REQUIRED.message,
+                    errorPrompt = UpdateErrorPrompt.download(UpdateCheckFailure.CDK_REQUIRED.message),
                 )
             }
             return
@@ -278,7 +280,9 @@ class SettingsViewModel(
                 is UpdateResolveResult.Failed -> {
                     val message = resolved.message()
                         ?: uiTextOf(R.string.settings_update_no_downloadable_apk)
-                    updateOperation.update { it.copy(downloading = false, errorPrompt = message) }
+                    updateOperation.update {
+                        it.copy(downloading = false, errorPrompt = UpdateErrorPrompt.download(message))
+                    }
                     return
                 }
             }
