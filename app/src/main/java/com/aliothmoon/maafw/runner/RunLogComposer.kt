@@ -39,11 +39,13 @@ class RunLogComposer {
     /** 返回 null 表示这条不展示（被去重掉，或洪泛期的 agent 输出） */
     fun compose(event: RunnerEvent, id: Long, atMillis: Long, context: RunLogContext): RunLogEntry? {
         val composed = when (event) {
+            is RunnerEvent.ExecutionFinished -> return null
+
             is RunnerEvent.Log -> Composed(RunLogKind.Info, uiTextFromFramework(event.message))
 
             is RunnerEvent.Progress -> Composed(
                 RunLogKind.Info,
-                uiTextFromFramework("${event.taskName} ${event.completed}/${event.total}"),
+                uiTextFromFramework("${event.taskLabel ?: event.taskName} ${event.completed}/${event.total}"),
             )
 
             // 正文已由调用方补完（$i18n 查表、{image}、文件路径），这里只负责装进条目：
@@ -185,21 +187,26 @@ class RunLogComposer {
     }
 }
 
-/**
- * 合成一行人话需要的、Runner 给不出的那些东西
- *
- * [currentTaskName] 取自 `ActiveExecution.currentTaskLabel`：给人看的展示名，
- * 不是内部 `taskName`。MXU 靠 `task_id → selectedTaskId` 的映射表回认；
- * 我们串行投递、同时只有一个任务在跑，当前任务本身就是权威，不必再建一张表
- */
+/** 合成一行人话需要的、Runner 给不出的那些东西 */
 data class RunLogContext(
     val currentTaskName: String? = null,
+    /** Runner 在事件产生时冻下的展示名；回调缺 entry 且任务名不在本轮映射时兜底 */
+    val currentTaskLabel: String? = null,
+    /** 内部任务名到展示名；只在回调缺 entry 时兜底 */
+    val taskLabels: Map<String, String> = emptyMap(),
+    /** Tasker 回调 entry 到展示名；与任务名是两个 key 空间 */
+    val entryLabels: Map<String, String> = emptyMap(),
     val resourceLabel: String? = null,
 ) {
-    /** 拿不到当前任务名就退回 PI 的 entry：宁可显示内部名，也不显示空 */
+    /**
+     * Tasker 回调自带 entry；不能依赖 currentTaskName，因为异步日志消费可能晚于
+     * 下一个任务的 onTaskStarted，把旧任务的结果标成新任务。
+     */
     fun taskLabel(details: JsonObject?): String =
-        currentTaskName?.takeIf { it.isNotBlank() }
-            ?: details.string("entry")
+        details.string("entry")
+            ?.let { entryLabels[it]?.takeIf(String::isNotBlank) ?: it }
+            ?: currentTaskLabel?.takeIf(String::isNotBlank)
+            ?: currentTaskName?.let { taskLabels[it]?.takeIf(String::isNotBlank) ?: it }
             ?: UNKNOWN_SUBJECT
 
     /** 一轮只加载一个 resource 的若干路径，用它的展示名比逐条报绝对路径有用 */

@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.isResource
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -79,6 +80,7 @@ class RunLauncherTest {
         project: ProjectState = ProjectState.Ready(definition, emptyList()),
         configurationStore: InMemoryUserConfigurationStore = store(),
         runMode: RunMode = RunMode.BACKGROUND,
+        journal: RunJournal = DiscardingRunJournal,
     ) = RunLauncher(
         projectRepository = FakeProjectRepository(project),
         configurationStore = configurationStore,
@@ -87,7 +89,7 @@ class RunLauncherTest {
         hooks = hooks,
         runMode = { runMode },
         scope = scope,
-        journal = DiscardingRunJournal,
+        journal = journal,
     )
 
     private fun fastStub(scope: CoroutineScope) = StubRunnerPort(
@@ -119,6 +121,24 @@ class RunLauncherTest {
 
         assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
         assertEquals(1, keepAlive.startCount)
+    }
+
+    @Test
+    fun `journal and runner receive the same generated execution id`() = runTest(testDispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val journal = RecordingRunJournal()
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = runner,
+            hooks = listOf(SessionLogHook(journal)),
+            journal = journal,
+        )
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+
+        val executionId = journal.begins.singleOrNull()?.second
+        assertTrue(executionId != null && executionId.isNotBlank())
+        assertEquals(listOf(executionId), runner.startedExecutionIds)
     }
 
     /** 保活是执行的一部分：没受理就拉，前台服务会因为读到非 busy 而当场自停 */
@@ -565,5 +585,17 @@ class RunLauncherTest {
                 log += "release:$id"
             })
         }
+    }
+
+    private class RecordingRunJournal : RunJournal {
+        val begins = mutableListOf<Pair<RunPlan, String>>()
+
+        override suspend fun begin(plan: RunPlan, executionId: String) {
+            begins += plan to executionId
+        }
+
+        override suspend fun end(executionId: String, reason: RunEndReason) = Unit
+
+        override fun note(executionId: String, level: RunNote, text: UiText) = Unit
     }
 }

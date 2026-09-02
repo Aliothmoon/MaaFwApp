@@ -9,7 +9,7 @@ import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
-import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.settings.AppSettingsGateway
 import io.sentry.ITransaction
 import io.sentry.Sentry
 import io.sentry.SentryLevel
@@ -31,14 +31,18 @@ import timber.log.Timber
 class TelemetryController(
     private val context: Context,
     private val projectRepository: ProjectRepository,
-    private val settings: AppSettingsManager,
+    private val settings: AppSettingsGateway,
     private val focusDispatcher: FocusDispatcher,
     private val runnerPort: RunnerPort,
     private val scope: CoroutineScope,
 ) {
 
     private var active: TelemetryDefinition? = null
-    private var runTransaction: ITransaction? = null
+
+    private data class ActiveRun(val transaction: ITransaction?)
+
+    @Volatile
+    private var activeRun = ActiveRun(transaction = null)
 
     fun setup() {
         scope.launch {
@@ -53,7 +57,8 @@ class TelemetryController(
             }.distinctUntilChanged().collect(::apply)
         }
         scope.launch {
-            focusDispatcher.traced.collect { focus ->
+            focusDispatcher.traced.collect { dispatch ->
+                val focus = dispatch.focus
                 if (active == null) return@collect
                 Sentry.captureMessage(focus.message, SentryLevel.INFO)
             }
@@ -61,9 +66,13 @@ class TelemetryController(
         scope.launch {
             runnerPort.state.collect { state ->
                 val definition = active ?: return@collect
-                if (!definition.tracing) return@collect
                 when (state.phase) {
-                    RunnerPhase.Preparing -> startRunTransaction(state.activeExecution?.totalTaskCount)
+                    RunnerPhase.Preparing -> {
+                        activeRun = ActiveRun(transaction = null)
+                        if (definition.tracing) {
+                            startRunTransaction(state.activeExecution?.totalTaskCount)
+                        }
+                    }
                     RunnerPhase.Idle -> finishRunTransaction(state.latestResult)
                     else -> Unit
                 }
@@ -106,15 +115,17 @@ class TelemetryController(
     }
 
     private fun startRunTransaction(taskCount: Int?) {
-        if (runTransaction != null) return
-        runTransaction = Sentry.startTransaction("run", "task.run").apply {
+        if (activeRun.transaction != null) return
+        val transaction = Sentry.startTransaction("run", "task.run").apply {
             taskCount?.let { setData("task_count", it) }
         }
+        activeRun = activeRun.copy(transaction = transaction)
     }
 
     private fun finishRunTransaction(result: ExecutionResult?) {
-        val transaction = runTransaction ?: return
-        runTransaction = null
+        val run = activeRun
+        activeRun = ActiveRun(transaction = null)
+        val transaction = run.transaction ?: return
         transaction.finish(
             when (result) {
                 is ExecutionResult.Completed -> SpanStatus.OK

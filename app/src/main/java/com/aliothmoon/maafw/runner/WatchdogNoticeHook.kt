@@ -40,13 +40,14 @@ class WatchdogNoticeHook(
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): EngageResult {
+        val executionId = ctx.executionId
         val job = scope.launch {
             watchdogState
                 // 上一轮留下的坏状态还没被 2s 轮询刷掉，别拿它当本轮的事
                 .dropWhile { it.isLost }
                 .distinctUntilChanged()
                 .filter { it.isLost }
-                .collect { state -> journal.note(RunNote.Warning, describe(state)) }
+                .collect { state -> journal.note(executionId, RunNote.Warning, describe(state)) }
         }
         return EngageResult.Engaged { job.cancel() }
     }

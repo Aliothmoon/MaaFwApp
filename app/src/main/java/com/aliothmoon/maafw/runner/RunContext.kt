@@ -76,6 +76,8 @@ fun interface RunProgress {
  * 在里面读到的就已经是冻结值，捕获进闭包即可；塞进来只会让本类随挂载物数量膨胀
  */
 class RunContext(
+    /** 一轮日志、状态机与迟到回调共用的身份；由编排层生成 */
+    val executionId: String = java.util.UUID.randomUUID().toString(),
     val trigger: RunTrigger,
     val runMode: RunMode,
     val plan: RunPlan,
