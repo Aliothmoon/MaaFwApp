@@ -140,7 +140,8 @@ class RunForegroundService : Service() {
      * `{name}` 这些形态得先补完，否则推给用户的是没处理过的模板
      */
     private suspend fun observeFocusNotifications() {
-        focusDispatcher.resolved.collect { focus ->
+        focusDispatcher.resolved.collect { dispatch ->
+            val focus = dispatch.focus
             if (FocusChannel.Notification !in focus.channels) return@collect
             ensureFocusChannel()
             val notification = NotificationCompat.Builder(this, FOCUS_CHANNEL_ID)

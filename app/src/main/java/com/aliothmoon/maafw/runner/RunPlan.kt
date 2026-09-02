@@ -29,5 +29,13 @@ data class RuntimeTask(
     val label: String = taskName,
 )
 
-fun RunPlan.taskLabelMap(): Map<String, String> =
-    tasks.associate { it.taskName to it.label.ifBlank { it.taskName } }
+private fun List<RuntimeTask>.labelsBy(keyOf: (RuntimeTask) -> String): Map<String, String> =
+    groupBy(keyOf).mapNotNull { (key, tasks) ->
+        val labels = tasks.map { it.label.ifBlank { it.taskName } }.distinct()
+        // 一个 key 对应多个展示名时无法从回调里分辨具体实例，保留原始 key 比随机取后者可靠
+        if (labels.size == 1) key to labels.single() else null
+    }.toMap()
+
+fun RunPlan.taskLabelMap(): Map<String, String> = tasks.labelsBy { it.taskName }
+
+fun RunPlan.entryLabelMap(): Map<String, String> = tasks.labelsBy { it.entry }

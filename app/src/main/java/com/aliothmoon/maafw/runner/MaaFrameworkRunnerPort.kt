@@ -35,7 +35,6 @@ import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.util.UUID
 
 /**
  * RunnerPort 的真实实现：本对象跑在 app 进程，MaaFramework 实例在特权进程里，两者经 binder 通信
@@ -60,11 +59,11 @@ class MaaFrameworkRunnerPort(
     private val _state = MutableStateFlow(RunnerState())
     override val state: StateFlow<RunnerState> = _state.asStateFlow()
 
-    private val _events = MutableSharedFlow<RunnerEvent>(
+    private val _events = MutableSharedFlow<RunnerEventEnvelope>(
         extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    override val events: Flow<RunnerEvent> = _events.asSharedFlow()
+    override val events: Flow<RunnerEventEnvelope> = _events.asSharedFlow()
 
     init {
         // 特权进程死了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
@@ -122,6 +121,7 @@ class MaaFrameworkRunnerPort(
             } else {
                 RunnerState(
                     phase = RunnerPhase.Idle,
+                    latestExecutionId = current.activeExecution?.executionId,
                     latestResult = ExecutionResult.Failed(
                         resultReason,
                         current.activeExecution?.taskResults.orEmpty(),
@@ -129,48 +129,109 @@ class MaaFrameworkRunnerPort(
                 )
             }
         }
-        if (previous.phase.isBusy) Timber.w(logMessage)
+        if (previous.phase.isBusy) {
+            previous.activeExecution?.let { execution ->
+                _events.tryEmit(
+                    RunnerEventEnvelope(
+                        executionId = execution.executionId,
+                        currentTaskName = execution.currentTaskName,
+                        currentTaskLabel = execution.currentTaskLabel,
+                        event = RunnerEvent.ExecutionFinished,
+                    ),
+                )
+            }
+            Timber.w(logMessage)
+        }
     }
 
     /**
      * JVM 单测里 [IMaaRunnerCallback.Stub] 会调未 mock 的 Binder.attachInterface
      * 测 start/stop/对账时换成空操作，避免为测 phase 去构造 AIDL Stub
      */
-    internal var bindRunnerCallback: (RemoteService) -> Unit = { service ->
-        service.setRunnerCallback(callback)
+    internal var bindRunnerCallback: (RemoteService, ExecutionCallback) -> Unit = { service, callback ->
+        service.setRunnerCallback(
+            object : IMaaRunnerCallback.Stub() {
+                override fun onEvent(message: String?, detailsJson: String?) =
+                    callback.onEvent(message, detailsJson)
+
+                override fun onAgentOutput(line: String?, fromStderr: Boolean) =
+                    callback.onAgentOutput(line, fromStderr)
+
+                override fun onAgentConnected(index: Int, total: Int, exec: String?) =
+                    callback.onAgentConnected(index, total, exec)
+
+                override fun onTaskStarted(taskName: String?, index: Int, total: Int) =
+                    callback.onTaskStarted(taskName, index, total)
+
+                override fun onTaskFinished(taskName: String?, success: Boolean, message: String?) =
+                    callback.onTaskFinished(taskName, success, message)
+
+                override fun onFinished(outcome: Int, reason: String?) =
+                    callback.onFinished(outcome, reason)
+            },
+        )
     }
 
-    private val callback by lazy { object : IMaaRunnerCallback.Stub() {
-        override fun onEvent(message: String?, detailsJson: String?) {
-            _events.tryEmit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
+    /**
+     * Binder callback 是全局注册的；这个处理器按轮创建，晚到的旧调用仍带旧身份，
+     * 但不能再改写当前轮的 ActiveExecution
+     */
+    internal inner class ExecutionCallback(
+        private val executionId: String,
+        plan: RunPlan,
+    ) {
+        private val tasks = plan.tasks
+
+        @Volatile
+        private var currentTaskName: String? = null
+
+        @Volatile
+        private var currentTaskLabel: String? = null
+
+        private val isActive: Boolean
+            get() = _state.value.activeExecution?.executionId == executionId
+
+        fun onEvent(message: String?, detailsJson: String?) {
+            emit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
 
-        override fun onAgentOutput(line: String?, fromStderr: Boolean) {
-            _events.tryEmit(RunnerEvent.AgentOutput(line.orEmpty(), fromStderr))
+        fun onAgentOutput(line: String?, fromStderr: Boolean) {
+            emit(RunnerEvent.AgentOutput(line.orEmpty(), fromStderr))
         }
 
-        override fun onAgentConnected(index: Int, total: Int, exec: String?) {
-            _events.tryEmit(RunnerEvent.AgentConnected(index, total, exec.orEmpty()))
+        fun onAgentConnected(index: Int, total: Int, exec: String?) {
+            emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty()))
         }
 
-        // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂
-        override fun onTaskStarted(taskName: String?, index: Int, total: Int) {
-            val name = taskName.orEmpty()
+        // index 是零基；回调名只作兜底，避免同名/别名抢错展示上下文
+        fun onTaskStarted(taskName: String?, index: Int, total: Int) {
+            val task = tasks.getOrNull(index) ?: tasks.firstOrNull { it.taskName == taskName.orEmpty() }
+            val name = task?.taskName ?: taskName.orEmpty()
+            val label = task?.label?.takeIf(String::isNotBlank) ?: name
+            currentTaskName = name
+            currentTaskLabel = label
+
+            // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂
             _state.update { current ->
+                val execution = current.activeExecution ?: return@update current
+                if (execution.executionId != executionId) return@update current
                 current.copy(
-                    activeExecution = current.activeExecution?.copy(
+                    activeExecution = execution.copy(
                         currentTaskName = name,
+                        currentTaskLabel = label,
                         totalTaskCount = total,
                     ),
                 )
             }
-            _events.tryEmit(RunnerEvent.Progress(name, index, total))
+            emit(RunnerEvent.Progress(name, index, total, label), currentTaskName = name)
         }
 
-        override fun onTaskFinished(taskName: String?, success: Boolean, message: String?) {
+        fun onTaskFinished(taskName: String?, success: Boolean, message: String?) {
+            if (!isActive) return
             val result = TaskResult(taskName.orEmpty(), success, message)
             _state.update { current ->
                 val execution = current.activeExecution ?: return@update current
+                if (execution.executionId != executionId) return@update current
                 val results = execution.taskResults + result
                 current.copy(
                     activeExecution = execution.copy(
@@ -181,40 +242,74 @@ class MaaFrameworkRunnerPort(
             }
         }
 
-        override fun onFinished(outcome: Int, reason: String?) {
-            val results = _state.value.activeExecution?.taskResults.orEmpty()
-            val result = when (outcome) {
-                RunOutcome.COMPLETED -> ExecutionResult.Completed(results)
-                RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
-                RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
-                else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
+        fun onFinished(outcome: Int, reason: String?) {
+            if (!isActive) return
+            emit(RunnerEvent.ExecutionFinished)
+            _state.update { current ->
+                val execution = current.activeExecution ?: return@update current
+                if (execution.executionId != executionId) return@update current
+                val result = when (outcome) {
+                    RunOutcome.COMPLETED -> ExecutionResult.Completed(execution.taskResults)
+                    RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(execution.taskResults)
+                    RunOutcome.CANCELLED -> ExecutionResult.Cancelled(execution.taskResults)
+                    else -> ExecutionResult.Failed(
+                        if (reason.isNullOrBlank()) {
+                            uiTextOf(R.string.msg_fail_default)
+                        } else {
+                            uiTextFromFramework(reason)
+                        },
+                        execution.taskResults,
+                    )
+                }
+                RunnerState(
+                    phase = RunnerPhase.Idle,
+                    latestExecutionId = executionId,
+                    latestResult = result,
+                )
             }
-            _state.value = RunnerState(phase = RunnerPhase.Idle, latestResult = result)
         }
-    } }
 
-    override suspend fun start(plan: RunPlan): RunnerCommandResult {
+        private fun emit(
+            event: RunnerEvent,
+            currentTaskName: String? = this.currentTaskName,
+            currentTaskLabel: String? = this.currentTaskLabel,
+        ) {
+            _events.tryEmit(
+                RunnerEventEnvelope(
+                    executionId = executionId,
+                    currentTaskName = currentTaskName,
+                    currentTaskLabel = currentTaskLabel,
+                    event = event,
+                ),
+            )
+        }
+    }
+
+    override suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult {
         if (_state.value.phase.isBusy) {
             return RunnerCommandResult.Rejected(uiTextOf(R.string.msg_reject_already_running))
         }
-        val executionId = UUID.randomUUID().toString()
         _state.value = RunnerState(
             phase = RunnerPhase.Preparing,
             activeExecution = ActiveExecution(
                 executionId = executionId,
                 runConfigurationId = plan.runConfigurationId,
                 currentTaskName = null,
+                currentTaskLabel = null,
                 completedTaskCount = 0,
                 totalTaskCount = plan.tasks.size,
                 taskResults = emptyList(),
                 taskLabels = plan.taskLabelMap(),
             ),
+            latestExecutionId = executionId,
             latestResult = null,
         )
 
+        val callback = ExecutionCallback(executionId, plan)
+
         return withContext(MaaDispatchers.IO) {
             try {
-                val rejection = launchOnService(plan, executionId)
+                val rejection = launchOnService(plan, executionId, callback)
                 if (rejection != null) return@withContext failPreparation(rejection, executionId)
                 // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
                 // 无条件写成 Running 会把停止意图丢掉，任务继续跑到结束
@@ -272,9 +367,13 @@ class MaaFrameworkRunnerPort(
      * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
      * 后端换了也会重新绑定
      */
-    private suspend fun launchOnService(plan: RunPlan, executionId: String): UiText? {
+    private suspend fun launchOnService(
+        plan: RunPlan,
+        executionId: String,
+        callback: ExecutionCallback,
+    ): UiText? {
         val piRoot = installer.installedDir()
-        return servicePort.useService { service -> prepareAndStart(plan, piRoot, service, executionId) }
+        return servicePort.useService { service -> prepareAndStart(plan, piRoot, service, executionId, callback) }
     }
 
     private fun prepareAndStart(
@@ -282,6 +381,7 @@ class MaaFrameworkRunnerPort(
         piRoot: File,
         service: RemoteService,
         executionId: String,
+        callback: ExecutionCallback,
     ): UiText? {
         if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
             return uiTextOf(R.string.msg_reject_setup_failed)
@@ -317,7 +417,7 @@ class MaaFrameworkRunnerPort(
             return if (mode == RunMode.FOREGROUND) uiTextOf(R.string.msg_reject_primary_capture) else uiTextOf(R.string.msg_reject_virtual_display)
         }
 
-        bindRunnerCallback(service)
+        bindRunnerCallback(service, callback)
 
         val payload = RunPlanPayload(
             resourcePaths = plan.resource.paths.map { File(piRoot, it).absolutePath },
@@ -358,11 +458,19 @@ class MaaFrameworkRunnerPort(
     private fun failPreparation(reason: UiText, executionId: String): RunnerCommandResult {
         val next = _state.updateAndGet { current ->
             if (current.phase == RunnerPhase.Preparing) {
-                RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Failed(reason))
+                RunnerState(
+                    phase = RunnerPhase.Idle,
+                    latestExecutionId = executionId,
+                    latestResult = ExecutionResult.Failed(reason),
+                )
             } else if (current.phase == RunnerPhase.Stopping &&
                 current.activeExecution?.executionId == executionId
             ) {
-                RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Cancelled(emptyList()))
+                RunnerState(
+                    phase = RunnerPhase.Idle,
+                    latestExecutionId = executionId,
+                    latestResult = ExecutionResult.Cancelled(emptyList()),
+                )
             } else {
                 current
             }

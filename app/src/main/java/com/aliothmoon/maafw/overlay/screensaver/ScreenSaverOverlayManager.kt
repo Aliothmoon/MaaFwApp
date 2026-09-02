@@ -53,6 +53,7 @@ class ScreenSaverOverlayManager(
     private var composeView: ComposeView? = null
     private var phaseJob: Job? = null
     private var logJob: Job? = null
+    private var boundExecutionId: String? = null
 
     private val _isShowing = MutableStateFlow(false)
     val isShowing: StateFlow<Boolean> = _isShowing.asStateFlow()
@@ -85,7 +86,9 @@ class ScreenSaverOverlayManager(
                 when {
                     // 开关只管「自动盖」；手动盖上的那次不受它影响
                     !previous.isBusy && current.isBusy ->
-                        if (appSettings.screenSaverEnabled.value) show()
+                        if (appSettings.screenSaverEnabled.value) {
+                            show(state.activeExecution?.executionId)
+                        }
 
                     // 结束就撤，别让用户回来面对一块黑屏还得先滑一下
                     previous.isBusy && !current.isBusy -> hide()
@@ -103,8 +106,13 @@ class ScreenSaverOverlayManager(
     // ── 显隐 ──
 
     /** 返回是否真的盖上了；没有悬浮窗权限时 addView 会抛，这里吞掉并如实回 false */
-    suspend fun show(): Boolean = withContext(Dispatchers.Main.immediate) {
-        if (_isShowing.value) return@withContext true
+    suspend fun show(executionId: String? = null): Boolean = withContext(Dispatchers.Main.immediate) {
+        val binding = executionId ?: runnerPort.state.value.activeExecution?.executionId
+        if (_isShowing.value) {
+            boundExecutionId = binding
+            startLogRelay()
+            return@withContext true
+        }
         if (appSettings.runMode.value != RunMode.BACKGROUND) {
             Timber.w("Not in background mode; ignoring screen-saver show request")
             return@withContext false
@@ -114,6 +122,7 @@ class ScreenSaverOverlayManager(
         runCatching { windowManager.addView(view, createLayoutParams()) }
             .onSuccess {
                 composeView = view
+                boundExecutionId = binding
                 viewModelOwner.start()
                 startLogRelay()
                 _isShowing.value = true
@@ -124,14 +133,16 @@ class ScreenSaverOverlayManager(
     }
 
     suspend fun hide() = withContext(Dispatchers.Main.immediate) {
-        val view = composeView ?: return@withContext
+        val view = composeView
         composeView = null
+        boundExecutionId = null
         _isShowing.value = false
         logJob?.cancel()
         logJob = null
         // 清掉，否则下一轮盖上的瞬间显示的是上一轮的尾句
         latestLog.value = null
         viewModelOwner.stop()
+        if (view == null) return@withContext
         runCatching { windowManager.removeView(view) }
             .onSuccess { Timber.d("Screen saver dismissed") }
             .onFailure { Timber.e(it, "Failed to remove screen saver") }
@@ -140,7 +151,13 @@ class ScreenSaverOverlayManager(
     private fun startLogRelay() {
         logJob?.cancel()
         logJob = scope.launch {
-            runnerPort.events.collect { latestLog.value = it.toLogText() }
+            runnerPort.events.collect { envelope ->
+                if (boundExecutionId == envelope.executionId) {
+                    envelope.event.toLogText().takeIf(String::isNotBlank)?.let {
+                        latestLog.value = it
+                    }
+                }
+            }
         }
     }
 

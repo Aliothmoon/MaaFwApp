@@ -67,8 +67,9 @@ private val NON_ESSENTIAL_KINDS =
 
 /** 屏保那一行只要一句话，带上 details_json 就糊了 */
 fun RunnerEvent.toLogText(): String = when (this) {
+    is RunnerEvent.ExecutionFinished -> ""
     is RunnerEvent.Log -> message
-    is RunnerEvent.Progress -> "$taskName $completed/$total"
+    is RunnerEvent.Progress -> "${taskLabel ?: taskName} $completed/$total"
     is RunnerEvent.Focus -> focus.content
     is RunnerEvent.AgentOutput -> line
     is RunnerEvent.AgentConnected -> label

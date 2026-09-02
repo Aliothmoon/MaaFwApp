@@ -36,13 +36,24 @@ class EnvironmentHooksTest {
     )
 
     private fun context(runMode: RunMode = RunMode.BACKGROUND) =
-        RunContext(RunTrigger.Manual, runMode, plan, journal = DiscardingRunJournal)
+        RunContext(
+            executionId = "execution-1",
+            trigger = RunTrigger.Manual,
+            runMode = runMode,
+            plan = plan,
+            journal = DiscardingRunJournal,
+        )
 
     private class RecordingScreenSaver(private val showSucceeds: Boolean = true) : RunScreenSaver {
         var shown = 0
         var hidden = 0
-        override suspend fun show(): Boolean {
-            if (showSucceeds) shown++
+        val shownExecutionIds = mutableListOf<String?>()
+
+        override suspend fun show(executionId: String?): Boolean {
+            if (showSucceeds) {
+                shown++
+                shownExecutionIds += executionId
+            }
             return showSucceeds
         }
 
@@ -150,6 +161,7 @@ class EnvironmentHooksTest {
         release!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
         assertEquals(1, saver.shown)
+        assertEquals(listOf("execution-1"), saver.shownExecutionIds)
         assertEquals(1, saver.hidden)
     }
 

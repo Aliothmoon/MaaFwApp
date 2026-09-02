@@ -77,6 +77,21 @@ class RunProgressSnapshotTest {
     }
 
     @Test
+    fun `duplicate task names use the captured instance label`() {
+        val snapshot = RunProgressSnapshots.from(
+            phase = RunnerPhase.Running,
+            execution = execution(
+                done = 1,
+                total = 2,
+                currentTaskName = "Fight",
+                currentTaskLabel = "第二次",
+            ),
+            statusText = null,
+        )
+        assertEquals("1/2 · 第二次", snapshot.contentText)
+    }
+
+    @Test
     fun `stopping keeps a determinate bar`() {
         val snapshot = RunProgressSnapshots.from(
             phase = RunnerPhase.Stopping,
@@ -114,11 +129,13 @@ class RunProgressSnapshotTest {
         done: Int,
         total: Int,
         currentTaskName: String? = null,
+        currentTaskLabel: String? = null,
         taskLabels: Map<String, String> = emptyMap(),
     ) = ActiveExecution(
         executionId = "e1",
         runConfigurationId = RunConfigurationId("c1"),
         currentTaskName = currentTaskName,
+        currentTaskLabel = currentTaskLabel,
         completedTaskCount = done,
         totalTaskCount = total,
         taskResults = emptyList(),

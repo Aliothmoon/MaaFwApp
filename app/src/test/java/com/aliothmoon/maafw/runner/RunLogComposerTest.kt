@@ -10,7 +10,12 @@ import org.junit.Test
 class RunLogComposerTest {
 
     private val composer = RunLogComposer()
-    private val context = RunLogContext(currentTaskName = "启动应用", resourceLabel = "官服")
+    private val context = RunLogContext(
+        currentTaskName = "启动应用",
+        taskLabels = mapOf("Start" to "启动应用"),
+        entryLabels = mapOf("Start" to "启动应用"),
+        resourceLabel = "官服",
+    )
 
     private var nextId = 0L
     private var clock = 0L
@@ -44,6 +49,45 @@ class RunLogComposerTest {
             RunLogContext(),
         )
         assertEquals(UiText.Resource(R.string.run_log_task_starting, listOf("Start")), entry?.text)
+    }
+
+    @Test
+    fun `progress prefers the materialized task label`() {
+        val entry = compose(RunnerEvent.Progress("internal_start", 1, 3, "每日启动"))
+
+        assertEquals(UiText.Verbatim("每日启动 1/3"), entry?.text)
+    }
+
+    @Test
+    fun `task callbacks keep their own task when progress already advanced`() {
+        val entry = RunLogComposer().compose(
+            RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"rich_room"}"""),
+            1,
+            0,
+            RunLogContext(
+                currentTaskName = "ninja_book",
+                taskLabels = mapOf("rich_room" to "丰饶之间", "ninja_book" to "忍法帖"),
+                entryLabels = mapOf("rich_room" to "丰饶之间"),
+            ),
+        )
+
+        assertEquals(UiText.Resource(R.string.run_log_task_failed, listOf("丰饶之间")), entry?.text)
+    }
+
+    @Test
+    fun `entry labels do not collide with task-name labels`() {
+        val entry = RunLogComposer().compose(
+            RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"Fight"}"""),
+            1,
+            0,
+            RunLogContext(
+                currentTaskName = "Fight",
+                taskLabels = mapOf("Fight" to "错误任务"),
+                entryLabels = mapOf("Fight" to "战斗"),
+            ),
+        )
+
+        assertEquals(UiText.Resource(R.string.run_log_task_succeeded, listOf("战斗")), entry?.text)
     }
 
     @Test

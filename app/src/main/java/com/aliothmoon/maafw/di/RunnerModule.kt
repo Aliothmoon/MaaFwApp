@@ -105,7 +105,7 @@ val runnerModule = module {
     single<RunScreenSaver> {
         val manager = get<ScreenSaverOverlayManager>()
         object : RunScreenSaver {
-            override suspend fun show(): Boolean = manager.show()
+            override suspend fun show(executionId: String?): Boolean = manager.show(executionId)
             override suspend fun hide() = manager.hide()
         }
     }

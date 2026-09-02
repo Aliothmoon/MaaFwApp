@@ -11,11 +11,15 @@ import com.aliothmoon.maafw.i18n.UiText
  */
 interface RunJournal {
 
-    suspend fun begin(plan: RunPlan)
+    suspend fun begin(plan: RunPlan, executionId: String)
 
-    suspend fun end(reason: RunEndReason)
+    suspend fun end(executionId: String, reason: RunEndReason)
 
-    fun note(level: RunNote, text: UiText)
+    /** 生产会话日志用：先等事件流终局被消费，再写 Footer 并关文件 */
+    suspend fun endAfterDrain(executionId: String, reason: RunEndReason) =
+        end(executionId, reason)
+
+    fun note(executionId: String, level: RunNote, text: UiText)
 }
 
 /** 外壳自产行的级别；与 MXU 回调那套 [RunLogKind] 分开，避免 hook 去选 Verbose / Agent */
@@ -25,15 +29,18 @@ enum class RunNote {
     Error,
 }
 
-fun RunJournal.info(text: UiText) = note(RunNote.Info, text)
+fun RunJournal.info(executionId: String, text: UiText) =
+    note(executionId, RunNote.Info, text)
 
-fun RunJournal.warn(text: UiText) = note(RunNote.Warning, text)
+fun RunJournal.warn(executionId: String, text: UiText) =
+    note(executionId, RunNote.Warning, text)
 
-fun RunJournal.error(text: UiText) = note(RunNote.Error, text)
+fun RunJournal.error(executionId: String, text: UiText) =
+    note(executionId, RunNote.Error, text)
 
 /** 单测与没有落盘的调用方 */
 object DiscardingRunJournal : RunJournal {
-    override suspend fun begin(plan: RunPlan) = Unit
-    override suspend fun end(reason: RunEndReason) = Unit
-    override fun note(level: RunNote, text: UiText) = Unit
+    override suspend fun begin(plan: RunPlan, executionId: String) = Unit
+    override suspend fun end(executionId: String, reason: RunEndReason) = Unit
+    override fun note(executionId: String, level: RunNote, text: UiText) = Unit
 }
