@@ -144,7 +144,16 @@ class RunLauncher(
                 is RunPlanResult.Success -> built.plan
             }
 
-            val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal)
+            val ctx = RunContext(
+                executionId = java.util.UUID.randomUUID().toString(),
+                trigger = trigger,
+                runMode = runMode(),
+                plan = plan,
+                acknowledged = acknowledged,
+                signals = signals,
+                progress = progress,
+                journal = journal,
+            )
             runPrechecks(ctx)?.let { return it }
 
             if (force) preemptRunning()
@@ -154,7 +163,7 @@ class RunLauncher(
                 return RunLaunchResult.Blocked(halt.reason)
             }
 
-            when (val command = runnerPort.start(plan)) {
+            when (val command = runnerPort.start(plan, ctx.executionId)) {
                 RunnerCommandResult.Accepted -> Unit
                 is RunnerCommandResult.Rejected -> {
                     finalize(engaged, RunEndReason.NotRun(NotRunCause.Rejected))

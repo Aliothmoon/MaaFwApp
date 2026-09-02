@@ -26,7 +26,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 特权进程内的 MaaFramework 执行器
@@ -40,11 +39,12 @@ class MaaRunner(private val agentHost: AgentHost) {
         Thread(r, "maa-runner").apply { isDaemon = true }
     }
 
+    private val callbackDispatcher = MaaRunnerCallbackDispatcher()
+
     /** Binder stop can arrive while the worker is still preparing native handles. */
     private val lifecycleLock = Any()
     private var running = false
     private var stopRequested = false
-    private val callbackRef = AtomicReference<IMaaRunnerCallback?>()
 
     // native handle
     private var resource: Pointer? = null
@@ -79,16 +79,15 @@ class MaaRunner(private val agentHost: AgentHost) {
     /** JNA 回调必须被强引用住，否则会被 GC，native 回调时踩空 */
     private val eventSink = MaaFrameworkLibrary.MaaEventCallback { _, message, detailsJson, _ ->
         Ln.i("MaaEventCallback on $message")
-        runCatching {
-            callbackRef.get()?.onEvent(message.orEmpty(), detailsJson.orEmpty())
-        }.onFailure {
-            // 回调穿回 native 会直接崩进程
-            Ln.w("MaaRunner: event dispatch failed: ${it.message}")
+        // Native callback threads must not block on Binder. Queue the event, then deliver all
+        // runner callbacks from one thread so the terminal event cannot overtake queued raw data.
+        callbackDispatcher.dispatch {
+            onEvent(message.orEmpty(), detailsJson.orEmpty())
         }
     }
 
     fun setCallback(callback: IMaaRunnerCallback?) {
-        callbackRef.set(callback)
+        callbackDispatcher.setCallback(callback)
     }
 
     /** agent child 的一行输出；由 [AgentHost] 的泵线程调用，app 侧不在时静默丢弃 */
@@ -201,6 +200,7 @@ class MaaRunner(private val agentHost: AgentHost) {
 
     fun destroy() {
         worker.shutdownNow()
+        callbackDispatcher.close()
         releaseNative()
     }
 
@@ -261,11 +261,13 @@ class MaaRunner(private val agentHost: AgentHost) {
             reason = "${e.javaClass.simpleName}: ${e.message}"
             Ln.e("MaaRunner: run failed: $reason")
         } finally {
+            // Keep this run marked as running until its terminal Binder call has been sent.
+            // This is the ordering barrier for raw events already queued by the same execution.
+            notify(waitForDispatch = true) { onFinished(outcome, reason) }
             synchronized(lifecycleLock) {
                 running = false
                 stopRequested = false
             }
-            notify { onFinished(outcome, reason) }
         }
     }
 
@@ -543,10 +545,15 @@ class MaaRunner(private val agentHost: AgentHost) {
         loadedResourcePaths = emptyList()
     }
 
-    private inline fun notify(block: IMaaRunnerCallback.() -> Unit) {
-        val callback = callbackRef.get() ?: return
-        runCatching { callback.block() }
-            .onFailure { Ln.w("MaaRunner: callback failed: ${it.message}") }
+    private fun notify(
+        waitForDispatch: Boolean = false,
+        block: IMaaRunnerCallback.() -> Unit,
+    ) {
+        if (waitForDispatch) {
+            callbackDispatcher.dispatchAndAwait(block)
+        } else {
+            callbackDispatcher.dispatch(block)
+        }
     }
 
     private fun statusText(status: Int): String = when (status) {

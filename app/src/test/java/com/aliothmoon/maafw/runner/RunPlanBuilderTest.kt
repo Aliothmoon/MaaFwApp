@@ -71,6 +71,19 @@ class RunPlanBuilderTest {
     }
 
     @Test
+    fun `用户重命名优先于定义展示名并去掉空白`() {
+        val result = RunPlanBuilder.build(
+            definition,
+            configWith(ConfiguredTask("启动游戏", customLabel = "  每日启动  ")),
+        )
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        assertEquals(
+            "每日启动",
+            (result as RunPlanResult.Success).plan.tasks.single().label,
+        )
+    }
+
+    @Test
     fun `夹具 PI 的 agent 声明原样冻结进 RunPlan`() {
         val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")))
         assertTrue("应编译成功: $result", result is RunPlanResult.Success)

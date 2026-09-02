@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface StubTaskOutcome {
@@ -39,11 +38,11 @@ class StubRunnerPort(
     private val _state = MutableStateFlow(RunnerState())
     override val state: StateFlow<RunnerState> = _state.asStateFlow()
 
-    private val _events = MutableSharedFlow<RunnerEvent>(
+    private val _events = MutableSharedFlow<RunnerEventEnvelope>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    override val events: Flow<RunnerEvent> = _events.asSharedFlow()
+    override val events: Flow<RunnerEventEnvelope> = _events.asSharedFlow()
 
     private val commandMutex = Mutex()
 
@@ -54,22 +53,30 @@ class StubRunnerPort(
         val stopRequested = AtomicBoolean(false)
     }
 
-    override suspend fun start(plan: RunPlan): RunnerCommandResult = commandMutex.withLock {
+    override suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult = commandMutex.withLock {
         if (_state.value.phase != RunnerPhase.Idle) {
             return RunnerCommandResult.Rejected(uiTextFromFramework("Busy"))
         }
-        val context = ExecutionContext(UUID.randomUUID().toString())
+        val context = ExecutionContext(executionId)
         currentContext = context
         val execution = ActiveExecution(
             executionId = context.executionId,
             runConfigurationId = plan.runConfigurationId,
             currentTaskName = null,
+            currentTaskLabel = null,
             completedTaskCount = 0,
             totalTaskCount = plan.tasks.size,
             taskResults = emptyList(),
             taskLabels = plan.taskLabelMap(),
         )
-        _state.update { it.copy(phase = RunnerPhase.Preparing, activeExecution = execution) }
+        _state.update {
+            it.copy(
+                phase = RunnerPhase.Preparing,
+                activeExecution = execution,
+                latestExecutionId = context.executionId,
+                latestResult = null,
+            )
+        }
         scope.launch { execute(plan, context) }
         RunnerCommandResult.Accepted
     }
@@ -86,31 +93,43 @@ class StubRunnerPort(
     }
 
     private suspend fun execute(plan: RunPlan, context: ExecutionContext) {
-        _events.tryEmit(RunnerEvent.Log("准备运行环境（${plan.resource.name}）"))
+        emit(context.executionId, RunnerEvent.Log("准备运行环境（${plan.resource.name}）"))
         delay(scenario.prepareDelayMillis)
 
         scenario.preparationFailure?.let { reason ->
-            finish(ExecutionResult.Failed(uiTextFromFramework(reason)))
+            finish(context, ExecutionResult.Failed(uiTextFromFramework(reason)))
             return
         }
 
         val results = mutableListOf<TaskResult>()
         for ((index, task) in plan.tasks.withIndex()) {
             if (context.stopRequested.get()) break
+            val taskLabel = task.label.takeIf(String::isNotBlank) ?: task.taskName
             _state.update {
                 it.copy(
                     phase = RunnerPhase.Running,
                     activeExecution = it.activeExecution?.copy(
                         currentTaskName = task.taskName,
+                        currentTaskLabel = taskLabel,
                         completedTaskCount = index,
                         taskResults = results.toList(),
                     ),
                 )
             }
             if (scenario.emitProgress) {
-                _events.tryEmit(RunnerEvent.Progress(task.taskName, index, plan.tasks.size))
+                emit(
+                    context.executionId,
+                    RunnerEvent.Progress(task.taskName, index, plan.tasks.size, taskLabel),
+                    task.taskName,
+                    taskLabel,
+                )
             }
-            _events.tryEmit(RunnerEvent.Log("开始任务: ${task.taskName}"))
+            emit(
+                context.executionId,
+                RunnerEvent.Log("开始任务: ${task.taskName}"),
+                task.taskName,
+                taskLabel,
+            )
             delay(scenario.taskDelayMillis)
             if (context.stopRequested.get()) break
 
@@ -120,8 +139,11 @@ class StubRunnerPort(
                 is StubTaskOutcome.Failure -> TaskResult(task.taskName, success = false, message = outcome.message)
             }
             results += result
-            _events.tryEmit(
+            emit(
+                context.executionId,
                 RunnerEvent.Log(if (result.success) "任务完成: ${task.taskName}" else "任务失败: ${task.taskName}"),
+                task.taskName,
+                taskLabel,
             )
             _state.update {
                 it.copy(
@@ -138,12 +160,36 @@ class StubRunnerPort(
             results.any { !it.success } -> ExecutionResult.CompletedWithFailures(results.toList())
             else -> ExecutionResult.Completed(results.toList())
         }
-        finish(result)
+        finish(context, result)
     }
 
-    private fun finish(result: ExecutionResult) {
+    private fun finish(context: ExecutionContext, result: ExecutionResult) {
         currentContext = null
-        _events.tryEmit(RunnerEvent.Log("本轮执行结束: ${result::class.simpleName}"))
-        _state.update { RunnerState(phase = RunnerPhase.Idle, activeExecution = null, latestResult = result) }
+        emit(context.executionId, RunnerEvent.Log("本轮执行结束: ${result::class.simpleName}"))
+        emit(context.executionId, RunnerEvent.ExecutionFinished)
+        _state.update {
+            RunnerState(
+                phase = RunnerPhase.Idle,
+                activeExecution = null,
+                latestExecutionId = context.executionId,
+                latestResult = result,
+            )
+        }
+    }
+
+    private fun emit(
+        executionId: String,
+        event: RunnerEvent,
+        currentTaskName: String? = null,
+        currentTaskLabel: String? = null,
+    ) {
+        _events.tryEmit(
+            RunnerEventEnvelope(
+                executionId = executionId,
+                currentTaskName = currentTaskName,
+                currentTaskLabel = currentTaskLabel,
+                event = event,
+            ),
+        )
     }
 }

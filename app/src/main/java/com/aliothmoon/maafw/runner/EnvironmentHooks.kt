@@ -121,8 +121,8 @@ class ScreenSaverHook(
         if (!settings.screenSaverEnabled.value) return EngageResult.Skipped()
 
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
-        if (!screenSaver.show()) {
-            ctx.journal.warn(uiTextOf(R.string.run_log_screen_saver_skipped))
+        if (!screenSaver.show(ctx.executionId)) {
+            ctx.journal.warn(ctx.executionId, uiTextOf(R.string.run_log_screen_saver_skipped))
             return EngageResult.Skipped()
         }
         return EngageResult.Engaged(Release { screenSaver.hide() })
@@ -183,10 +183,16 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
         return EngageResult.Engaged(Release { reason ->
             when {
                 reason !is RunEndReason.Ran ->
-                    ctx.journal.info(uiTextOf(R.string.run_log_auto_sleep_skipped_not_run))
+                    ctx.journal.info(
+                        ctx.executionId,
+                        uiTextOf(R.string.run_log_auto_sleep_skipped_not_run),
+                    )
 
                 skipIfAwake && !tookOverIdleDevice ->
-                    ctx.journal.info(uiTextOf(R.string.run_log_auto_sleep_skipped_awake))
+                    ctx.journal.info(
+                        ctx.executionId,
+                        uiTextOf(R.string.run_log_auto_sleep_skipped_awake),
+                    )
 
                 else -> servicePort.callOrDefault("lockAndSleep", WakeUnlockResult.IPC_FAILED) {
                     it.lockAndSleep()
@@ -249,6 +255,6 @@ object CountdownHook : RunEnvHook {
  */
 interface RunScreenSaver {
     /** 返回是否确实由本次调用盖上 */
-    suspend fun show(): Boolean
+    suspend fun show(executionId: String?): Boolean
     suspend fun hide()
 }
