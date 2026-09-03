@@ -140,8 +140,6 @@ class MaaRunner(private val agentHost: AgentHost) {
             MaaGlobalOption.STDOUT_LEVEL,
             if (debug) MaaLoggingLevel.INFO else MaaLoggingLevel.ERROR,
         )
-        // 节点出错时自动存一张现场图，比事后复现便宜；SAVE_DRAW 会每次识别都写盘，暂不开
-        setBoolOption(lib, MaaGlobalOption.SAVE_ON_ERROR, debug)
         Ln.i("MaaRunner: global options applied, logDir=$logDir debug=$debug")
     }
 
@@ -157,12 +155,6 @@ class MaaRunner(private val agentHost: AgentHost) {
         val memory = Memory(Int.SIZE_BYTES.toLong())
         memory.setInt(0, value)
         return lib.MaaGlobalSetOption(key, memory, Int.SIZE_BYTES.toLong()).toInt() != 0
-    }
-
-    private fun setBoolOption(lib: MaaFrameworkLibrary, key: Int, value: Boolean): Boolean {
-        val memory = Memory(1)
-        memory.setByte(0, if (value) 1 else 0)
-        return lib.MaaGlobalSetOption(key, memory, 1).toInt() != 0
     }
 
     fun isRunning(): Boolean = synchronized(lifecycleLock) { running }
