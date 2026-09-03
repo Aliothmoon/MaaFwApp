@@ -342,6 +342,7 @@ sealed interface SessionIntent {
     data object RefreshPermissions : SessionIntent
 
     data object ClearRunLog : SessionIntent
+    data object ClearDiagnosticData : SessionIntent
 }
 
 /** 一次性 Effect，不进 UiState */
