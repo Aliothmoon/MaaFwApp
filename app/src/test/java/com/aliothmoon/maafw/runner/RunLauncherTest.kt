@@ -202,7 +202,8 @@ class RunLauncherTest {
         // 悬浮窗手动开跑是前台模式的正路
         assertEquals(RunLaunchResult.Started, launchIn(RunMode.FOREGROUND))
         assertEquals(RunLaunchResult.Started, launchIn(RunMode.BACKGROUND))
-        assertTrue(launchIn(RunMode.FOREGROUND, RunTrigger.Schedule("s1")) is RunLaunchResult.Blocked)
+        val blocked = launchIn(RunMode.FOREGROUND, RunTrigger.Schedule("s1")) as RunLaunchResult.Blocked
+        assertTrue(blocked.reason.isResource(R.string.runner_foreground_schedule_blocked))
     }
 
     /** 确认循环：先问，带着 token 重跑就该放行 */

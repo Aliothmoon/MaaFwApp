@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.domain.RunMode
+
 /** 一条规则加上它算出来的下次触发时刻；后者不落盘，每次由闹钟规则现算 */
 data class ScheduleRow(
     val strategy: ScheduleStrategy,
@@ -16,6 +18,7 @@ data class ScheduleConfigurationOption(
 )
 
 data class ScheduleUiState(
+    val runMode: RunMode = RunMode.BACKGROUND,
     val rows: List<ScheduleRow> = emptyList(),
     /** 可绑定的运行配置；空 = 用户还没建过 */
     val configurations: List<ScheduleConfigurationOption> = emptyList(),

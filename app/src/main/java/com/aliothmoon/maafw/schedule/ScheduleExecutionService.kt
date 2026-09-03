@@ -180,10 +180,14 @@ class ScheduleExecutionService : Service() {
             Timber.i("Schedule %s duplicate delivery, dropped", strategy.id)
             return
         }
-        if (outcome.result != TriggerResult.STARTED) {
-            Timber.w("Schedule %s did not start: %s", strategy.id, launchResult)
-        }
         val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
+        if (outcome.result != TriggerResult.STARTED) {
+            Timber.w(
+                "Schedule %s did not start: %s",
+                strategy.id,
+                frozen ?: launchResult.toString(),
+            )
+        }
 
         triggerLog.append(
             TriggerLogEntry(
