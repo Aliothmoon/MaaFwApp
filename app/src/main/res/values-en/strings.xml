@@ -266,6 +266,8 @@
     <string name="schedule_next_trigger">Next %1$s</string>
     <string name="schedule_next_none">Incomplete rule, will not fire</string>
     <string name="schedule_disabled">Disabled</string>
+    <string name="schedule_foreground_reminder_title">Foreground mode only supports scheduled reminders</string>
+    <string name="schedule_foreground_reminder_hint">Switch to background mode to use automatic starts</string>
     <string name="schedule_exact_alarm_blocked">Exact alarms are not allowed</string>
     <string name="schedule_exact_alarm_hint">Schedules still fire on time, but the status bar shows an alarm icon</string>
     <string name="schedule_exact_alarm_grant">Allow</string>

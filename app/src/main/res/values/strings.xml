@@ -260,6 +260,8 @@
     <string name="schedule_next_trigger">下次 %1$s</string>
     <string name="schedule_next_none">规则不完整，不会触发</string>
     <string name="schedule_disabled">已停用</string>
+    <string name="schedule_foreground_reminder_title">前台模式仅支持到点提醒功能</string>
+    <string name="schedule_foreground_reminder_hint">如需使用自动启动，请切换为后台模式</string>
     <string name="schedule_exact_alarm_blocked">系统未允许精确闹钟</string>
     <string name="schedule_exact_alarm_hint">仍会按时触发，但状态栏会多一个闹钟图标</string>
     <string name="schedule_exact_alarm_grant">去允许</string>

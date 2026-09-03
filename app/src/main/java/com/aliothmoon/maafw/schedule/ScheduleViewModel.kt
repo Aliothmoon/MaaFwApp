@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.schedule
 
 import androidx.lifecycle.ViewModel
 import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.settings.AppSettingsGateway
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +36,7 @@ class ScheduleViewModel(
     private val alarms: ScheduleAlarmManager,
     private val triggerLog: ScheduleTriggerLog,
     configurationStore: UserConfigurationStore,
+    appSettings: AppSettingsGateway,
 ) : ViewModel() {
 
     private val exactAlarmAllowed = MutableStateFlow(alarms.canScheduleExact())
@@ -54,8 +56,10 @@ class ScheduleViewModel(
         exactAlarmAllowed,
         loadedLog,
         configurations,
-    ) { strategies, exact, log, configs ->
+        appSettings.runMode,
+    ) { strategies, exact, log, configs, mode ->
         ScheduleUiState(
+            runMode = mode,
             rows = strategies.map { strategy ->
                 val missing = configs.options.none { it.id == strategy.runConfigurationId }
                 ScheduleRow(
