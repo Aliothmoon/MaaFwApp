@@ -515,6 +515,12 @@
     <string name="settings_log_archive_desc">View the execution log of each run</string>
     <string name="settings_log_error_desc">View the app\'s own exceptions and errors</string>
     <string name="settings_log_export_desc">Pack all logs into a ZIP file to share</string>
+    <string name="settings_log_cleanup">Clear diagnostic data</string>
+    <string name="settings_log_cleanup_desc">Delete app and MaaFramework logs, run records, screenshots, and diagnostic files</string>
+    <string name="settings_log_cleanup_title">Clear diagnostic data</string>
+    <string name="settings_log_cleanup_message">All logs, run records, screenshots, and diagnostic files will be deleted, then the app will restart. This cannot be undone.</string>
+    <string name="settings_log_cleanup_confirm">Clear and restart</string>
+    <string name="settings_log_cleanup_failed">Failed to clear logs</string>
 
     <!-- Diagnostic texts; built by DiagnosticMessages in domain/Diagnostics.kt -->
     <string name="diagnostic_severity_warning">Warning</string>

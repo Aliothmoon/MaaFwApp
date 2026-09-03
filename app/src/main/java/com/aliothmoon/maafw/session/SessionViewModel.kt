@@ -48,6 +48,7 @@ import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.uiTextFormatted
 import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.log.LogCleanupService
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.telemetry.isDebugProjectVersion
@@ -117,6 +118,8 @@ class SessionViewModel(
     private val focusDispatcher: FocusDispatcher,
     /** 运行日志的产地；VM 只转发它的流并转达「清空」 */
     private val recorder: RunLogRecorder,
+    /** 诊断产物清空后必须重启，让日志管线拿到新的完整上文 */
+    private val logCleanup: LogCleanupService,
     private val piInstall: PiInstallCoordinator,
 ) : ViewModel() {
 
@@ -541,6 +544,14 @@ class SessionViewModel(
             SessionIntent.RefreshPermissions -> permissionGateway.refresh()
 
             SessionIntent.ClearRunLog -> recorder.clear()
+
+            SessionIntent.ClearDiagnosticData -> guarded {
+                if (logCleanup.clearAll()) {
+                    emitEffect(SessionEffect.RestartApp)
+                } else {
+                    emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.settings_log_cleanup_failed)))
+                }
+            }
         }
     }
 
