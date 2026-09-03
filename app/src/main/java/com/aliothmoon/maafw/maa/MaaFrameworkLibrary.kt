@@ -130,7 +130,6 @@ object MaaGlobalOption {
     const val SAVE_DRAW = 2
     const val STDOUT_LEVEL = 4
     const val DEBUG_MODE = 6
-    const val SAVE_ON_ERROR = 7
 }
 
 /** `MaaLoggingLevelEnum` */
