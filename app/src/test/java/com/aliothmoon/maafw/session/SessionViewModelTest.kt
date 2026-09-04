@@ -43,6 +43,8 @@ import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.GameFpsReader
+import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PassthroughFocusContentResolver
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.isEssential
@@ -197,6 +199,13 @@ class SessionViewModelTest {
             appSettings = settings,
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
         )
         return Triple(vm, store, runner)
@@ -222,6 +231,13 @@ class SessionViewModelTest {
             appSettings = settings,
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
         )
     }
