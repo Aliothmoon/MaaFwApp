@@ -138,4 +138,7 @@ interface RemoteService {
      * 走文件不回传字节：一张 720p PNG 几百 KB，binder 事务缓冲总共才 1MB
      */
     boolean saveCachedImage(String path) = 75;
+
+    /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
+    float getGameFps() = 76;
 }

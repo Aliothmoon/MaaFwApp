@@ -24,6 +24,7 @@ open class FakePrivilegedService : RemoteService {
     var unlockResult: Int = WakeUnlockResult.OK
     var lockAndSleepResult: Int = WakeUnlockResult.OK
     var screenOn: Boolean = true
+    var currentGameFps: Float = -1f
 
     var unlockCalls: MutableList<String> = mutableListOf()
         private set
@@ -60,6 +61,8 @@ open class FakePrivilegedService : RemoteService {
     }
 
     override fun isScreenOn(): Boolean = screenOn
+
+    override fun getGameFps(): Float = currentGameFps
 
     // ── 其余：本测试用不到，保持无副作用的零值 ──
 

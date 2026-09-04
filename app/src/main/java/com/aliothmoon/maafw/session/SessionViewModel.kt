@@ -32,6 +32,7 @@ import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.runner.RunLogEntry
@@ -117,6 +118,8 @@ class SessionViewModel(
     private val focusDispatcher: FocusDispatcher,
     /** 运行日志的产地；VM 只转发它的流并转达「清空」 */
     private val recorder: RunLogRecorder,
+    /** 后台运行期的实时 FPS；单独转发，不并入聚合 UI 状态 */
+    private val gameFpsWatcher: GameFpsWatcher,
     private val piInstall: PiInstallCoordinator,
 ) : ViewModel() {
 
@@ -175,6 +178,9 @@ class SessionViewModel(
      * 一次滑动能连发几十个触点，混进聚合态会让整棵树按触摸频率重组
      */
     val previewMarkers: StateFlow<List<PreviewTouchMarker>> = previewPort.markers
+
+    /** FPS 每秒更新，独立成流避免整棵 UI 树跟着重组 */
+    val gameFps: StateFlow<Float?> = gameFpsWatcher.fps
 
     /**
      * 运行日志，同样单独一条流：一次长跑上千条，混进聚合态会让整棵树按日志频率重组
