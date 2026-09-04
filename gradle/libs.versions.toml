@@ -2,6 +2,7 @@
 agp = "9.2.1"
 kotlin = "2.3.21"
 ksp = "2.3.9"
+spotless = "7.2.1"
 kotlinpoet = "2.3.0"
 snakeyamlEngine = "2.9"
 floatingX = "2.3.7"
@@ -137,3 +138,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "androidxBenchmark" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
