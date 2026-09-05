@@ -390,6 +390,7 @@
     <string name="runner_quick_options">Options</string>
     <string name="quick_actions_title">Quick actions</string>
     <string name="quick_settings_title">Automation</string>
+    <string name="quick_action_reset_task_list">Reset task list</string>
     <string name="quick_action_screen_saver">Screen off</string>
     <string name="quick_action_close_app">Close target app</string>
     <string name="quick_setting_close_app_after_task">Close the target app when task ends</string>
