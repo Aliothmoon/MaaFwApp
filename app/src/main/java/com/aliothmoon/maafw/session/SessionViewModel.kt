@@ -490,6 +490,14 @@ class SessionViewModel(
                 }
             }
 
+            is SessionIntent.ResetTaskList -> guarded {
+                val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition
+                if (definition == null) return@guarded
+                mutateConfiguration(intent.configurationId) { configuration ->
+                    ConfigurationResolver.resetTaskList(definition, configuration)
+                }
+            }
+
             is SessionIntent.SetGlobalOption -> guarded {
                 val value = intent.value.secured(intent.optionName)
                 configurationStore.update {
