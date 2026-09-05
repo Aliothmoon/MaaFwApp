@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.AppWatchdog
+import com.aliothmoon.maafw.remote.internal.GameFpsMonitor
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
@@ -150,6 +151,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun setVirtualDisplayMode(mode: Int): Boolean = when (mode) {
         DisplayMode.PRIMARY -> {
+            GameFpsMonitor.stop()
             VirtualDisplayManager.stop()
             virtualDisplayMode.set(mode)
             true
@@ -181,6 +183,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun stopVirtualDisplay() {
         AppWatchdog.stopWatching()
+        GameFpsMonitor.stop()
         when (virtualDisplayMode.get()) {
             DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
             DisplayMode.BACKGROUND -> {
@@ -194,7 +197,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun isAppOnVirtualDisplay(packageName: String): Boolean {
         val displayId = VirtualDisplayManager.getDisplayId()
         if (displayId == DefaultDisplayConfig.DISPLAY_NONE) return true
-        return ActivityUtils.isAppOnDisplay(packageName, displayId)
+        return ActivityUtils.isAppOnDisplay(packageName, displayId).also { onDisplay ->
+            if (onDisplay) GameFpsMonitor.ensureStarted(packageName)
+        }
     }
 
     override fun moveAppToVirtualDisplay(packageName: String): Boolean {
@@ -284,6 +289,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun saveCachedImage(path: String?): Boolean =
         !path.isNullOrBlank() && runner.saveCachedImage(path)
 
+    override fun getGameFps(): Float = GameFpsMonitor.currentFps()
+
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
 
     /**
@@ -344,6 +351,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
      * 它自己按 flag 文件判要不要动手，没改过时是空操作
      */
     private fun cleanup() {
+        step("game fps") { GameFpsMonitor.stop() }
         step("screen size") { ScreenManager.destroy() }
         step("power") { PowerController.destroy() }
         step("primary display") { PrimaryDisplayManager.stop() }

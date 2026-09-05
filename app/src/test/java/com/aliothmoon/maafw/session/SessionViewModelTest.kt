@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
+import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
@@ -43,6 +44,8 @@ import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.GameFpsReader
+import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PassthroughFocusContentResolver
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.isEssential
@@ -197,6 +200,13 @@ class SessionViewModelTest {
             appSettings = settings,
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
         )
         return Triple(vm, store, runner)
@@ -222,6 +232,13 @@ class SessionViewModelTest {
             appSettings = settings,
             focusDispatcher = focusDispatcher,
             recorder = recorderFor(runner, focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
         )
     }
@@ -402,6 +419,40 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun `reset task list clears options only for selected configuration`() = runTest(mainDispatcher) {
+        val activeId = RunConfigurationId("c1")
+        val otherId = RunConfigurationId("c2")
+        val optionValues = mapOf("option" to OptionValue.SingleCase("custom"))
+        val store = InMemoryUserConfigurationStore(
+            UserConfiguration(
+                initialized = true,
+                activeResourceName = "官服",
+                configurations = listOf(
+                    RunConfiguration(
+                        activeId,
+                        "日常",
+                        listOf(ConfiguredTask("启动游戏", optionValues = optionValues, instanceId = "t1")),
+                    ),
+                    RunConfiguration(
+                        otherId,
+                        "备份",
+                        listOf(ConfiguredTask("启动游戏", optionValues = optionValues, instanceId = "t2")),
+                    ),
+                ),
+                activeConfigurationId = activeId,
+            ),
+        )
+        val (vm, _, _) = createVm(store = store)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.ResetTaskList(activeId))
+        advanceUntilIdle()
+
+        assertTrue(store.current.configurations[0].tasks.single().optionValues.isEmpty())
+        assertEquals(optionValues, store.current.configurations[1].tasks.single().optionValues)
+    }
+
+    @Test
     fun `busy runner rejects configuration mutation`() = runTest(mainDispatcher) {
         val runner = StubRunnerPort(
             scope = backgroundScope,
@@ -428,6 +479,37 @@ class SessionViewModelTest {
                     it.message.isResource(R.string.msg_locked_while_running)
             },
         )
+    }
+
+    @Test
+    fun `reset task list is blocked while busy`() = runTest(mainDispatcher) {
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val configId = RunConfigurationId("c1")
+        val initialStore = readyStore(
+            configId = configId,
+            tasks = listOf(
+                ConfiguredTask(
+                    "启动游戏",
+                    optionValues = mapOf("option" to OptionValue.SingleCase("custom")),
+                    instanceId = "t1",
+                ),
+            ),
+        )
+        val (vm, updatedStore, _) = createVm(store = initialStore, runner = runner)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        assertTrue(runner.state.value.phase.isBusy)
+        val before = updatedStore.current
+
+        vm.onIntent(SessionIntent.ResetTaskList(configId))
+        advanceUntilIdle()
+
+        assertEquals(before, updatedStore.current)
     }
 
     @Test

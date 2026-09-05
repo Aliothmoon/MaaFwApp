@@ -383,6 +383,7 @@
     <string name="runner_quick_options">快捷选项</string>
     <string name="quick_actions_title">快捷操作</string>
     <string name="quick_settings_title">自动设置</string>
+    <string name="quick_action_reset_task_list">重置任务列表</string>
     <string name="quick_action_screen_saver">熄屏挂机</string>
     <string name="quick_action_close_app">关闭目标应用</string>
     <string name="quick_setting_close_app_after_task">任务自动结束时关闭目标应用</string>
@@ -462,6 +463,8 @@
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
     <string name="run_log_app_unknown">未知应用</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
+    <string name="run_log_game_fps_low">游戏画面帧率仅 %1$d FPS，低于 30，自动战斗可能出错；请在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_game_fps_degraded">游戏画面帧率 %1$d FPS，低于 50，战斗时机可能不准；建议在游戏设置中开启高帧率模式，并关闭省电模式</string>
 
     <!-- 历史日志：每轮运行落盘一份 -->
     <string name="log_archive_title">运行历史</string>
