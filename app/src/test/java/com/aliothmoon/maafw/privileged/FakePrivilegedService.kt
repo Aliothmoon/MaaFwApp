@@ -31,6 +31,7 @@ open class FakePrivilegedService : RemoteService {
         private set
     var stopTargetAppCount: Int = 0
         private set
+    var virtualDisplayTopPackage: String? = "com.example.app"
 
     var runnerCallback: IMaaRunnerCallback? = null
         private set
@@ -103,6 +104,7 @@ open class FakePrivilegedService : RemoteService {
     override fun testUnlock(credential: String?): Int = unlockResult
     override fun watchdogState(): Int = 0
     override fun watchdogTargetPackage(): String = ""
+    override fun virtualDisplayTopPackage(): String? = virtualDisplayTopPackage
 
     /** 缓存帧要真 controller 才有；测试里没有可落盘的东西 */
     override fun saveCachedImage(path: String?): Boolean = false

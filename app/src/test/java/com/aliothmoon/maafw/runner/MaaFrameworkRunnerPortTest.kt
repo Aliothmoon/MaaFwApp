@@ -86,6 +86,19 @@ class MaaFrameworkRunnerPortTest {
     }
 
     @Test
+    fun `empty virtual display is rejected before dispatch`() = runTest(dispatcher) {
+        val service = FakePrivilegedService().apply { virtualDisplayTopPackage = null }
+        val (runner, _) = port(this, service)
+
+        val result = runner.start(plan())
+        advanceUntilIdle()
+
+        assertTrue(result is RunnerCommandResult.Rejected)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertTrue(runner.state.value.latestResult is ExecutionResult.Failed)
+    }
+
+    @Test
     fun `stop during prepare is retried after start returns`() = runTest(dispatcher) {
         val service = FakePrivilegedService()
         val hold = CompletableDeferred<Unit>()

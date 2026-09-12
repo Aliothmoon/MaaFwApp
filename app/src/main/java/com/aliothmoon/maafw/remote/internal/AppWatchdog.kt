@@ -33,6 +33,9 @@ object AppWatchdog {
     /** pidof 查不到进程 */
     const val STATE_APP_DIED = 3
 
+    /** 虚拟屏上还没有任何顶层应用任务 */
+    const val STATE_VIRTUAL_DISPLAY_EMPTY = 4
+
     private const val POLL_INTERVAL_MS = 5000L
     private const val REPIN_GRACE_MS = 5000L
     private const val MAX_REPIN_ATTEMPTS = 3
@@ -95,7 +98,7 @@ object AppWatchdog {
 
         val pkg = targetPackage
         if (pkg == null) {
-            _state.value = STATE_IDLE
+            _state.value = STATE_VIRTUAL_DISPLAY_EMPTY
             return
         }
 

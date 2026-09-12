@@ -103,11 +103,17 @@ interface RemoteService {
     /** MaaFramework 版本；未加载返回 null */
     String maaVersion() = 54;
 
-    /** 看门狗状态：0=IDLE / 1=WATCHING / 2=APP_DIED（目标 app 是否仍在虚拟屏上） */
+    /** 看门狗状态：0=IDLE / 1=WATCHING / 2=DISPLAY_DRIFT / 3=APP_DIED / 4=VIRTUAL_DISPLAY_EMPTY */
     int watchdogState() = 60;
 
     /** 看门狗当下盯着的包名；没有目标时为空串。运行日志要把它写进那句提示里 */
     String watchdogTargetPackage() = 61;
+
+    /**
+     * 虚拟屏当前顶层任务的包名；无屏、无顶层任务或系统查询不可用时为 null。
+     * 它回答「屏上有没有 app」，不判断画面是不是黑屏或目标 UI 是否加载完成。
+     */
+    String virtualDisplayTopPackage() = 62;
 
     // ── 亮屏与解锁 ──
 

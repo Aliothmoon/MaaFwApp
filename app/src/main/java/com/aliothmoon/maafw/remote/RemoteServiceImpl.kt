@@ -84,6 +84,12 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun watchdogTargetPackage(): String = AppWatchdog.targetPackage.orEmpty()
 
+    override fun virtualDisplayTopPackage(): String? {
+        val displayId = VirtualDisplayManager.getDisplayId()
+        if (displayId == DefaultDisplayConfig.DISPLAY_NONE) return null
+        return ActivityUtils.getTopPackageOnDisplay(displayId)
+    }
+
     // ── 亮屏与解锁 ──
 
     override fun unlock(credential: String?): Int =

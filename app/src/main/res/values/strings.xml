@@ -28,6 +28,7 @@
     <string name="virtual_display_game_running">运行中</string>
     <string name="virtual_display_game_stopped">已停止</string>
     <string name="virtual_display_app_drifted">已离屏</string>
+    <string name="virtual_display_empty">空屏</string>
     <string name="virtual_display_idle">空闲</string>
     <string name="tasks_preview_exit_fullscreen">退出全屏</string>
     <string name="tasks_preview_idle">未在运行</string>
@@ -376,6 +377,7 @@
     <string name="msg_reject_switch_display_mode">切换显示模式失败：%1$s</string>
     <string name="msg_reject_primary_capture">主屏采集启动失败</string>
     <string name="msg_reject_virtual_display">虚拟屏幕启动失败，请检查服务权限</string>
+    <string name="msg_reject_virtual_display_empty">虚拟屏幕上没有应用任务，请先启动目标应用</string>
     <string name="msg_reject_service_rejected">特权进程拒绝了本次执行</string>
 
     <!-- 资源切换与运行选项 -->
@@ -460,6 +462,7 @@
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
     <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)，可改用前台模式</string>
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
+    <string name="run_log_virtual_display_empty">虚拟屏幕上还没有应用任务；若项目不会自动启动目标应用，请先手动启动</string>
     <string name="run_log_app_unknown">未知应用</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
 

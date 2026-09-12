@@ -182,6 +182,8 @@ private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modif
             Color(0xFFF44336) to stringResource(R.string.virtual_display_game_stopped)
         WatchdogState.DISPLAY_DRIFT ->
             Color(0xFFF44336) to stringResource(R.string.virtual_display_app_drifted)
+        WatchdogState.VIRTUAL_DISPLAY_EMPTY ->
+            Color(0xFFFFC107) to stringResource(R.string.virtual_display_empty)
         WatchdogState.IDLE ->
             Color(0xFF9E9E9E) to stringResource(R.string.virtual_display_idle)
     }

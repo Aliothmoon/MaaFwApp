@@ -43,9 +43,9 @@ class WatchdogNoticeHook(
         val job = scope.launch {
             watchdogState
                 // 上一轮留下的坏状态还没被 2s 轮询刷掉，别拿它当本轮的事
-                .dropWhile { it.isLost }
+                .dropWhile { it.needsNotice }
                 .distinctUntilChanged()
-                .filter { it.isLost }
+                .filter { it.needsNotice }
                 .collect { state -> journal.note(RunNote.Warning, describe(state)) }
         }
         return EngageResult.Engaged { job.cancel() }
@@ -54,6 +54,7 @@ class WatchdogNoticeHook(
     private suspend fun describe(state: WatchdogState) = uiTextOf(
         when (state) {
             WatchdogState.APP_DIED -> R.string.run_log_app_process_gone
+            WatchdogState.VIRTUAL_DISPLAY_EMPTY -> R.string.run_log_virtual_display_empty
             else -> R.string.run_log_app_left_display
         },
         targetPackage(),

@@ -316,6 +316,14 @@ class MaaFrameworkRunnerPort(
         if (service.startVirtualDisplay() == DefaultDisplayConfig.DISPLAY_NONE) {
             return if (mode == RunMode.FOREGROUND) uiTextOf(R.string.msg_reject_primary_capture) else uiTextOf(R.string.msg_reject_virtual_display)
         }
+        if (mode == RunMode.BACKGROUND) {
+            val topPackage = runCatching { service.virtualDisplayTopPackage() }
+                .onFailure { Timber.w(it, "virtualDisplayTopPackage failed") }
+            // 调用失败视为旧特权进程暂不支持该检查；明确的 null 才代表空屏
+            if (topPackage.isSuccess && topPackage.getOrNull() == null) {
+                return uiTextOf(R.string.msg_reject_virtual_display_empty)
+            }
+        }
 
         bindRunnerCallback(service)
 

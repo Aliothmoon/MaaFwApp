@@ -28,6 +28,7 @@
     <string name="virtual_display_game_running">Running</string>
     <string name="virtual_display_game_stopped">Stopped</string>
     <string name="virtual_display_app_drifted">Off-display</string>
+    <string name="virtual_display_empty">Empty</string>
     <string name="virtual_display_idle">Idle</string>
     <string name="tasks_preview_exit_fullscreen">Exit fullscreen</string>
     <string name="tasks_preview_idle">Not running</string>
@@ -383,6 +384,7 @@
     <string name="msg_reject_switch_display_mode">Failed to switch display mode: %1$s</string>
     <string name="msg_reject_primary_capture">Failed to start primary screen capture</string>
     <string name="msg_reject_virtual_display">Virtual display failed to start; check service permissions</string>
+    <string name="msg_reject_virtual_display_empty">No app task is on the virtual display; start the target app first</string>
     <string name="msg_reject_service_rejected">Privileged process rejected the run</string>
 
     <!-- Server switching & run options -->
@@ -468,6 +470,7 @@
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
     <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s). Try foreground mode instead.</string>
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
+    <string name="run_log_virtual_display_empty">No app task is on the virtual display yet; start the target app manually if this project does not start it.</string>
     <string name="run_log_app_unknown">unknown app</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
 
