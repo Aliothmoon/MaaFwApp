@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
@@ -15,9 +16,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -41,10 +42,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangedIgnoreConsumed
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -58,6 +66,7 @@ import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
 import com.aliothmoon.maafw.ui.components.MaaTouchOverlay
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 
 /**
  * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一份组合状态
@@ -73,11 +82,13 @@ internal fun rememberMovablePreview(
     resolution: DisplayResolution,
     /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
     markers: () -> List<PreviewTouchMarker>,
+    onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
 ): @Composable () -> Unit {
     val currentResolution by rememberUpdatedState(resolution)
     val currentMarkers by rememberUpdatedState(markers)
+    val currentCreated by rememberUpdatedState(onSurfaceCreated)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
     var lastSentSurface by remember { mutableStateOf<PlatformSurface?>(null) }
@@ -85,6 +96,7 @@ internal fun rememberMovablePreview(
         movableContentOf {
             MaaPreviewSurface(
                 resolution = currentResolution,
+                onSurfaceCreated = { currentCreated() },
                 onSurfaceAvailable = { surface ->
                     // surfaceChanged 会重复触发，同一个 Surface 不重复跨进程上报
                     if (lastSentSurface != surface) {
@@ -98,11 +110,14 @@ internal fun rememberMovablePreview(
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
-                MaaTouchOverlay(
-                    markers = currentMarkers(),
-                    resolution = currentResolution,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                // 小窗内不画触摸轨迹：画面已缩到巴掌大，轨迹只会糊住画面（对齐 MaaMeow）
+                if (!LocalIsInPip.current) {
+                    MaaTouchOverlay(
+                        markers = currentMarkers(),
+                        resolution = currentResolution,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }
@@ -120,25 +135,39 @@ internal fun LivePreview(
     watchdogState: WatchdogState,
     content: (@Composable () -> Unit)?,
     onEnterFullscreen: () -> Unit,
+    // 高度受限的宿主区域，由调用方用 weight 给出；卡片在其内按预览分辨率等比缩到最大并居中，
+    // 横屏时不再整幅吃满宽度挤掉任务列表（对齐 MaaMeow VirtualDisplayPreview 的缩放）
+    modifier: Modifier = Modifier,
+    /** 卡片在 window 中的位置，给画中画的进入动画用 */
+    onBoundsChanged: ((Rect?) -> Unit)? = null,
 ) {
-    val cardModifier = Modifier
-        .fillMaxWidth()
-        .padding(top = MaaDesignTokens.Spacing.md)
-        .aspectRatio(resolution?.aspectRatio ?: (16f / 9f))
-    if (content == null) {
-        MaaCardSurface(modifier = cardModifier) { LivePreviewIdleArt() }
-        return
-    }
-    MaaCardSurface(modifier = cardModifier.maaClickable(onClick = onEnterFullscreen)) {
-        Box(Modifier.fillMaxSize()) {
-            content()
-            PreviewStatusMask(surfaceReady = surfaceReady, running = running)
-            WatchdogStatusBadge(
-                state = watchdogState,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(MaaDesignTokens.Spacing.sm),
-            )
+    // 尺寸靠 aspectRatio 算而不是 BoxWithConstraints：后者是 SubcomposeLayout，
+    // 测量期的首次组合撞上 movableContent 搬家会拿到已停用的节点（Apply is called on
+    // deactivated node），翻页动画强制 remeasure 时必崩。matchHeightConstraintsFirst
+    // 先按高度定、放不下再回退按宽度，与原先那个分支等价
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        val aspect = resolution?.aspectRatio ?: (16f / 9f)
+        val cardModifier = Modifier.aspectRatio(aspect, matchHeightConstraintsFirst = true)
+        val boundsReporting = Modifier.onGloballyPositioned {
+            onBoundsChanged?.invoke(it.boundsInWindow().let { rect ->
+                Rect(rect.left.toInt(), rect.top.toInt(), rect.right.toInt(), rect.bottom.toInt())
+            })
+        }
+        if (content == null) {
+            MaaCardSurface(modifier = cardModifier.then(boundsReporting)) { LivePreviewIdleArt() }
+            return@Box
+        }
+        MaaCardSurface(modifier = cardModifier.then(boundsReporting).maaClickable(onClick = onEnterFullscreen)) {
+            Box(Modifier.fillMaxSize()) {
+                content()
+                PreviewStatusMask(surfaceReady = surfaceReady, running = running)
+                WatchdogStatusBadge(
+                    state = watchdogState,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(MaaDesignTokens.Spacing.sm),
+                )
+            }
         }
     }
 }
@@ -178,7 +207,7 @@ private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modif
 internal fun FullscreenPreview(
     resolution: DisplayResolution,
     onExit: () -> Unit,
-    onTouch: (x: Int, y: Int, action: PreviewTouchAction) -> Unit,
+    onTouch: (x: Int, y: Int, action: PreviewTouchAction, contact: Int) -> Unit,
     content: @Composable () -> Unit,
 ) {
     val activity = LocalContext.current.findActivity()
@@ -229,41 +258,78 @@ internal fun FullscreenPreview(
 }
 
 /**
- * 把手指位置换算到虚拟屏坐标再上报
+ * 逐个 pointer 上报，多指同时按下各走各的 contact
  *
- * 画面按 contain 方式居中缩放，两侧/上下可能有黑边，落在黑边上的点直接丢掉——
- * 那里没有对应的虚拟屏像素，硬算会得到越界坐标
+ * 不走手势识别器：它们只跟一根手指，且要等 touch slop 才认，这里要的是每次位移原样透出去
  */
 private fun Modifier.previewTouchInput(
     resolution: DisplayResolution,
-    onTouch: (x: Int, y: Int, action: PreviewTouchAction) -> Unit,
+    onTouch: (x: Int, y: Int, action: PreviewTouchAction, contact: Int) -> Unit,
 ): Modifier = pointerInput(resolution) {
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent()
-            val change = event.changes.firstOrNull() ?: continue
-            val action = when (event.type) {
-                PointerEventType.Press -> PreviewTouchAction.Down
-                PointerEventType.Move -> if (change.pressed) PreviewTouchAction.Move else null
-                PointerEventType.Release -> PreviewTouchAction.Up
-                else -> null
-            }
-            if (action != null) {
-                val scale = minOf(
-                    size.width / resolution.width.toFloat(),
-                    size.height / resolution.height.toFloat(),
-                )
-                val offsetX = (size.width - resolution.width * scale) / 2f
-                val offsetY = (size.height - resolution.height * scale) / 2f
-                val vx = ((change.position.x - offsetX) / scale).toInt()
-                val vy = ((change.position.y - offsetY) / scale).toInt()
-                if (vx in 0 until resolution.width && vy in 0 until resolution.height) {
-                    onTouch(vx, vy, action)
+    val slots = PreviewPointerSlots()
+    try {
+        awaitPointerEventScope {
+            while (true) {
+                for (change in awaitPointerEvent().changes) {
+                    val pointerId = change.id.value
+                    val down = change.changedToDownIgnoreConsumed()
+                    val up = change.changedToUpIgnoreConsumed()
+                    if (!down && !up && !change.positionChangedIgnoreConsumed()) continue
+
+                    val point = viewToVirtualDisplay(change.position, size, resolution)
+                    val contact = when {
+                        // 黑边上的按下没有对应像素，丢掉；已按下的手指拖出画面仍要跟
+                        down -> if (point.inside) slots.acquire(pointerId) else -1
+                        up -> slots.release(pointerId)
+                        else -> slots.indexOf(pointerId)
+                    }
+                    if (contact < 0) continue
+                    val action = when {
+                        down -> PreviewTouchAction.Down
+                        up -> PreviewTouchAction.Up
+                        else -> PreviewTouchAction.Move
+                    }
+                    slots.remember(contact, point.offset.x, point.offset.y)
+                    onTouch(point.offset.x, point.offset.y, action, contact)
+                    change.consume()
                 }
             }
-            change.consume()
         }
+    } finally {
+        // 退出预览时仍按着的手指逐个抬起，不发整体 CANCEL：远端那张槽位表与 MaaFramework
+        // 的注入共用，整体取消会把它正在做的手势一并丢掉
+        slots.releaseHeld { contact, x, y -> onTouch(x, y, PreviewTouchAction.Up, contact) }
     }
+}
+
+/** [offset] 已钳进虚拟屏范围；[inside] 是钳之前落没落在画面上 */
+private data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
+
+/**
+ * 把手指位置换算到虚拟屏坐标
+ *
+ * 越界钳回边缘而不是丢掉：手指拖出画面后抬起，那条 up 也得送达，否则远端以为它还按着
+ */
+private fun viewToVirtualDisplay(
+    view: Offset,
+    viewSize: IntSize,
+    resolution: DisplayResolution,
+): DisplayPoint {
+    val scale = minOf(
+        viewSize.width / resolution.width.toFloat(),
+        viewSize.height / resolution.height.toFloat(),
+    )
+    val offsetX = (viewSize.width - resolution.width * scale) / 2f
+    val offsetY = (viewSize.height - resolution.height * scale) / 2f
+    val vx = ((view.x - offsetX) / scale).toInt()
+    val vy = ((view.y - offsetY) / scale).toInt()
+    return DisplayPoint(
+        offset = IntOffset(
+            vx.coerceIn(0, resolution.width - 1),
+            vy.coerceIn(0, resolution.height - 1),
+        ),
+        inside = vx in 0 until resolution.width && vy in 0 until resolution.height,
+    )
 }
 
 /** Compose 的 LocalContext 可能是 ContextWrapper，逐层剥到 Activity */

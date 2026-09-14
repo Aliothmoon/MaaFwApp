@@ -8,8 +8,12 @@ import com.aliothmoon.maafw.notification.NotificationSettingsViewModel
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.settings.SettingsViewModel
+import com.aliothmoon.maafw.ui.SessionMessagePresenter
+import org.koin.android.ext.koin.androidContext
+import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val viewModelModule = module {
@@ -18,7 +22,14 @@ val viewModelModule = module {
     viewModelOf(::AppLogViewModel)
     viewModelOf(::AppLogDetailViewModel)
     viewModelOf(::NotificationSettingsViewModel)
-    viewModelOf(::SessionViewModel)
+    singleOf(::SessionViewModel)
+    single {
+        SessionMessagePresenter(
+            context = androidContext() as android.app.Application,
+            session = get(),
+            scope = get(named<AppCoroutineScope>()),
+        )
+    }
     viewModelOf(::ScheduleViewModel)
 
     viewModel {
@@ -26,11 +37,9 @@ val viewModelModule = module {
             permissionGateway = get(),
             appSettings = get(),
             projectRepository = get(),
-            updateCheckApi = get(),
+            updateService = get(),
             updateDownloader = get(),
-            updateInstaller = get(),
-            updateDownloadNotifier = get(),
-            notificationPermissionRequester = get(),
+            apkInstaller = get(),
         )
     }
 }

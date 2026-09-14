@@ -50,6 +50,7 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
 import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
@@ -73,8 +74,10 @@ internal fun RunnerToggleButton(
     ) {
         val toggleModifier = Modifier.weight(1f)
         if (phase.isBusy) {
-            MaaOutlinedButton(
+            // 停止是破坏性动作，语义色取 error；对齐 HomeScreen 服务开关那套描边配比
+            MaaSemanticOutlinedButton(
                 onClick = { onIntent(SessionIntent.Stop) },
+                semantic = MaterialTheme.colorScheme.error,
                 enabled = phase != RunnerPhase.Stopping,
                 modifier = toggleModifier,
             ) {
@@ -88,7 +91,7 @@ internal fun RunnerToggleButton(
             // 前台模式灰显但仍可点：点了走 Start，由 SessionViewModel 拦下并给提示
             val foregroundBlocked = state.runMode == RunMode.FOREGROUND
             MaaButton(
-                onClick = { onIntent(SessionIntent.Start) },
+                onClick = { onIntent(SessionIntent.Start()) },
                 enabled = state.canStart,
                 colors = if (foregroundBlocked) {
                     ButtonDefaults.buttonColors(

@@ -32,14 +32,15 @@ class LogExportService(
     private val roots: () -> List<File>,
     /** 调试模式下额外附一份 `getprop`：ROM 差异是排障时最先要问的 */
     private val debugMode: () -> Boolean,
+    /** 设备快照文本；采集在 [DeviceInfoCollector] */
+    private val deviceInfo: () -> String,
 ) {
 
-    /** 返回 null = 没有可导出的日志，或打包失败 */
+    /** 返回 null = 打包失败；没有日志时也保留设备信息快照 */
     suspend fun exportZip(): File? = withContext(MaaDispatchers.IO) {
         val files = LogExportCollector.collect(roots(), System.currentTimeMillis())
         if (files.isEmpty()) {
-            Timber.w("没有可导出的日志")
-            return@withContext null
+            Timber.w("no log files to export, packing device info only")
         }
         runCatching {
             val dir = File(baseDir(), "${LOG_DIR_NAME}/${LogExportCollector.EXPORT_DIR_NAME}")
@@ -49,7 +50,7 @@ class LogExportService(
             val zip = File(dir, "maafw_logs_${STAMP.format(Date())}.zip")
             writeZip(zip, files)
             zip
-        }.onFailure { Timber.w(it, "导出日志失败") }.getOrNull()
+        }.onFailure { Timber.w(it, "export logs failed") }.getOrNull()
     }
 
     suspend fun shareIntent(): Intent? = exportZip()?.let(::createShareIntent)
@@ -62,7 +63,7 @@ class LogExportService(
                 zip.inputStream().use { it.copyTo(out) }
             } ?: return@runCatching null
             displayName(target) ?: zip.name
-        }.onFailure { Timber.w(it, "写入导出目标失败：%s", target) }.getOrNull()
+        }.onFailure { Timber.w(it, "write to export target failed: %s", target) }.getOrNull()
     }
 
     fun suggestedFileName(): String = "maafw_logs_${STAMP.format(Date())}.zip"
@@ -71,6 +72,7 @@ class LogExportService(
         val base = baseDir()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
             if (debugMode()) appendDeviceProperties(out)
+            appendDeviceInfo(out)
             files.forEach { file ->
                 val entry = ZipEntry(file.relativeTo(base).invariantSeparatorsPath)
                 entry.time = file.lastModified()
@@ -89,7 +91,15 @@ class LogExportService(
             process.inputStream.use { it.copyTo(out, BUFFER_SIZE) }
             out.closeEntry()
             process.waitFor()
-        }.onFailure { Timber.w(it, "收集设备属性失败") }
+        }.onFailure { Timber.w(it, "collect device properties failed") }
+    }
+
+    private fun appendDeviceInfo(out: ZipOutputStream) {
+        runCatching {
+            out.putNextEntry(ZipEntry(DEVICE_INFO_ENTRY))
+            out.write(deviceInfo().toByteArray(Charsets.UTF_8))
+            out.closeEntry()
+        }.onFailure { Timber.w(it, "collect device info failed") }
     }
 
     /** 走 FileProvider 而非 file://：API 24 起后者直接抛 FileUriExposedException */
@@ -114,6 +124,7 @@ class LogExportService(
     private companion object {
         const val LOG_DIR_NAME = "log"
         const val PROPERTIES_ENTRY = "properties.txt"
+        const val DEVICE_INFO_ENTRY = "device_info.txt"
         const val MIME_ZIP = "application/zip"
         const val BUFFER_SIZE = 8 * 1024
 

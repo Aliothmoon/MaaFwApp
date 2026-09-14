@@ -30,8 +30,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -59,9 +58,7 @@ fun MaaModalSheet(
     onDismiss: () -> Unit,
     content: @Composable (Modifier) -> Unit,
 ) {
-    val screenHeightPx = with(LocalDensity.current) {
-        LocalConfiguration.current.screenHeightDp.dp.toPx()
-    }
+    val screenHeightPx = LocalWindowInfo.current.containerSize.height.toFloat()
     val sheetHeightPx = screenHeightPx * MaaDesignTokens.Sheet.heightFraction
 
     val progress = remember { Animatable(0f) }

@@ -73,7 +73,7 @@ class ExecAgentHost(
         Ln.i("ExecAgentHost: launching $command (cwd=${request.workingDir})")
         val process = runCatching { builder.start() }
             .getOrElse { throw AgentLaunchException("agent 启动失败：${it.message}", it) }
-        return ProcessAgentSession(process, onOutput)
+        return ProcessAgentSession(executable.absolutePath, process, onOutput)
     }
 
     /** 对齐 MXU：统一补 `v` 前缀，MaaVersion() 本身带不带都有可能 */
@@ -115,6 +115,7 @@ private fun String.stripAnsiEscapes(): String =
  * 的现场恰恰常发生在那种时候
  */
 private class ProcessAgentSession(
+    override val executable: String,
     private val process: Process,
     onOutput: (line: String, fromStderr: Boolean) -> Unit,
 ) : AgentSession {

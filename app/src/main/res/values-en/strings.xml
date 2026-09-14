@@ -12,16 +12,17 @@
     <string name="dialog_confirm">OK</string>
     <string name="common_restart">Restart</string>
     <string name="dialog_cancel">Cancel</string>
+    <string name="common_expand_action">Expand</string>
+    <string name="common_collapse_action">Collapse</string>
 
     <!-- Tasks screen -->
     <string name="tasks_project_load_failed">Project failed to load. Check diagnostics on Home.</string>
     <string name="tasks_reload">Reload</string>
-    <string name="tasks_empty_config_title">No configurations yet</string>
+    <string name="tasks_empty_config_title">No configurations</string>
     <string name="tasks_empty_config_hint">Tap the selector above to create an empty configuration, or start from a template</string>
-    <string name="tasks_empty_task_title">No tasks yet</string>
+    <string name="tasks_empty_task_title">No tasks</string>
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
-    <string name="tasks_run_order">Task list</string>
     <string name="tasks_live_preview">Live preview</string>
     <string name="tasks_preview_waiting_surface">Waiting for frames</string>
     <string name="virtual_display_game_running">Running</string>
@@ -85,9 +86,6 @@
     <string name="home_project">Project</string>
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
-    <string name="home_name">Name</string>
-    <string name="home_resource">Server</string>
-    <string name="home_none">None</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
@@ -117,6 +115,8 @@
     <string name="settings_section_display">Display</string>
     <string name="settings_section_schedule">Scheduled tasks</string>
     <string name="settings_section_other">Other</string>
+    <string name="settings_pip_on_home">Auto picture-in-picture while running</string>
+    <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The game cannot be controlled inside the window</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_style">Theme style</string>
     <string name="settings_follow_system">System default</string>
@@ -133,48 +133,82 @@
     <string name="settings_run_mode_hint_foreground">Drives the current screen directly, occupying the phone while running; the target app is not restarted and preview touch is disabled</string>
     <string name="settings_force_restart_app">Force-restart the target app</string>
     <string name="settings_force_restart_app_desc">Try enabling this when the target app cannot start normally</string>
-    <string name="settings_resource">Server selection</string>
+    <string name="settings_resource">Server</string>
     <string name="settings_no_resources">The project provides no selectable servers</string>
-    <string name="settings_current_resource">Current resource</string>
-    <string name="settings_not_selected">Not selected</string>
-    <string name="settings_resource_hint">Switching resources affects task applicability; unavailable while running</string>
     <string name="settings_reload_project">Reload project</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
-    <string name="settings_build">Build</string>
+    <string name="settings_version_of">%1$s version</string>
+    <string name="settings_framework">MaaFramework</string>
     <string name="settings_telemetry">Help improve this project</string>
     <string name="settings_telemetry_desc">Sends task names and run results to the project author. Screenshots, log text and anything you type are never included</string>
     <string name="settings_project">Project</string>
-    <string name="settings_project_version">Project version</string>
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
     <string name="settings_section_update">Updates</string>
-    <string name="settings_update_download_source">Download source</string>
     <string name="settings_update_source_mirror">MirrorChyan</string>
     <string name="settings_update_source_github">GitHub</string>
     <string name="settings_update_mirror_cdk">MirrorChyan CDK</string>
-    <string name="settings_update_mirror_cdk_required">Required when MirrorChyan is selected</string>
-    <string name="settings_update_github_token">GitHub token</string>
-    <string name="settings_update_github_token_hint">Optional; used only for GitHub update downloads</string>
+    <string name="settings_update_cdk_placeholder">Enter your CDK</string>
+    <string name="settings_update_cdk_subscribe">No CDK? Subscribe</string>
+    <string name="settings_update_cdk_clear">Clear CDK</string>
+    <string name="settings_update_cdk_show">Show CDK</string>
+    <string name="settings_update_cdk_hide">Hide CDK</string>
+    <string name="settings_update_cdk_unset">Not set</string>
+    <string name="settings_update_cdk_saved">Saved</string>
+    <string name="settings_update_mirror_cdk_desc">MirrorChyan is an independent third-party accelerated download service. It is paid, and the fee is not charged by "%1$s". Subscription revenue covers its operating costs, and part of the proceeds goes back to the project developers. Subscribe for a CDK to enjoy fast downloads and support continued development. Without a CDK, switch to the GitHub update source to download.</string>
+    <string name="settings_update_source">Update source</string>
+    <string name="settings_update_mirror_about">About MirrorChyan</string>
+    <string name="settings_update_cancel_download">Cancel download</string>
     <string name="settings_update_channel">Update channel</string>
     <string name="settings_update_channel_stable">Stable</string>
     <string name="settings_update_channel_beta">Beta</string>
     <string name="settings_update_check">Check for updates</string>
     <string name="settings_update_checking">Checking…</string>
     <string name="settings_update_download">Download update</string>
-    <string name="settings_update_downloading">Downloading…</string>
-    <string name="settings_update_available">Available update</string>
     <string name="settings_update_result">Check result</string>
     <string name="settings_update_up_to_date">You are up to date</string>
-    <string name="settings_update_failed">Check failed: %1$s</string>
-    <string name="settings_update_progress_known">Downloaded %1$s of %2$s</string>
-    <string name="settings_update_progress_unknown">Downloaded %1$s</string>
-    <string name="settings_update_installer_started">System installer opened</string>
-    <string name="settings_update_source_hint">The download source affects downloads only, not the default update-check source</string>
-    <string name="settings_update_notification_denied">Notification permission is off; download progress will not show in the notification bar</string>
-    <string name="settings_update_notification_open_settings">Open settings</string>
-    <string name="settings_update_notification_error">Notification permission is required to show download progress in the notification bar</string>
+    <string name="settings_update_no_downloadable_apk">The selected update source has no downloadable APK</string>
+    <string name="settings_update_auto_check">Check for updates on launch</string>
+    <string name="settings_update_auto_download">Auto-download updates</string>
+    <string name="settings_update_auto_download_desc">When a new version is found on launch, download it and open the installer automatically</string>
+    <string name="dialog_update_found_title">Update available</string>
+    <string name="dialog_update_error_title">Update check failed</string>
+    <string name="dialog_update_failed_title">Update failed</string>
+    <string name="dialog_update_later">Later</string>
+    <string name="update_detail_http_status">HTTP %1$d</string>
+    <string name="update_download_detail_bytes">%1$s of %2$s downloaded</string>
+    <string name="update_download_detail_digest">expected %1$s, got %2$s</string>
+    <string name="update_fail_with_detail">%1$s: %2$s</string>
+    <string name="update_fail_missing_configuration">Update source is not configured</string>
+    <string name="update_fail_network">Network error</string>
+    <string name="update_fail_http">Server error</string>
+    <string name="update_fail_rate_limited">Rate limited; too many requests</string>
+    <string name="update_fail_cdk_expired">CDK has expired</string>
+    <string name="update_fail_cdk_invalid">Invalid CDK</string>
+    <string name="update_fail_cdk_quota_exhausted">CDK daily download limit reached</string>
+    <string name="update_fail_cdk_mismatched">CDK type does not match the resource to download</string>
+    <string name="update_fail_cdk_blocked">CDK has been blocked</string>
+    <string name="update_fail_cdk_required">No CDK provided, so MirrorChyan cannot resolve a download; enter a CDK or switch the update source to GitHub</string>
+    <string name="update_fail_resource_not_found">This project is not available on MirrorChyan; switch the update source to GitHub</string>
+    <string name="update_fail_invalid_os">Invalid OS parameter</string>
+    <string name="update_fail_invalid_arch">Invalid architecture parameter</string>
+    <string name="update_fail_invalid_channel">Invalid update channel parameter</string>
+    <string name="update_fail_invalid_response">The update source returned an unparsable response</string>
+    <string name="update_fail_no_matching_asset">No matching package</string>
+    <string name="update_fail_version_invalid">Version string cannot be parsed</string>
+    <string name="update_fail_unknown">Unknown error</string>
+    <string name="update_download_fail_invalid_url">Invalid download URL</string>
+    <string name="update_download_fail_network">Download interrupted</string>
+    <string name="update_download_fail_http">Download server error</string>
+    <string name="update_download_fail_storage">Storage unavailable</string>
+    <string name="update_download_fail_invalid_digest">Package is missing its checksum</string>
+    <string name="update_download_fail_digest_mismatch">Package checksum mismatch</string>
+    <string name="update_download_fail_unknown">Download failed</string>
+    <string name="update_install_fail_file_invalid">Package file is not usable</string>
+    <string name="update_install_fail_installer_not_found">No system installer found</string>
+    <string name="update_install_fail_unknown">Failed to start installation</string>
     <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->
@@ -189,10 +223,23 @@
 
     <!-- Foreground control layer -->
     <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
-    <string name="overlay_panel_title">Control panel</string>
+    <string name="overlay_tab_tasks">Tasks</string>
+    <string name="overlay_tab_log">Log</string>
+    <string name="overlay_hide">Hide</string>
     <string name="overlay_back_to_app">Back to app</string>
     <string name="overlay_lock">Lock position</string>
     <string name="overlay_unlock">Unlock position</string>
+    <string name="overlay_edit_tasks">Edit tasks</string>
+    <string name="overlay_edit_done">Done</string>
+    <string name="overlay_manage_config">Edit configs</string>
+    <string name="overlay_pane_view_empty_title">Select a task</string>
+    <string name="overlay_pane_view_empty_hint">Tap a task on the left to edit its options</string>
+    <string name="overlay_pane_edit_empty_title">Select a task to manage</string>
+    <string name="overlay_pane_edit_empty_hint">Rename, duplicate, or remove</string>
+    <string name="overlay_pane_edit_add_hint">Tap Add to append from the catalog</string>
+    <string name="overlay_delete_task">Remove this task?</string>
+    <string name="overlay_delete_config">Delete this configuration?</string>
+    <string name="overlay_new_config">New</string>
     <string name="overlay_ball_idle">Idle</string>
     <string name="overlay_ball_preparing">Starting</string>
     <string name="overlay_ball_running">Running</string>
@@ -206,10 +253,7 @@
     <string name="settings_overlay_show">Open control panel</string>
 
     <!-- Screen saver -->
-    <string name="settings_screen_saver">Screen off</string>
     <string name="settings_screen_saver_auto">Turn the screen off while running</string>
-    <string name="settings_screen_saver_hint">Blacks out the screen while a background run is in progress, leaving only the clock, battery and the latest log line; swipe right to unlock, and it is removed automatically when the run ends</string>
-    <string name="settings_screen_saver_show">Turn off now</string>
     <string name="screensaver_idle">Waiting for task to start…</string>
     <string name="screensaver_swipe_to_unlock">Swipe right to unlock</string>
 
@@ -221,7 +265,7 @@
 
     <string name="schedule_title">Schedules</string>
     <string name="schedule_add">New rule</string>
-    <string name="schedule_empty">No schedules yet</string>
+    <string name="schedule_empty">No schedules</string>
     <string name="schedule_empty_hint">Once a rule is added, its bound run configuration runs automatically at the scheduled time</string>
     <string name="schedule_next_trigger">Next %1$s</string>
     <string name="schedule_next_none">Incomplete rule, will not fire</string>
@@ -257,10 +301,13 @@
     <string name="schedule_interval_days">Every %1$d d</string>
     <string name="schedule_edit_days_unit">Days</string>
     <string name="schedule_edit_hours_unit">Hours</string>
-    <string name="schedule_edit_total_hours">= %1$d hours</string>
+    <plurals name="schedule_edit_total_hours">
+        <item quantity="one">= %1$d hour</item>
+        <item quantity="other">= %1$d hours</item>
+    </plurals>
 
     <string name="schedule_log_title">Trigger log</string>
-    <string name="schedule_log_empty">No triggers recorded</string>
+    <string name="schedule_log_empty">No triggers</string>
     <string name="schedule_log_clear">Clear</string>
     <string name="schedule_log_delay">%1$s late</string>
     <string name="schedule_result_triggered">Triggered</string>
@@ -359,8 +406,6 @@
     <string name="permission_request">Request</string>
     <string name="permission_quick_grant">Quick grant</string>
     <string name="permission_requesting">Requesting…</string>
-    <string name="permission_service_connected">Privileged process connected</string>
-    <string name="permission_service_disconnected">Privileged process not connected</string>
     <string name="permission_open_shizuku">Shizuku shortcut</string>
     <string name="permission_expand">Show more permissions</string>
     <string name="permission_collapse">Hide more permissions</string>
@@ -388,7 +433,7 @@
     <string name="home_status_stopping">Stopping task…</string>
     <string name="home_status_ready">Ready</string>
     <string name="home_service_connect">Reload service</string>
-    <string name="home_service_disconnect">Close service</string>
+    <string name="home_service_disconnect">Close all services</string>
     <string name="dialog_shizuku_not_installed_title">Shizuku Not Installed</string>
     <string name="dialog_shizuku_not_installed_message">This app depends on the Shizuku service. Shizuku was not detected on your device; please install it first.</string>
     <string name="dialog_shizuku_install_confirm">Install Shizuku</string>
@@ -404,13 +449,15 @@
     <string name="common_got_it">Got it</string>
 
     <!-- Run log -->
-    <string name="run_log_title">Run log</string>
-    <string name="run_log_count">%1$d entries</string>
+    <plurals name="run_log_count">
+        <item quantity="one">%1$d entry</item>
+        <item quantity="other">%1$d entries</item>
+    </plurals>
     <string name="run_log_export">Export</string>
     <string name="run_log_clear">Clear</string>
-    <string name="run_log_empty">No entries yet. MaaFramework output appears here once a run starts.</string>
+    <string name="run_log_empty">No logs</string>
     <string name="tasks_log">Log</string>
-    <string name="run_log_filter_essential">Key</string>
+    <string name="run_log_filter_progress">Progress</string>
     <string name="run_log_filter_all">All</string>
     <string name="run_log_connecting">Connecting to device…</string>
     <string name="run_log_connected">Device connected</string>
@@ -430,8 +477,11 @@
 
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>
-    <string name="log_archive_empty">No history yet. Each finished run is recorded here.</string>
-    <string name="log_archive_meta">%1$d tasks · %2$s</string>
+    <string name="log_archive_empty">No run history</string>
+    <plurals name="log_archive_meta">
+        <item quantity="one">%1$d task · %2$s</item>
+        <item quantity="other">%1$d tasks · %2$s</item>
+    </plurals>
     <string name="log_archive_cleanup">Clean up old</string>
     <string name="log_archive_delete_title">Delete this record</string>
     <string name="log_archive_delete_message">Delete the run from %1$s? This cannot be undone.</string>
@@ -448,7 +498,7 @@
 
     <!-- Error log: the app's own warnings and errors, written by AppLogWriter -->
     <string name="app_log_title">Error log</string>
-    <string name="app_log_empty">No error log yet</string>
+    <string name="app_log_empty">No error logs</string>
     <string name="app_log_clear">Clear all</string>
     <!-- size · last written -->
     <string name="app_log_meta">%1$s · %2$s</string>
@@ -460,7 +510,7 @@
     <string name="log_export_share">Share</string>
     <string name="log_export_save">Save to device</string>
     <string name="log_export_running">Packing…</string>
-    <string name="log_export_failed">Export failed: nothing to export</string>
+    <string name="log_export_failed">Export failed</string>
     <string name="log_export_saved">Saved as %1$s</string>
     <string name="log_export_subject">MaaFwApp logs</string>
 
@@ -523,7 +573,10 @@
     <!-- PI unpacking -->
     <string name="pi_install_title">Preparing project resources</string>
     <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
-    <string name="pi_install_progress_count">Wrote %1$d files</string>
+    <plurals name="pi_install_progress_count">
+        <item quantity="one">Wrote %1$d file</item>
+        <item quantity="other">Wrote %1$d files</item>
+    </plurals>
     <string name="pi_install_note">Extracted once on first launch and after each version update. Please wait…</string>
     <string name="pi_install_failed_title">Failed to prepare project resources</string>
     <string name="pi_install_failed_message">%1$s\n\nCheck that there is enough free space, then retry.</string>
@@ -548,7 +601,6 @@
     <string name="foreground_resolution_too_small">The screen %1$s is too small to fit a 16:9 picture</string>
     <string name="foreground_resolution_required">The screen is not 16:9 yet — tap Change resolution first</string>
     <string name="foreground_service_required">Connect the Shizuku or Root backend first</string>
-    <string name="foreground_overlay_unsupported">The control panel is unavailable for now</string>
 
     <!-- Settings "Notifications" group entry -->
     <string name="settings_section_notification">Notifications</string>
@@ -626,13 +678,6 @@
     <string name="notification_event_channel_silent_desc">Leaves an entry in the shade when a run ends, without a sound</string>
     <string name="notification_event_channel_popup_name">Run result (banner)</string>
     <string name="notification_event_channel_popup_desc">Shows a banner with a sound when a run ends</string>
-    <string name="notification_channel_update_download">App update download</string>
-    <string name="notification_channel_update_download_desc">Shows progress in the shade while a new version is downloading, auto-cancels when done</string>
-    <string name="notification_update_download_title">Downloading %1$s</string>
-    <string name="notification_update_download_complete_title">%1$s downloaded</string>
-    <string name="notification_update_download_complete">Download complete, opening the system installer</string>
-    <string name="notification_update_download_failed_title">Download failed</string>
-    <string name="notification_update_download_failed">Download failed: %1$s</string>
 
     <string name="notification_event_run_completed">All tasks completed</string>
     <plurals name="notification_event_run_completed_body">
@@ -640,7 +685,7 @@
         <item quantity="other">%1$d tasks in total</item>
     </plurals>
     <string name="notification_event_run_partial">Run ended with failures</string>
-    <string name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
+    <string tools:ignore="PluralsCandidate" name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
     <string name="notification_event_run_failed">Run failed</string>
     <string name="notification_event_service_died">Background service stopped</string>
     <string name="notification_event_service_died_body">The background service ended unexpectedly and this run was aborted</string>

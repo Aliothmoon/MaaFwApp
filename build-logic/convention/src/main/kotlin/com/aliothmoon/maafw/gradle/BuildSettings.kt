@@ -3,6 +3,9 @@ package com.aliothmoon.maafw.gradle
 import org.gradle.api.Project
 import java.util.Properties
 
+/** Native ABIs the shell and its bundled MaaFramework/agent runtimes support. */
+internal val SHIPPED_ABIS = listOf("arm64-v8a", "x86_64")
+
 private fun Project.loadLocalProperties(): Properties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
@@ -26,8 +29,31 @@ internal fun Project.textSetting(key: String, envName: String): String? =
 internal fun Project.signingSetting(envName: String, key: String): String =
     System.getenv(envName) ?: loadLocalProperties().getProperty(key, "")
 
+/**
+ * The MaaFramework release the jniLibs were laid out from, written by setup_maa_framework.py
+ * Absent until that script has run here, and the about card hides the row rather than guess
+ */
+internal fun Project.maaFrameworkVersion(): String =
+    rootProject.file(".maafwversion").takeIf { it.isFile }?.readText()?.trim().orEmpty()
+
 /** Comma separated list switch, read from local.properties only */
 internal fun Project.listSetting(key: String): List<String> =
     (loadLocalProperties().getProperty(key) ?: "").split(',')
         .map(String::trim)
         .filter(String::isNotEmpty)
+
+/**
+ * Resolve a build-type ABI setting, preserving the historical universal default while rejecting
+ * values for which the shell does not ship native dependencies.
+ */
+internal fun Project.abiSetting(key: String): List<String> {
+    val configured = listSetting(key)
+    if (configured.isEmpty()) return SHIPPED_ABIS
+
+    val unsupported = configured.filterNot(SHIPPED_ABIS::contains).distinct()
+    require(unsupported.isEmpty()) {
+        "$key contains unsupported ABI(s): ${unsupported.joinToString()}; " +
+            "supported values are ${SHIPPED_ABIS.joinToString()}"
+    }
+    return configured.distinct()
+}

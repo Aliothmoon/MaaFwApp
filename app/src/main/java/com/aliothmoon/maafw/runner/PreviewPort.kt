@@ -19,16 +19,25 @@ import timber.log.Timber
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
-/** 预览上的一次触点，坐标在虚拟屏坐标系；[action] 是 MotionEvent 的 actionMasked */
+/** 与特权侧 `TouchPointerSequence.MAX_CONTACTS` 同值；校验在那边做，这里只是不把依赖伸进 bridge */
+const val MAX_PREVIEW_CONTACTS = 16
+
+/**
+ * 预览上的一次触点，坐标在虚拟屏坐标系
+ *
+ * [action] 只取 DOWN / MOVE / UP：POINTER_DOWN / POINTER_UP 折进前两者，第几根手指看 [contact]
+ */
 data class PreviewTouchMarker(
     val id: Long,
     val x: Int,
     val y: Int,
     val action: Int,
+    val contact: Int,
     val createdAtMs: Long,
 ) {
     companion object {
-        const val MAX_ACTIVE_MARKERS = 8
+        /** 双指时每根手指的轨迹长度与单指持平 */
+        const val MAX_ACTIVE_MARKERS = 16
         const val TTL_MS = 600L
         const val CLEANUP_INTERVAL_MS = 100L
     }
@@ -48,10 +57,12 @@ interface PreviewPort {
     /**
      * 用户在预览上的手动操作，坐标已换算到虚拟屏坐标系
      * 与 MaaFramework 注入的是同一条 InputControlUtils 通路，会走同一份触点回调
+     *
+     * [contact] 是 0..15 的手指槽位，由 UI 侧按 Compose PointerId 分配
      */
-    fun touchDown(x: Int, y: Int)
-    fun touchMove(x: Int, y: Int)
-    fun touchUp(x: Int, y: Int)
+    fun touchDown(x: Int, y: Int, contact: Int)
+    fun touchMove(x: Int, y: Int, contact: Int)
+    fun touchUp(x: Int, y: Int, contact: Int)
 }
 
 /**
@@ -76,14 +87,23 @@ class RemotePreviewPort(
     override val markers: StateFlow<List<PreviewTouchMarker>> = _markers.asStateFlow()
 
     private val touchCallback = object : ITouchEventCallback.Stub() {
-        override fun onCallback(x: Int, y: Int, type: Int) {
-            if (type != MotionEvent.ACTION_DOWN &&
-                type != MotionEvent.ACTION_MOVE &&
-                type != MotionEvent.ACTION_UP
-            ) {
-                return
+        override fun onCallback(x: Int, y: Int, type: Int, contact: Int) {
+            val action = when (type) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> type
+                MotionEvent.ACTION_POINTER_DOWN -> MotionEvent.ACTION_DOWN
+                MotionEvent.ACTION_POINTER_UP -> MotionEvent.ACTION_UP
+                else -> return
             }
-            appendMarker(PreviewTouchMarker(markerId.incrementAndGet(), x, y, type, SystemClock.elapsedRealtime()))
+            appendMarker(
+                PreviewTouchMarker(
+                    id = markerId.incrementAndGet(),
+                    x = x,
+                    y = y,
+                    action = action,
+                    contact = contact,
+                    createdAtMs = SystemClock.elapsedRealtime(),
+                ),
+            )
         }
     }
 
@@ -116,11 +136,11 @@ class RemotePreviewPort(
         clearMarkers()
     }
 
-    override fun touchDown(x: Int, y: Int) = withService { it.touchDown(x, y) }
+    override fun touchDown(x: Int, y: Int, contact: Int) = withService { it.touchDown(x, y, contact) }
 
-    override fun touchMove(x: Int, y: Int) = withService { it.touchMove(x, y) }
+    override fun touchMove(x: Int, y: Int, contact: Int) = withService { it.touchMove(x, y, contact) }
 
-    override fun touchUp(x: Int, y: Int) = withService { it.touchUp(x, y) }
+    override fun touchUp(x: Int, y: Int, contact: Int) = withService { it.touchUp(x, y, contact) }
 
     /** 手动触摸是 oneway，发不出去就算了；预览本来就是尽力而为 */
     private inline fun withService(action: (RemoteService) -> Unit) {

@@ -258,7 +258,7 @@ object PiParser {
             githubRepository = root.string("github")
                 ?.let(::githubRepository)
                 ?.takeIf(String::isNotBlank),
-            mirrorChyanRid = root.string("mirrorchyan_rid")?.trim()?.takeIf(String::isNotBlank),
+            mirrorchyanRid = root.string("mirrorchyan_rid")?.trim()?.takeIf(String::isNotBlank),
         )
     }
 

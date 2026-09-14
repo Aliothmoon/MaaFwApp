@@ -1,8 +1,11 @@
 package com.aliothmoon.maafw.bridge;
 
 
+import android.content.pm.PackageInfo;
+
 import com.aliothmoon.maafw.remote.internal.ActivityUtils;
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager;
+import com.aliothmoon.maafw.third.FakeContext;
 import com.aliothmoon.maafw.third.Ln;
 
 import java.util.Locale;
@@ -23,6 +26,7 @@ public final class DriverClass {
 
     public static boolean startApp(String packageName, int displayId, boolean forceStop) {
         Ln.i(TAG + String.format(Locale.US, "%s %d %b", packageName, displayId, forceStop));
+        logTargetAppInfo(packageName, displayId, forceStop);
         if (displayId == PrimaryDisplayManager.DISPLAY_ID) {
             return ActivityUtils.startApp(packageName, displayId, forceStop);
         }
@@ -41,6 +45,20 @@ public final class DriverClass {
             awaitFirstFrame();
         }
         return ret;
+    }
+
+    private static void logTargetAppInfo(String rawSpec, int displayId, boolean forceStop) {
+        String context = " displayId=" + displayId + " forceStop=" + forceStop;
+        try {
+            String target = ActivityUtils.packageNameOf(rawSpec);
+            PackageInfo info = FakeContext.get().getPackageManager().getPackageInfo(target, 0);
+            Ln.i(TAG + ": target app spec=" + rawSpec + " package=" + target
+                    + " version=" + info.versionName + " (" + info.getLongVersionCode() + ")"
+                    + " uid=" + (info.applicationInfo == null ? "unknown" : info.applicationInfo.uid)
+                    + context);
+        } catch (Throwable e) {
+            Ln.w(TAG + ": target app info unavailable spec=" + rawSpec + context, e);
+        }
     }
 
     private static void awaitFirstFrame() {

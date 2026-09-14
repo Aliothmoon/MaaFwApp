@@ -251,11 +251,6 @@ class PermissionManager(
         appSettings.setSkipShizukuCheck(true)
     }
 
-    fun installShizuku(context: Context): Boolean = ShizukuInstallHelper.installShizuku(context)
-
-    fun openShizuku(context: Context): Boolean =
-        ShizukuInstallHelper.openShizuku(context, appSettings.shizukuLaunchPackage.value)
-
     private suspend fun resolveReadiness(
         remoteState: RemoteAccessState,
         skipCheck: Boolean,

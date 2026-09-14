@@ -8,7 +8,6 @@ import com.aliothmoon.maafw.maa.MaaAgentClientLibrary
 import com.aliothmoon.maafw.maa.MaaAgentClientLoader
 import com.aliothmoon.maafw.maa.MaaFrameworkLibrary
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
-import com.aliothmoon.maafw.maa.MaaFwVersion
 import com.aliothmoon.maafw.maa.MaaGlobalOption
 import com.aliothmoon.maafw.maa.MaaLoggingLevel
 import com.aliothmoon.maafw.maa.MaaStatus
@@ -290,11 +289,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             return "libbridge.so 未加载，无法建立 native controller"
         }
 
-        // TouchArgs.contact 是 v5.12.3 起 fw 才填的合约字段，旧 fw 那 4 字节是栈残值，
-        // 不过闸直接读会得到幻影手指；低于配对版本一律压 0（等价旧 bridge 单指行为）
-        NativeBridgeLib.setContactSupport(MaaFwVersion.fillsTouchContact(lib.MaaVersion()))
         ActivityUtils.forceRestartOnVirtualDisplay = payload.forceRestartApp
-
         val displayId = when (payload.displayMode) {
             DisplayMode.PRIMARY ->
                 if (PrimaryDisplayManager.getCaptureSize() == null) {
@@ -385,7 +380,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             agents.size == payload.agents.size &&
             agents.all { it.session.isAlive() && agentLib.MaaAgentClientAlive(it.client).toInt() != 0 }
         if (reusable) {
-            notifyAgentsConnected(payload.agents)
+            notifyAgentsConnected()
             return null
         }
 
@@ -430,7 +425,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 return failAgents(started, "agent 连接超时：${agent.childExec}")
             }
             Ln.i("MaaRunner: agent[$index] connected, identifier=$identifier")
-            notify { onAgentConnected(index, payload.agents.size, agent.childExec) }
+            notify { onAgentConnected(index, payload.agents.size, session.executable) }
             started += ActiveAgent(client, session)
         }
 
@@ -442,10 +437,11 @@ class MaaRunner(private val agentHost: AgentHost) {
     }
 
     /** 复用还活着的 child 时也回投：新一轮会话日志不能因为没重新 connect 就缺这行 */
-    private fun notifyAgentsConnected(declared: List<AgentPayload>) {
-        declared.forEachIndexed { index, agent ->
-            Ln.i("MaaRunner: agent[$index] reused, exec=${agent.childExec}")
-            notify { onAgentConnected(index, declared.size, agent.childExec) }
+    private fun notifyAgentsConnected() {
+        val alive = agents
+        alive.forEachIndexed { index, active ->
+            Ln.i("MaaRunner: agent[$index] reused, exec=${active.session.executable}")
+            notify { onAgentConnected(index, alive.size, active.session.executable) }
         }
     }
 
