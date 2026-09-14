@@ -54,6 +54,8 @@ fun LogExportController(
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
 
+    // 模板组合期取、回调里再填参：LocalContext.current 不随 Configuration 失效，切了语言还是旧的
+    val savedFormat = stringResource(R.string.log_export_saved)
     val runningText = stringResource(R.string.log_export_running)
     val failedText = stringResource(R.string.log_export_failed)
     val chooserTitle = stringResource(R.string.log_export_title)
@@ -68,7 +70,7 @@ fun LogExportController(
         scope.launch {
             val name = service.exportTo(uri)
             busy = false
-            onMessage(name?.let { context.getString(R.string.log_export_saved, it) } ?: failedText)
+            onMessage(name?.let { savedFormat.format(it) } ?: failedText)
         }
     }
 

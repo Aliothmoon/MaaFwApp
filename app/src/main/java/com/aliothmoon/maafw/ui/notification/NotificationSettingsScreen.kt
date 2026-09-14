@@ -100,7 +100,7 @@ fun NotificationSettingsScreen(
                 .fillMaxSize()
                 .padding(padding),
             contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             item(key = "internal") { InternalCard(state, viewModel::onIntent) }
             item(key = "triggers") { TriggerCard(state, viewModel::onIntent) }

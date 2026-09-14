@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -530,7 +531,11 @@ private fun IntervalSection(
         val totalMinutes = (draft.intervalDays ?: 0) * 24 * 60 + (draft.intervalHours ?: 0) * 60
         if (totalMinutes > 0) {
             Text(
-                text = stringResource(R.string.schedule_edit_total_hours, totalMinutes / 60),
+                text = pluralStringResource(
+                    R.plurals.schedule_edit_total_hours,
+                    totalMinutes / 60,
+                    totalMinutes / 60,
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

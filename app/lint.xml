@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 只登记有意为之的那些；真缺陷就地改，不往这里塞 -->
+<lint>
+
+    <!-- 依赖有新版是情报不是缺陷；升级要单独评估兼容性，不该每次 lint 都刷一屏 -->
+    <issue id="NewerVersionAvailable" severity="ignore" />
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+
+    <!-- 出的是 APK 不是 AAB，语言拆分无从谈起；per-app locale 走 AndroidX -->
+    <issue id="AppBundleLocaleChanges" severity="ignore" />
+
+    <!-- 日志层自己不能用 Timber：AppLogWriter 是 Timber 树的落盘端，
+         CrashHandler 跑在 Timber 可能已经死掉之后，特权进程侧（LogcatCaptureServiceImpl / third.Ln）
+         根本没种过树 -->
+    <issue id="LogNotTimber">
+        <ignore path="src/main/java/com/aliothmoon/maafw/log/AppLogWriter.kt" />
+        <ignore path="src/main/java/com/aliothmoon/maafw/log/CrashHandler.kt" />
+        <ignore path="src/main/java/com/aliothmoon/maafw/remote/LogcatCaptureServiceImpl.kt" />
+        <ignore path="src/main/java/com/aliothmoon/maafw/third" />
+    </issue>
+
+    <!-- third/ 是照搬上游的隐藏 API 包装层，反射与 @TargetApi 就是它存在的理由，改写会和上游对不上 -->
+    <issue id="PrivateApi">
+        <ignore path="src/main/java/com/aliothmoon/maafw/third" />
+        <ignore path="src/main/java/com/aliothmoon/maafw/remote/internal/ActivityUtils.kt" />
+    </issue>
+    <issue id="DiscouragedPrivateApi">
+        <ignore path="src/main/java/com/aliothmoon/maafw/remote/internal/ActivityUtils.kt" />
+    </issue>
+    <issue id="UseRequiresApi">
+        <ignore path="src/main/java/com/aliothmoon/maafw/third" />
+    </issue>
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/java/com/aliothmoon/maafw/third" />
+    </issue>
+
+    <!-- 无 profile 图标时 manifest 占位符回落到它，lint 看不见占位符替换后的值 -->
+    <issue id="UnusedResources">
+        <ignore regexp="ic_launcher_round" />
+    </issue>
+
+</lint>

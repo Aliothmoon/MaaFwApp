@@ -18,7 +18,7 @@ oneway interface IMaaRunnerCallback {
 
     void onAgentOutput(String line, boolean fromStderr) = 5;
 
-    /** 一个 agent child 已 connect（含本轮复用已在线的）；[exec] 是 PI 的 child_exec */
+    /** 一个 agent child 已 connect（含本轮复用已在线的）；[exec] 是真正拉起的可执行体，不是 PI 的 child_exec */
     void onAgentConnected(int index, int total, String exec) = 6;
 
     /** blocking modal；特权进程会在本地等待 acknowledgeModalFocus 后才放行 pipeline */

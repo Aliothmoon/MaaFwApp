@@ -52,9 +52,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,11 +104,11 @@ fun ScreenSaverView(
     var currentTime by remember { mutableStateOf(LocalTime.now()) }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
 
-    val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     // 漂移范围以 px 存，与 offset { IntOffset } 的单位一致
-    val maxOffsetXPx = with(density) { (configuration.screenWidthDp / 8).dp.roundToPx() }
-    val maxOffsetYPx = with(density) { (configuration.screenHeightDp / 4).dp.roundToPx() }
+    val containerSize = LocalWindowInfo.current.containerSize
+    val maxOffsetXPx = containerSize.width / 8
+    val maxOffsetYPx = containerSize.height / 4
 
     var burnInOffsetX by remember { mutableIntStateOf(0) }
     var burnInOffsetY by remember { mutableIntStateOf(0) }

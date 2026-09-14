@@ -12,16 +12,17 @@
     <string name="dialog_confirm">确定</string>
     <string name="common_restart">重启</string>
     <string name="dialog_cancel">取消</string>
+    <string name="common_expand_action">展开</string>
+    <string name="common_collapse_action">收起</string>
 
     <!-- 任务页 -->
     <string name="tasks_project_load_failed">项目加载失败，请查看首页诊断</string>
     <string name="tasks_reload">重新加载</string>
-    <string name="tasks_empty_config_title">还没有配置</string>
+    <string name="tasks_empty_config_title">暂无配置</string>
     <string name="tasks_empty_config_hint">点击上方选择器新建空配置，或从模板快速创建</string>
-    <string name="tasks_empty_task_title">还没有任务</string>
+    <string name="tasks_empty_task_title">暂无任务</string>
     <string name="tasks_empty_task_hint">从任务目录选择要执行的任务</string>
     <string name="tasks_add_task">添加任务</string>
-    <string name="tasks_run_order">任务列表</string>
     <string name="tasks_live_preview">实时预览</string>
     <string name="tasks_preview_waiting_surface">等待画面</string>
     <string name="virtual_display_game_running">运行中</string>
@@ -82,9 +83,6 @@
     <string name="home_project">项目</string>
     <string name="home_project_loading">正在加载 ProjectInterface…</string>
     <string name="home_project_load_failed">项目加载失败</string>
-    <string name="home_name">名称</string>
-    <string name="home_resource">服务器</string>
-    <string name="home_none">无</string>
     <string name="home_diagnostics_summary">诊断：%1$d 条</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="other">诊断：%1$d 条（%2$d 条错误）</item>
@@ -111,6 +109,8 @@
     <string name="settings_section_display">显示设置</string>
     <string name="settings_section_schedule">定时任务设置</string>
     <string name="settings_section_other">其他设置</string>
+    <string name="settings_pip_on_home">后台运行时自动画中画</string>
+    <string name="settings_pip_on_home_desc">后台模式任务运行中，停在任务页时按 Home 或手势回桌面，自动缩为画中画小窗继续显示画面。小窗内无法操作游戏</string>
     <string name="settings_theme">主题</string>
     <string name="settings_theme_style">主题风格</string>
     <string name="settings_follow_system">跟随系统</string>
@@ -123,50 +123,82 @@
     <string name="settings_run_mode">运行模式</string>
     <string name="settings_run_mode_background">后台模式</string>
     <string name="settings_run_mode_foreground">前台模式</string>
-    <string name="settings_run_mode_hint_background">在独立的虚拟屏幕上运行任务，手机可正常使用；分辨率由项目声明推导</string>
-    <string name="settings_run_mode_hint_foreground">直接操作当前屏幕，运行期间手机被占用；不会重启目标应用，预览里也不接管触摸</string>
-    <string name="settings_resource">服务器选择</string>
+    <string name="settings_resource">服务器</string>
     <string name="settings_no_resources">项目未提供可选服务器</string>
-    <string name="settings_current_resource">当前资源</string>
-    <string name="settings_not_selected">未选择</string>
-    <string name="settings_resource_hint">切换资源会影响任务适用性，运行期间不可切换</string>
     <string name="settings_reload_project">重新加载项目</string>
     <string name="settings_about">关于</string>
     <string name="settings_version">版本</string>
-    <string name="settings_build">构建</string>
+    <string name="settings_version_of">%1$s 版本</string>
+    <string name="settings_framework">MaaFramework</string>
     <string name="settings_telemetry">帮助改进本项目</string>
     <string name="settings_telemetry_desc">向项目作者发送任务名与运行结果，不含截图、日志正文与你填写的内容</string>
     <string name="settings_project">项目</string>
-    <string name="settings_project_version">项目版本</string>
     <string name="settings_about_contact">联系方式</string>
     <string name="settings_about_license">开源许可</string>
     <string name="settings_about_repository">项目仓库</string>
     <string name="settings_section_update">更新</string>
-    <string name="settings_update_download_source">下载源</string>
     <string name="settings_update_source_mirror">Mirror酱</string>
     <string name="settings_update_source_github">GitHub</string>
     <string name="settings_update_mirror_cdk">Mirror酱 CDK</string>
-    <string name="settings_update_mirror_cdk_required">选择 Mirror酱 下载源时必填</string>
-    <string name="settings_update_github_token">GitHub Token</string>
-    <string name="settings_update_github_token_hint">可选；仅用于 GitHub 更新下载</string>
+    <string name="settings_update_cdk_placeholder">输入您的 CDK</string>
+    <string name="settings_update_cdk_subscribe">没有CDK? 立即订阅</string>
+    <string name="settings_update_cdk_clear">清空 CDK</string>
+    <string name="settings_update_cdk_show">显示 CDK</string>
+    <string name="settings_update_cdk_hide">隐藏 CDK</string>
+    <string name="settings_update_cdk_unset">未设置</string>
+    <string name="settings_update_cdk_saved">已保存</string>
+    <string name="settings_update_mirror_cdk_desc">Mirror酱 是独立的第三方加速下载服务，需要付费使用，并非「%1$s」收费。其运营成本由订阅收入支撑，部分收益将回馈项目开发者。欢迎订阅 CDK 享受高速下载，同时支持项目持续开发。未填写 CDK 时请切换到 GitHub 更新源下载。</string>
+    <string name="settings_update_source">更新源</string>
+    <string name="settings_update_mirror_about">关于 Mirror酱</string>
+    <string name="settings_update_cancel_download">取消下载</string>
     <string name="settings_update_channel">更新渠道</string>
     <string name="settings_update_channel_stable">正式版</string>
     <string name="settings_update_channel_beta">公测版</string>
-    <string name="settings_update_check">检测更新</string>
-    <string name="settings_update_checking">检测中…</string>
+    <string name="settings_update_check">检查更新</string>
+    <string name="settings_update_checking">检查中…</string>
     <string name="settings_update_download">下载更新</string>
-    <string name="settings_update_downloading">下载中…</string>
-    <string name="settings_update_available">可更新版本</string>
-    <string name="settings_update_result">检测结果</string>
+    <string name="settings_update_result">检查结果</string>
     <string name="settings_update_up_to_date">当前已是最新版本</string>
-    <string name="settings_update_failed">检测失败：%1$s</string>
-    <string name="settings_update_progress_known">已下载 %1$s / %2$s</string>
-    <string name="settings_update_progress_unknown">已下载 %1$s</string>
-    <string name="settings_update_installer_started">已打开系统安装器</string>
-    <string name="settings_update_source_hint">下载源只影响更新下载，不改变更新检测的默认来源</string>
-    <string name="settings_update_notification_denied">通知权限未开启，无法在通知栏显示下载进度</string>
-    <string name="settings_update_notification_open_settings">前往开启</string>
-    <string name="settings_update_notification_error">需要授予通知权限才能在通知栏显示下载进度</string>
+    <string name="settings_update_no_downloadable_apk">所选更新源没有可下载的安装包</string>
+    <string name="settings_update_auto_check">启动时自动检查更新</string>
+    <string name="settings_update_auto_download">自动下载更新</string>
+    <string name="settings_update_auto_download_desc">启动检查发现新版本时自动下载并打开安装器</string>
+    <string name="dialog_update_found_title">发现新版本</string>
+    <string name="dialog_update_error_title">检查更新失败</string>
+    <string name="dialog_update_failed_title">更新失败</string>
+    <string name="dialog_update_later">稍后更新</string>
+    <string name="update_detail_http_status">HTTP %1$d</string>
+    <string name="update_download_detail_bytes">已下载 %1$s / %2$s</string>
+    <string name="update_download_detail_digest">期望 %1$s，实际 %2$s</string>
+    <string name="update_fail_with_detail">%1$s：%2$s</string>
+    <string name="update_fail_missing_configuration">更新源缺少配置</string>
+    <string name="update_fail_network">网络错误</string>
+    <string name="update_fail_http">服务端错误</string>
+    <string name="update_fail_rate_limited">请求过于频繁，已被限流</string>
+    <string name="update_fail_cdk_expired">CDK 已过期</string>
+    <string name="update_fail_cdk_invalid">CDK 不正确</string>
+    <string name="update_fail_cdk_quota_exhausted">CDK 今日下载次数已达上限</string>
+    <string name="update_fail_cdk_mismatched">CDK 类型和待下载的资源不匹配</string>
+    <string name="update_fail_cdk_blocked">CDK 已被封禁</string>
+    <string name="update_fail_cdk_required">未填写 CDK，无法通过 Mirror酱 获取下载地址；请填写 CDK 或切换到 GitHub 更新源</string>
+    <string name="update_fail_resource_not_found">当前项目不支持 Mirror酱，请切换到 GitHub 更新源</string>
+    <string name="update_fail_invalid_os">错误的系统参数</string>
+    <string name="update_fail_invalid_arch">错误的架构参数</string>
+    <string name="update_fail_invalid_channel">错误的更新通道参数</string>
+    <string name="update_fail_invalid_response">更新源返回了无法解析的内容</string>
+    <string name="update_fail_no_matching_asset">没有匹配的安装包</string>
+    <string name="update_fail_version_invalid">版本号无法解析</string>
+    <string name="update_fail_unknown">未知错误</string>
+    <string name="update_download_fail_invalid_url">下载地址无效</string>
+    <string name="update_download_fail_network">下载中断</string>
+    <string name="update_download_fail_http">下载服务端错误</string>
+    <string name="update_download_fail_storage">存储不可用</string>
+    <string name="update_download_fail_invalid_digest">安装包缺少校验值</string>
+    <string name="update_download_fail_digest_mismatch">安装包校验失败</string>
+    <string name="update_download_fail_unknown">下载失败</string>
+    <string name="update_install_fail_file_invalid">安装包不可用</string>
+    <string name="update_install_fail_installer_not_found">找不到系统安装器</string>
+    <string name="update_install_fail_unknown">无法启动安装</string>
     <string name="welcome_title">欢迎</string>
 
     <!-- 通知 -->
@@ -185,10 +217,23 @@
 
     <!-- 前台模式控制层 -->
     <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板。只拦按键，不读取屏幕内容</string>
-    <string name="overlay_panel_title">操作面板</string>
+    <string name="overlay_tab_tasks">任务</string>
+    <string name="overlay_tab_log">日志</string>
+    <string name="overlay_hide">隐藏</string>
     <string name="overlay_back_to_app">回到应用</string>
     <string name="overlay_lock">锁定位置</string>
     <string name="overlay_unlock">解除锁定</string>
+    <string name="overlay_edit_tasks">编辑任务</string>
+    <string name="overlay_edit_done">完成</string>
+    <string name="overlay_manage_config">编辑配置</string>
+    <string name="overlay_pane_view_empty_title">选择一个任务</string>
+    <string name="overlay_pane_view_empty_hint">左侧点一项，右侧改选项</string>
+    <string name="overlay_pane_edit_empty_title">选择要管理的任务</string>
+    <string name="overlay_pane_edit_empty_hint">可重命名、复制或移除</string>
+    <string name="overlay_pane_edit_add_hint">点「添加任务」从目录追加</string>
+    <string name="overlay_delete_task">移除这个任务？</string>
+    <string name="overlay_delete_config">删除这个配置？</string>
+    <string name="overlay_new_config">新建</string>
     <string name="overlay_ball_idle">空闲</string>
     <string name="overlay_ball_preparing">启动中</string>
     <string name="overlay_ball_running">运行中</string>
@@ -202,10 +247,7 @@
     <string name="settings_overlay_show">打开操作面板</string>
 
     <!-- 运行期屏保 -->
-    <string name="settings_screen_saver">熄屏挂机</string>
     <string name="settings_screen_saver_auto">运行时自动熄屏</string>
-    <string name="settings_screen_saver_hint">后台运行时将屏幕显示为全黑，仅保留时钟、电量与最新一条日志；向右滑动解锁，任务结束后自动关闭</string>
-    <string name="settings_screen_saver_show">立即熄屏</string>
     <string name="screensaver_idle">等待任务开始…</string>
     <string name="screensaver_swipe_to_unlock">向右滑动解锁</string>
 
@@ -217,7 +259,7 @@
 
     <string name="schedule_title">定时任务</string>
     <string name="schedule_add">新建规则</string>
-    <string name="schedule_empty">还没有定时规则</string>
+    <string name="schedule_empty">暂无定时规则</string>
     <string name="schedule_empty_hint">新建规则后，到达设定时间会自动执行绑定的运行配置</string>
     <string name="schedule_next_trigger">下次 %1$s</string>
     <string name="schedule_next_none">规则不完整，不会触发</string>
@@ -253,10 +295,12 @@
     <string name="schedule_interval_days">每 %1$d 天</string>
     <string name="schedule_edit_days_unit">天</string>
     <string name="schedule_edit_hours_unit">小时</string>
-    <string name="schedule_edit_total_hours">= %1$d 小时</string>
+    <plurals name="schedule_edit_total_hours">
+        <item quantity="other">= %1$d 小时</item>
+    </plurals>
 
     <string name="schedule_log_title">触发日志</string>
-    <string name="schedule_log_empty">还没有触发记录</string>
+    <string name="schedule_log_empty">暂无触发记录</string>
     <string name="schedule_log_clear">清空</string>
     <string name="schedule_log_delay">延迟 %1$s</string>
     <string name="schedule_result_triggered">已触发</string>
@@ -355,8 +399,6 @@
     <string name="permission_request">请求权限</string>
     <string name="permission_quick_grant">快捷授权</string>
     <string name="permission_requesting">授权中…</string>
-    <string name="permission_service_connected">特权进程已连接</string>
-    <string name="permission_service_disconnected">特权进程未连接</string>
     <string name="permission_open_shizuku">Shizuku 快捷入口</string>
     <string name="permission_expand">展开其他权限</string>
     <string name="permission_collapse">收起其他权限</string>
@@ -384,7 +426,7 @@
     <string name="home_status_stopping">任务停止中…</string>
     <string name="home_status_ready">就绪</string>
     <string name="home_service_connect">重新加载服务</string>
-    <string name="home_service_disconnect">关闭服务</string>
+    <string name="home_service_disconnect">关闭所有服务</string>
     <string name="dialog_shizuku_not_installed_title">未检测到 Shizuku</string>
     <string name="dialog_shizuku_not_installed_message">本应用依赖 Shizuku 服务运行，检测到设备未安装 Shizuku，请先安装。</string>
     <string name="dialog_shizuku_install_confirm">快捷安装 Shizuku</string>
@@ -400,13 +442,14 @@
     <string name="common_got_it">知道了</string>
 
     <!-- 运行日志 -->
-    <string name="run_log_title">运行日志</string>
-    <string name="run_log_count">%1$d 条</string>
+    <plurals name="run_log_count">
+        <item quantity="other">%1$d 条</item>
+    </plurals>
     <string name="run_log_export">导出</string>
     <string name="run_log_clear">清空</string>
-    <string name="run_log_empty">还没有日志；开始任务后 MaaFramework 的运行输出会显示在这里</string>
+    <string name="run_log_empty">暂无日志</string>
     <string name="tasks_log">日志</string>
-    <string name="run_log_filter_essential">关键</string>
+    <string name="run_log_filter_progress">进度</string>
     <string name="run_log_filter_all">全部</string>
     <string name="run_log_connecting">正在连接设备…</string>
     <string name="run_log_connected">设备连接成功</string>
@@ -426,8 +469,10 @@
 
     <!-- 历史日志：每轮运行落盘一份 -->
     <string name="log_archive_title">运行历史</string>
-    <string name="log_archive_empty">还没有历史记录；每次运行结束后会记录在这里</string>
-    <string name="log_archive_meta">%1$d 个任务 · %2$s</string>
+    <string name="log_archive_empty">暂无运行记录</string>
+    <plurals name="log_archive_meta">
+        <item quantity="other">%1$d 个任务 · %2$s</item>
+    </plurals>
     <string name="log_archive_cleanup">清理过期</string>
     <string name="log_archive_delete_title">删除这份记录</string>
     <string name="log_archive_delete_message">删除 %1$s 的运行记录？此操作无法撤销。</string>
@@ -444,7 +489,7 @@
 
     <!-- 错误日志：app 自身的警告与错误，由 AppLogWriter 落盘 -->
     <string name="app_log_title">错误日志</string>
-    <string name="app_log_empty">还没有错误日志</string>
+    <string name="app_log_empty">暂无错误日志</string>
     <string name="app_log_clear">全部清除</string>
     <!-- 大小 · 最后写入时间 -->
     <string name="app_log_meta">%1$s · %2$s</string>
@@ -456,7 +501,7 @@
     <string name="log_export_share">分享</string>
     <string name="log_export_save">保存到设备</string>
     <string name="log_export_running">正在打包…</string>
-    <string name="log_export_failed">导出失败：没有可导出的日志</string>
+    <string name="log_export_failed">导出失败</string>
     <string name="log_export_saved">已保存为 %1$s</string>
     <string name="log_export_subject">MaaFwApp 日志</string>
 
@@ -519,7 +564,9 @@
     <!-- PI 解压 -->
     <string name="pi_install_title">正在准备项目资源</string>
     <string name="pi_install_progress">%1$d / %2$d (%3$d%%)</string>
-    <string name="pi_install_progress_count">已写入 %1$d 个文件</string>
+    <plurals name="pi_install_progress_count">
+        <item quantity="other">已写入 %1$d 个文件</item>
+    </plurals>
     <string name="pi_install_note">首次启动与版本更新后需要解压一次，请稍候…</string>
     <string name="pi_install_failed_title">项目资源准备失败</string>
     <string name="pi_install_failed_message">%1$s\n\n请检查存储空间是否充足，然后重试。</string>
@@ -544,7 +591,6 @@
     <string name="foreground_resolution_too_small">屏幕 %1$s 太小，放不下 16:9 的画面</string>
     <string name="foreground_resolution_required">当前屏幕比例不是 16:9，请先点「修改分辨率」</string>
     <string name="foreground_service_required">请先连接 Shizuku 或 Root 后端</string>
-    <string name="foreground_overlay_unsupported">操作面板暂不可用</string>
 
     <!-- 设置页「通知」分组入口 -->
     <string name="settings_section_notification">通知</string>
@@ -622,13 +668,6 @@
     <string name="notification_event_channel_silent_desc">任务结束后在通知栏留一条，不出声</string>
     <string name="notification_event_channel_popup_name">任务结果（弹出）</string>
     <string name="notification_event_channel_popup_desc">任务结束后弹出横幅并出声</string>
-    <string name="notification_channel_update_download">应用更新下载</string>
-    <string name="notification_channel_update_download_desc">下载新版本时在通知栏显示进度，下载完成后自动收起</string>
-    <string name="notification_update_download_title">正在下载 %1$s</string>
-    <string name="notification_update_download_complete_title">%1$s 已下载</string>
-    <string name="notification_update_download_complete">已下载完毕，准备进入系统安装</string>
-    <string name="notification_update_download_failed_title">下载失败</string>
-    <string name="notification_update_download_failed">下载失败：%1$s</string>
 
     <string name="notification_event_run_completed">任务已全部完成</string>
     <plurals name="notification_event_run_completed_body">

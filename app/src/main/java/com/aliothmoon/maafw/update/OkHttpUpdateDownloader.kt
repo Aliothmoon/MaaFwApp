@@ -1,148 +1,103 @@
 package com.aliothmoon.maafw.update
 
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.constant.MiscConstants
+import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.util.HttpClientHelper
+import com.aliothmoon.maafw.util.await
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import com.aliothmoon.maafw.MaaDispatchers
 import timber.log.Timber
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
-import java.io.RandomAccessFile
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Locale
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.coroutineContext
 
-internal class OkHttpUpdateDownloader(
-    private val directory: File,
-    okHttpClient: OkHttpClient = defaultClient(),
-    private val userAgent: String = "MaaFwApp Android",
-) : UpdateDownloadApi {
-
-    private val client = okHttpClient.newBuilder()
-        .callTimeout(0, TimeUnit.MILLISECONDS)
-        .build()
+class OkHttpUpdateDownloader(
+    private val helper: HttpClientHelper,
+) {
 
     private val mutex = Mutex()
 
-    override suspend fun download(
-        update: UpdateCheckResult.UpdateAvailable,
-        credentials: UpdateDownloadCredentials,
-        onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit,
+    suspend fun download(
+        update: ResolvedUpdate,
+        onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit = { _, _ -> },
     ): UpdateDownloadResult = mutex.withLock {
         withContext(MaaDispatchers.IO) {
-            downloadLocked(update, credentials, onProgress)
+            downloadLocked(update, onProgress)
         }
     }
 
     private suspend fun downloadLocked(
-        update: UpdateCheckResult.UpdateAvailable,
-        credentials: UpdateDownloadCredentials,
+        update: ResolvedUpdate,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit,
     ): UpdateDownloadResult {
         val url = try {
             update.downloadUrl.toHttpUrl()
         } catch (_: IllegalArgumentException) {
-            return failed(UpdateDownloadFailure.INVALID_URL, "Invalid update download URL")
+            return failed(UpdateDownloadFailure.INVALID_URL)
         }
         if (!url.isHttps) {
-            return failed(UpdateDownloadFailure.INVALID_URL, "Update download must use HTTPS")
+            return failed(UpdateDownloadFailure.INVALID_URL)
         }
 
         val expectedDigest = normalizeDigest(update.sha256)
-            ?: return failed(
-                UpdateDownloadFailure.INVALID_DIGEST,
-                "Update SHA-256 digest is missing or invalid",
-            )
+            ?: return failed(UpdateDownloadFailure.INVALID_DIGEST)
         val target = targetFile(update, expectedDigest)
         val part = File(target.path + PART_EXTENSION)
+        var call: Call? = null
         try {
             if (target.isFile && digestOf(target) == expectedDigest) {
                 return downloaded(update, target, expectedDigest)
             }
             if (!prepareDirectory()) {
-                return failed(UpdateDownloadFailure.STORAGE, "Cannot create update download directory")
+                return failed(UpdateDownloadFailure.STORAGE)
             }
             if (target.isFile && !target.delete()) {
-                return failed(UpdateDownloadFailure.STORAGE, "Cannot replace stale update APK")
+                return failed(UpdateDownloadFailure.STORAGE)
             }
 
-            // 断点续传:上一次失败的 .part 字节数,会作为 Range 起点
-            val resumeOffset = part.length()
-            val request = buildRequest(url, update, credentials, resumeOffset)
-            client.newCall(request).await().use { response ->
+            val activeCall = helper.rawClient().newCall(buildRequest(url)).also { call = it }
+            activeCall.await().use { response ->
                 val code = response.code
-                if (code != HTTP_OK && code != HTTP_PARTIAL) {
+                if (code != HTTP_OK) {
                     throw UpdateDownloadException(
                         UpdateDownloadFailure.HTTP,
-                        "Update download returned HTTP $code",
+                        "HTTP $code",
+                        detail = uiTextOf(R.string.update_detail_http_status, code),
                     )
                 }
-                val partial = code == HTTP_PARTIAL
-                // 服务器不认 Range:重置 .part,从 0 重新下载
-                val effectiveOffset = if (partial) {
-                    resumeOffset
-                } else if (resumeOffset > 0L) {
-                    Timber.tag("UpdateDownload").w(
-                        "Server returned HTTP %d despite Range header; dropping stale %d-byte .part",
-                        code, resumeOffset,
-                    )
-                    if (!part.delete()) {
-                        throw UpdateDownloadException(
-                            UpdateDownloadFailure.STORAGE,
-                            "Cannot truncate stale partial update download",
-                        )
-                    }
-                    0L
-                } else 0L
-
-                val body = response.body
-                val responseLength = body.contentLength()
-                val totalLength = if (effectiveOffset > 0L) {
-                    if (responseLength < 0L) -1L else responseLength + effectiveOffset
-                } else responseLength
-
+                val totalLength = response.body.contentLength()
                 val digest = MessageDigest.getInstance(SHA_256)
-                // 续传时把已落盘的字节先增量喂给 digest,避免最终验证时再扫一遍整个文件
-                if (effectiveOffset > 0L) {
-                    FileInputStream(part).buffered().use { ins ->
-                        val buffer = ByteArray(BUFFER_SIZE)
-                        while (true) {
-                            val n = ins.read(buffer)
-                            if (n < 0) break
-                            digest.update(buffer, 0, n)
-                        }
-                    }
-                }
+                var downloadedBytes = 0L
+                var lastProgressBytes = -PROGRESS_INTERVAL.toLong()
+                onProgress(0L, totalLength)
 
-                var downloadedBytes = effectiveOffset
-                var lastProgressBytes: Long = -PROGRESS_INTERVAL.toLong()
-                onProgress(downloadedBytes, totalLength)
-
-                RandomAccessFile(part, "rw").use { raf ->
-                    if (effectiveOffset > 0L) raf.seek(raf.length())
-                    else raf.setLength(0L)
+                val input = response.body.byteStream()
+                FileOutputStream(part).use { out ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     while (true) {
-                        val read = body.byteStream().read(buffer)
+                        // 阻塞 read 不感知协程取消：逐块自检退出，配合 catch 里的 call.cancel()
+                        // 让还阻塞在 socket 上的 read 立刻抛出
+                        coroutineContext.ensureActive()
+                        val read = input.read(buffer)
                         if (read < 0) break
                         if (read == 0) continue
-
-                        raf.write(buffer, 0, read)
+                        out.write(buffer, 0, read)
                         digest.update(buffer, 0, read)
                         downloadedBytes += read
                         if (
@@ -158,21 +113,25 @@ internal class OkHttpUpdateDownloader(
                 if (totalLength >= 0 && downloadedBytes != totalLength) {
                     throw UpdateDownloadException(
                         UpdateDownloadFailure.NETWORK,
-                        "Update download ended at $downloadedBytes of $totalLength bytes",
+                        "ended at $downloadedBytes of $totalLength bytes",
+                        detail = uiTextOf(
+                            R.string.update_download_detail_bytes,
+                            downloadedBytes.toString(),
+                            totalLength.toString(),
+                        ),
                     )
                 }
 
                 val actualDigest = hex(digest.digest())
-                if (!MessageDigest.isEqual(
-                        actualDigest.toByteArray(Charsets.US_ASCII),
-                        expectedDigest.toByteArray(Charsets.US_ASCII),
-                    )
-                ) {
-                    // digest 不匹配:.part 的字节是坏的,留它就会污染下次下载
-                    part.delete()
+                if (actualDigest != expectedDigest) {
                     throw UpdateDownloadException(
                         UpdateDownloadFailure.DIGEST_MISMATCH,
                         "SHA-256 mismatch: expected $expectedDigest, got $actualDigest",
+                        detail = uiTextOf(
+                            R.string.update_download_detail_digest,
+                            expectedDigest,
+                            actualDigest,
+                        ),
                     )
                 }
                 if (downloadedBytes != lastProgressBytes) {
@@ -182,52 +141,32 @@ internal class OkHttpUpdateDownloader(
                 return downloaded(update, target, actualDigest)
             }
         } catch (e: CancellationException) {
+            call?.cancel()
             throw e
         } catch (e: UpdateDownloadException) {
-            // 失败时保留 .part,下次重试时通过 Range 头从断点继续
-            return failed(e.failure, e.message)
+            return failed(e.failure, e.detail, e.message)
         } catch (_: SecurityException) {
-            return failed(UpdateDownloadFailure.STORAGE, "Update download storage access was denied")
+            return failed(UpdateDownloadFailure.STORAGE)
         } catch (_: IOException) {
-            return failed(UpdateDownloadFailure.NETWORK, "Update download failed")
+            return failed(UpdateDownloadFailure.NETWORK)
         } catch (e: Exception) {
-            return failed(UpdateDownloadFailure.UNKNOWN, e.message)
+            return failed(UpdateDownloadFailure.UNKNOWN, logMessage = e.message)
+        } finally {
+            // 不支持续传：成功路径 move 后 part 已不存在，失败/取消一律清掉
+            part.delete()
         }
-        // 显式不提 finally { part.delete() }: 成功路径 move() 已经改名,失败路径故意保留 .part
     }
 
-    private fun buildRequest(
-        url: okhttp3.HttpUrl,
-        update: UpdateCheckResult.UpdateAvailable,
-        credentials: UpdateDownloadCredentials,
-        resumeOffset: Long,
-    ): Request {
-        val builder = Request.Builder()
+    private fun buildRequest(url: okhttp3.HttpUrl): Request =
+        Request.Builder()
             .url(url)
-            .apply {
-                header("User-Agent", userAgent)
-                when (update.source) {
-                    UpdateSource.GITHUB -> credentials.githubToken
-                        ?.trim()
-                        ?.takeIf(String::isNotBlank)
-                        ?.let { header("Authorization", "Bearer $it") }
-                    // Mirror酱的 CDK 用于解析下载地址，不作为 CDN 下载请求的鉴权头。
-                    UpdateSource.MIRROR_CHYAN -> Unit
-                }
-                if (resumeOffset > 0L) {
-                    header("Range", "bytes=$resumeOffset-")
-                    Timber.tag("UpdateDownload").w(
-                        "Resuming download from offset %d (existing .part)",
-                        resumeOffset,
-                    )
-                }
-            }
+            .header("User-Agent", MiscConstants.BROWSER_UA)
+            .header("Accept-Encoding", "identity")
             .get()
-        return builder.build()
-    }
+            .build()
 
     private fun prepareDirectory(): Boolean = try {
-        directory.mkdirs() || directory.isDirectory
+        with(AppPaths.UPDATES_CACHE_DIR) { mkdirs() || isDirectory }
     } catch (_: SecurityException) {
         false
     }
@@ -253,26 +192,26 @@ internal class OkHttpUpdateDownloader(
             throw UpdateDownloadException(
                 UpdateDownloadFailure.STORAGE,
                 "Cannot finalize update APK",
-                e,
+                cause = e,
             )
         } catch (e: IOException) {
             throw UpdateDownloadException(
                 UpdateDownloadFailure.STORAGE,
                 "Cannot finalize update APK",
-                e,
+                cause = e,
             )
         }
     }
 
     private fun targetFile(
-        update: UpdateCheckResult.UpdateAvailable,
+        update: ResolvedUpdate,
         expectedDigest: String,
     ): File {
         val identity = expectedDigest.takeLast(DIGEST_FILE_SUFFIX_LENGTH)
         val safeVersion = update.version.replace(UNSAFE_FILE_NAME, "_")
             .take(MAX_VERSION_LENGTH)
             .ifBlank { "unknown" }
-        return File(directory, "maafw-${safeVersion}-${identity}.apk")
+        return File(AppPaths.UPDATES_CACHE_DIR, "maafw-${safeVersion}-${identity}.apk")
     }
 
     private fun digestOf(file: File): String = try {
@@ -290,7 +229,7 @@ internal class OkHttpUpdateDownloader(
         throw UpdateDownloadException(
             UpdateDownloadFailure.STORAGE,
             "Cannot verify downloaded update APK",
-            e,
+            cause = e,
         )
     }
 
@@ -302,12 +241,11 @@ internal class OkHttpUpdateDownloader(
     }
 
     private fun downloaded(
-        update: UpdateCheckResult.UpdateAvailable,
+        update: ResolvedUpdate,
         file: File,
         sha256: String,
     ): UpdateDownloadResult.Downloaded = UpdateDownloadResult.Downloaded(
         DownloadedUpdate(
-            source = update.source,
             version = update.version,
             file = file,
             sha256 = sha256,
@@ -316,18 +254,21 @@ internal class OkHttpUpdateDownloader(
 
     private fun failed(
         reason: UpdateDownloadFailure,
-        message: String? = null,
-    ): UpdateDownloadResult.Failed = UpdateDownloadResult.Failed(reason, message)
+        detail: UiText? = null,
+        logMessage: String? = null,
+    ): UpdateDownloadResult.Failed {
+        if (logMessage != null) Timber.tag("UpdateDownload").w("%s: %s", reason.name, logMessage)
+        return UpdateDownloadResult.Failed(reason, detail)
+    }
 
     private fun hex(value: ByteArray): String = value.joinToString("") {
         String.format(Locale.US, "%02x", it)
     }
 
-    private fun Int.isSuccess(): Boolean = this in 200..299
-
     private class UpdateDownloadException(
         val failure: UpdateDownloadFailure,
         override val message: String,
+        val detail: UiText? = null,
         override val cause: Throwable? = null,
     ) : Exception(message, cause)
 
@@ -339,27 +280,8 @@ internal class OkHttpUpdateDownloader(
         const val DIGEST_FILE_SUFFIX_LENGTH = 16
         const val MAX_VERSION_LENGTH = 48
         const val HTTP_OK = 200
-        const val HTTP_PARTIAL = 206
         val DIGEST_PREFIX_PATTERN = Regex("""^sha256:""", RegexOption.IGNORE_CASE)
         val DIGEST_PATTERN = Regex("""^[0-9a-f]{64}$""")
         val UNSAFE_FILE_NAME = Regex("""[^A-Za-z0-9._-]""")
-
-        fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .build()
     }
-}
-
-private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
-    enqueue(object : Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            if (continuation.isActive) continuation.resumeWithException(e)
-        }
-
-        override fun onResponse(call: Call, response: Response) {
-            continuation.resume(response) { _, _, _ -> response.close() }
-        }
-    })
-    continuation.invokeOnCancellation { cancel() }
 }

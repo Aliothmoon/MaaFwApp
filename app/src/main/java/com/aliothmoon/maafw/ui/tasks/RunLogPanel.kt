@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -53,7 +54,7 @@ import java.util.Locale
  * 内嵌而非弹层：看日志时多半同时要看任务进度与那颗启停按钮，全屏弹层把两者都挡了
  * 开关在配置行右侧，本组件不自带关闭钮
  *
- * 「关键」档是 `RunLogComposer` 合成过的人话；「全部」档另外露出没被合成的原始回调，
+ * 「进度」档是 `RunLogComposer` 合成过的人话；「全部」档另外露出没被合成的原始回调，
  * 那些保持等宽、可展开看原样 details_json——排障时对得上官方文档与源码的原文比什么都值钱
  */
 @Composable
@@ -80,7 +81,7 @@ internal fun RunLogPanel(
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
         ) {
             MaaChoiceChip(
-                label = stringResource(R.string.run_log_filter_essential),
+                label = stringResource(R.string.run_log_filter_progress),
                 selected = essentialOnly,
                 onClick = { essentialOnly = true },
             )
@@ -90,7 +91,7 @@ internal fun RunLogPanel(
                 onClick = { essentialOnly = false },
             )
             Text(
-                text = stringResource(R.string.run_log_count, visible.size),
+                text = pluralStringResource(R.plurals.run_log_count, visible.size, visible.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),

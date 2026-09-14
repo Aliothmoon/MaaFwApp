@@ -33,6 +33,9 @@ private const val FIXED_SIZE_DELAY_MS = 50L
  * 只在 Surface 尺寸等于虚拟屏尺寸时才上报：`setFixedSize` 是异步的，
  * 提前把还是布局尺寸的 Surface 交出去，画面会按错误比例贴上来
  *
+ * [onSurfaceCreated] 与 [onSurfaceAvailable] 差着一整轮 `setFixedSize`，不能合并：
+ * 前者是「画布有了」，遮罩与画中画武装看它；后者是「尺寸对上了，能交给特权进程」
+ *
  * 本组件不持有「已上报哪个 Surface」的状态，也不在离开组合时解绑——
  * 它整个活在 movableContent 里，搬家时这些状态会跟着一起动，
  * 判重与解绑都由外层（[com.aliothmoon.maafw.ui.tasks.rememberMovablePreview]）负责
@@ -40,12 +43,14 @@ private const val FIXED_SIZE_DELAY_MS = 50L
 @Composable
 fun MaaPreviewSurface(
     resolution: DisplayResolution,
+    onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (Surface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
     modifier: Modifier = Modifier,
     overlay: @Composable () -> Unit = {},
 ) {
     val currentResolution by rememberUpdatedState(resolution)
+    val currentCreated by rememberUpdatedState(onSurfaceCreated)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
     val scope = rememberCoroutineScope()
@@ -59,6 +64,7 @@ fun MaaPreviewSurface(
                         holder.setFormat(PixelFormat.RGBA_8888)
                         holder.addCallback(object : SurfaceHolder.Callback {
                             override fun surfaceCreated(holder: SurfaceHolder) {
+                                currentCreated()
                                 scope.launch {
                                     delay(FIXED_SIZE_DELAY_MS)
                                     val res = currentResolution

@@ -9,11 +9,6 @@ static jstring ping(JNIEnv *env, jclass clazz) {
     return env->NewStringUTF("LibBridge");
 }
 
-static void nativeSetContactSupport(JNIEnv *env, jclass clazz, jboolean supported) {
-    (void) env; (void) clazz;
-    SetInputContactSupport(supported == JNI_TRUE);
-}
-
 static jobject nativeGetFrameBufferBitmap(JNIEnv *env, jclass clazz) {
     (void) clazz;
     return CreateFrameBufferBitmap(env);
@@ -43,7 +38,6 @@ static jlong nativeGetFrameCount(JNIEnv *env, jclass clazz) {
 
 static JNINativeMethod gMethods[] = {
         {"ping",                  "()Ljava/lang/String;",        reinterpret_cast<void *>(ping)},
-        {"setContactSupport",     "(Z)V",                         reinterpret_cast<void *>(nativeSetContactSupport)},
         {"setupNativeCapturer",   "(II)Landroid/view/Surface;",  reinterpret_cast<void *>(nativeSetupNativeCapturer)},
         {"releaseNativeCapturer", "()V",                         reinterpret_cast<void *>(nativeReleaseNativeCapturer)},
         {"setPreviewSurface",     "(Ljava/lang/Object;)V",       reinterpret_cast<void *>(nativeSetPreviewSurface)},
@@ -89,7 +83,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 
     JNIEnv *env = nullptr;
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) == JNI_OK && env) {
-        SetPreviewSurface(env, nullptr);
+        ShutdownPreview(env);
         ReleaseInputBridge(env);
     }
 }

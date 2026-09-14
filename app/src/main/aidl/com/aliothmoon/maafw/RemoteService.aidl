@@ -64,11 +64,16 @@ interface RemoteService {
     oneway void setTouchCallback(ITouchEventCallback callback) = 21;
 
     // ── 预览上的手动操作 ──
-    oneway void touchDown(int x, int y) = 30;
 
-    oneway void touchMove(int x, int y) = 31;
+    /**
+     * contact 是 0..15 的手指槽位，与 MotionEvent 的 pointer id 同义
+     * 单指版本占的 30..32 作废不复用：同 id 换签名会让挺过升级的旧进程拿两个 int 解三个 int
+     */
+    oneway void touchDown(int x, int y, int contact) = 33;
 
-    oneway void touchUp(int x, int y) = 32;
+    oneway void touchMove(int x, int y, int contact) = 34;
+
+    oneway void touchUp(int x, int y, int contact) = 35;
 
     // ── 代授权限 ──
 
