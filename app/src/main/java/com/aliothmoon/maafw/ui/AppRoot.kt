@@ -627,7 +627,7 @@ fun AppRoot(
 
         FocusDialogHost(
             controller = focusDialogController,
-            onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+            onMessage = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
         )
     }
 }
