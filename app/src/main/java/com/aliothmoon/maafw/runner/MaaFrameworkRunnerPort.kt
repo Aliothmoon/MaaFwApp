@@ -51,6 +51,8 @@ class MaaFrameworkRunnerPort(
     private val runMode: () -> RunMode,
     /** 同上：分辨率偏好可能两轮之间被改 */
     private val resolutionPreference: () -> ResolutionPreference,
+    /** 同上：StartApp 的强停策略可能两轮之间被改 */
+    private val forceRestartApp: () -> Boolean,
     /** 调试模式：传给特权进程 setup 的 isDebug，开启 MaaFramework 详细日志 */
     private val debugMode: () -> Boolean,
     private val scope: CoroutineScope,
@@ -324,6 +326,7 @@ class MaaFrameworkRunnerPort(
             screenWidth = width,
             screenHeight = height,
             displayMode = mode.displayMode,
+            forceRestartApp = forceRestartApp(),
             tasks = plan.tasks.map {
                 RuntimeTaskPayload(
                     taskName = it.taskName,

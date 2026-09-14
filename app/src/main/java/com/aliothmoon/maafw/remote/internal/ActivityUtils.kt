@@ -32,6 +32,10 @@ object ActivityUtils {
     @Volatile
     var forceFullscreenOnVirtualDisplay: Boolean = false
 
+    /** false 时仅在目标应用未确认位于目标虚拟屏的情况下强停；进程默认 true 以保持旧行为 */
+    @Volatile
+    var forceRestartOnVirtualDisplay: Boolean = true
+
     private val setLaunchWindowingMode by lazy {
         runCatching {
             ActivityOptions::class.java
@@ -85,6 +89,18 @@ object ActivityUtils {
     @JvmStatic
     fun packageNameOf(spec: String): String = componentOf(spec)?.packageName ?: spec
 
+    /** 无法确认 display 时返回 true，保守沿用旧强停行为 */
+    internal fun shouldForceStopBeforeStart(
+        requestedForceStop: Boolean,
+        targetDisplayId: Int,
+        currentDisplayId: Int?,
+        forceRestart: Boolean,
+    ): Boolean = requestedForceStop && (
+        targetDisplayId == Display.DEFAULT_DISPLAY ||
+            forceRestart ||
+            currentDisplayId != targetDisplayId
+        )
+
     private fun componentOf(spec: String): ComponentName? =
         spec.takeIf { it.contains('/') }?.let { ComponentName.unflattenFromString(it) }
 
@@ -121,8 +137,19 @@ object ActivityUtils {
         }
         intent.addFlags(flag)
 
-        if (forceStop) {
+        val currentDisplayId = if (
+            forceStop &&
+            !forceRestartOnVirtualDisplay &&
+            displayId != Display.DEFAULT_DISPLAY
+        ) {
+            getAppDisplayId(targetPackage)
+        } else {
+            null
+        }
+        if (shouldForceStopBeforeStart(forceStop, displayId, currentDisplayId, forceRestartOnVirtualDisplay)) {
             ServiceManager.getActivityManager().forceStopPackage(targetPackage)
+        } else {
+            Ln.i("startApp keeps $targetPackage alive on display $displayId")
         }
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
 
