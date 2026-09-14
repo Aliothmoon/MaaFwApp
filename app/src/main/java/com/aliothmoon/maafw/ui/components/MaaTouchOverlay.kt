@@ -45,6 +45,16 @@ fun MaaTouchOverlay(
                 y = size.height * marker.y.coerceIn(0, maxY) / maxY.toFloat(),
             )
 
+            // 手动触摸的槽位从高位取，恒带环；不带环的那个点是 MaaFramework 注入的
+            if (marker.contact > 0) {
+                drawCircle(
+                    color = Color.White.copy(alpha = alpha * 0.7f),
+                    radius = 9.dp.toPx(),
+                    center = center,
+                    style = Stroke(width = 1.dp.toPx()),
+                )
+            }
+
             when (marker.action) {
                 MotionEvent.ACTION_DOWN -> {
                     drawCircle(

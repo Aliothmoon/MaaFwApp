@@ -40,9 +40,8 @@ class UpdateVersionTest {
     }
 
     @Test
-    fun `invalid versions cannot be compared`() {
+    fun `invalid versions cannot be parsed`() {
         assertNull(UpdateVersion.parse("latest"))
-        assertNull(isUpdateAvailable("1.0.0", "unknown"))
-        assertNull(isUpdateAvailable("unknown", "1.0.0"))
+        assertNull(UpdateVersion.parse("unknown"))
     }
 }

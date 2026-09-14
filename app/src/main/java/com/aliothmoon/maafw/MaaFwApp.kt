@@ -64,6 +64,9 @@ class MaaFwApp : Application() {
         }.koin
         writer.setup()
         LogTreeHolder(writer, settings.debugMode::value).setup()
+        // PermissionManager 在 postCreate 里才建，但它的授权观察器构造期就可能 bind()，
+        // 连接器的 context 必须先行注入（backendProvider 依赖设置加载，只能在 postCreate 里给）
+        RemoteServiceManager.initializeConnectors(this)
         koin.get<CoroutineScope>(named<AppCoroutineScope>()).launch {
             settings.loaded.first { it }
             withContext(Dispatchers.Main) { postCreate(koin) }

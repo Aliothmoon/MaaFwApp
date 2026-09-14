@@ -7,6 +7,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * 多指规划：pointer index 必须紧凑且 ACTION_POINTER_INDEX 指向正确的手指，
+ * 否则系统侧会把第二指的按下/抬起记到别的手指上
+ */
 class TouchPointerSequenceTest {
 
     private fun p(contact: Int, x: Float = contact * 10f) = Pointer(contact, x, 0f)
@@ -33,7 +37,7 @@ class TouchPointerSequenceTest {
     @Test
     fun `lift the second finger first is POINTER_UP`() {
         val current = listOf(p(0), p(1))
-        val step = TouchPointerSequence.plan(Kind.Up, current, 1, 0f, 0f)
+        val step = TouchPointerSequence.plan(Kind.Up, current, 1, 10f, 0f)
         assertTrue(step.ok)
         assertEquals(TouchPointerSequence.ACTION_POINTER_UP, step.actionMasked)
         assertEquals(1, step.changingIndex)
@@ -52,10 +56,19 @@ class TouchPointerSequenceTest {
 
     @Test
     fun `last finger up is ACTION_UP`() {
-        val step = TouchPointerSequence.plan(Kind.Up, listOf(p(1)), 1, 0f, 0f)
+        val step = TouchPointerSequence.plan(Kind.Up, listOf(p(1)), 1, 10f, 0f)
         assertTrue(step.ok)
         assertEquals(TouchPointerSequence.ACTION_UP, step.actionMasked)
         assertEquals(listOf(p(1)), step.pointers)
+    }
+
+    @Test
+    fun `up carries the lift point of that contact`() {
+        // fw 的 touch_up 传的是该手指最后位置；抬起坐标要落到被抬的那根手指上
+        val step = TouchPointerSequence.plan(Kind.Up, listOf(p(0), p(1)), 1, 40f, 50f)
+        assertTrue(step.ok)
+        assertEquals(Pointer(1, 40f, 50f), step.pointers[1])
+        assertEquals(p(0), step.pointers[0])
     }
 
     @Test

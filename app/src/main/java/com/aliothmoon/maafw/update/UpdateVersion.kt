@@ -69,9 +69,3 @@ internal data class UpdateVersion(
         }
     }
 }
-
-internal fun isUpdateAvailable(latest: String, current: String): Boolean? {
-    val latestVersion = UpdateVersion.parse(latest) ?: return null
-    val currentVersion = UpdateVersion.parse(current) ?: return null
-    return latestVersion > currentVersion
-}

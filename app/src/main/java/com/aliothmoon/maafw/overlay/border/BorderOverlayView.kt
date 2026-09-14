@@ -20,6 +20,8 @@ import android.view.animation.LinearInterpolator
  *
  * 前台模式下目标应用占满屏幕，除了这圈边框没有别的迹象能区分手动与自动
  */
+// 只由代码构造塞进 WindowManager，没有 XML 膨胀路径
+@SuppressLint("ViewConstructor")
 class BorderOverlayView(context: Context, private val style: BorderStyle = BorderStyle()) : View(context) {
 
     private val borderWidthPx: Float = style.widthDp * resources.displayMetrics.density
