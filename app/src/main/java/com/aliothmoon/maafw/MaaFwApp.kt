@@ -18,6 +18,7 @@ import com.aliothmoon.maafw.log.CrashHandler
 import com.aliothmoon.maafw.log.LogTreeHolder
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.settings.AppSettingsManager
@@ -63,6 +64,9 @@ class MaaFwApp : Application() {
         }.koin
         writer.setup()
         LogTreeHolder(writer, settings.debugMode::value).setup()
+        // PermissionManager 在 postCreate 里才建，但它的授权观察器构造期就可能 bind()，
+        // 连接器的 context 必须先行注入（backendProvider 依赖设置加载，只能在 postCreate 里给）
+        RemoteServiceManager.initializeConnectors(this)
         koin.get<CoroutineScope>(named<AppCoroutineScope>()).launch {
             settings.loaded.first { it }
             withContext(Dispatchers.Main) { postCreate(koin) }
@@ -74,6 +78,7 @@ class MaaFwApp : Application() {
         val provider = koin.get<AppSettingsManager>().startupBackend::value
         RemoteServiceManager.initialize(this, provider)
         koin.get<OverlayController>().setup()
+        koin.get<SessionMessagePresenter>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
         koin.get<TelemetryController>().setup()
     }

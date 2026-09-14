@@ -1,11 +1,12 @@
 package com.aliothmoon.maafw.notification.provider
 
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
-import timber.log.Timber
-import java.time.LocalDateTime
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.util.HttpClientHelper
 import java.time.format.DateTimeFormatter
+import java.time.LocalDateTime
+import timber.log.Timber
 
 /**
  * 自定义 Webhook：请求体是用户写的模板，`{title}` `{content}` `{time}` 三个占位符
@@ -14,7 +15,7 @@ import java.time.format.DateTimeFormatter
  * 正文里的换成字面量 `\n`——原样塞进去会让整个请求体解不出来
  */
 class CustomWebhookProvider(
-    private val httpClient: NotificationHttpClient,
+    private val httpClient: HttpClientHelper,
     private val settingsManager: NotificationSettingsManager,
 ) : NotificationProvider {
 

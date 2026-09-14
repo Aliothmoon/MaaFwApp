@@ -65,6 +65,8 @@ internal data class BuildProfile(
     val appId: String?,
     val appLabel: String?,
     val appIcon: File?,
+    /** Wins over the PI's own mirrorchyan_rid: the packager knows where this build is published */
+    val mirrorchyanRid: String?,
 )
 
 /** Nothing configured at all: the package ships without a PI, see the soft failure on syncPiAssets */
@@ -78,6 +80,7 @@ private val NO_PROFILE = BuildProfile(
     appId = null,
     appLabel = null,
     appIcon = null,
+    mirrorchyanRid = null,
 )
 
 /**
@@ -101,6 +104,7 @@ private fun File.readProfile(): BuildProfile {
     val base = parentFile
     val agent = root.child("agent")
     val app = root.child("app")
+    val update = root.child("update")
 
     val agentSourceDir = agent?.text("sourceDir")?.let { base.resolvePath(it).absolutePath }
     val agentRuntimes = agent?.children("runtimes")?.map { it.toAgentRuntime() }.orEmpty()
@@ -123,6 +127,7 @@ private fun File.readProfile(): BuildProfile {
         appId = app?.text("id"),
         appLabel = app?.text("label"),
         appIcon = app?.text("icon")?.let { base.resolvePath(it) },
+        mirrorchyanRid = update?.text("mirrorchyanRid")?.requireMirrorchyanRid(),
     )
 }
 
@@ -178,6 +183,15 @@ private fun Map<*, *>.text(key: String): String? = this[key].scalar()?.takeIf { 
 
 private fun Map<*, *>.textList(key: String): List<String>? =
     (this[key] as? List<*>)?.mapNotNull { it.scalar() }?.filter { it.isNotBlank() }
+
+/** It ends up in a BuildConfig string literal, where a quote breaks the generated source instead */
+private fun String.requireMirrorchyanRid(): String {
+    // 92 is the backslash; isISOControl covers the line breaks
+    require(none { it == '"' || it.code == 92 || it.isISOControl() }) {
+        "update.mirrorchyanRid must not contain quotes, backslashes or control characters: $this"
+    }
+    return this
+}
 
 private fun Map<*, *>.child(key: String): Map<*, *>? = this[key] as? Map<*, *>
 

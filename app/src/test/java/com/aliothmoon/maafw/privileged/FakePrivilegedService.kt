@@ -81,9 +81,9 @@ open class FakePrivilegedService : RemoteService {
     override fun clearForcedDisplaySize(): Boolean = true
     override fun setMonitorSurface(surface: Surface?) = Unit
     override fun setTouchCallback(callback: ITouchEventCallback?) = Unit
-    override fun touchDown(x: Int, y: Int) = Unit
-    override fun touchMove(x: Int, y: Int) = Unit
-    override fun touchUp(x: Int, y: Int) = Unit
+    override fun touchDown(x: Int, y: Int, contact: Int) = Unit
+    override fun touchMove(x: Int, y: Int, contact: Int) = Unit
+    override fun touchUp(x: Int, y: Int, contact: Int) = Unit
     override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int = permissions
     override fun isPackageInstalled(packageName: String?): Boolean = true
     override fun setRunnerCallback(callback: IMaaRunnerCallback?) {

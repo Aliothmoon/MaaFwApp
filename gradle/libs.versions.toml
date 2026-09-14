@@ -27,7 +27,6 @@ kotlinxSerializationJson = "1.11.0"
 reorderable = "2.5.1"
 
 markwon = "4.6.2"
-jsoup = "1.21.1"
 
 # 提权与 native 接入
 shizuku = "13.1.5"
@@ -96,7 +95,6 @@ markwon-html = { group = "io.noties.markwon", name = "html", version.ref = "mark
 markwon-image = { group = "io.noties.markwon", name = "image", version.ref = "markwon" }
 markwon-linkify = { group = "io.noties.markwon", name = "linkify", version.ref = "markwon" }
 markwon-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
-jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 sentry-android-core = { group = "io.sentry", name = "sentry-android-core", version.ref = "sentry" }
 angus-mail = { group = "org.eclipse.angus", name = "jakarta.mail", version.ref = "angusMail" }

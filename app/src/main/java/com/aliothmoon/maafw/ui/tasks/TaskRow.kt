@@ -93,13 +93,13 @@ internal fun TaskRow(
     task: ResolvedConfiguredTask,
     locked: Boolean,
     isDragging: Boolean,
-    dragHandleModifier: Modifier,
     onToggle: (Boolean) -> Unit,
     onRemove: () -> Unit,
     onDuplicate: () -> Unit,
     onRename: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    dragHandleModifier: Modifier = Modifier,
 ) {
     val contentAlpha by animateFloatAsState(
         targetValue = if (task.enabled) 1f else DisabledTaskAlpha,

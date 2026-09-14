@@ -3,54 +3,62 @@ package com.aliothmoon.maafw.overlay
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.i18n.asString
-import com.aliothmoon.maafw.notification.RunProgressSnapshots
+import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunnerPhase
-import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
+import com.aliothmoon.maafw.session.SessionIntent
+import com.aliothmoon.maafw.session.SessionUiState
+import com.aliothmoon.maafw.session.TaskSurface
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
-import com.aliothmoon.maafw.ui.components.MaaButton
-import com.aliothmoon.maafw.ui.i18n.asUiText
+import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.tasks.RunLogPanel
+import kotlinx.coroutines.launch
 
 /**
- * 悬浮控制面板
+ * 悬浮操作面板：任务 + 日志
+ *
+ * 控件走 overlay 自己的密度，不套任务页 MaaButton / 内容卡
  */
 @Composable
 fun OverlayPanel(
-    state: RunnerState,
+    state: SessionUiState,
+    logEntries: () -> List<RunLogEntry>,
     isLocked: Boolean,
-    onStop: () -> Unit,
+    onIntent: (SessionIntent) -> Unit,
     onBackToApp: () -> Unit,
+    onExportLog: () -> Unit,
     onLockToggle: (Boolean) -> Unit,
-    onClose: () -> Unit,
+    onHide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val pagerState = rememberPagerState(initialPage = 0) { OverlayPanelTab.entries.size }
+    val scope = rememberCoroutineScope()
+    val phase = state.runner.phase
+
     Surface(
         modifier = modifier.fillMaxSize(),
-        shape = MaterialTheme.shapes.large,
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = MaaTheme.style.cardElevation,
         shadowElevation = MaaTheme.style.cardElevation,
@@ -58,110 +66,135 @@ fun OverlayPanel(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(MaaTheme.style.cardInnerPadding),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+                .padding(MaaDesignTokens.Overlay.pad),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Overlay.gap),
         ) {
-            PanelHeader(isLocked, onLockToggle, onClose)
-            Column(
+            PanelHeader(
+                selectedTab = OverlayPanelTab.entries[pagerState.currentPage],
+                onTabSelected = { tab -> scope.launch { pagerState.animateScrollToPage(tab.ordinal) } },
+                isLocked = isLocked,
+                onLockToggle = onLockToggle,
+                onBackToApp = onBackToApp,
+            )
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-            ) {
-                Text(
-                    text = state.phase.asUiText().asString(),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                state.activeExecution?.let { execution ->
-                    execution.currentTaskLabel?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (execution.totalTaskCount > 0) {
-                        Text(
-                            text = "${execution.completedTaskCount}/${execution.totalTaskCount}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        LinearProgressIndicator(
-                            progress = {
-                                RunProgressSnapshots.progressValue(
-                                    done = execution.completedTaskCount,
-                                    total = execution.totalTaskCount,
-                                    hasCurrentTask = !execution.currentTaskName.isNullOrBlank(),
-                                ) / RunProgressSnapshots.PROGRESS_MAX.toFloat()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-                state.latestResult?.let {
-                    Text(
-                        text = it.asUiText().asString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    .fillMaxWidth()
+                    .weight(1f),
+                userScrollEnabled = false,
+                beyondViewportPageCount = 1,
+            ) { page ->
+                when (OverlayPanelTab.entries[page]) {
+                    OverlayPanelTab.TASKS -> OverlayTaskSplit(
+                        state = state,
+                        onIntent = onIntent,
+                    )
+
+                    OverlayPanelTab.LOG -> RunLogPanel(
+                        entries = logEntries,
+                        onExport = onExportLog,
+                        onClear = { onIntent(SessionIntent.ClearRunLog) },
                     )
                 }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Overlay.gap),
             ) {
-                MaaButton(
-                    onClick = onBackToApp,
+                OverlayBarButton(
+                    onClick = onHide,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Icon(
-                        Icons.Outlined.Home,
-                        contentDescription = null,
-                        Modifier.size(MaaDesignTokens.IconSize.sm)
-                    )
-                    Text(
-                        text = stringResource(R.string.overlay_back_to_app),
-                        modifier = Modifier.padding(start = MaaDesignTokens.Spacing.xs),
-                    )
+                    Text(stringResource(R.string.overlay_hide), style = MaterialTheme.typography.labelSmall)
                 }
-                MaaButton(
-                    onClick = onStop,
-                    enabled = state.phase.isBusy,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(R.string.runner_stop))
+                if (phase.isBusy) {
+                    OverlayBarButton(
+                        onClick = { onIntent(SessionIntent.Stop) },
+                        enabled = phase != RunnerPhase.Stopping,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (phase == RunnerPhase.Stopping) {
+                                    R.string.runner_stopping
+                                } else {
+                                    R.string.runner_stop
+                                },
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                } else {
+                    OverlayBarButton(
+                        onClick = { onIntent(SessionIntent.Start(TaskSurface.Overlay)) },
+                        enabled = state.canStart,
+                        filled = true,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            stringResource(R.string.runner_start),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+private enum class OverlayPanelTab {
+    TASKS,
+    LOG,
+}
+
 @Composable
 private fun PanelHeader(
+    selectedTab: OverlayPanelTab,
+    onTabSelected: (OverlayPanelTab) -> Unit,
     isLocked: Boolean,
     onLockToggle: (Boolean) -> Unit,
-    onClose: () -> Unit,
+    onBackToApp: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
     ) {
-        Text(
-            text = stringResource(R.string.overlay_panel_title),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f),
-        )
-        // 锁住即禁止拖拽：面板压在目标应用上，误拖会把它拽出可视区
-        IconButton(onClick = { onLockToggle(!isLocked) }) {
-            Icon(
-                imageVector = if (isLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
-                contentDescription = stringResource(
-                    if (isLocked) R.string.overlay_unlock else R.string.overlay_lock,
+        OverlayPanelTab.entries.forEach { tab ->
+            Text(
+                text = stringResource(
+                    when (tab) {
+                        OverlayPanelTab.TASKS -> R.string.overlay_tab_tasks
+                        OverlayPanelTab.LOG -> R.string.overlay_tab_log
+                    }
                 ),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selectedTab == tab) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                fontWeight = if (selectedTab == tab) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.maaClickable(onClick = { onTabSelected(tab) }),
             )
         }
-        IconButton(onClick = onClose) {
-            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.common_close))
-        }
+        Spacer(modifier = Modifier.weight(1f))
+        OverlayIconHit(
+            icon = Icons.Outlined.Home,
+            contentDescription = stringResource(R.string.overlay_back_to_app),
+            onClick = onBackToApp,
+        )
+        OverlayIconHit(
+            icon = if (isLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+            contentDescription = stringResource(
+                if (isLocked) R.string.overlay_unlock else R.string.overlay_lock,
+            ),
+            onClick = { onLockToggle(!isLocked) },
+            tint = if (isLocked) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
     }
 }

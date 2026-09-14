@@ -202,6 +202,7 @@ internal fun ConfigurationSelectorRow(
     onAddTasks: () -> Unit,
     onToggleLog: () -> Unit,
     modifier: Modifier = Modifier,
+    showLogToggle: Boolean = true,
 ) {
     // 固定高度而非 IntrinsicSize.Min：三件东西各有各的固有高度（卡按文字、按钮按 Material
     // 最小尺寸），交给固有高度对齐必然是最高的那个说了算，压不下来
@@ -229,13 +230,15 @@ internal fun ConfigurationSelectorRow(
                 label = stringResource(R.string.tasks_add_task),
             )
             // 不给图标：两个字比任何图标都说得清，且「日志 / 关闭」等宽，切换时按钮不跳
-            RowActionButton(
-                onClick = onToggleLog,
-                enabled = true,
-                icon = null,
-                label = stringResource(if (logOpen) R.string.common_close else R.string.tasks_log),
-                active = logOpen,
-            )
+            if (showLogToggle) {
+                RowActionButton(
+                    onClick = onToggleLog,
+                    enabled = true,
+                    icon = null,
+                    label = stringResource(if (logOpen) R.string.common_close else R.string.tasks_log),
+                    active = logOpen,
+                )
+            }
         }
     }
 }

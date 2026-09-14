@@ -139,7 +139,14 @@ python scripts/build_agent_bundle.py \
 ./gradlew :app:assembleRelease
 ```
 
-本地迭代可以在 `local.properties` 里写 `build.debugAbi=arm64-v8a`，debug 包就只打这一个 ABI。release 始终包含 `arm64-v8a` 和 `x86_64`。
+默认的 debug 和 release 包都包含 `arm64-v8a` 与 `x86_64`。可以在 `local.properties` 里按构建类型裁剪：
+
+```properties
+build.debugAbi=arm64-v8a
+build.releaseAbi=arm64-v8a
+```
+
+值为逗号分隔的 `arm64-v8a`、`x86_64`，未配置时仍默认包含两者。release 的 ABI 必须与铺入 `app/src/main/jniLibs` 的 MaaFramework，以及配方 `agent.abi` 声明并实际提供的 agent runtime 一致；否则 APK 会宣称支持一个缺少运行时的架构。
 
 改完配方或上游资源后，也可以只跑同步：
 

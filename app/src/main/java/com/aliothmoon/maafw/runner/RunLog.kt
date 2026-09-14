@@ -54,10 +54,10 @@ enum class RunLogKind {
 const val RUN_LOG_CAPACITY = 500
 
 /**
- * 「只看关键」留下的：这一轮跑到哪了
+ * 「进度」档留下的：这一轮跑到哪了
  *
  * agent 的两条流都不在内——它和 `Node.*` 原始转储同级，是排障信息。agent 崩了照样看得见，
- * 那会以 `Tasker.Task.Failed` 的形式出现在关键档，再切「全部」看 stderr 上的现场
+ * 那会以 `Tasker.Task.Failed` 的形式出现在进度档，再切「全部」看 stderr 上的现场
  */
 val RunLogEntry.isEssential: Boolean
     get() = kind !in NON_ESSENTIAL_KINDS

@@ -24,6 +24,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -101,7 +102,7 @@ fun RunLogDetailScreen(
         }
 
         // 一次只展开一条：detail 展开就是十来行，多条同时展开这个列表没法看
-        var expanded by remember { mutableStateOf(-1) }
+        var expanded by remember { mutableIntStateOf(-1) }
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

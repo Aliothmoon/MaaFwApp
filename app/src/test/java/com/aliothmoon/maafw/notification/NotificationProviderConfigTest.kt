@@ -9,7 +9,7 @@ import com.aliothmoon.maafw.notification.provider.DiscordProvider
 import com.aliothmoon.maafw.notification.provider.DiscordWebhookProvider
 import com.aliothmoon.maafw.notification.provider.GotifyProvider
 import com.aliothmoon.maafw.notification.provider.KookProvider
-import com.aliothmoon.maafw.notification.provider.NotificationHttpClient
+import com.aliothmoon.maafw.util.HttpClientHelper
 import com.aliothmoon.maafw.notification.provider.NotificationSendResult
 import com.aliothmoon.maafw.notification.provider.QmsgProvider
 import com.aliothmoon.maafw.notification.provider.ServerChanProvider
@@ -30,7 +30,7 @@ import org.junit.Test
  */
 class NotificationProviderConfigTest {
 
-    private val httpClient = mockk<NotificationHttpClient>()
+    private val httpClient = mockk<HttpClientHelper>()
 
     private fun manager(settings: NotificationSettings = NotificationSettings()) =
         mockk<NotificationSettingsManager> { coEvery { current() } returns settings }
