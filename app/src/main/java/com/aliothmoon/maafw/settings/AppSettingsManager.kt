@@ -49,8 +49,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     /**
      * 首次读盘是否已落到下面各 StateFlow 上；置位后 `.value` 才是盘上的值
      *
-     * 现有三个等待点：启动首屏（`MainActivity`）、`MaaFwApp.postCreate`（`RemoteAccessCoordinator`
+     * 现有等待点包括启动首屏（`MainActivity`）、`MaaFwApp.postCreate`（`RemoteAccessCoordinator`
      * 一初始化就同步读 startupBackend）、`ScheduleExecutionService.handleTrigger`（投递前要 runMode）
+     * 和 `ScheduleReceiver` 服务启动失败后的兜底重排（要用 runMode 选闹钟提前量）
      */
     override val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
