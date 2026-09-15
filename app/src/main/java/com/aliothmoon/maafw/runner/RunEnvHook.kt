@@ -64,6 +64,12 @@ interface RunEnvHook {
     /** [EngageResult.Failed] 是否中止整轮。解锁失败还硬跑 = 对着锁屏识别到超时 */
     val gating: Boolean
 
+    /**
+     * 覆盖「单个挂载物 engage」的兜底超时；null = 用 [RunLauncher] 的通用超时。
+     * 会主动等到某个截止时刻的挂载物（倒计时）应给足自己的窗口，别被通用 30s 误杀
+     */
+    val engageTimeoutMillis: Long? get() = null
+
     suspend fun engage(ctx: RunContext): EngageResult
 }
 

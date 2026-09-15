@@ -9,7 +9,6 @@ import com.aliothmoon.maafw.runner.CountdownHook
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.telemetry.TelemetryController
-import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.NotificationHook
@@ -115,7 +114,7 @@ val runnerModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            prechecks = listOf(ForegroundModePrecheck),
+            prechecks = emptyList(),
             hooks = listOf(
                 SessionLogHook(get()),
                 NotificationHook(get()),
@@ -123,7 +122,7 @@ val runnerModule = module {
                 WakeUnlockHook(get(), get<AppSettingsManager>()),
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
-                CountdownHook,
+                CountdownHook(),
                 KeepAliveHook(get()),
                 WatchdogNoticeHook(
                     watchdogState = get<PermissionGateway>().watchdogState,

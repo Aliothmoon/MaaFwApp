@@ -145,7 +145,8 @@ class ScheduleExecutionService : Service() {
             runLauncher.launch(
                 trigger = RunTrigger.Schedule(
                     strategy.id,
-                    ScheduleRunOptions(
+                    scheduledAtEpochMs = scheduledTimeMs,
+                    options = ScheduleRunOptions(
                         autoSleepAfterTask = strategy.autoSleepAfterTask,
                         skipAutoSleepIfAwake = strategy.skipAutoSleepIfAwake,
                         closeAppAfterTask = strategy.closeAppAfterTask,

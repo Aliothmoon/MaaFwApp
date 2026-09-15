@@ -242,7 +242,7 @@ class RunLauncher(
                 "gating hook ${hook.id} cannot use AfterAccepted"
             }
             val result = try {
-                withTimeout(ENGAGE_TIMEOUT_MS) { hook.engage(ctx) }
+                withTimeout(hook.engageTimeoutMillis ?: ENGAGE_TIMEOUT_MS) { hook.engage(ctx) }
             } catch (timeout: TimeoutCancellationException) {
                 EngageResult.Failed(uiTextOf(R.string.msg_hook_timeout, hook.id))
             } catch (cancellation: CancellationException) {

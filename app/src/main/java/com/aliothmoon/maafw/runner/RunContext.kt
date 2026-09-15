@@ -12,6 +12,13 @@ sealed interface RunTrigger {
      */
     data class Schedule(
         val strategyId: String,
+        /**
+         * 本回合计约开始时刻的 epoch millis。
+         *
+         * 前台模式下闹钟会提前 [com.aliothmoon.maafw.schedule.ScheduleAlarmManager.FOREGROUND_COUNTDOWN_LEAD_MS]
+         * 响起，倒计时以它为准到点自动投递；null = 没有倒计时，到了直接投。
+         */
+        val scheduledAtEpochMs: Long? = null,
         val options: ScheduleRunOptions = ScheduleRunOptions(),
     ) : RunTrigger
 }

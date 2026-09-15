@@ -197,17 +197,21 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
 }
 
 /**
- * 投递前倒计时，给用户一个反悔的窗口
+ * 投递前倒计时：给用户一个「提前开始 / 取消本次」的窗口
+ *
+ * 只在**前台模式**的定时触发上挂：后台模式没人看着，到点直接投。
+ * 闹钟提前 30s 响起，这里等到的是计约定时刻；窗口内点了「立即开始」就提前投，
+ * 点了「取消」就中止整轮，什么都没点就在到点那一刻准时投。
  *
  * gating：用户点了取消就该中止整轮，而不是「等完了照跑」
- *
- * 只在有打断面的调用方那里才有意义——[RunContext.signals] 默认实现永不置位，
- * 那样它就退化成一段纯粹的延迟。首页手动 Start 不挂它：用户刚按下按钮，不需要再问一遍
  */
-object CountdownHook : RunEnvHook {
+class CountdownHook(
+    /** 时钟抽象，单测喂虚拟时间 */
+    private val now: () -> Long = { System.currentTimeMillis() },
+) : RunEnvHook {
 
-    /** 与 MaaMeow 的 `LaunchRequest.DEFAULT_COUNTDOWN_SECONDS` 一致，同样不开放配置 */
-    private const val COUNTDOWN_SECONDS = 30
+    /** 倒计时要等的是「计约定时刻」而非固定 30s，外层兜底超时给宽一点 */
+    override val engageTimeoutMillis: Long = 60_000L
 
     override val id: String = "countdown"
     override val anchor: Anchor = Anchor.BeforeDispatch
@@ -215,20 +219,26 @@ object CountdownHook : RunEnvHook {
     override val gating: Boolean = true
 
     override suspend fun engage(ctx: RunContext): EngageResult {
-        if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
+        if (ctx.runMode != RunMode.FOREGROUND) return EngageResult.Skipped()
+        val trigger = ctx.trigger as? RunTrigger.Schedule ?: return EngageResult.Skipped()
+        val deadline = trigger.scheduledAtEpochMs ?: return EngageResult.Skipped()
+        if (deadline <= now()) return EngageResult.Skipped()
 
-        for (remaining in COUNTDOWN_SECONDS downTo 1) {
+        while (true) {
             // 先看「立即开始」：两个都置位时以它为准（同 MaaMeow），
             // 两个布尔分不出先后，而「点了取消又点开始」比反过来常见得多
-            if (ctx.signals.startNowRequested) break
+            if (ctx.signals.startNowRequested) return EngageResult.Skipped()
             if (ctx.signals.cancelRequested) {
                 return EngageResult.Failed(
                     uiTextOf(R.string.run_countdown_cancelled),
                     NotRunCause.Cancelled,
                 )
             }
-            ctx.progress.report(id, uiTextOf(R.string.run_countdown_remaining, remaining))
-            delay(1_000)
+            val remainingMs = deadline - now()
+            if (remainingMs <= 0) break
+            val remainingSeconds = ((remainingMs + 999) / 1000).toInt()
+            ctx.progress.report(id, uiTextOf(R.string.run_countdown_remaining, remainingSeconds))
+            delay(minOf(1_000L, remainingMs))
         }
         // 最后再看一眼：整个等待期间用户都可能点取消，包括最后一秒
         if (ctx.signals.cancelRequested && !ctx.signals.startNowRequested) {
