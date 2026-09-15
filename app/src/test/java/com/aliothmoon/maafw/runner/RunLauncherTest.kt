@@ -170,6 +170,28 @@ class RunLauncherTest {
 
     // ── 检查 ─────────────────────────────────────────────────────────
 
+    /** 定时触发绝不抢占正在跑的轮次：已有执行时直接拒绝，不动挂载物也不进倒计时 */
+    @Test
+    fun `scheduled trigger while a run is busy is rejected without engaging hooks`() = runTest(testDispatcher) {
+        val hook = RecordingHook("env", Anchor.BeforeDispatch)
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val launcher = launcher(scope = backgroundScope, runner = runner, hooks = listOf(hook))
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+        hook.log.clear()
+
+        val result = launcher.launch(RunTrigger.Schedule("s1"))
+
+        assertTrue(result is RunLaunchResult.Rejected)
+        assertTrue(
+            (result as RunLaunchResult.Rejected).reason.isResource(R.string.msg_reject_already_running),
+        )
+        assertEquals(emptyList<String>(), hook.log)
+    }
+
     @Test
     fun `blocking precheck stops before the runner is touched`() = runTest(testDispatcher) {
         val runner = fastStub(backgroundScope)

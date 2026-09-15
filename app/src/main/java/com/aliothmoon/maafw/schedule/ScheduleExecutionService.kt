@@ -17,6 +17,7 @@ import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.i18n.resolve
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
@@ -155,7 +156,6 @@ class ScheduleExecutionService : Service() {
                 configurationId = RunConfigurationId(strategy.runConfigurationId),
                 // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
                 requestId = RunRequestId($$"${strategy.id}@$scheduledTimeMs"),
-                force = strategy.forceStart,
                 steps = RunStepSink {
                     steps += TriggerStep(
                         it.hookId,
@@ -169,22 +169,38 @@ class ScheduleExecutionService : Service() {
             )
         } finally {
             signalsByStrategy.remove(strategy.id)
-            updateNotification(
-                getString(R.string.notification_schedule_triggered),
-                strategy.id,
-                interruptible = false,
-            )
         }
         val outcome = launchResult.toScheduleOutcome()
         if (outcome.result == TriggerResult.DUPLICATE) {
             // 第一次投递已经记过账也续过闹钟了，这里什么都不做，否则会多一条记录、多排一次
             Timber.i("Schedule %s duplicate delivery, dropped", strategy.id)
+            updateNotification(
+                getString(R.string.notification_schedule_triggered),
+                strategy.id,
+                interruptible = false,
+            )
             return
         }
         if (outcome.result != TriggerResult.STARTED) {
             Timber.w("Schedule %s did not start: %s", strategy.id, launchResult)
         }
         val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
+
+        // 通知栏收尾：跑起来用通用文案；失败把原因留在通知栏。前台服务停掉后
+        // 会连通知一起清掉，所以「已有执行在进行中」额外补一条非前台错误通知
+        if (outcome.result == TriggerResult.STARTED) {
+            updateNotification(
+                getString(R.string.notification_schedule_triggered),
+                strategy.id,
+                interruptible = false,
+            )
+        } else {
+            val failureText = frozen ?: getString(R.string.notification_schedule_triggered)
+            updateNotification(failureText, strategy.id, interruptible = false)
+            if (outcome.detail == uiTextOf(R.string.msg_reject_already_running)) {
+                postScheduleFailure(failureText)
+            }
+        }
 
         triggerLog.append(
             TriggerLogEntry(
@@ -243,6 +259,36 @@ class ScheduleExecutionService : Service() {
             NOTIFICATION_ID,
             buildNotification(text, strategyId.takeIf { interruptible })
         )
+    }
+
+    /** 前台服务停止后会随 stopForeground 一起被清掉，失败信息必须另发一条普通通知留存 */
+    private fun postScheduleFailure(text: String) {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(
+            NOTIFICATION_ERROR_ID,
+            buildFailureNotification(text),
+        )
+    }
+
+    private fun buildFailureNotification(text: String): Notification {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(getString(R.string.notification_schedule_title))
+            .setContentText(text)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    1,
+                    intent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            )
+            .setSilent(true)
+            .setAutoCancel(true)
+            .build()
     }
 
     /** [interruptibleStrategyId] 非 null 时挂上「立即开始 / 取消本次」两个动作 */
@@ -311,6 +357,7 @@ class ScheduleExecutionService : Service() {
 
         const val CHANNEL_ID = "schedule_execution"
         const val NOTIFICATION_ID = 1002
+        const val NOTIFICATION_ERROR_ID = 1003
         const val STORE_READY_TIMEOUT_MS = 5_000L
     }
 }
