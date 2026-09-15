@@ -21,6 +21,7 @@ import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.schedule.ScheduleAlarmModeObserver
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.telemetry.TelemetryController
 import kotlinx.coroutines.CoroutineScope
@@ -75,6 +76,7 @@ class MaaFwApp : Application() {
 
     fun postCreate(koin: Koin) {
         koin.get<PermissionManager>()
+        koin.get<ScheduleAlarmModeObserver>().start()
         val provider = koin.get<AppSettingsManager>().startupBackend::value
         RemoteServiceManager.initialize(this, provider)
         koin.get<OverlayController>().setup()
