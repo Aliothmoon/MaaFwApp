@@ -279,7 +279,8 @@ private fun WheelColumn(
                         } else {
                             (index - startIndex).toFloat()
                         }
-                        val depth = (abs(offsetRows) / edgeRows).coerceIn(0f, 1f)
+                        val depth = (abs(offsetRows) / edgeRows.coerceAtLeast(1f))
+                            .coerceIn(0f, 1f)
                         alpha = 1f - FADE_DEPTH * depth
                         val shrink = 1f - SHRINK_DEPTH * depth
                         scaleX = shrink

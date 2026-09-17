@@ -62,7 +62,9 @@ private fun TimePickerDialogContent(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    SubcomposeLayout { constraints ->
+    SubcomposeLayout(
+        modifier = Modifier.padding(MaaDesignTokens.Spacing.xxl),
+    ) { constraints ->
         val title = subcompose("title") {
             Text(
                 text = stringResource(R.string.schedule_time_picker_title),
