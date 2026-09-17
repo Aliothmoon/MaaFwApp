@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -112,7 +113,7 @@ fun WheelTimePicker(
 ) {
     val visibleRows = rows.coerceAtLeast(3).let { if (it % 2 == 0) it - 1 else it }
     val colors = MaterialTheme.colorScheme
-    val selectionShape = RoundedCornerShape(MaaDesignTokens.CornerRadius.card)
+    val selectionShape = RoundedCornerShape(MaaTheme.style.radii.card)
     val digitStyle = MaterialTheme.typography.headlineMedium.copy(
         fontWeight = FontWeight.SemiBold,
         // 等宽数字，滚动时字形不会左右抖
@@ -154,6 +155,7 @@ fun WheelTimePicker(
                 WheelColumn(
                     count = HOUR_COUNT,
                     initialIndex = state.startHour,
+                    selectedValue = state.hour,
                     onSelect = { state.hour = it },
                     rows = visibleRows,
                     itemHeight = itemHeight,
@@ -176,6 +178,7 @@ fun WheelTimePicker(
                 WheelColumn(
                     count = MINUTE_COUNT,
                     initialIndex = state.startMinute,
+                    selectedValue = state.minute,
                     onSelect = { state.minute = it },
                     rows = visibleRows,
                     itemHeight = itemHeight,
@@ -192,6 +195,7 @@ fun WheelTimePicker(
 private fun WheelColumn(
     count: Int,
     initialIndex: Int,
+    selectedValue: Int,
     onSelect: (Int) -> Unit,
     rows: Int,
     itemHeight: Dp,
@@ -213,8 +217,11 @@ private fun WheelColumn(
         }
     }
 
-    // 滚动过程中持续上报，避免未停稳就点确定拿到旧值
-    LaunchedEffect(listState) {
+    // rows 变化会改变内边距，先按当前选中值重新对中，避免布局漂移被当成新选择
+    LaunchedEffect(listState, rows) {
+        listState.scrollToItem(count * (LOOP_CYCLES / 2) + selectedValue)
+
+        // 滚动过程中持续上报，避免未停稳就点确定拿到旧值
         var first = true
         snapshotFlow { centered }
             .filterNotNull()
