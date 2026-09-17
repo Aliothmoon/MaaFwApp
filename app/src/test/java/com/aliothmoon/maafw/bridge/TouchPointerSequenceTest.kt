@@ -16,6 +16,49 @@ class TouchPointerSequenceTest {
     private fun p(contact: Int, x: Float = contact * 10f) = Pointer(contact, x, 0f)
 
     @Test
+    fun `manual high contact starts with Android pointer zero`() {
+        val down = TouchPointerSequence.plan(Kind.Down, emptyList(), 15, 20f, 30f)
+        assertEquals(15, down.pointers.single().contact)
+        assertEquals(0, down.pointers.single().pointerId)
+        for (kind in listOf(Kind.Move, Kind.Up)) {
+            val next = TouchPointerSequence.plan(kind, down.pointers, 15, 40f, 50f)
+            assertEquals(0, next.pointers.single().pointerId)
+        }
+    }
+
+    @Test
+    fun `manual and automated touches have separate contacts and stable low pointer ids`() {
+        val manual = TouchPointerSequence.plan(Kind.Down, emptyList(), 15, 10f, 20f)
+        val both = TouchPointerSequence.plan(Kind.Down, manual.pointers, 0, 30f, 40f)
+        assertFalse(both.cancelFirst)
+        assertEquals(listOf(15, 0), both.pointers.map { it.contact })
+        assertEquals(listOf(0, 1), both.pointers.map { it.pointerId })
+        val manualUp = TouchPointerSequence.plan(Kind.Up, both.pointers, 15, 10f, 20f)
+        assertEquals(TouchPointerSequence.ACTION_POINTER_UP, manualUp.actionMasked)
+        val remaining = manualUp.pointers.filter { it.contact != 15 }
+        val secondManual = TouchPointerSequence.plan(Kind.Down, remaining, 14, 50f, 60f)
+        assertEquals(listOf(1, 0), secondManual.pointers.map { it.pointerId })
+        val automaticMove = TouchPointerSequence.plan(Kind.Move, secondManual.pointers, 0, 31f, 41f)
+        assertEquals(1, automaticMove.pointers[automaticMove.changingIndex].pointerId)
+    }
+
+    @Test
+    fun `automation first leaves pointer one for manual touch without cancel`() {
+        val automatic = TouchPointerSequence.plan(Kind.Down, emptyList(), 0, 10f, 20f)
+        val manual = TouchPointerSequence.plan(Kind.Down, automatic.pointers, 15, 30f, 40f)
+        assertFalse(manual.cancelFirst)
+        assertEquals(listOf(0, 1), manual.pointers.map { it.pointerId })
+    }
+
+    @Test
+    fun `duplicate logical contact resets Android pointer id after cancellation`() {
+        val current = listOf(Pointer(0, 1f, 2f, 1), Pointer(15, 3f, 4f, 0))
+        val repeated = TouchPointerSequence.plan(Kind.Down, current, 0, 5f, 6f)
+        assertTrue(repeated.cancelFirst)
+        assertEquals(0, repeated.pointers.single().pointerId)
+    }
+
+    @Test
     fun `first down is ACTION_DOWN`() {
         val step = TouchPointerSequence.plan(Kind.Down, emptyList(), 0, 1f, 2f)
         assertTrue(step.ok)
