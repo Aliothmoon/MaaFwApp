@@ -6,7 +6,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
-import android.content.res.Configuration
 import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -25,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.OndemandVideo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -167,6 +167,16 @@ internal fun LivePreview(
                         .align(Alignment.TopEnd)
                         .padding(MaaDesignTokens.Spacing.sm),
                 )
+                IconButton(
+                    onClick = onEnterFullscreen,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Fullscreen,
+                        contentDescription = stringResource(R.string.tasks_preview_enter_fullscreen),
+                        tint = Color.White,
+                    )
+                }
             }
         }
     }
@@ -222,12 +232,11 @@ internal fun FullscreenPreview(
         onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 
-    // 虚拟屏是横的，竖着看只有中间一条；退出时还原用户原本的方向设置
-    DisposableEffect(activity) {
+    // 跟随虚拟屏方向，竖屏游戏也能占满屏幕；退出时还原用户原本的方向设置。
+    val orientation = previewOrientation(resolution)
+    DisposableEffect(activity, orientation) {
         val original = activity?.requestedOrientation
-        if (activity?.resources?.configuration?.orientation != Configuration.ORIENTATION_LANDSCAPE) {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        }
+        activity?.requestedOrientation = orientation
         onDispose { if (original != null) activity.requestedOrientation = original }
     }
 
@@ -236,11 +245,11 @@ internal fun FullscreenPreview(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .previewTouchInput(resolution, onTouch),
+            .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        // 按钮是触控区域的兄弟节点，点退出不会同时点击虚拟屏中的游戏。
+        Box(Modifier.fillMaxSize().previewTouchInput(resolution, onTouch)) { content() }
         IconButton(
             onClick = onExit,
             modifier = Modifier
@@ -256,6 +265,10 @@ internal fun FullscreenPreview(
         }
     }
 }
+
+internal fun previewOrientation(resolution: DisplayResolution): Int =
+    if (resolution.height > resolution.width) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+    else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
 /**
  * 逐个 pointer 上报，多指同时按下各走各的 contact
@@ -303,32 +316,35 @@ private fun Modifier.previewTouchInput(
 }
 
 /** [offset] 已钳进虚拟屏范围；[inside] 是钳之前落没落在画面上 */
-private data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
+internal data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
 
 /**
  * 把手指位置换算到虚拟屏坐标
  *
  * 越界钳回边缘而不是丢掉：手指拖出画面后抬起，那条 up 也得送达，否则远端以为它还按着
  */
-private fun viewToVirtualDisplay(
+internal fun viewToVirtualDisplay(
     view: Offset,
     viewSize: IntSize,
     resolution: DisplayResolution,
 ): DisplayPoint {
+    if (viewSize.width <= 0 || viewSize.height <= 0 || resolution.width <= 0 || resolution.height <= 0) {
+        return DisplayPoint(IntOffset.Zero, inside = false)
+    }
     val scale = minOf(
         viewSize.width / resolution.width.toFloat(),
         viewSize.height / resolution.height.toFloat(),
     )
     val offsetX = (viewSize.width - resolution.width * scale) / 2f
     val offsetY = (viewSize.height - resolution.height * scale) / 2f
-    val vx = ((view.x - offsetX) / scale).toInt()
-    val vy = ((view.y - offsetY) / scale).toInt()
+    val vx = (view.x - offsetX) / scale
+    val vy = (view.y - offsetY) / scale
     return DisplayPoint(
         offset = IntOffset(
-            vx.coerceIn(0, resolution.width - 1),
-            vy.coerceIn(0, resolution.height - 1),
+            vx.toInt().coerceIn(0, resolution.width - 1),
+            vy.toInt().coerceIn(0, resolution.height - 1),
         ),
-        inside = vx in 0 until resolution.width && vy in 0 until resolution.height,
+        inside = vx >= 0f && vx < resolution.width && vy >= 0f && vy < resolution.height,
     )
 }
 

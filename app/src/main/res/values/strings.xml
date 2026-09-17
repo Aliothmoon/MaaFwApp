@@ -30,6 +30,7 @@
     <string name="virtual_display_app_drifted">已离屏</string>
     <string name="virtual_display_idle">空闲</string>
     <string name="tasks_preview_exit_fullscreen">退出全屏</string>
+    <string name="tasks_preview_enter_fullscreen">放大虚拟屏幕</string>
     <string name="tasks_preview_idle">未在运行</string>
     <string name="tasks_remove">移除</string>
     <string name="tasks_drag_reorder">拖动排序</string>
