@@ -54,11 +54,15 @@ import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 private const val HOUR_COUNT = 24
 private const val MINUTE_COUNT = 60
+
+/** 循环滚轮的虚拟圈数，起点放中间，两头实际滚不到 */
+private const val LOOP_CYCLES = 1000
 
 /** 离中心越远越淡 */
 private const val FADE_DEPTH = 0.65f
@@ -183,7 +187,7 @@ fun WheelTimePicker(
     }
 }
 
-/** 单列滚轮，上下留半屏内边距让首尾项也能滚到正中 */
+/** 单列循环滚轮，虚拟项按 [count] 取模，首尾相接 */
 @Composable
 private fun WheelColumn(
     count: Int,
@@ -194,7 +198,8 @@ private fun WheelColumn(
     digitStyle: TextStyle,
     modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    val startIndex = count * (LOOP_CYCLES / 2) + initialIndex
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val edgeRows = (rows / 2).toFloat()
@@ -213,6 +218,7 @@ private fun WheelColumn(
         var first = true
         snapshotFlow { centered }
             .filterNotNull()
+            .map { it % count }
             .distinctUntilChanged()
             .collect { index ->
                 onSelect(index)
@@ -229,8 +235,8 @@ private fun WheelColumn(
         contentPadding = PaddingValues(vertical = itemHeight * (rows / 2)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        items(count, key = { it }) { index ->
-            val isSelected = (centered ?: initialIndex) == index
+        items(count * LOOP_CYCLES, key = { it }) { index ->
+            val isSelected = (centered ?: startIndex) == index
             val digitColor by animateColorAsState(
                 targetValue = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
@@ -255,7 +261,7 @@ private fun WheelColumn(
                                 (info.viewportStartOffset + info.viewportEndOffset) / 2f
                             (item.offset + item.size / 2f - viewCenter) / item.size
                         } else {
-                            (index - initialIndex).toFloat()
+                            (index - startIndex).toFloat()
                         }
                         val depth = (abs(offsetRows) / edgeRows).coerceIn(0f, 1f)
                         alpha = 1f - FADE_DEPTH * depth
@@ -271,7 +277,7 @@ private fun WheelColumn(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = index.toString().padStart(2, '0'),
+                    text = (index % count).toString().padStart(2, '0'),
                     style = digitStyle,
                     color = digitColor,
                     maxLines = 1,
