@@ -104,8 +104,8 @@ object PermissionGrantHelper {
         return try {
             // OP_RUN_IN_BACKGROUND = 63, MODE_ALLOWED = 0
             RemoteUtils.appOpsService.setMode(63, uid, packageName, 0)
-            // OP_RUN_ANY_IN_BACKGROUND = 65, MODE_ALLOWED = 0
-            RemoteUtils.appOpsService.setMode(65, uid, packageName, 0)
+            // OP_RUN_ANY_IN_BACKGROUND = 70, MODE_ALLOWED = 0
+            RemoteUtils.appOpsService.setMode(70, uid, packageName, 0)
 
             RemoteUtils.shellExec("am set-standby-bucket $packageName active")
             RemoteUtils.shellExec("am set-inactive $packageName false")
