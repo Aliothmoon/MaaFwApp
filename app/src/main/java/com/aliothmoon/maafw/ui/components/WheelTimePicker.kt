@@ -250,6 +250,7 @@ private fun WheelColumn(
     ) {
         items(count * LOOP_CYCLES, key = { it }) { index ->
             val isSelected = (centered ?: startIndex) == index
+            val wheelValue = (index % count).toString().padStart(2, '0')
             val digitColor by animateColorAsState(
                 targetValue = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
@@ -265,7 +266,7 @@ private fun WheelColumn(
                     .height(itemHeight)
                     .semantics {
                         selected = isSelected
-                        contentDescription = semanticLabel
+                        contentDescription = "$semanticLabel $wheelValue"
                     }
                     // 变形放在绘制阶段按像素距离连续插值，不触发重组
                     .graphicsLayer {
@@ -294,7 +295,7 @@ private fun WheelColumn(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = (index % count).toString().padStart(2, '0'),
+                    text = wheelValue,
                     style = digitStyle,
                     color = digitColor,
                     maxLines = 1,

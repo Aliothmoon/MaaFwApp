@@ -17,7 +17,9 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.constrain
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import java.time.LocalTime
@@ -97,7 +99,8 @@ private fun TimePickerDialogContent(
 
         val width = maxOf(title.width, picker.width, actions.width)
         val height = title.height + titleGap + picker.height + actionsGap + actions.height
-        layout(width, height) {
+        val size = constraints.constrain(IntSize(width, height))
+        layout(size.width, size.height) {
             title.placeRelative(0, 0)
             picker.placeRelative(0, title.height + titleGap)
             actions.placeRelative(0, title.height + titleGap + picker.height + actionsGap)
