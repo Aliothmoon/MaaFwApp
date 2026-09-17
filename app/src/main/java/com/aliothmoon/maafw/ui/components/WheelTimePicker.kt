@@ -45,12 +45,15 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -102,7 +105,7 @@ fun rememberWheelTimePickerState(
  *
  * M3 表盘与键盘输入在不同 Android 版本上表现不一致，这里只依赖 foundation 的滚动与吸附
  *
- * [rows] 需为奇数，偶数会被下调一格
+ * [rows] 需为奇数，偶数会被下调一格；极矮对话框可以只留选中行
  */
 @Composable
 fun WheelTimePicker(
@@ -111,7 +114,7 @@ fun WheelTimePicker(
     rows: Int = 5,
     itemHeight: Dp = 48.dp,
 ) {
-    val visibleRows = rows.coerceAtLeast(3).let { if (it % 2 == 0) it - 1 else it }
+    val visibleRows = rows.coerceAtLeast(1).let { if (it % 2 == 0) it - 1 else it }
     val colors = MaterialTheme.colorScheme
     val selectionShape = RoundedCornerShape(MaaTheme.style.radii.card)
     val digitStyle = MaterialTheme.typography.headlineMedium.copy(
@@ -156,6 +159,7 @@ fun WheelTimePicker(
                     count = HOUR_COUNT,
                     initialIndex = state.startHour,
                     selectedValue = state.hour,
+                    semanticLabel = stringResource(R.string.time_picker_hour),
                     onSelect = { state.hour = it },
                     rows = visibleRows,
                     itemHeight = itemHeight,
@@ -179,6 +183,7 @@ fun WheelTimePicker(
                     count = MINUTE_COUNT,
                     initialIndex = state.startMinute,
                     selectedValue = state.minute,
+                    semanticLabel = stringResource(R.string.time_picker_minute),
                     onSelect = { state.minute = it },
                     rows = visibleRows,
                     itemHeight = itemHeight,
@@ -196,6 +201,7 @@ private fun WheelColumn(
     count: Int,
     initialIndex: Int,
     selectedValue: Int,
+    semanticLabel: String,
     onSelect: (Int) -> Unit,
     rows: Int,
     itemHeight: Dp,
@@ -257,7 +263,10 @@ private fun WheelColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(itemHeight)
-                    .semantics { selected = isSelected }
+                    .semantics {
+                        selected = isSelected
+                        contentDescription = semanticLabel
+                    }
                     // 变形放在绘制阶段按像素距离连续插值，不触发重组
                     .graphicsLayer {
                         val info = listState.layoutInfo
