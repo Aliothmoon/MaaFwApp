@@ -171,4 +171,24 @@ object PermissionGrantHelper {
             false
         }
     }
+
+    /** specialUse FGS 的 appop 可能被 ROM 或管控工具拒绝，任务 FGS 会因此起不来 */
+    fun grantForegroundServiceSpecialUse(packageName: String): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        return try {
+            // uid 级 op：非默认的 uid 模式会盖过包模式，两级都放开；用 op 名免硬编码编号
+            val uidExit = RemoteUtils.shellExec("appops set --uid $packageName FOREGROUND_SERVICE_SPECIAL_USE allow")
+            val pkgExit = RemoteUtils.shellExec("appops set $packageName FOREGROUND_SERVICE_SPECIAL_USE allow")
+            val ok = uidExit == 0 && pkgExit == 0
+            if (ok) {
+                Ln.i("$TAG: FOREGROUND_SERVICE_SPECIAL_USE allowed for $packageName")
+            } else {
+                Ln.w("$TAG: FOREGROUND_SERVICE_SPECIAL_USE allow failed (uid=$uidExit, pkg=$pkgExit)")
+            }
+            ok
+        } catch (e: Exception) {
+            Ln.e("$TAG: Failed to allow FOREGROUND_SERVICE_SPECIAL_USE: $e")
+            false
+        }
+    }
 }
