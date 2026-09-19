@@ -20,6 +20,8 @@ data class SettingsUiState(
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     val update: UpdatePanelState = UpdatePanelState(),
     val pipOnHome: Boolean = true,
+    val runDurationLimitEnabled: Boolean = false,
+    val runDurationLimitMinutes: Int = 240,
 )
 
 data class UpdatePanelState(
@@ -62,6 +64,8 @@ sealed interface SettingsIntent {
     data class SetAutoCheckUpdate(val enabled: Boolean) : SettingsIntent
     data class SetAutoDownloadUpdate(val enabled: Boolean) : SettingsIntent
     data class SetPipOnHome(val enabled: Boolean) : SettingsIntent
+    data class SetRunDurationLimitEnabled(val enabled: Boolean) : SettingsIntent
+    data class SetRunDurationLimitMinutes(val minutes: Int) : SettingsIntent
     data object CheckUpdate : SettingsIntent
     data object DownloadUpdate : SettingsIntent
     data object CancelDownload : SettingsIntent

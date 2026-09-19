@@ -92,6 +92,14 @@ data class AppSettings(
     @PrefKey(default = "")
     val wakeCredential: String = "",
 
+    /** 单轮任务超过该时长后自动停止；运行中改动只影响下一轮（见 [com.aliothmoon.maafw.runner.RunDurationLimitHook]） */
+    @PrefKey(default = "false")
+    val runDurationLimitEnabled: String = "false",
+
+    /** 运行时长上限的分钟数；异常落盘值在读取侧收敛进 [com.aliothmoon.maafw.runner.RunDurationLimit] */
+    @PrefKey(default = "240")
+    val runDurationLimitMinutes: String = "240",
+
     /**
      * PI 声明了 `telemetry.sentry` 时才有意义；默认关
      *

@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -39,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
@@ -57,6 +59,7 @@ import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
@@ -136,11 +139,64 @@ fun SettingsScreen(
             ResourceOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
+            RunDurationCard(settingsState, onSettingsIntent)
             NotificationCard(onOpenNotificationSettings)
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
             OtherCard(state, settingsState, onIntent, onSettingsIntent)
             AboutCard(state)
+        }
+    }
+}
+
+/**
+ * 单轮运行时长上限：超时后由运行日志记一行原因，再把当轮停掉
+ *
+ * 值在任务受理后冻结；运行中改设置只影响下一轮，所以控件不跟着运行锁定
+ */
+@Composable
+private fun RunDurationCard(
+    state: SettingsUiState,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
+    // 失焦前只动本地缓冲：每次键入都立即钳位会让人刚输入「8」就被改回「240」。
+    // 按 settings 值 remember，让异步读盘或下一轮前的改动也能同步进输入框
+    var minuteInput by remember(state.runDurationLimitMinutes) {
+        mutableStateOf(state.runDurationLimitMinutes.toString())
+    }
+
+    MaaCard(title = stringResource(R.string.settings_section_duration_limit), collapsible = true) {
+        MaaSwitchRow(
+            label = stringResource(R.string.settings_duration_limit_enabled),
+            checked = state.runDurationLimitEnabled,
+            onCheckedChange = { onSettingsIntent(SettingsIntent.SetRunDurationLimitEnabled(it)) },
+        )
+        if (state.runDurationLimitEnabled) {
+            OutlinedTextField(
+                value = minuteInput,
+                onValueChange = { raw ->
+                    if (raw.length <= 4 && raw.all(Char::isDigit)) {
+                        minuteInput = raw
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused && minuteInput != state.runDurationLimitMinutes.toString()) {
+                            val normalized = minuteInput.toIntOrNull()
+                                ?.coerceIn(RunDurationLimit.MIN_MINUTES, RunDurationLimit.MAX_MINUTES)
+                                ?: RunDurationLimit.DEFAULT_MINUTES
+                            minuteInput = normalized.toString()
+                            onSettingsIntent(SettingsIntent.SetRunDurationLimitMinutes(normalized))
+                        }
+                    },
+                label = { Text(stringResource(R.string.settings_duration_limit_minutes)) },
+                supportingText = {
+                    Text(stringResource(R.string.settings_duration_limit_hint))
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            )
         }
     }
 }

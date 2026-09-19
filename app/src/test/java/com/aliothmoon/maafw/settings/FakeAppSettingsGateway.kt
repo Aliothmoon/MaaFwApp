@@ -86,6 +86,18 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         wakeCredential.value = credential.filter(Char::isDigit)
     }
 
+    override val runDurationLimitEnabled = MutableStateFlow(false)
+
+    override suspend fun setRunDurationLimitEnabled(enabled: Boolean) {
+        runDurationLimitEnabled.value = enabled
+    }
+
+    override val runDurationLimitMinutes = MutableStateFlow(240)
+
+    override suspend fun setRunDurationLimitMinutes(minutes: Int) {
+        runDurationLimitMinutes.value = minutes.coerceIn(1, 1440)
+    }
+
     override val telemetryEnabled = MutableStateFlow(false)
 
     override suspend fun setTelemetryEnabled(enabled: Boolean) {

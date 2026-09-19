@@ -11,6 +11,7 @@ import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
@@ -100,6 +101,14 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _wakeCredential = MutableStateFlow(defaults.wakeCredential)
     override val wakeCredential: StateFlow<String> = _wakeCredential.asStateFlow()
 
+    private val _runDurationLimitEnabled =
+        MutableStateFlow(defaults.runDurationLimitEnabled.toBoolean())
+    override val runDurationLimitEnabled: StateFlow<Boolean> = _runDurationLimitEnabled.asStateFlow()
+
+    private val _runDurationLimitMinutes =
+        MutableStateFlow(parseRunDurationLimitMinutes(defaults.runDurationLimitMinutes))
+    override val runDurationLimitMinutes: StateFlow<Int> = _runDurationLimitMinutes.asStateFlow()
+
     private val _telemetryEnabled = MutableStateFlow(defaults.telemetryEnabled.toBoolean())
     override val telemetryEnabled: StateFlow<Boolean> = _telemetryEnabled.asStateFlow()
 
@@ -141,6 +150,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
                 _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
                 _wakeCredential.value = s.wakeCredential
+                _runDurationLimitEnabled.value = s.runDurationLimitEnabled.toBoolean()
+                _runDurationLimitMinutes.value = parseRunDurationLimitMinutes(s.runDurationLimitMinutes)
                 _telemetryEnabled.value = s.telemetryEnabled.toBoolean()
                 _autoCheckUpdate.value = s.autoCheckUpdate.toBoolean()
                 _autoDownloadUpdate.value = s.autoDownloadUpdate.toBoolean()
@@ -216,6 +227,15 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[wakeCredential] = digits }
     }
 
+    override suspend fun setRunDurationLimitEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[runDurationLimitEnabled] = enabled.toString() }
+    }
+
+    override suspend fun setRunDurationLimitMinutes(minutes: Int): Unit = with(AppSettingsSchema) {
+        val normalized = RunDurationLimit.normalize(minutes)
+        context.dataStore.edit { it[runDurationLimitMinutes] = normalized.toString() }
+    }
+
     override suspend fun setTelemetryEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[telemetryEnabled] = enabled.toString() }
     }
@@ -268,4 +288,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseUpdateSource(raw: String): UpdateSource =
         runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRRORCHYAN)
+
+    private fun parseRunDurationLimitMinutes(raw: String): Int =
+        raw.toIntOrNull()?.let(RunDurationLimit::normalize) ?: RunDurationLimit.DEFAULT_MINUTES
 }
