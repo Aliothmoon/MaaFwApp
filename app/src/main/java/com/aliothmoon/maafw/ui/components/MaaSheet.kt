@@ -109,6 +109,7 @@ fun MaaSheetHeader(
     title: String,
     onClose: () -> Unit,
     onBack: (() -> Unit)? = null,
+    closeEnabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -124,7 +125,7 @@ fun MaaSheetHeader(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = onClose) {
+        IconButton(onClick = onClose, enabled = closeEnabled) {
             Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.common_close))
         }
     }

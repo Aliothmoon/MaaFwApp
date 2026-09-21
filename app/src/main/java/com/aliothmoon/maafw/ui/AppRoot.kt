@@ -328,6 +328,7 @@ fun AppRoot(
             title = stringResource(R.string.welcome_title),
             bodies = state.welcomePrompt,
             onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
+            minimumBrowseMs = 3_000L,
         )
 
         UpdatePromptDialog(
