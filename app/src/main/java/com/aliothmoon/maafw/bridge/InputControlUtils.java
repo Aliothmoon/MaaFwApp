@@ -258,6 +258,7 @@ public final class InputControlUtils {
                 + " x=" + event.getX(index)
                 + " y=" + event.getY(index)
                 + " pointers=" + formatPointers(event)
+                + " slots=" + formatSlots(slots)
                 + " mode=" + injectModeName(mode)
                 + " setDisplayElapsedMs=" + elapsedMs(setDisplayStartNanos)
                 + " injectElapsedMs=" + (injectStartNanos == 0 ? "not_reached" : elapsedMs(injectStartNanos))
