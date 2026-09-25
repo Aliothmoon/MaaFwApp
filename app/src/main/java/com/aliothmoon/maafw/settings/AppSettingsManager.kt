@@ -109,7 +109,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     override val runDurationLimitEnabled: StateFlow<Boolean> = _runDurationLimitEnabled.asStateFlow()
 
     private val _runDurationLimitMinutes =
-        MutableStateFlow(parseRunDurationLimitMinutes(defaults.runDurationLimitMinutes))
+        MutableStateFlow(RunDurationLimit.parse(defaults.runDurationLimitMinutes))
     override val runDurationLimitMinutes: StateFlow<Int> = _runDurationLimitMinutes.asStateFlow()
 
     private val _telemetryEnabled = MutableStateFlow(defaults.telemetryEnabled.toBoolean())
@@ -155,7 +155,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
                 _wakeCredential.value = s.wakeCredential
                 _runDurationLimitEnabled.value = s.runDurationLimitEnabled.toBoolean()
-                _runDurationLimitMinutes.value = parseRunDurationLimitMinutes(s.runDurationLimitMinutes)
+                _runDurationLimitMinutes.value = RunDurationLimit.parse(s.runDurationLimitMinutes)
                 _telemetryEnabled.value = s.telemetryEnabled.toBoolean()
                 _autoCheckUpdate.value = s.autoCheckUpdate.toBoolean()
                 _autoDownloadUpdate.value = s.autoDownloadUpdate.toBoolean()
@@ -240,8 +240,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     }
 
     override suspend fun setRunDurationLimitMinutes(minutes: Int): Unit = with(AppSettingsSchema) {
-        val normalized = RunDurationLimit.normalize(minutes)
-        context.dataStore.edit { it[runDurationLimitMinutes] = normalized.toString() }
+        context.dataStore.edit { it[runDurationLimitMinutes] = RunDurationLimit.normalize(minutes).toString() }
     }
 
     override suspend fun setTelemetryEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
@@ -296,7 +295,4 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseUpdateSource(raw: String): UpdateSource =
         runCatching { UpdateSource.valueOf(raw) }.getOrDefault(UpdateSource.MIRRORCHYAN)
-
-    private fun parseRunDurationLimitMinutes(raw: String): Int =
-        raw.toIntOrNull()?.let(RunDurationLimit::normalize) ?: RunDurationLimit.DEFAULT_MINUTES
 }

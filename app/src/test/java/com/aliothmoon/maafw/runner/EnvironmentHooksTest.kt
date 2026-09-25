@@ -289,6 +289,20 @@ class EnvironmentHooksTest {
         assertEquals(0, service.stopTargetAppCount)
     }
 
+    /** 时长上限停的结局同样是 Cancelled，但那不是用户接手，应用照关 */
+    @Test
+    fun `target app is closed after a stop at the duration limit`() = runTest {
+        val service = FakePrivilegedService()
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
+        val ctx = scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))
+
+        val release = hook.engage(ctx).releaseOrNull()!!
+        ctx.stoppedAtLimit.set(true)
+        release(RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())))
+
+        assertEquals(1, service.stopTargetAppCount)
+    }
+
     /** 特权进程断了时收尾不该反过来触发重连 */
     @Test
     fun `teardown is a no-op when the privileged process is gone`() = runTest {

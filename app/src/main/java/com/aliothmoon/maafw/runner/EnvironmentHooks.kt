@@ -59,6 +59,9 @@ internal object HookOrder {
 
     /** 只是挂一个监听，排在最后，收尾时最先摘掉 */
     const val WATCHDOG_NOTICE = 50
+
+    /** 收尾时最先撤计时器：别的挂载物撤到一半时它不该再到点去 stop */
+    const val RUN_DURATION_LIMIT = 60
 }
 
 /**
@@ -152,8 +155,10 @@ class CloseTargetAppHook(
         if (!settings.closeAppAfterTask.value && !perRule) return EngageResult.Skipped()
 
         return EngageResult.Engaged(Release { reason ->
-            // 只认自然跑完：投递被拒或用户手动停时把人家的应用关掉，太粗暴
-            if (reason is RunEndReason.Ran && reason.result !is ExecutionResult.Cancelled) {
+            // 投递被拒或用户手动停时把人家的应用关掉，太粗暴；时长上限到点停的不算用户接手，照关
+            val ranToEnd = reason is RunEndReason.Ran &&
+                (reason.result !is ExecutionResult.Cancelled || ctx.stoppedAtLimit.get())
+            if (ranToEnd) {
                 servicePort.callOrDefault("stopTargetApp", false) { it.stopTargetApp() }
             }
         })

@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.preferences.PrefKey
 import com.aliothmoon.preferences.PrefSchema
@@ -101,13 +102,12 @@ data class AppSettings(
     @PrefKey(default = "")
     val wakeCredential: String = "",
 
-    /** 单轮任务超过该时长后自动停止；运行中改动只影响下一轮（见 [com.aliothmoon.maafw.runner.RunDurationLimitHook]） */
+    /** 单轮超过 [runDurationLimitMinutes] 就自动停；见 [com.aliothmoon.maafw.runner.RunDurationLimitHook] */
     @PrefKey(default = "false")
     val runDurationLimitEnabled: String = "false",
 
-    /** 运行时长上限的分钟数；异常落盘值在读取侧收敛进 [com.aliothmoon.maafw.runner.RunDurationLimit] */
-    @PrefKey(default = "240")
-    val runDurationLimitMinutes: String = "240",
+    @PrefKey(default = "${RunDurationLimit.DEFAULT_MINUTES}")
+    val runDurationLimitMinutes: String = RunDurationLimit.DEFAULT_MINUTES.toString(),
 
     /**
      * PI 声明了 `telemetry.sentry` 时才有意义；默认关

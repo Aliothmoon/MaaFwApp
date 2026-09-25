@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.settings
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
@@ -98,10 +99,10 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         runDurationLimitEnabled.value = enabled
     }
 
-    override val runDurationLimitMinutes = MutableStateFlow(240)
+    override val runDurationLimitMinutes = MutableStateFlow(RunDurationLimit.DEFAULT_MINUTES)
 
     override suspend fun setRunDurationLimitMinutes(minutes: Int) {
-        runDurationLimitMinutes.value = minutes.coerceIn(1, 1440)
+        runDurationLimitMinutes.value = RunDurationLimit.normalize(minutes)
     }
 
     override val telemetryEnabled = MutableStateFlow(false)

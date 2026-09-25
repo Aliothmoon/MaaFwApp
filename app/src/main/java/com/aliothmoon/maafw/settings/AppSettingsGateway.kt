@@ -55,11 +55,9 @@ interface AppSettingsGateway {
     val wakeCredential: StateFlow<String>
     suspend fun setWakeCredential(credential: String)
 
-    /** 单轮任务超时后自动停止；运行中改值只影响下一轮 */
     val runDurationLimitEnabled: StateFlow<Boolean>
     suspend fun setRunDurationLimitEnabled(enabled: Boolean)
 
-    /** 分钟数；setter 与读取侧都会收敛进允许区间 */
     val runDurationLimitMinutes: StateFlow<Int>
     suspend fun setRunDurationLimitMinutes(minutes: Int)
 
