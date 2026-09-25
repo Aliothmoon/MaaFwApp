@@ -285,6 +285,9 @@
     <string name="schedule_edit_days">Days</string>
     <string name="schedule_edit_times">Times</string>
     <string name="schedule_edit_add_time">Add time</string>
+    <string name="schedule_time_picker_title">Choose time</string>
+    <string name="time_picker_hour">Hour</string>
+    <string name="time_picker_minute">Minute</string>
     <string name="schedule_edit_start_time">First run</string>
     <string name="schedule_edit_interval">Execution interval</string>
     <string name="schedule_edit_save">Save</string>
