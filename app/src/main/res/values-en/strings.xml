@@ -114,6 +114,10 @@
     <string name="settings_section_resource_option">Resource settings</string>
     <string name="settings_section_display">Display</string>
     <string name="settings_section_schedule">Scheduled tasks</string>
+    <string name="settings_section_duration_limit">Run duration limit</string>
+    <string name="settings_duration_limit_enabled">Stop automatically after timeout</string>
+    <string name="settings_duration_limit_minutes">Maximum run duration (minutes)</string>
+    <string name="settings_duration_limit_hint">%1$d–%2$d minutes; changes while a run is in progress apply to the next run</string>
     <string name="settings_section_other">Other</string>
     <string name="settings_pip_on_home">Auto picture-in-picture while running</string>
     <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The game cannot be controlled inside the window</string>
@@ -316,6 +320,8 @@
     <string name="run_log_screen_saver_skipped">Screen-off overlay did not show; it will not be dismissed automatically</string>
     <string name="run_log_auto_sleep_skipped_not_run">The run did not start; skip auto-sleep</string>
     <string name="run_log_auto_sleep_skipped_awake">The screen was already on at start; skip auto-sleep</string>
+    <string name="run_log_duration_limit_reached">Run duration limit reached (%1$d minutes); stopping the task</string>
+    <string name="run_log_duration_limit_stop_failed">Failed to stop at the duration limit: %1$s</string>
     <string name="wake_unlock_need_pin">A PIN is required to unlock; add it in Settings</string>
     <string name="wake_unlock_pin_rejected">Wrong PIN, or this lock screen does not accept injected keys</string>
     <string name="wake_unlock_screen_off">The screen did not turn on</string>

@@ -16,6 +16,7 @@ import com.aliothmoon.maafw.runner.NotificationHook
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
 import com.aliothmoon.maafw.runner.RemotePreviewPort
+import com.aliothmoon.maafw.runner.RunDurationLimitHook
 import com.aliothmoon.maafw.runner.RunKeepAlive
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunJournal
@@ -129,6 +130,11 @@ val runnerModule = module {
                     watchdogState = get<PermissionGateway>().watchdogState,
                     servicePort = get(),
                     journal = get(),
+                    scope = get(named<AppCoroutineScope>()),
+                ),
+                RunDurationLimitHook(
+                    settings = get<AppSettingsManager>(),
+                    runnerPort = get(),
                     scope = get(named<AppCoroutineScope>()),
                 ),
             ),

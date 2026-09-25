@@ -137,7 +137,7 @@ class MaaFrameworkRunnerPortTest {
         val service = FakePrivilegedService()
         val (runner, _) = port(this, service, saveOnError = { false })
 
-        assertEquals(RunnerCommandResult.Accepted, runner.start(plan()))
+        assertEquals(RunnerCommandResult.Accepted, runner.start(plan(), "e1"))
         advanceUntilIdle()
 
         assertFalse(service.saveOnError)

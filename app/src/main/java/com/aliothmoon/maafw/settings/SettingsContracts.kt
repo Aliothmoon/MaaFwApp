@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
@@ -20,6 +21,8 @@ data class SettingsUiState(
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     val update: UpdatePanelState = UpdatePanelState(),
     val pipOnHome: Boolean = true,
+    val runDurationLimitEnabled: Boolean = false,
+    val runDurationLimitMinutes: Int = RunDurationLimit.DEFAULT_MINUTES,
 )
 
 data class UpdatePanelState(
@@ -62,6 +65,8 @@ sealed interface SettingsIntent {
     data class SetAutoCheckUpdate(val enabled: Boolean) : SettingsIntent
     data class SetAutoDownloadUpdate(val enabled: Boolean) : SettingsIntent
     data class SetPipOnHome(val enabled: Boolean) : SettingsIntent
+    data class SetRunDurationLimitEnabled(val enabled: Boolean) : SettingsIntent
+    data class SetRunDurationLimitMinutes(val minutes: Int) : SettingsIntent
     data object CheckUpdate : SettingsIntent
     data object DownloadUpdate : SettingsIntent
     data object CancelDownload : SettingsIntent

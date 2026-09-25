@@ -108,6 +108,10 @@
     <string name="settings_section_resource_option">资源设置</string>
     <string name="settings_section_display">显示设置</string>
     <string name="settings_section_schedule">定时任务设置</string>
+    <string name="settings_section_duration_limit">运行时长上限</string>
+    <string name="settings_duration_limit_enabled">单轮超时后自动停止</string>
+    <string name="settings_duration_limit_minutes">最长运行分钟数</string>
+    <string name="settings_duration_limit_hint">范围 %1$d–%2$d 分钟；运行中改动下一轮生效</string>
     <string name="settings_section_other">其他设置</string>
     <string name="settings_pip_on_home">后台运行时自动画中画</string>
     <string name="settings_pip_on_home_desc">后台模式任务运行中，停在任务页时按 Home 或手势回桌面，自动缩为画中画小窗继续显示画面。小窗内无法操作游戏</string>
@@ -309,6 +313,8 @@
     <string name="run_log_screen_saver_skipped">熄屏挂机未能打开，本轮不自动关闭</string>
     <string name="run_log_auto_sleep_skipped_not_run">任务未开始，跳过自动熄屏</string>
     <string name="run_log_auto_sleep_skipped_awake">启动时屏幕已亮，跳过自动熄屏</string>
+    <string name="run_log_duration_limit_reached">已达到运行时长上限（%1$d 分钟），停止任务</string>
+    <string name="run_log_duration_limit_stop_failed">按时长上限停止失败：%1$s</string>
     <string name="wake_unlock_need_pin">需要 PIN 才能解锁，请到设置里填写</string>
     <string name="wake_unlock_pin_rejected">PIN 不对，或该机型锁屏不接受注入按键</string>
     <string name="wake_unlock_screen_off">屏幕没有亮起来</string>

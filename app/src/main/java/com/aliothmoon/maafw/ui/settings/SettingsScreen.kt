@@ -136,6 +136,7 @@ fun SettingsScreen(
             ResourceOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
+            RunDurationCard(settingsState, onSettingsIntent)
             NotificationCard(onOpenNotificationSettings)
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
