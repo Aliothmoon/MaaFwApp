@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -67,6 +68,7 @@ import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
 import com.aliothmoon.maafw.ui.components.MaaTouchOverlay
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.pip.LocalIsInPip
+import kotlin.math.roundToInt
 
 /**
  * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一份组合状态
@@ -82,12 +84,14 @@ internal fun rememberMovablePreview(
     resolution: DisplayResolution,
     /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
     markers: () -> List<PreviewTouchMarker>,
+    fps: () -> Float?,
     onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
 ): @Composable () -> Unit {
     val currentResolution by rememberUpdatedState(resolution)
     val currentMarkers by rememberUpdatedState(markers)
+    val currentFps by rememberUpdatedState(fps)
     val currentCreated by rememberUpdatedState(onSurfaceCreated)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
@@ -117,6 +121,22 @@ internal fun rememberMovablePreview(
                         resolution = currentResolution,
                         modifier = Modifier.fillMaxSize(),
                     )
+                }
+                currentFps()?.let { value ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.TopStart,
+                    ) {
+                        Text(
+                            text = "${value.roundToInt()} FPS",
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 5.dp, vertical = 2.dp),
+                        )
+                    }
                 }
             }
         }

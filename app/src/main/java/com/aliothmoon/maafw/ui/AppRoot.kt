@@ -187,6 +187,7 @@ fun AppRoot(
     // 刻意不用 by 解构：在这一层读就等于让整棵树跟着触摸与日志频率重组，
     // 往下传取值函数，读推迟到真正显示它们的叶子
     val previewMarkersState = viewModel.previewMarkers.collectAsStateWithLifecycle()
+    val gameFpsState = viewModel.gameFps.collectAsStateWithLifecycle()
     val runLogState = viewModel.runLog.collectAsStateWithLifecycle()
 
     // 语言重载唯一触发点：App/系统切语言都经 Activity 重建后到此
@@ -214,6 +215,7 @@ fun AppRoot(
         rememberMovablePreview(
             resolution = resolution,
             markers = { previewMarkersState.value },
+            fps = { gameFpsState.value },
             // 不等 setFixedSize 那一轮：搬一次家要 50ms+ 才对上尺寸，期间遮罩会盖住刚回来的画面
             onSurfaceCreated = { previewSurfaceReady = true },
             onSurfaceAvailable = {

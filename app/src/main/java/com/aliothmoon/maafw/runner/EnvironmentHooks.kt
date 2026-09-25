@@ -60,6 +60,9 @@ internal object HookOrder {
     /** 只是挂一个监听，排在最后，收尾时最先摘掉 */
     const val WATCHDOG_NOTICE = 50
 
+    /** 同为观察者，排在看门狗之后；收尾时先停 FPS 轮询，再看门狗 */
+    const val GAME_FPS = 55
+
     /** 收尾时最先撤计时器：别的挂载物撤到一半时它不该再到点去 stop */
     const val RUN_DURATION_LIMIT = 60
 }
