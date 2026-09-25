@@ -93,7 +93,17 @@ class RunSessionLogStore {
                 val stamp = Instant.ofEpochMilli(startedAt)
                     .atZone(ZoneId.systemDefault())
                     .format(FILE_STAMP)
-                val file = File(sessionDir(), "$PREFIX$stamp${SEPARATOR}${tasks.size}$SUFFIX")
+                val dir = sessionDir()
+                var file = File(dir, "$PREFIX$stamp${SEPARATOR}${tasks.size}$SUFFIX")
+                // 同一秒里开两轮会撞名（被拒的那轮也开文件），追加写会把两轮混进一个文件
+                var collision = 0
+                while (file.exists()) {
+                    collision += 1
+                    file = File(
+                        dir,
+                        "$PREFIX$stamp${SEPARATOR}${tasks.size}${SEPARATOR}$collision$SUFFIX",
+                    )
+                }
                 val writer = RunSessionWriter(BufferedWriter(FileWriter(file, true)))
                 writer.write(listOf(RunSessionRecord.Header(startedAt, tasks)))
                 writer

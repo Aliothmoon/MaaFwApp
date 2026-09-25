@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
+import java.util.UUID
 
 /** 谁发起的这一轮；决定「需要确认」时有没有人可问 */
 sealed interface RunTrigger {
@@ -87,4 +88,5 @@ class RunContext(
     val progress: RunProgress = RunProgress { _, _ -> },
     /** 本轮运行日志；单测可传 [DiscardingRunJournal] */
     val journal: RunJournal,
+    val executionId: String = UUID.randomUUID().toString(),
 )

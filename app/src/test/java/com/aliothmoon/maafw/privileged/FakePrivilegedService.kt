@@ -69,6 +69,14 @@ open class FakePrivilegedService : RemoteService {
     override fun pid(): Int = 0
     override fun heartbeat(appPid: Int) = Unit
     override fun setup(piRoot: String?, logDir: String?, isDebug: Boolean): Boolean = setupResult
+
+    var saveOnError: Boolean = true
+        private set
+
+    override fun setSaveOnError(enabled: Boolean): Boolean {
+        saveOnError = enabled
+        return true
+    }
     override fun setVirtualDisplayMode(mode: Int): Boolean = true
     override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) = Unit
     override fun startVirtualDisplay(): Int = 1

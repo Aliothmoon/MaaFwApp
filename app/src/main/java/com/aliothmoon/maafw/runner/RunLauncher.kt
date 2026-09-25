@@ -154,7 +154,7 @@ class RunLauncher(
                 return RunLaunchResult.Blocked(halt.reason)
             }
 
-            when (val command = runnerPort.start(plan)) {
+            when (val command = runnerPort.start(plan, ctx.executionId)) {
                 RunnerCommandResult.Accepted -> Unit
                 is RunnerCommandResult.Rejected -> {
                     finalize(engaged, RunEndReason.NotRun(NotRunCause.Rejected))

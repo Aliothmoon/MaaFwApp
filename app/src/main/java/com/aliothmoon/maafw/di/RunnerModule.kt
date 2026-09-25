@@ -46,6 +46,7 @@ val runnerModule = module {
             runMode = get<AppSettingsManager>().runMode::value,
             resolutionPreference = get<AppSettingsManager>().resolutionPreference::value,
             debugMode = get<AppSettingsManager>().debugMode::value,
+            saveOnError = get<AppSettingsManager>().saveOnError::value,
             scope = get(named<AppCoroutineScope>()),
             servicePort = get(),
         )
@@ -83,7 +84,6 @@ val runnerModule = module {
 
     single {
         RunLogRecorder(
-            runnerPort = get(),
             focusDispatcher = get(),
             store = get(),
             renderText = get<LocalizedTextRenderer>()::render,

@@ -68,6 +68,12 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         debugMode.value = enabled
     }
 
+    override val saveOnError = MutableStateFlow(true)
+
+    override suspend fun setSaveOnError(enabled: Boolean) {
+        saveOnError.value = enabled
+    }
+
     override val themeStyle = MutableStateFlow(ThemeStyle.DEFAULT)
 
     override suspend fun setThemeStyle(style: ThemeStyle) {
