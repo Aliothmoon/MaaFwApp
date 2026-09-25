@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleRow
 import com.aliothmoon.maafw.schedule.ScheduleUiState
@@ -104,6 +105,15 @@ fun ScheduleScreen(
             ),
         )
         // 空状态靠 fillParentMaxSize 居中，卡片不能再进列表
+        if (state.runMode == RunMode.FOREGROUND) {
+            ForegroundModeCard(
+                modifier = Modifier.padding(
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    bottom = MaaDesignTokens.Spacing.md,
+                ),
+            )
+        }
         if (!state.exactAlarmAllowed) {
             ExactAlarmCard(
                 onGrant = { onIntent(ScheduleIntent.RequestExactAlarmPermission) },
@@ -138,6 +148,20 @@ fun ScheduleScreen(
         }
     }
 
+}
+
+@Composable
+private fun ForegroundModeCard(modifier: Modifier = Modifier) {
+    MaaCard(
+        modifier = modifier,
+        title = stringResource(R.string.schedule_foreground_reminder_title),
+    ) {
+        Text(
+            text = stringResource(R.string.schedule_foreground_reminder_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable
