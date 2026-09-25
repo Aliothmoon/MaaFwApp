@@ -298,6 +298,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int {
         if (packageName.isNullOrBlank()) return 0
         var granted = 0
+        // 结果不进返回位免改 AIDL 返回协议；放开失败由 App 侧预检兜底
+        if (permissions and PrivilegedGrant.FGS_SPECIAL_USE != 0) {
+            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName)
+        }
         if (permissions and PrivilegedGrant.NOTIFICATION != 0 &&
             PermissionGrantHelper.grantNotificationPermission(packageName, uid)
         ) {
