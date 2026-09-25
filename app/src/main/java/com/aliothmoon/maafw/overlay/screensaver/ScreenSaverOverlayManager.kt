@@ -14,6 +14,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
+import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.isBusy
@@ -140,7 +141,11 @@ class ScreenSaverOverlayManager(
     private fun startLogRelay() {
         logJob?.cancel()
         logJob = scope.launch {
-            runnerPort.events.collect { latestLog.value = it.toLogText() }
+            runnerPort.events.collect { envelope ->
+                if (envelope.event !is RunnerEvent.ExecutionFinished) {
+                    latestLog.value = envelope.event.toLogText()
+                }
+            }
         }
     }
 

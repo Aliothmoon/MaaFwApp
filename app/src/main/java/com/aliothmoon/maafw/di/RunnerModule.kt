@@ -83,7 +83,6 @@ val runnerModule = module {
 
     single {
         RunLogRecorder(
-            runnerPort = get(),
             focusDispatcher = get(),
             store = get(),
             renderText = get<LocalizedTextRenderer>()::render,
