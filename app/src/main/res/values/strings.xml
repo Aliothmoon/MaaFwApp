@@ -506,6 +506,12 @@
     <string name="settings_log_archive_desc">查看每次运行的执行日志</string>
     <string name="settings_log_error_desc">查看应用异常和错误记录</string>
     <string name="settings_log_export_desc">打包所有日志为 ZIP 文件分享</string>
+    <string name="settings_log_cleanup">清理日志数据</string>
+    <string name="settings_log_cleanup_desc">删除应用与 MaaFramework 日志、运行记录、截图和诊断文件</string>
+    <string name="settings_log_cleanup_title">清理日志数据</string>
+    <string name="settings_log_cleanup_message">将删除全部日志、运行记录、截图和诊断文件，并重启应用。此操作无法撤销。</string>
+    <string name="settings_log_cleanup_confirm">清理并重启</string>
+    <string name="settings_log_cleanup_failed">清理日志失败</string>
 
     <!-- 诊断文案；构造点在 domain/Diagnostics.kt 的 DiagnosticMessages -->
     <string name="diagnostic_severity_warning">警告</string>
