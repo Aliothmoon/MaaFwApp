@@ -56,6 +56,8 @@ interface MaaFrameworkLibrary : Library {
 
     fun MaaTaskerAddSink(tasker: Pointer?, sink: MaaEventCallback?, transArg: Pointer?): Long
 
+    fun MaaTaskerAddContextSink(tasker: Pointer?, sink: MaaEventCallback?, transArg: Pointer?): Long
+
     fun MaaTaskerBindResource(tasker: Pointer?, res: Pointer?): Byte
 
     fun MaaTaskerBindController(tasker: Pointer?, ctrl: Pointer?): Byte
@@ -106,7 +108,8 @@ interface MaaFrameworkLibrary : Library {
 
     /**
      * 对应 `MaaEventCallback`：`void(void* handle, const char* message, const char* details_json, void* trans_arg)`
-     * 由 native 线程回调，实现里不得阻塞，也不得抛异常穿回 native
+     * 由 native 线程回调，实现不得抛异常穿回 native。普通事件不得阻塞；
+     * blocking modal 是唯一例外，由 MaaRunner 的 modal gate 受控等待
      */
     fun interface MaaEventCallback : Callback {
         operator fun invoke(handle: Pointer?, message: String?, details: String?, transArg: Pointer?)

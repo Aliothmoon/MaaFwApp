@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.runner
 
+import kotlinx.coroutines.CompletableDeferred
+
 /** 正文原样返回：不涉及 `{image}` 与文件路径的用例用它，避免各自造一个空实现 */
 object PassthroughFocusContentResolver : FocusContentResolver {
     override suspend fun resolve(content: String): String = content
@@ -19,5 +21,18 @@ class RecordingFocusContentResolver(
             content.contains(FOCUS_IMAGE_PLACEHOLDER) -> content.replace(FOCUS_IMAGE_PLACEHOLDER, imageUri)
             else -> fileBody
         }
+    }
+}
+
+class GatedFocusContentResolver : FocusContentResolver {
+    private val gate = CompletableDeferred<Unit>()
+
+    fun release() {
+        gate.complete(Unit)
+    }
+
+    override suspend fun resolve(content: String): String {
+        gate.await()
+        return content
     }
 }

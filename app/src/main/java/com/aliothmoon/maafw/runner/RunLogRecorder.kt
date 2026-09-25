@@ -85,7 +85,11 @@ class RunLogRecorder(
                 // Focus 从 events 上过滤掉：它要先经 FocusDispatcher 补完（$i18n / 文件 / 占位符）
                 runnerPort.events.filter { it !is RunnerEvent.Focus },
                 focusDispatcher.resolved
-                    .filter { FocusChannel.Log in it.channels }
+                    .filter {
+                        FocusChannel.Log in it.channels ||
+                            FocusChannel.Dialog in it.channels ||
+                            FocusChannel.Modal in it.channels
+                    }
                     .map { RunnerEvent.Focus(it) },
             ).collect(::record)
         }

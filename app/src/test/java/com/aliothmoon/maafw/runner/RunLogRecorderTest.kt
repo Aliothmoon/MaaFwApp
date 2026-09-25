@@ -133,6 +133,105 @@ class RunLogRecorderTest {
     }
 
     @Test
+    fun `legacy focus reaches the user-facing run log`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+        val focus = FocusParser.parse(
+            "Node.Action.Succeeded",
+            """{"name":"NodeA","focus":{"succeeded":["刷到第3关","体力不足"]}}""",
+        )!!
+
+        runner.emit(RunnerEvent.Focus(focus))
+        settleRunLog()
+
+        val line = recorder.runLog.value.single()
+        assertEquals(RunLogKind.Focus, line.kind)
+        assertEquals("刷到第3关\n体力不足", (line.text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value)
+    }
+
+    @Test
+    fun `legacy string focus reaches the user-facing run log once`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+        val focus = FocusParser.parse(
+            "Node.Action.Starting",
+            """{"name":"Activity","focus":"[color:DeepSkyBlue]进入活动任务[/color]"}""",
+        )!!
+
+        assertNull(
+            FocusParser.parse(
+                "Node.PipelineNode.Starting",
+                """{"name":"Activity","focus":"[color:DeepSkyBlue]进入活动任务[/color]"}""",
+            )
+        )
+        runner.emit(RunnerEvent.Focus(focus))
+        settleRunLog()
+
+        val line = recorder.runLog.value.single()
+        assertEquals(RunLogKind.Focus, line.kind)
+        assertEquals(
+            """<span style="color: DeepSkyBlue;">进入活动任务</span>""",
+            (line.text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value,
+        )
+    }
+
+    @Test
+    fun `dialog and modal focus reaches the run log while toast and notification do not`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Succeeded",
+                    content = "modal line",
+                    channels = setOf(FocusChannel.Modal),
+                    trace = false,
+                    modalId = "modal-1",
+                ),
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Starting",
+                    content = "dialog line",
+                    channels = setOf(FocusChannel.Dialog),
+                    trace = false,
+                ),
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Starting",
+                    content = "toast line",
+                    channels = setOf(FocusChannel.Toast),
+                    trace = false,
+                ),
+            ),
+        )
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.Action.Starting",
+                    content = "notification line",
+                    channels = setOf(FocusChannel.Notification),
+                    trace = false,
+                ),
+            ),
+        )
+        settleRunLog()
+
+        assertEquals(
+            listOf("modal line", "dialog line"),
+            recorder.runLog.value.map { line ->
+                (line.text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value ?: "<res>"
+            },
+        )
+    }
+
+    @Test
     fun `a new PI task clears the pipeline node status`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)

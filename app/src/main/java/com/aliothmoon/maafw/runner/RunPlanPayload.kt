@@ -11,6 +11,8 @@ import kotlinx.serialization.json.JsonObject
  */
 @Serializable
 data class RunPlanPayload(
+    /** app 侧本轮执行的 ID；modal 回调原样带回，用来拒绝跨轮次的晚到请求 */
+    val executionId: String,
     /** PI resource 的绝对路径，按声明顺序逐个 MaaResourcePostBundle */
     val resourcePaths: List<String>,
     /**

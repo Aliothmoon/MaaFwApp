@@ -50,6 +50,9 @@ class StubRunnerPort(
     /** stopRequested 绑定单次 executionId，不跨轮次 */
     private var currentContext: ExecutionContext? = null
 
+    private val _acknowledgedModalFocusIds = mutableListOf<String>()
+    val acknowledgedModalFocusIds: List<String> get() = _acknowledgedModalFocusIds
+
     private class ExecutionContext(val executionId: String) {
         val stopRequested = AtomicBoolean(false)
     }
@@ -83,6 +86,11 @@ class StubRunnerPort(
         context.stopRequested.set(true)
         _state.update { it.copy(phase = RunnerPhase.Stopping) }
         RunnerCommandResult.Accepted
+    }
+
+    override suspend fun acknowledgeModalFocus(focusId: String): Boolean {
+        _acknowledgedModalFocusIds += focusId
+        return true
     }
 
     private suspend fun execute(plan: RunPlan, context: ExecutionContext) {

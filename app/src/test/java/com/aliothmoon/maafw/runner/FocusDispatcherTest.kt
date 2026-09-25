@@ -89,6 +89,19 @@ class FocusDispatcherTest {
     }
 
     @Test
+    fun `MFA custom markup is converted after placeholders`() = runTest(UnconfinedTestDispatcher()) {
+        val runner = RecordingEventRunnerPort()
+        val event = focus(
+            "[color:{color}]剩余 {count}[/color]",
+            mapOf("color" to "red", "count" to "3"),
+        )
+        assertEquals(
+            """<span style="color: red;">剩余 3</span>""",
+            completed(runner, dispatcherWith(runner), event).content,
+        )
+    }
+
+    @Test
     fun `translation key is resolved`() = runTest(UnconfinedTestDispatcher()) {
         val runner = RecordingEventRunnerPort()
         val result = completed(runner, dispatcherWith(runner), focus("\$tip.plain"))
