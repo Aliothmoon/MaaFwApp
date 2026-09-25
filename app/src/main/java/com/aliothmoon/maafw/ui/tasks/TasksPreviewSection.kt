@@ -256,11 +256,17 @@ internal fun FullscreenPreview(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .previewTouchInput(resolution, onTouch),
+            .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .previewTouchInput(resolution, onTouch),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
         IconButton(
             onClick = onExit,
             modifier = Modifier
@@ -323,14 +329,14 @@ private fun Modifier.previewTouchInput(
 }
 
 /** [offset] 已钳进虚拟屏范围；[inside] 是钳之前落没落在画面上 */
-private data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
+internal data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
 
 /**
  * 把手指位置换算到虚拟屏坐标
  *
  * 越界钳回边缘而不是丢掉：手指拖出画面后抬起，那条 up 也得送达，否则远端以为它还按着
  */
-private fun viewToVirtualDisplay(
+internal fun viewToVirtualDisplay(
     view: Offset,
     viewSize: IntSize,
     resolution: DisplayResolution,
@@ -341,14 +347,14 @@ private fun viewToVirtualDisplay(
     )
     val offsetX = (viewSize.width - resolution.width * scale) / 2f
     val offsetY = (viewSize.height - resolution.height * scale) / 2f
-    val vx = ((view.x - offsetX) / scale).toInt()
-    val vy = ((view.y - offsetY) / scale).toInt()
+    val vx = (view.x - offsetX) / scale
+    val vy = (view.y - offsetY) / scale
     return DisplayPoint(
         offset = IntOffset(
-            vx.coerceIn(0, resolution.width - 1),
-            vy.coerceIn(0, resolution.height - 1),
+            vx.toInt().coerceIn(0, resolution.width - 1),
+            vy.toInt().coerceIn(0, resolution.height - 1),
         ),
-        inside = vx in 0 until resolution.width && vy in 0 until resolution.height,
+        inside = vx >= 0f && vx < resolution.width && vy >= 0f && vy < resolution.height,
     )
 }
 
