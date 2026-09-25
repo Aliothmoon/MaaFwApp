@@ -30,6 +30,7 @@
     <string name="virtual_display_app_drifted">Off-display</string>
     <string name="virtual_display_idle">Idle</string>
     <string name="tasks_preview_exit_fullscreen">Exit fullscreen</string>
+    <string name="tasks_preview_enter_fullscreen">Expand virtual display</string>
     <string name="tasks_preview_idle">Not running</string>
     <string name="tasks_remove">Remove</string>
     <string name="tasks_drag_reorder">Drag to reorder</string>
