@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.ui.components
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,9 +12,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -40,9 +46,13 @@ fun MaaTimePickerDialog(
     onConfirm: (LocalTime) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
+    // 默认跟系统的 12/24 小时制；切换只在这次弹窗里记住
+    var is24Hour by rememberSaveable { mutableStateOf(DateFormat.is24HourFormat(context)) }
     val state = rememberWheelTimePickerState(
         initialHour = initial.hour,
         initialMinute = initial.minute,
+        is24Hour = is24Hour,
     )
     BasicAlertDialog(onDismissRequest = onDismiss) {
         Surface(
@@ -51,6 +61,7 @@ fun MaaTimePickerDialog(
         ) {
             TimePickerDialogContent(
                 state = state,
+                onFormatChange = { is24Hour = it },
                 onConfirm = { onConfirm(LocalTime.of(state.hour, state.minute)) },
                 onDismiss = onDismiss,
             )
@@ -61,6 +72,7 @@ fun MaaTimePickerDialog(
 @Composable
 private fun TimePickerDialogContent(
     state: WheelTimePickerState,
+    onFormatChange: (Boolean) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -68,12 +80,18 @@ private fun TimePickerDialogContent(
         modifier = Modifier.padding(MaaDesignTokens.Spacing.xxl),
     ) { constraints ->
         val title = subcompose("title") {
-            Text(
-                text = stringResource(R.string.schedule_time_picker_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.schedule_time_picker_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                WheelTimeFormatToggle(is24Hour = state.is24Hour, onFormatChange = onFormatChange)
+            }
         }.single().measure(constraints.copy(minHeight = 0))
 
         val actions = subcompose("actions") {

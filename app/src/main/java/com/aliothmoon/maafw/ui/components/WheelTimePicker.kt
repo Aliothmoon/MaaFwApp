@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -29,12 +31,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +51,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -64,6 +69,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 private const val HOUR_COUNT = 24
+private const val HOURS_PER_PERIOD = 12
 private const val MINUTE_COUNT = 60
 
 /** 循环滚轮的虚拟圈数，起点放中间，两头实际滚不到 */
@@ -78,31 +84,85 @@ private const val SHRINK_DEPTH = 0.24f
 /** 向中心收拢的比例，模拟滚筒透视 */
 private const val GATHER_RATIO = 0.09f
 
+private val PICKER_MAX_WIDTH = 304.dp
+
 /** 24 小时制没有时段列，收窄一点保持时分列的疏密 */
-private val PICKER_MAX_WIDTH = 248.dp
+private val WHEELS_ONLY_MAX_WIDTH = 248.dp
+
+private val PERIOD_CELL_HEIGHT = 48.dp
 
 /**
- * 24 小时制滚轮状态
+ * [hour] 恒为 24 小时制，[is24Hour] 只决定滚轮怎么显示
  *
- * 构造参数只作为初始值，之后由滚轮与调用方驱动
+ * 构造参数只作为初始值，之后由滚轮与时段选择驱动；换制式要换实例
  */
 @Stable
-class WheelTimePickerState(initialHour: Int, initialMinute: Int) {
+class WheelTimePickerState(
+    initialHour: Int,
+    initialMinute: Int,
+    val is24Hour: Boolean = false,
+) {
     internal val startHour = initialHour.coerceIn(0, HOUR_COUNT - 1)
     internal val startMinute = initialMinute.coerceIn(0, MINUTE_COUNT - 1)
+
+    internal val hourCount = if (is24Hour) HOUR_COUNT else HOURS_PER_PERIOD
+
+    internal val firstHourValue = if (is24Hour) 0 else 1
+
+    internal val startHourIndex = hourIndexOf(startHour)
 
     var hour by mutableIntStateOf(startHour)
         internal set
 
     var minute by mutableIntStateOf(startMinute)
         internal set
+
+    val isPm: Boolean
+        get() = hour >= HOURS_PER_PERIOD
+
+    /** 当前小时在小时列里的下标；[rows] 变化后按它重新对中 */
+    internal val hourIndex: Int
+        get() = hourIndexOf(hour)
+
+    private fun hourIndexOf(hour: Int): Int =
+        if (is24Hour) hour else (hour + HOURS_PER_PERIOD - 1) % HOURS_PER_PERIOD
+
+    internal fun selectHourIndex(index: Int) {
+        if (is24Hour) {
+            hour = index.coerceIn(0, HOUR_COUNT - 1)
+        } else {
+            selectHour(index + 1)
+        }
+    }
+
+    internal fun selectHour(hourOfPeriod: Int) {
+        require(hourOfPeriod in 1..HOURS_PER_PERIOD)
+        hour = hourOfPeriod % HOURS_PER_PERIOD + if (isPm) HOURS_PER_PERIOD else 0
+    }
+
+    internal fun selectPeriod(pm: Boolean) {
+        hour = hour % HOURS_PER_PERIOD + if (pm) HOURS_PER_PERIOD else 0
+    }
 }
 
 @Composable
 fun rememberWheelTimePickerState(
     initialHour: Int,
     initialMinute: Int,
-): WheelTimePickerState = remember { WheelTimePickerState(initialHour, initialMinute) }
+    is24Hour: Boolean = false,
+): WheelTimePickerState {
+    val previous = remember { arrayOfNulls<WheelTimePickerState>(1) }
+    return remember(is24Hour) {
+        val last = previous[0]
+        Snapshot.withoutReadObservation {
+            WheelTimePickerState(
+                last?.hour ?: initialHour,
+                last?.minute ?: initialMinute,
+                is24Hour,
+            )
+        }.also { previous[0] = it }
+    }
+}
 
 /**
  * 自绘时分滚轮，用来替代 M3 的 TimePicker / TimeInput
@@ -131,71 +191,176 @@ fun WheelTimePicker(
         modifier = modifier.height(itemHeight * visibleRows),
         contentAlignment = Alignment.Center,
     ) {
-        Box(
-            modifier = Modifier.widthIn(max = PICKER_MAX_WIDTH).fillMaxWidth(),
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier
+                .widthIn(max = if (state.is24Hour) WHEELS_ONLY_MAX_WIDTH else PICKER_MAX_WIDTH)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 选中行：居中铺一条渐变胶囊，滚轮在其上滚动
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(itemHeight)
-                    .clip(selectionShape)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                colors.primaryContainer.copy(alpha = 0.65f),
-                                colors.primaryContainer,
-                                colors.primaryContainer.copy(alpha = 0.65f),
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                // 选中行：居中铺一条渐变胶囊，滚轮在其上滚动
+                Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(itemHeight)
+                            .clip(selectionShape)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        colors.primaryContainer.copy(alpha = 0.65f),
+                                        colors.primaryContainer,
+                                        colors.primaryContainer.copy(alpha = 0.65f),
+                                    )
+                                )
                             )
-                        )
+                            .border(1.dp, colors.primary.copy(alpha = 0.12f), selectionShape)
                     )
-                    .border(1.dp, colors.primary.copy(alpha = 0.12f), selectionShape)
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MaaDesignTokens.Spacing.md)
-                    .fadeVerticalEdges(edgeFraction = 0.75f / visibleRows),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                WheelColumn(
-                    count = HOUR_COUNT,
-                    initialIndex = state.startHour,
-                    selectedValue = state.hour,
-                    semanticLabel = stringResource(R.string.time_picker_hour),
-                    onSelect = { state.hour = it },
-                    rows = visibleRows,
-                    itemHeight = itemHeight,
-                    digitStyle = digitStyle,
-                    modifier = Modifier.weight(1f),
-                )
-                Column(
-                    modifier = Modifier.width(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    repeat(2) {
-                        Box(
-                            Modifier
-                                .size(4.dp)
-                                .background(colors.primary.copy(alpha = 0.7f), CircleShape)
+                }
+                // 换制式要把两列连同 LazyListState 一起重建，否则停在旧下标
+                key(state.is24Hour) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = MaaDesignTokens.Spacing.md)
+                            .fadeVerticalEdges(edgeFraction = 0.75f / visibleRows),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        WheelColumn(
+                            count = state.hourCount,
+                            initialIndex = state.startHourIndex,
+                            selectedValue = state.hourIndex,
+                            semanticLabel = stringResource(R.string.time_picker_hour),
+                            onSelect = { state.selectHourIndex(it) },
+                            rows = visibleRows,
+                            itemHeight = itemHeight,
+                            digitStyle = digitStyle,
+                            modifier = Modifier.weight(1f),
+                            firstValue = state.firstHourValue,
+                        )
+                        Column(
+                            modifier = Modifier.width(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            repeat(2) {
+                                Box(
+                                    Modifier
+                                        .size(4.dp)
+                                        .background(colors.primary.copy(alpha = 0.7f), CircleShape)
+                                )
+                            }
+                        }
+                        WheelColumn(
+                            count = MINUTE_COUNT,
+                            initialIndex = state.startMinute,
+                            selectedValue = state.minute,
+                            semanticLabel = stringResource(R.string.time_picker_minute),
+                            onSelect = { state.minute = it },
+                            rows = visibleRows,
+                            itemHeight = itemHeight,
+                            digitStyle = digitStyle,
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
-                WheelColumn(
-                    count = MINUTE_COUNT,
-                    initialIndex = state.startMinute,
-                    selectedValue = state.minute,
-                    semanticLabel = stringResource(R.string.time_picker_minute),
-                    onSelect = { state.minute = it },
-                    rows = visibleRows,
-                    itemHeight = itemHeight,
-                    digitStyle = digitStyle,
-                    modifier = Modifier.weight(1f),
-                )
+            }
+            if (!state.is24Hour) {
+                // 极矮对话框只剩一行时两格按滚轮高度对半分，否则下午那格会被挤没
+                val cellHeight = ((itemHeight * visibleRows - MaaDesignTokens.Spacing.xs) / 2)
+                    .coerceAtMost(PERIOD_CELL_HEIGHT)
+                PeriodSelector(state, cellHeight)
             }
         }
+    }
+}
+
+@Composable
+fun WheelTimeFormatToggle(
+    is24Hour: Boolean,
+    onFormatChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+    ) {
+        listOf(false, true).forEach { target ->
+            SegmentCell(
+                selected = is24Hour == target,
+                text = stringResource(
+                    if (target) R.string.time_picker_format_24h
+                    else R.string.time_picker_format_12h
+                ),
+                onSelect = { onFormatChange(target) },
+                textStyle = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.size(width = 42.dp, height = 32.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PeriodSelector(state: WheelTimePickerState, cellHeight: Dp) {
+    Column(
+        modifier = Modifier
+            .width(56.dp)
+            .selectableGroup(),
+        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+    ) {
+        listOf(false, true).forEach { pm ->
+            SegmentCell(
+                selected = state.isPm == pm,
+                text = stringResource(if (pm) R.string.time_picker_pm else R.string.time_picker_am),
+                onSelect = { state.selectPeriod(pm) },
+                textStyle = MaterialTheme.typography.titleSmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(cellHeight),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SegmentCell(
+    selected: Boolean,
+    text: String,
+    onSelect: () -> Unit,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    val haptic = LocalHapticFeedback.current
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(MaaTheme.style.radii.button)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(if (selected) colors.primaryContainer else colors.surfaceContainerHigh)
+            .border(
+                width = 1.dp,
+                color = if (selected) colors.primary.copy(alpha = 0.3f) else colors.outlineVariant,
+                shape = shape,
+            )
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = {
+                    if (!selected) {
+                        onSelect()
+                        haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    }
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = textStyle,
+            color = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
+            maxLines = 1,
+        )
     }
 }
 
@@ -211,6 +376,7 @@ private fun WheelColumn(
     itemHeight: Dp,
     digitStyle: TextStyle,
     modifier: Modifier = Modifier,
+    firstValue: Int = 0,
 ) {
     val startIndex = count * (LOOP_CYCLES / 2) + initialIndex
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
@@ -255,7 +421,7 @@ private fun WheelColumn(
     ) {
         items(count * LOOP_CYCLES, key = { it }) { index ->
             val isSelected = (centered ?: startIndex) == index
-            val wheelValue = (index % count).toString().padStart(2, '0')
+            val wheelValue = (index % count + firstValue).toString().padStart(2, '0')
             val digitColor by animateColorAsState(
                 targetValue = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
