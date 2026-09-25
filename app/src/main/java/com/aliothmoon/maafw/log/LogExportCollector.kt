@@ -22,7 +22,7 @@ object LogExportCollector {
      *
      * 加新目录时记得往这里补一条，否则一年后的导出包会有上千个文件
      */
-    private val ROLLING_MARKERS = listOf("/run/", "/focus/", "/logcat/", "/crash/")
+    private val ROLLING_MARKERS = listOf("/run/", "/focus/", "/manual/", "/logcat/", "/crash/")
 
     fun collect(roots: List<File>, now: Long): List<File> =
         roots.asSequence()
