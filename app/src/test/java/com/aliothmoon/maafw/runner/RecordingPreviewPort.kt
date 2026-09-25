@@ -37,4 +37,10 @@ class RecordingPreviewPort : PreviewPort {
     override fun touchUp(x: Int, y: Int, contact: Int) {
         touches += Touch(x, y, "up", contact)
     }
+
+    val keys = mutableListOf<VirtualDisplayKey>()
+
+    override fun pressKey(key: VirtualDisplayKey) {
+        keys += key
+    }
 }

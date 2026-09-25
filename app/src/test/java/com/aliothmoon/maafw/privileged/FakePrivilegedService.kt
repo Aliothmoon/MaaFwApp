@@ -31,6 +31,9 @@ open class FakePrivilegedService : RemoteService {
         private set
     var stopTargetAppCount: Int = 0
         private set
+    var virtualDisplayRunning: Boolean = false
+
+    val pressedKeys: MutableList<Int> = mutableListOf()
 
     var runnerCallback: IMaaRunnerCallback? = null
         private set
@@ -80,7 +83,10 @@ open class FakePrivilegedService : RemoteService {
     override fun setVirtualDisplayMode(mode: Int): Boolean = true
     override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) = Unit
     override fun startVirtualDisplay(): Int = 1
-    override fun stopVirtualDisplay() = Unit
+    override fun stopVirtualDisplay() {
+        virtualDisplayRunning = false
+    }
+    override fun isVirtualDisplayRunning(): Boolean = virtualDisplayRunning
     override fun isAppOnVirtualDisplay(packageName: String?): Boolean = true
     override fun moveAppToVirtualDisplay(packageName: String?): Boolean = true
     override fun setForceFullscreenOnVirtualDisplay(enabled: Boolean) = Unit
@@ -92,6 +98,9 @@ open class FakePrivilegedService : RemoteService {
     override fun touchDown(x: Int, y: Int, contact: Int) = Unit
     override fun touchMove(x: Int, y: Int, contact: Int) = Unit
     override fun touchUp(x: Int, y: Int, contact: Int) = Unit
+    override fun pressKey(keyCode: Int) {
+        pressedKeys += keyCode
+    }
     override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int = permissions
     override fun isPackageInstalled(packageName: String?): Boolean = true
     override fun setRunnerCallback(callback: IMaaRunnerCallback?) {

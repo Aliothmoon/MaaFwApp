@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.session
 
+import android.view.KeyEvent
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
 import com.aliothmoon.maafw.constant.AppPaths
@@ -19,6 +20,7 @@ import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
+import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
@@ -51,6 +53,7 @@ import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerScenario
+import com.aliothmoon.maafw.runner.VirtualDisplayKey
 import com.aliothmoon.maafw.runner.isBusy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -183,6 +186,7 @@ class SessionViewModelTest {
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
+        servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val focusDispatcher = idleFocusDispatcher()
         val vm = SessionViewModel(
@@ -192,7 +196,7 @@ class SessionViewModelTest {
             runLauncher = launcherFor(project, store, runner, settings),
             previewPort = preview,
             permissionGateway = permissions,
-            servicePort = FakePrivilegedServicePort(),
+            servicePort = servicePort,
             displaySize = displaySize,
             appSettings = settings,
             focusDispatcher = focusDispatcher,
@@ -280,6 +284,76 @@ class SessionViewModelTest {
             ),
             preview.touches,
         )
+    }
+
+    @Test
+    fun `virtual display keys carry the selected system key to the port`() = runTest(mainDispatcher) {
+        val preview = RecordingPreviewPort()
+        val (vm, _, _) = createVm(preview = preview)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.PressVirtualDisplayKey(VirtualDisplayKey.Back))
+        vm.onIntent(SessionIntent.PressVirtualDisplayKey(VirtualDisplayKey.Home))
+        vm.onIntent(SessionIntent.PressVirtualDisplayKey(VirtualDisplayKey.Recents))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(VirtualDisplayKey.Back, VirtualDisplayKey.Home, VirtualDisplayKey.Recents),
+            preview.keys,
+        )
+    }
+
+    @Test
+    fun `virtual display key codes match Android navigation keys`() {
+        assertEquals(KeyEvent.KEYCODE_BACK, VirtualDisplayKey.Back.keyCode)
+        assertEquals(KeyEvent.KEYCODE_HOME, VirtualDisplayKey.Home.keyCode)
+        assertEquals(KeyEvent.KEYCODE_APP_SWITCH, VirtualDisplayKey.Recents.keyCode)
+    }
+
+    @Test
+    fun `virtual display keys follow display and service state`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService().apply { virtualDisplayRunning = true }
+        val servicePort = FakePrivilegedServicePort(service)
+        val permissions = FakePermissionGateway().apply {
+            serviceState.value = PrivilegedServiceState.Connected
+        }
+        val (vm, _, _) = createVm(permissions = permissions, servicePort = servicePort)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.virtualDisplayKeysAvailable)
+        assertFalse(vm.uiState.value.virtualDisplayKeysUnlocked)
+        assertFalse(vm.uiState.value.virtualDisplayKeysEnabled)
+
+        vm.onIntent(SessionIntent.SetVirtualDisplayKeysUnlocked(true))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.virtualDisplayKeysUnlocked)
+        assertTrue(vm.uiState.value.virtualDisplayKeysEnabled)
+
+        vm.onIntent(SessionIntent.SetVirtualDisplayKeysUnlocked(false))
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.virtualDisplayKeysEnabled)
+
+        vm.onIntent(SessionIntent.SetVirtualDisplayKeysUnlocked(true))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.virtualDisplayKeysEnabled)
+
+        permissions.serviceState.value = PrivilegedServiceState.Disconnected
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.virtualDisplayKeysAvailable)
+        assertFalse(vm.uiState.value.virtualDisplayKeysEnabled)
+        assertTrue(vm.uiState.value.virtualDisplayKeysUnlocked)
+
+        permissions.serviceState.value = PrivilegedServiceState.Connected
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.virtualDisplayKeysAvailable)
+        assertTrue(vm.uiState.value.virtualDisplayKeysEnabled)
+
+        vm.onIntent(SessionIntent.CloseTargetApp)
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.virtualDisplayKeysAvailable)
+        assertFalse(vm.uiState.value.virtualDisplayKeysEnabled)
+        assertFalse(service.virtualDisplayRunning)
     }
 
     @Test

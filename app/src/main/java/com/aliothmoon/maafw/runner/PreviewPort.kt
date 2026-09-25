@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
 import android.os.SystemClock
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
 import com.aliothmoon.maafw.ITouchEventCallback
@@ -21,6 +22,13 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** 与特权侧 `TouchPointerSequence.MAX_CONTACTS` 同值；校验在那边做，这里只是不把依赖伸进 bridge */
 const val MAX_PREVIEW_CONTACTS = 16
+
+/** 可注入虚拟屏的 Android 系统主按键 */
+enum class VirtualDisplayKey(val keyCode: Int) {
+    Back(KeyEvent.KEYCODE_BACK),
+    Home(KeyEvent.KEYCODE_HOME),
+    Recents(KeyEvent.KEYCODE_APP_SWITCH),
+}
 
 /**
  * 预览上的一次触点，坐标在虚拟屏坐标系
@@ -63,6 +71,9 @@ interface PreviewPort {
     fun touchDown(x: Int, y: Int, contact: Int)
     fun touchMove(x: Int, y: Int, contact: Int)
     fun touchUp(x: Int, y: Int, contact: Int)
+
+    /** 向虚拟屏注入一次系统主按键 */
+    fun pressKey(key: VirtualDisplayKey)
 }
 
 /**
@@ -142,7 +153,9 @@ class RemotePreviewPort(
 
     override fun touchUp(x: Int, y: Int, contact: Int) = withService { it.touchUp(x, y, contact) }
 
-    /** 手动触摸是 oneway，发不出去就算了；预览本来就是尽力而为 */
+    override fun pressKey(key: VirtualDisplayKey) = withService { it.pressKey(key.keyCode) }
+
+    /** 手动输入是 oneway，发不出去就算了；预览本来就是尽力而为 */
     private inline fun withService(action: (RemoteService) -> Unit) {
         val service = servicePort.serviceOrNull() ?: return
         runCatching { action(service) }.onFailure { Timber.w(it, "Preview touch failed") }

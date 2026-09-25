@@ -385,6 +385,13 @@
     <string name="quick_settings_title">自动设置</string>
     <string name="quick_action_screen_saver">熄屏挂机</string>
     <string name="quick_action_close_app">关闭目标应用</string>
+    <string name="quick_action_back">返回</string>
+    <string name="quick_action_home">主页</string>
+    <string name="quick_action_recents">最近任务</string>
+    <string name="virtual_display_keys_title">虚拟屏按键</string>
+    <string name="virtual_display_keys_locked">按键操作已锁定</string>
+    <string name="virtual_display_keys_unlocked">按键操作已解锁</string>
+    <string name="virtual_display_keys_warning">使用按钮操作可能破坏任务流程</string>
     <string name="quick_setting_close_app_after_task">任务自动结束时关闭目标应用</string>
     <string name="quick_setting_touch_preview">显示触摸预览</string>
 

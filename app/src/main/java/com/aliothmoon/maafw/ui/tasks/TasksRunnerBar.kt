@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Nightlight
 import androidx.compose.material.icons.outlined.PowerSettingsNew
@@ -45,13 +49,16 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.isBusy
+import com.aliothmoon.maafw.runner.VirtualDisplayKey
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
-import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.ui.components.MaaSwitch
 
 /**
  * 底部启停条
@@ -229,6 +236,92 @@ internal fun TasksQuickOptionsPanel(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
+                if (state.runMode == RunMode.BACKGROUND) {
+                    GroupLabel(stringResource(R.string.virtual_display_keys_title))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onIntent(
+                                    SessionIntent.SetVirtualDisplayKeysUnlocked(
+                                        !state.virtualDisplayKeysUnlocked,
+                                    ),
+                                )
+                            }
+                            .padding(vertical = MaaDesignTokens.Spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+                    ) {
+                        Icon(
+                            imageVector = if (state.virtualDisplayKeysUnlocked) {
+                                Icons.Outlined.LockOpen
+                            } else {
+                                Icons.Outlined.Lock
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = stringResource(
+                                if (state.virtualDisplayKeysUnlocked) {
+                                    R.string.virtual_display_keys_unlocked
+                                } else {
+                                    R.string.virtual_display_keys_locked
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        MaaSwitch(
+                            checked = state.virtualDisplayKeysUnlocked,
+                            onCheckedChange = {
+                                onIntent(SessionIntent.SetVirtualDisplayKeysUnlocked(it))
+                            },
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.virtual_display_keys_warning),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                    ) {
+                        ActionIconTile(
+                            icon = MaaIcons.BackAction,
+                            contentDescription = stringResource(R.string.quick_action_back),
+                            accent = MaterialTheme.colorScheme.secondary,
+                            enabled = state.virtualDisplayKeysEnabled,
+                            onClick = {
+                                onIntent(SessionIntent.PressVirtualDisplayKey(VirtualDisplayKey.Back))
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        ActionIconTile(
+                            icon = Icons.Outlined.Home,
+                            contentDescription = stringResource(R.string.quick_action_home),
+                            accent = MaterialTheme.colorScheme.secondary,
+                            enabled = state.virtualDisplayKeysEnabled,
+                            onClick = {
+                                onIntent(SessionIntent.PressVirtualDisplayKey(VirtualDisplayKey.Home))
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        ActionIconTile(
+                            icon = Icons.Outlined.Apps,
+                            contentDescription = stringResource(R.string.quick_action_recents),
+                            accent = MaterialTheme.colorScheme.secondary,
+                            enabled = state.virtualDisplayKeysEnabled,
+                            onClick = {
+                                onIntent(SessionIntent.PressVirtualDisplayKey(VirtualDisplayKey.Recents))
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+
                 GroupLabel(stringResource(R.string.quick_settings_title))
                 if (state.runMode == RunMode.BACKGROUND) {
                     SettingToggleRow(
@@ -270,6 +363,40 @@ private val PanelBottomInset = 56.dp
 
 /** 动作块高度；比一行文字略高，两块并排时才不显得挤 */
 private val ActionTileHeight = 36.dp
+
+/** 图标动作块：没有可见文字时用 contentDescription 保留无障碍语义 */
+@Composable
+private fun ActionIconTile(
+    icon: ImageVector,
+    contentDescription: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val tint = if (enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(ActionTileHeight),
+        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
+        color = tint.copy(alpha = 0.08f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(MaaDesignTokens.Separator.thickness, tint.copy(alpha = 0.2f)),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+                tint = tint,
+            )
+        }
+    }
+}
 
 /**
  * 一格动作：底色与描边都从 accent 派生

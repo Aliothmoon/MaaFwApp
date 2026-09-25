@@ -194,24 +194,57 @@ public final class InputControlUtils {
         return apply(TouchPointerSequence.Kind.Up, x, y, contact, displayId);
     }
 
-    public static boolean keyDown(int keyCode, int displayId) {
-        long downTime = SystemClock.uptimeMillis();
-        KeyEvent keyEvent = new KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, keyCode, 0);
+    private static KeyEvent obtainKeyEvent(long downTime, long eventTime, int action, int keyCode) {
+        return new KeyEvent(
+                downTime,
+                eventTime,
+                action,
+                keyCode,
+                0,
+                0,
+                DEFAULT_DEVICE_ID,
+                0,
+                0,
+                InputDevice.SOURCE_KEYBOARD
+        );
+    }
 
+    private static boolean injectKey(KeyEvent keyEvent, int displayId, int injectMode) {
         if (!setDisplayId(keyEvent, displayId)) {
             return false;
         }
-        return getManager().injectInputEvent(keyEvent, InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH);
+        return getManager().injectInputEvent(keyEvent, injectMode);
+    }
+
+    public static boolean keyDown(int keyCode, int displayId) {
+        long downTime = SystemClock.uptimeMillis();
+        return injectKey(
+                obtainKeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, keyCode),
+                displayId,
+                InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH);
     }
 
     public static boolean keyUp(int keyCode, int displayId) {
         long upTime = SystemClock.uptimeMillis();
-        KeyEvent keyEvent = new KeyEvent(upTime, upTime, KeyEvent.ACTION_UP, keyCode, 0);
+        return injectKey(
+                obtainKeyEvent(upTime, upTime, KeyEvent.ACTION_UP, keyCode),
+                displayId,
+                InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+    }
 
-        if (!setDisplayId(keyEvent, displayId)) {
-            return false;
-        }
-
-        return getManager().injectInputEvent(keyEvent, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+    /**
+     * 成对注入一次按键；UP 使用与 DOWN 相同的 downTime，确保系统按同一次按压处理
+     */
+    public static boolean pressKey(int keyCode, int displayId) {
+        long downTime = SystemClock.uptimeMillis();
+        boolean down = injectKey(
+                obtainKeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, keyCode),
+                displayId,
+                InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH);
+        boolean up = injectKey(
+                obtainKeyEvent(downTime, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode),
+                displayId,
+                InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+        return down && up;
     }
 }

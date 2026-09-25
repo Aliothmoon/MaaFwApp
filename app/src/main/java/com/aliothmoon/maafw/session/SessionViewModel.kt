@@ -57,14 +57,18 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
@@ -131,6 +135,9 @@ class SessionViewModel(
         PrivilegedSnapshot(access, granting, readiness, service, system)
     }
 
+    private val _virtualDisplayRunning = MutableStateFlow(false)
+    private val _virtualDisplayKeysUnlocked = MutableStateFlow(false)
+
     private val settingsState: Flow<SettingsSnapshot> = combine(
         appSettings.runMode,
         appSettings.overlayControlMode,
@@ -167,6 +174,10 @@ class SessionViewModel(
     }.flowOn(MaaDispatchers.Default) // resolve 属重计算，不占用主线程
         .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
         .combine(piInstall.state) { base, install -> base.copy(piInstallState = install) }
+        .combine(_virtualDisplayRunning) { base, running -> base.copy(virtualDisplayRunning = running) }
+        .combine(_virtualDisplayKeysUnlocked) { base, unlocked ->
+            base.copy(virtualDisplayKeysUnlocked = unlocked)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
@@ -221,6 +232,20 @@ class SessionViewModel(
                         }
                     }
                 }
+        }
+        viewModelScope.launch {
+            permissionGateway.serviceState.collect { state ->
+                if (state == PrivilegedServiceState.Connected) {
+                    refreshVirtualDisplayRunning()
+                } else {
+                    _virtualDisplayRunning.value = false
+                }
+            }
+        }
+        viewModelScope.launch {
+            runnerPort.state.map { it.phase }.distinctUntilChanged().collect {
+                refreshVirtualDisplayRunning()
+            }
         }
     }
 
@@ -499,9 +524,12 @@ class SessionViewModel(
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
             // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
-            SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
-                runCatching { service.stopVirtualDisplay() }
-                    .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
+            SessionIntent.CloseTargetApp -> {
+                servicePort.serviceOrNull()?.let { service ->
+                    runCatching { service.stopVirtualDisplay() }
+                        .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
+                }
+                refreshVirtualDisplayRunning()
             }
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
@@ -538,6 +566,11 @@ class SessionViewModel(
                 PreviewTouchAction.Up -> previewPort.touchUp(intent.x, intent.y, intent.contact)
             }
 
+            is SessionIntent.PressVirtualDisplayKey -> previewPort.pressKey(intent.key)
+
+            is SessionIntent.SetVirtualDisplayKeysUnlocked ->
+                _virtualDisplayKeysUnlocked.value = intent.unlocked
+
             // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授
             SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
             SessionIntent.TogglePrivilegedService -> togglePrivilegedService()
@@ -562,6 +595,13 @@ class SessionViewModel(
     }
 
     private fun locked(): Boolean = runnerPort.state.value.phase.isBusy
+
+    private suspend fun refreshVirtualDisplayRunning() {
+        _virtualDisplayRunning.value = withContext(MaaDispatchers.IO) {
+            runCatching { servicePort.serviceOrNull()?.isVirtualDisplayRunning() == true }
+                .getOrDefault(false)
+        }
+    }
 
     private suspend fun appendAndActivate(configuration: RunConfiguration) {
         configurationStore.update { config ->

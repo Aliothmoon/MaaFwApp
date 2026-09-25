@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -171,6 +172,9 @@ object MaaIcons {
 
     val ArrowBackFilled: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.arrow_left, Icons.AutoMirrored.Filled.ArrowBack)
+
+    val BackAction: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.undo, Icons.AutoMirrored.Outlined.Undo)
 
     val CaretDown: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.caretdown, Icons.Outlined.ArrowDropDown)

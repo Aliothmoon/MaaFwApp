@@ -29,6 +29,7 @@ import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.ResolutionPreference
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.VirtualDisplayKey
 import com.aliothmoon.maafw.runner.isBusy
 
 /** 跨页工作会话聚合态；Activity 作用域单实例，UI 只读 */
@@ -76,6 +77,10 @@ data class SessionUiState(
     val previewResolution: DisplayResolution? = null,
     /** 目标 app 在虚拟屏上的看门狗状态；预览小窗右上角徽标用它（AppWatchdog） */
     val watchdogState: WatchdogState = WatchdogState.IDLE,
+    /** 后台虚拟屏是否仍存在；任务结束不等于虚拟屏结束 */
+    val virtualDisplayRunning: Boolean = false,
+    /** 虚拟屏按键操作锁；只保存在当前进程，不持久化到下次启动 */
+    val virtualDisplayKeysUnlocked: Boolean = false,
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     /** 授权请求进行中；只压按钮，不进 configurationLocked */
     val remoteAccessGranting: Boolean = false,
@@ -88,6 +93,14 @@ data class SessionUiState(
 
     val privilegedServiceConnected: Boolean
         get() = privilegedService == PrivilegedServiceState.Connected
+
+    /** 原本的可用条件：只服务后台虚拟屏，且必须仍能通过特权进程注入 */
+    val virtualDisplayKeysAvailable: Boolean
+        get() = runMode == RunMode.BACKGROUND && virtualDisplayRunning && privilegedServiceConnected
+
+    /** 三个系统主按键还要通过用户显式解锁 */
+    val virtualDisplayKeysEnabled: Boolean
+        get() = virtualDisplayKeysAvailable && virtualDisplayKeysUnlocked
 
     /**
      * 首页那一行服务状态：连接态、项目加载、运行态三路归约成一句
@@ -322,6 +335,12 @@ sealed interface SessionIntent {
         val action: PreviewTouchAction,
         val contact: Int,
     ) : SessionIntent
+
+    /** 向后台虚拟屏注入 Android 系统主按键 */
+    data class PressVirtualDisplayKey(val key: VirtualDisplayKey) : SessionIntent
+
+    /** 当前进程内临时解锁虚拟屏按键；不写设置，下次启动恢复锁定 */
+    data class SetVirtualDisplayKeysUnlocked(val unlocked: Boolean) : SessionIntent
 
     /** 向当前后端发起授权；不走 guarded，运行中也允许（授权不改配置） */
     data object RequestRemoteAccess : SessionIntent

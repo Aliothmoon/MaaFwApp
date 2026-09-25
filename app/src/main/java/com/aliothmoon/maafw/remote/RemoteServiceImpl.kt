@@ -195,6 +195,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
         }
     }
 
+    override fun isVirtualDisplayRunning(): Boolean =
+        virtualDisplayMode.get() == DisplayMode.BACKGROUND &&
+            VirtualDisplayManager.getDisplayId() != DefaultDisplayConfig.DISPLAY_NONE
+
     /** 没有虚拟屏时返回 true：调用方据此判断「是否需要拉回」，无屏可拉即无需处理 */
     override fun isAppOnVirtualDisplay(packageName: String): Boolean {
         val displayId = VirtualDisplayManager.getDisplayId()
@@ -259,6 +263,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun touchUp(x: Int, y: Int, contact: Int) =
         withVirtualDisplay { InputControlUtils.up(x, y, contact, it) }
+
+    override fun pressKey(keyCode: Int) =
+        withVirtualDisplay { InputControlUtils.pressKey(keyCode, it) }
 
     private inline fun withVirtualDisplay(action: (Int) -> Unit) {
         if (virtualDisplayMode.get() == DisplayMode.PRIMARY) return
