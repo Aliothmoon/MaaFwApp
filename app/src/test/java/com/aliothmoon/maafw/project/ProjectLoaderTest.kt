@@ -654,6 +654,84 @@ class ProjectLoaderControllerTest {
     }
 }
 
+class ProjectLoaderWelcomeTest {
+
+    private fun load(files: Map<String, String>): ProjectLoadResult.Ready {
+        val result = ProjectLoader(MapProjectSource(files)).load()
+        assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
+        return result as ProjectLoadResult.Ready
+    }
+
+    @Test
+    fun `welcome 数组按顺序读取文件并保留 URL`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """
+                        "welcome": [
+                            "announcements/first.md",
+                            "announcements/second.md",
+                            "https://example.com/announcement.md"
+                        ]
+                    """.trimIndent(),
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+                "announcements/first.md" to "# First",
+                "announcements/second.md" to "# Second",
+            ),
+        )
+
+        assertEquals(
+            listOf("# First", "# Second", "https://example.com/announcement.md"),
+            ready.definition.metadata.welcome,
+        )
+    }
+
+    @Test
+    fun `welcome 文件读取失败保留原始路径并记 warning`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"welcome":["missing.md","announcements/second.md"]""",
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+                "announcements/second.md" to "# Second",
+            ),
+        )
+
+        assertEquals(listOf("missing.md", "# Second"), ready.definition.metadata.welcome)
+        assertTrue(
+            ready.diagnostics.any {
+                it.severity == DiagnosticSeverity.Warning &&
+                    it.message.isResource(
+                        R.string.diagnostic_description_read_failed,
+                        "no file: missing.md",
+                    )
+            },
+        )
+    }
+
+    @Test
+    fun `welcome 非法声明记 Error`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot("tasks/a.json", body = """"welcome":[]"""),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+            ),
+        )
+
+        assertTrue(ready.definition.metadata.welcome.isEmpty())
+        assertTrue(
+            ready.diagnostics.any {
+                it.severity == DiagnosticSeverity.Error &&
+                    it.message.isResource(R.string.diagnostic_welcome_invalid)
+            },
+        )
+    }
+}
+
 class ProjectLoaderAgentTest {
 
     private fun load(files: Map<String, String>): ProjectLoadResult.Ready {

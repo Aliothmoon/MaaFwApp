@@ -292,7 +292,9 @@ class SessionViewModel(
             telemetryDeclared = project.definition.telemetry != null,
             telemetryLockedByVersion = isDebugProjectVersion(project.definition.version),
             welcomePrompt = metadata.welcome
-                ?.takeIf { metadata.welcomeFingerprint != config.welcomeFingerprint },
+                .takeIf {
+                    it.isNotEmpty() && metadata.welcomeFingerprint != config.welcomeFingerprint
+                },
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,

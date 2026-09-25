@@ -1,6 +1,10 @@
 package com.aliothmoon.maafw.project
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.Diagnostic
+import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.OptionDefinition
+import com.aliothmoon.maafw.i18n.isResource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
@@ -38,7 +42,7 @@ class PiMetadataTest {
             MapTextResolver(mapOf("welcome.body" to "欢迎使用")),
         )
 
-        assertEquals("欢迎使用", metadata.welcome)
+        assertEquals(listOf("欢迎使用"), metadata.welcome)
         assertEquals("一句话说明", metadata.description)
         assertEquals("CONTACT", metadata.contact)
         assertEquals("https://example.com/owner/repo", metadata.github)
@@ -52,6 +56,29 @@ class PiMetadataTest {
         )
         assertNull(metadata.github)
         assertNull(metadata.githubRepository)
+    }
+
+    @Test
+    fun `welcome 数组按声明顺序物化且保留 URL`() {
+        val metadata = PiParser.parseMetadata(
+            root(
+                """
+                {
+                  "welcome": [
+                    "${'$'}welcome.first",
+                    "announcements/update.md",
+                    "https://example.com/announcement.md"
+                  ]
+                }
+                """.trimIndent(),
+            ),
+            MapTextResolver(mapOf("welcome.first" to "第一条公告")),
+        )
+
+        assertEquals(
+            listOf("第一条公告", "announcements/update.md", "https://example.com/announcement.md"),
+            metadata.welcome,
+        )
     }
 
     @Test
@@ -86,6 +113,32 @@ class PiMetadataTest {
     }
 
     @Test
+    fun `单字符串与单元素数组指纹相同`() {
+        val text = MapTextResolver(emptyMap())
+        val scalar = PiParser.parseMetadata(root("""{ "welcome": "hi" }"""), text)
+        val array = PiParser.parseMetadata(root("""{ "welcome": ["hi"] }"""), text)
+
+        assertEquals(scalar.welcome, array.welcome)
+        assertEquals(scalar.welcomeFingerprint, array.welcomeFingerprint)
+    }
+
+    @Test
+    fun `公告列表变化时指纹跟着变`() {
+        val text = MapTextResolver(emptyMap())
+
+        fun fingerprint(welcome: String): String? = PiParser.parseMetadata(
+            root("""{ "version": "1.0.0", "welcome": $welcome }"""),
+            text,
+        ).welcomeFingerprint
+
+        val baseline = fingerprint("""["a","b"]""")
+        assertNotEquals(baseline, fingerprint("""["a"]"""))
+        assertNotEquals(baseline, fingerprint("""["a","c"]"""))
+        assertNotEquals(baseline, fingerprint("""["b","a"]"""))
+        assertNotEquals(baseline, fingerprint("""["a","b","c"]"""))
+    }
+
+    @Test
     fun `PI 版本变化时指纹跟着变`() {
         val text = MapTextResolver(emptyMap())
         val v1 = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": "hi" }"""), text)
@@ -96,8 +149,37 @@ class PiMetadataTest {
     @Test
     fun `没有 welcome 就没有指纹`() {
         val metadata = PiParser.parseMetadata(root("""{ "name": "x" }"""), MapTextResolver(emptyMap()))
-        assertNull(metadata.welcome)
+        assertTrue(metadata.welcome.isEmpty())
         assertNull(metadata.welcomeFingerprint)
+    }
+
+    @Test
+    fun `非法 welcome 记 Error 且不生成指纹`() {
+        listOf(
+            """{ "welcome": [] }""",
+            """{ "welcome": ["ok", 3] }""",
+            """{ "welcome": {} }""",
+            """{ "welcome": null }""",
+            """{ "welcome": 3 }""",
+            """{ "welcome": true }""",
+        ).forEach { json ->
+            val diagnostics = mutableListOf<Diagnostic>()
+            val metadata = PiParser.parseMetadata(
+                "interface.json",
+                root(json),
+                MapTextResolver(emptyMap()),
+                diagnostics,
+            )
+
+            assertTrue(metadata.welcome.isEmpty())
+            assertNull(metadata.welcomeFingerprint)
+            assertTrue(
+                diagnostics.any {
+                    it.severity == DiagnosticSeverity.Error &&
+                        it.message.isResource(R.string.diagnostic_welcome_invalid)
+                },
+            )
+        }
     }
 
     @Test

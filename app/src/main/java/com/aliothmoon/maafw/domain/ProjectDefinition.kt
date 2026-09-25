@@ -41,10 +41,10 @@ data class TelemetryDefinition(
 )
 
 /**
- * [welcomeFingerprint] 算在物化前的原始声明上：算在正文上的话，切一次语言换了译文就会重弹
+ * [welcomeFingerprint] 算在物化前的完整有序声明上：算在正文上的话，切一次语言换了译文就会重弹
  */
 data class ProjectMetadata(
-    val welcome: String? = null,
+    val welcome: List<String> = emptyList(),
     val welcomeFingerprint: String? = null,
     val description: String? = null,
     val contact: String? = null,

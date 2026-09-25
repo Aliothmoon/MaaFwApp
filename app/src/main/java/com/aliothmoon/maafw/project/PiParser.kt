@@ -246,11 +246,21 @@ object PiParser {
     }
 
     /** 与 [parseInterface] 分开是因为物化要等翻译表，那一步在 loader 里读完 languages 才有 */
-    fun parseMetadata(root: JsonObject, text: PiTextResolver): ProjectMetadata {
-        val welcomeRaw = root.string("welcome")
+    fun parseMetadata(root: JsonObject, text: PiTextResolver): ProjectMetadata =
+        parseMetadata("welcome", root, text, mutableListOf())
+
+    fun parseMetadata(
+        source: String,
+        root: JsonObject,
+        text: PiTextResolver,
+        diagnostics: MutableList<Diagnostic>,
+    ): ProjectMetadata {
+        val welcomeRaw = welcomeDeclarations(source, root, diagnostics)
         return ProjectMetadata(
-            welcome = text.description(welcomeRaw),
-            welcomeFingerprint = welcomeRaw?.let { welcomeFingerprint(it, root.string("version")) },
+            welcome = welcomeRaw.map { text.description(it).orEmpty() },
+            welcomeFingerprint = welcomeRaw
+                .takeIf { it.isNotEmpty() }
+                ?.let { welcomeFingerprint(it, root.string("version")) },
             description = text.description(root.string("description")),
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
@@ -260,6 +270,39 @@ object PiParser {
                 ?.takeIf(String::isNotBlank),
             mirrorchyanRid = root.string("mirrorchyan_rid")?.trim()?.takeIf(String::isNotBlank),
         )
+    }
+
+    /** PI v2.10.2：welcome 允许 string 或非空 string[]，统一成有序公告列表 */
+    private fun welcomeDeclarations(
+        source: String,
+        root: JsonObject,
+        diagnostics: MutableList<Diagnostic>,
+    ): List<String> = when (val value = root["welcome"]) {
+        null -> emptyList()
+        is JsonPrimitive -> value
+            .takeIf { it.isString }
+            ?.contentOrNull
+            ?.let(::listOf)
+            ?: invalidWelcome(source, diagnostics)
+        is JsonArray -> {
+            val declarations = value.mapNotNull { element ->
+                (element as? JsonPrimitive)
+                    ?.takeIf { it.isString }
+                    ?.contentOrNull
+            }
+            when {
+                declarations.size != value.size -> invalidWelcome(source, diagnostics)
+                declarations.isEmpty() -> invalidWelcome(source, diagnostics)
+                else -> declarations
+            }
+        }
+
+        else -> invalidWelcome(source, diagnostics)
+    }
+
+    private fun invalidWelcome(source: String, diagnostics: MutableList<Diagnostic>): List<String> {
+        diagnostics += error(source, DiagnosticMessages.welcomeInvalid())
+        return emptyList()
     }
 
     /** 只认 github.com/<owner>/<repo>；仓库页 URL 常带 release 等后续路径，都截掉 */
@@ -282,11 +325,33 @@ object PiParser {
         )
     }
 
-    private fun welcomeFingerprint(raw: String, version: String?): String =
+    private fun welcomeFingerprint(raw: List<String>, version: String?): String =
         MessageDigest.getInstance("SHA-256")
-            .digest("$raw@${version.orEmpty()}".toByteArray())
+            .digest(welcomeFingerprintPayload(raw, version).toByteArray())
             .take(8)
             .joinToString("") { "%02x".format(it) }
+
+    /**
+     * 单条公告沿用旧 payload，保证旧单字符串与新的等价单元素数组不重复弹窗；
+     * 多条公告用长度前缀编码，避免用分隔符拼接时产生歧义
+     */
+    private fun welcomeFingerprintPayload(raw: List<String>, version: String?): String {
+        val normalizedVersion = version.orEmpty()
+        if (raw.size == 1) return "${raw.single()}@$normalizedVersion"
+        return buildString {
+            append(raw.size)
+            raw.forEach { item ->
+                append('|')
+                append(item.length)
+                append('|')
+                append(item)
+            }
+            append("|@")
+            append(normalizedVersion.length)
+            append('|')
+            append(normalizedVersion)
+        }
+    }
 
     fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {
         val root = try {

@@ -520,6 +520,7 @@
     <string name="diagnostic_resource_path_missing">resource "%1$s" 缺少 path</string>
     <string name="diagnostic_no_adb_controller">该项目未声明 Adb controller，限定 controller 的任务都不可用</string>
     <string name="diagnostic_language_path_invalid">languages "%1$s" 的路径不是字符串</string>
+    <string name="diagnostic_welcome_invalid">welcome 必须是非空字符串或非空字符串数组，已忽略</string>
     <string name="diagnostic_import_read_failed">import 分片读取失败，已跳过：%1$s</string>
     <string name="diagnostic_project_has_no_tasks">项目未声明任何任务</string>
     <string name="diagnostic_duplicate_declaration">%1$s "%2$s" 重复声明，保留先出现的定义</string>

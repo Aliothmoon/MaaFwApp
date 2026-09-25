@@ -49,8 +49,8 @@ data class SessionUiState(
     /** PI 版本是开发态：设置页不展示开关；上报仍由 TelemetryController 拦截 */
     val telemetryLockedByVersion: Boolean = false,
     val telemetryEnabled: Boolean = false,
-    /** 非 null = 这份 welcome 还没给用户看过 */
-    val welcomePrompt: String? = null,
+    /** 非 null = 这份有序 welcome 列表还没给用户看过 */
+    val welcomePrompt: List<String>? = null,
     val environment: ResolvedEnvironment? = null,
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),

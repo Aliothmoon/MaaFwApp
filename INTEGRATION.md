@@ -64,7 +64,7 @@ app:
 | 热更新资源 | 资源随 APK 绑定，换资源重新出包 |
 | 调试期改完资源刷新即可 | 重装或清数据。版本号在独立 checkout 时跟本仓库提交走、作为 submodule 时跟最外层主仓库走；版本号未变时设备可能继续用旧解包 |
 
-`welcome`、`description`、`contact`、`license`、`github`、`telemetry` 会进首启弹窗和设置页「关于」。正文支持 `$i18n`、相对文件、URL 或直接文本。
+`welcome`、`description`、`contact`、`license`、`github`、`telemetry` 会进首启弹窗和设置页「关于」。正文支持 `$i18n`、相对文件、URL 或直接文本。PI v2.10.2 起 `welcome` 还支持非空字符串数组，多条公告会按声明顺序展示。
 
 ## Agent
 

@@ -156,7 +156,9 @@ class ProjectLoader(
             globalOptionNames = state.globalOptionNames.filter { it in state.options },
             templates = templates,
             agents = pi.agents,
-            metadata = pi.root?.let { PiParser.parseMetadata(it, text) } ?: ProjectMetadata(),
+            metadata = pi.root?.let {
+                PiParser.parseMetadata(INTERFACE_JSON, it, text, diagnostics)
+            } ?: ProjectMetadata(),
             telemetry = pi.root?.let(PiParser::parseTelemetry),
             translations = translations,
         )

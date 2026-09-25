@@ -70,6 +70,8 @@ object DiagnosticMessages {
     fun languagePathInvalid(language: String): UiText =
         uiTextOf(R.string.diagnostic_language_path_invalid, language)
 
+    fun welcomeInvalid(): UiText = uiTextOf(R.string.diagnostic_welcome_invalid)
+
     fun importReadFailed(detail: String): UiText =
         uiTextOf(R.string.diagnostic_import_read_failed, detail)
 

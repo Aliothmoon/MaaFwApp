@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -75,6 +76,7 @@ import kotlin.io.path.createTempDirectory
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -280,6 +282,28 @@ class SessionViewModelTest {
             ),
             preview.touches,
         )
+    }
+
+    @Test
+    fun `welcome list prompts once and stores the list fingerprint`() = runTest(mainDispatcher) {
+        val metadataDefinition = definition.copy(
+            metadata = ProjectMetadata(
+                welcome = listOf("# First", "# Second"),
+                welcomeFingerprint = "list-fingerprint",
+            ),
+        )
+        val project = FakeProjectRepository(ProjectState.Ready(metadataDefinition, emptyList()))
+        val store = readyStore()
+        val (vm, _, _) = createVm(store = store, project = project)
+        advanceUntilIdle()
+
+        assertEquals(listOf("# First", "# Second"), vm.uiState.value.welcomePrompt)
+
+        vm.onIntent(SessionIntent.DismissWelcome)
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.welcomePrompt)
+        assertEquals("list-fingerprint", store.current.welcomeFingerprint)
     }
 
     @Test

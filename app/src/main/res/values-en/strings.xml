@@ -529,6 +529,7 @@
     <string name="diagnostic_resource_path_missing">Resource "%1$s" is missing path</string>
     <string name="diagnostic_no_adb_controller">This project declares no Adb controller; tasks restricted to a controller are unavailable</string>
     <string name="diagnostic_language_path_invalid">Language "%1$s" path is not a string</string>
+    <string name="diagnostic_welcome_invalid">welcome must be a non-empty string or a non-empty string array; ignored</string>
     <string name="diagnostic_import_read_failed">Failed to read import; skipped: %1$s</string>
     <string name="diagnostic_project_has_no_tasks">Project declares no tasks</string>
     <string name="diagnostic_duplicate_declaration">Duplicate %1$s "%2$s"; keeping the first declaration</string>
