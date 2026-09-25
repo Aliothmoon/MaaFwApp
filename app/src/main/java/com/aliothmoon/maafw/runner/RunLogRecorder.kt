@@ -65,7 +65,6 @@ class RunLogRecorder(
     private class Session(
         /** 开会话时从 [RunPlan] 冻下来——运行中用户改了资源不该影响这一轮的正文 */
         val resourceLabel: String?,
-        /** null = 文件没开成，这一轮只留内存 */
         val writer: RunSessionWriter?,
     ) {
         val pending = ConcurrentLinkedQueue<RunSessionRecord.Line>()
@@ -75,7 +74,7 @@ class RunLogRecorder(
 
     private val sessions = ConcurrentHashMap<String, Session>()
 
-    /** 最近开的一轮；只有它的事件上屏、进通知栏，更早那轮的迟到事件只进它自己的文件 */
+    /** 只有最近一轮上屏、进通知栏 */
     @Volatile
     private var latestExecutionId: String? = null
 
@@ -139,10 +138,7 @@ class RunLogRecorder(
         }
     }
 
-    /**
-     * 看到 Idle 时事件流可能还没消费完，先等这一轮的终局 marker 过了合成协程再写 Footer，
-     * 否则尾巴上的失败行要么丢，要么落进下一轮的文件
-     */
+    /** 看到 Idle 时事件可能还没消费完，等本轮 marker 过了合成协程再写 Footer */
     override suspend fun end(executionId: String, reason: RunEndReason) {
         val session = sessions[executionId] ?: return
         // NotRun 没进过 Runner，不会有 marker

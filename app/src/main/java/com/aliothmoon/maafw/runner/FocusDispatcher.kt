@@ -52,12 +52,7 @@ class FocusDispatcher(
     )
     val traced: Flow<FocusMessage> = _traced.asSharedFlow()
 
-    /**
-     * 给会话日志的整条事件流：focus 换成补完后的，其余原样透传
-     *
-     * 日志不能分别订 events 与 [resolved] 再合并：补完带 IO，两条流谁先到没保证，
-     * 终局 marker 会抢在最后几条 focus 前面，文件就在它们落盘前关了。容量对齐 Runner 那条
-     */
+    /** 会话日志用：整条事件按原序透传、focus 换成补完后的，终局 marker 因此不会抢在 focus 前面 */
     private val _recording = MutableSharedFlow<RunnerEventEnvelope>(
         extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,

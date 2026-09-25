@@ -73,7 +73,6 @@ class MaaFrameworkRunnerPortTest {
         ),
     )
 
-    /** 事件照收，回调逐轮记下来供测试直接喂 */
     private fun TestScope.recordCallbacks(
         runner: MaaFrameworkRunnerPort,
     ): Pair<MutableList<MaaFrameworkRunnerPort.ExecutionCallback>, MutableList<RunnerEventEnvelope>> {
@@ -173,7 +172,6 @@ class MaaFrameworkRunnerPortTest {
         assertTrue(runner.state.value.latestResult is ExecutionResult.Failed)
     }
 
-    /** 日志异步消费，任务名必须在回调到达那一刻冻下；消费时再查 state 会标成下一个任务 */
     @Test
     fun `events carry the task that was current when they arrived`() = runTest(dispatcher) {
         val (runner, _) = port(this)
@@ -232,7 +230,6 @@ class MaaFrameworkRunnerPortTest {
         assertEquals(1, events.count { it.event is RunnerEvent.ExecutionFinished })
     }
 
-    /** 死亡通知收回执行态时 onFinished 不会再来，会话日志要靠这里的 marker 收尾 */
     @Test
     fun `an aborted run still emits its terminal marker`() = runTest(dispatcher) {
         val servicePort = FakePrivilegedServicePort()

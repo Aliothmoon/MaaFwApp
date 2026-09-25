@@ -148,7 +148,6 @@ class StubRunnerPort(
         _state.update { RunnerState(phase = RunnerPhase.Idle, activeExecution = null, latestResult = result) }
     }
 
-    /** 单协程顺序执行，发的那一刻 state 里的当前任务就是这条事件的 */
     private fun emit(context: ExecutionContext, event: RunnerEvent) {
         _events.tryEmit(
             RunnerEventEnvelope(context.executionId, _state.value.activeExecution?.currentTaskLabel, event),

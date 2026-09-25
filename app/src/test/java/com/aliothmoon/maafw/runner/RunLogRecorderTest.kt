@@ -80,7 +80,6 @@ class RunLogRecorderTest {
         return records(file)
     }
 
-    /** 多轮并存时按 Header 的首个任务名认文件 */
     private fun sessionRecordsByFirstTask(): Map<String, List<RunSessionRecord>> =
         File(logDir, "run").listFiles().orEmpty().map(::records).associateBy {
             (it.first() as RunSessionRecord.Header).tasks.first()
@@ -92,7 +91,6 @@ class RunLogRecorderTest {
 
     private fun List<RunSessionRecord>.lineTexts() = filterIsInstance<RunSessionRecord.Line>().map { it.text }
 
-    /** 生产里 Runner 先发 marker 再切 Idle，收尾才开始等；这里按同样的顺序喂 */
     private suspend fun RunLogRecorder.finish(runner: RecordingEventRunnerPort, executionId: String = ID) {
         runner.emit(RunnerEvent.ExecutionFinished, executionId)
         end(executionId, RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
@@ -257,7 +255,6 @@ class RunLogRecorderTest {
         val recorder = recorder(runner)
 
         recorder.begin(planOf("清体力"), ID)
-        // NotRun 没进过 Runner，不发 marker 也不能干等
         recorder.end(ID, RunEndReason.NotRun(NotRunCause.Rejected))
 
         assertEquals(
@@ -331,7 +328,6 @@ class RunLogRecorderTest {
         assertTrue("逐条发布了，共 ${sizes.size} 次", sizes.size <= 3)
     }
 
-    /** Runner 已经 Idle 而事件还没消费完：收尾要等终局 marker，尾巴上的失败行不能丢 */
     @Test
     fun `end waits for the terminal marker before writing the footer`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
@@ -348,10 +344,6 @@ class RunLogRecorderTest {
         assertTrue(records.last() is RunSessionRecord.Footer)
     }
 
-    /**
-     * 上一轮还在等 marker 时下一轮已经开了文件：迟到的尾巴只进自己那份，
-     * 也不能冲掉新一轮的通知栏状态
-     */
     @Test
     fun `a late event of the previous run stays in its own file`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
@@ -372,7 +364,6 @@ class RunLogRecorderTest {
         assertEquals(listOf("这一轮的第一句"), files.getValue("这一轮").lineTexts())
     }
 
-    /** 任务名取事件自带的那份，不取合成时 Runner 的当前任务 */
     @Test
     fun `task lines use the label frozen in the envelope`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()

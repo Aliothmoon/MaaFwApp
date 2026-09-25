@@ -164,7 +164,6 @@ class FocusDispatcherTest {
         assertEquals(channels, completed(runner, dispatcherWith(runner), event).channels)
     }
 
-    /** 补完带 IO 时，日志那条流里的 focus 仍排在它之后的原始事件与终局 marker 前面 */
     @Test
     fun `recording keeps completed focus in order with the raw events`() = runTest(UnconfinedTestDispatcher()) {
         val runner = RecordingEventRunnerPort()

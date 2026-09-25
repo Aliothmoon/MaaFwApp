@@ -142,7 +142,6 @@ class ScreenSaverOverlayManager(
         logJob?.cancel()
         logJob = scope.launch {
             runnerPort.events.collect { envelope ->
-                // 终局 marker 不成行，别把最后一句冲成空白
                 if (envelope.event !is RunnerEvent.ExecutionFinished) {
                     latestLog.value = envelope.event.toLogText()
                 }

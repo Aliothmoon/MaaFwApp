@@ -246,7 +246,7 @@ class SessionViewModelTest {
     private fun emptyPiInstall() =
         PiInstallCoordinator(PiInstaller(EmptyPiPackage, versionCode = 1))
 
-    /** 运行日志只从 FocusDispatcher 那条流取事件，必须接在 VM 的同一个 runner 上；补完规则另有 FocusDispatcherTest 覆盖 */
+    /** 运行日志只从它那条流取事件，必须接在 VM 用的同一个 runner 上 */
     private fun TestScope.focusDispatcherFor(
         runner: RunnerPort,
         resolver: FocusContentResolver = PassthroughFocusContentResolver,

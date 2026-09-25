@@ -15,10 +15,7 @@ interface RunnerPort {
     suspend fun stop(): RunnerCommandResult
 }
 
-/**
- * 轮次与任务展示名在收到回调那一刻冻下，不能等消费时再查 state：
- * 日志是异步消费的，那时 state 可能已经进了下一个任务，甚至下一轮
- */
+/** 轮次与任务名在收到回调时冻下：日志异步消费，那时 state 可能已进下一个任务甚至下一轮 */
 data class RunnerEventEnvelope(
     val executionId: String,
     val taskLabel: String?,

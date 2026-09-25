@@ -129,7 +129,6 @@ class MaaFrameworkRunnerPort(
             }
         }
         if (previous.phase.isBusy) {
-            // onFinished 不会再来了，会话日志还在等这一轮的终局
             previous.activeExecution?.let {
                 _events.tryEmit(RunnerEventEnvelope(it.executionId, it.currentTaskLabel, RunnerEvent.ExecutionFinished))
             }
@@ -165,11 +164,7 @@ class MaaFrameworkRunnerPort(
         )
     }
 
-    /**
-     * 按轮新建：还在 binder 里排队的旧轮调用照样盖旧轮的 id，也改不动新一轮的 ActiveExecution
-     *
-     * 同一个 Stub 上的 oneway 调用按序到达，[taskLabel] 在收到时就是事件所属的任务
-     */
+    /** 按轮新建，排队中的旧轮调用改不动新一轮；同一 Stub 的 oneway 调用按序到达，收到时的 [taskLabel] 就是事件所属任务 */
     internal inner class ExecutionCallback(
         private val executionId: String,
         private val taskLabels: Map<String, String>,

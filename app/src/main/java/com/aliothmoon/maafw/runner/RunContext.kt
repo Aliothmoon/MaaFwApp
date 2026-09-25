@@ -88,6 +88,5 @@ class RunContext(
     val progress: RunProgress = RunProgress { _, _ -> },
     /** 本轮运行日志；单测可传 [DiscardingRunJournal] */
     val journal: RunJournal,
-    /** 会话日志、Runner 事件、挂载物写的行都靠它归到同一轮 */
     val executionId: String = UUID.randomUUID().toString(),
 )
