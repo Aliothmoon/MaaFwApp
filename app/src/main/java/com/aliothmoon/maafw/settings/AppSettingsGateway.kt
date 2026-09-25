@@ -39,6 +39,10 @@ interface AppSettingsGateway {
     val debugMode: StateFlow<Boolean>
     suspend fun setDebugMode(enabled: Boolean)
 
+    /** 节点出错时存现场图；每轮 setup 后现读传给特权进程 */
+    val saveOnError: StateFlow<Boolean>
+    suspend fun setSaveOnError(enabled: Boolean)
+
     val themeStyle: StateFlow<ThemeStyle>
     suspend fun setThemeStyle(style: ThemeStyle)
 

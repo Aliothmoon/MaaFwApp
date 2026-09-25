@@ -353,6 +353,15 @@ private fun LogCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        MaaLabeledControlRow(
+            label = stringResource(R.string.settings_save_on_error),
+            trailing = {
+                MaaSwitch(
+                    checked = state.saveOnError,
+                    onCheckedChange = { enabled -> onIntent(SessionIntent.SetSaveOnError(enabled)) },
+                )
+            },
+        )
     }
     if (showEnableConfirm) {
         AlertDialog(

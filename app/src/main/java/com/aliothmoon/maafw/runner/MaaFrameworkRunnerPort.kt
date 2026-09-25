@@ -53,6 +53,8 @@ class MaaFrameworkRunnerPort(
     private val resolutionPreference: () -> ResolutionPreference,
     /** 调试模式：传给特权进程 setup 的 isDebug，开启 MaaFramework 详细日志 */
     private val debugMode: () -> Boolean,
+    /** 同上：出错存图可能两轮之间被改，每轮 setup 后现读 */
+    private val saveOnError: () -> Boolean,
     private val scope: CoroutineScope,
     private val servicePort: PrivilegedServicePort,
 ) : RunnerPort {
@@ -286,6 +288,9 @@ class MaaFrameworkRunnerPort(
         if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
             return uiTextOf(R.string.msg_reject_setup_failed)
         }
+        // 环境性开关，不作为拒跑理由：设不上只是不存图，下一轮再试
+        runCatching { service.setSaveOnError(saveOnError()) }
+            .onFailure { Timber.w(it, "setSaveOnError failed") }
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
         // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作
         if (debugMode()) {

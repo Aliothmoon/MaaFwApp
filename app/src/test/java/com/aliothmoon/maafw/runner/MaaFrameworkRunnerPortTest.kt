@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -67,6 +68,7 @@ class MaaFrameworkRunnerPortTest {
         scope: TestScope,
         service: FakePrivilegedService = FakePrivilegedService(),
         servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(service),
+        saveOnError: () -> Boolean = { true },
     ): Pair<MaaFrameworkRunnerPort, FakePrivilegedServicePort> {
         val installer = mockk<PiInstaller>()
         every { installer.installedDir() } returns temp.newFolder("pi")
@@ -77,6 +79,7 @@ class MaaFrameworkRunnerPortTest {
             runMode = { RunMode.BACKGROUND },
             resolutionPreference = { ResolutionPreference.P720 },
             debugMode = { false },
+            saveOnError = saveOnError,
             scope = scope.backgroundScope,
             servicePort = servicePort,
         )
@@ -105,6 +108,17 @@ class MaaFrameworkRunnerPortTest {
         assertEquals(RunnerCommandResult.Accepted, started.await())
         assertEquals(RunnerPhase.Stopping, runner.state.value.phase)
         assertEquals(2, service.stopRunCount)
+    }
+
+    @Test
+    fun `saveOnError is read per run and pushed to the service`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service, saveOnError = { false })
+
+        assertEquals(RunnerCommandResult.Accepted, runner.start(plan()))
+        advanceUntilIdle()
+
+        assertFalse(service.saveOnError)
     }
 
     @Test

@@ -57,6 +57,8 @@ data class SessionUiState(
     val themeMode: ThemeMode = ThemeMode.System,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     val debugMode: Boolean = false,
+    /** 节点出错时存现场图；默认开，对应 MaaGlobalOption_SaveOnError */
+    val saveOnError: Boolean = true,
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     val screenSaverEnabled: Boolean = false,
@@ -242,6 +244,8 @@ sealed interface SessionIntent {
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
     data class SetDebugMode(val enabled: Boolean) : SessionIntent
+
+    data class SetSaveOnError(val enabled: Boolean) : SessionIntent
 
     /** 主屏 / 后台虚拟屏；运行中不允许改，下一轮才生效 */
     data class SetRunMode(val mode: RunMode) : SessionIntent
