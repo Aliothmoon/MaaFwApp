@@ -325,8 +325,6 @@
     <string name="settings_wake_credential">Unlock PIN</string>
     <string name="settings_wake_credential_hint">Numeric PIN only; stored in the clear on this device and cleared on export</string>
     <string name="schedule_edit_advanced">Advanced</string>
-    <string name="schedule_edit_force_start">Force start</string>
-    <string name="schedule_edit_force_start_tip">Interrupt a run already in progress and run this rule instead</string>
     <string name="schedule_edit_auto_sleep">Sleep after the task finishes</string>
     <string name="schedule_edit_skip_sleep_if_awake">Skip if the screen was already on at start</string>
     <string name="schedule_edit_close_app">Close the target app after the task</string>

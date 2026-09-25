@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -195,14 +196,19 @@ class EnvironmentHooksTest {
         assertEquals(0, service.lockAndSleepCount)
     }
 
-    // ── 倒计时 ──────────────────────────────────────────────────────
+    // ── 倒计时（前台模式专用） ─────────────────────────────────────
+
+    /** 跟 runTest 的虚拟时钟配合：currentTime 往前走，now() 也往前走 */
+    private val countdownStartMs = 1_000_000_000L
+    private fun TestScope.countdownHook() = CountdownHook(now = { countdownStartMs + currentTime })
 
     private fun scheduleContext(
         options: ScheduleRunOptions = ScheduleRunOptions(),
         signals: RunSignals = RunSignals(),
         runMode: RunMode = RunMode.BACKGROUND,
+        scheduledAtEpochMs: Long? = countdownStartMs + 30_000,
     ) = RunContext(
-        trigger = RunTrigger.Schedule("s1", options),
+        trigger = RunTrigger.Schedule("s1", scheduledAtEpochMs, options),
         runMode = runMode,
         plan = plan,
         signals = signals,
@@ -212,33 +218,57 @@ class EnvironmentHooksTest {
     /** 手动 Start 不该被拖住：trigger 不是 Schedule 就没有倒计时 */
     @Test
     fun `manual trigger has no countdown`() = runTest {
-        assertTrue(CountdownHook.engage(context()) is EngageResult.Skipped)
+        assertTrue(countdownHook().engage(context()) is EngageResult.Skipped)
     }
 
-    /** 秒数不开放配置，定时触发一律等这么久 */
+    /** 后台模式没人看着，到点直接投，不做倒计时 */
     @Test
-    fun `countdown waits thirty seconds and reports each one`() = runTest {
+    fun `background schedule has no countdown`() = runTest {
+        assertTrue(countdownHook().engage(scheduleContext(runMode = RunMode.BACKGROUND)) is EngageResult.Skipped)
+        assertEquals(0L, currentTime)
+    }
+
+    /** 前台倒计时从 countdownStartMs 等到 scheduledAtEpochMs，每秒报一次 */
+    @Test
+    fun `foreground countdown waits until scheduled time and reports each second`() = runTest {
         val ticks = mutableListOf<String>()
         val ctx = RunContext(
-            trigger = RunTrigger.Schedule("s1"),
-            runMode = RunMode.BACKGROUND,
+            trigger = RunTrigger.Schedule("s1", countdownStartMs + 30_000),
+            runMode = RunMode.FOREGROUND,
             plan = plan,
             progress = RunProgress { hookId, _ -> ticks += hookId },
             journal = DiscardingRunJournal,
         )
 
-        CountdownHook.engage(ctx)
+        assertTrue(countdownHook().engage(ctx) is EngageResult.Skipped)
 
         assertEquals(30, ticks.size)
         assertEquals(30_000L, currentTime)
+    }
+
+    /** 到点那一刻准时投：只等剩下的窗口，不机械等满 30s */
+    @Test
+    fun `countdown waits only until the deadline`() = runTest {
+        val ctx = RunContext(
+            trigger = RunTrigger.Schedule("s1", countdownStartMs + 10_000),
+            runMode = RunMode.FOREGROUND,
+            plan = plan,
+            journal = DiscardingRunJournal,
+        )
+
+        assertTrue(countdownHook().engage(ctx) is EngageResult.Skipped)
+        assertEquals(10_000L, currentTime)
     }
 
     @Test
     fun `start now cuts the wait short`() = runTest {
         val signals = RunSignals().apply { requestStartNow() }
 
-        CountdownHook.engage(scheduleContext(signals = signals))
-
+        assertTrue(
+            countdownHook().engage(
+                scheduleContext(signals = signals, runMode = RunMode.FOREGROUND),
+            ) is EngageResult.Skipped,
+        )
         assertEquals(0L, currentTime)
     }
 
@@ -247,8 +277,12 @@ class EnvironmentHooksTest {
     fun `cancel aborts the run`() = runTest {
         val signals = RunSignals().apply { requestCancel() }
 
-        assertTrue(CountdownHook.gating)
-        assertTrue(CountdownHook.engage(scheduleContext(signals = signals)) is EngageResult.Failed)
+        assertTrue(CountdownHook().gating)
+        assertTrue(
+            countdownHook().engage(
+                scheduleContext(signals = signals, runMode = RunMode.FOREGROUND),
+            ) is EngageResult.Failed,
+        )
     }
 
     /** 两个都点过说明用户改了主意，以「立即开始」为准 */
@@ -259,7 +293,11 @@ class EnvironmentHooksTest {
             requestStartNow()
         }
 
-        assertTrue(CountdownHook.engage(scheduleContext(signals = signals)) is EngageResult.Skipped)
+        assertTrue(
+            countdownHook().engage(
+                scheduleContext(signals = signals, runMode = RunMode.FOREGROUND),
+            ) is EngageResult.Skipped,
+        )
     }
 
     // ── 关目标应用 ──────────────────────────────────────────────────

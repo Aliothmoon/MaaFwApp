@@ -676,8 +676,8 @@ class SessionViewModel(
     /**
      * 发起本身在 [RunLauncher]（进程级，定时触发共用同一条）；这里只把结局翻成 UI 消息
      *
-     * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
-     * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
+     * 前台拦截：这里拦应用内入口（前台模式没有应用内的预览环境）；悬浮窗手动放行。
+     * 定时触发在前台模式由 CountdownHook 提前倒计时投递，不再整轮拦下
      */
     private suspend fun start(surface: TaskSurface) {
         if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {

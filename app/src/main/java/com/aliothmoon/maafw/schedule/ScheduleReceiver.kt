@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
@@ -53,8 +54,11 @@ class ScheduleReceiver : BroadcastReceiver() {
                 val koin = GlobalContext.get()
                 val store: ScheduleStrategyStore = koin.get()
                 val alarms: ScheduleAlarmManager = koin.get()
+                val appSettings: AppSettingsManager = koin.get()
                 val loaded = withTimeoutOrNull(STORE_READY_TIMEOUT_MS) {
                     store.isLoaded.first { it }
+                    // 前台模式的提前量写在设置里；没等到读盘就重排会退回后台节奏
+                    appSettings.loaded.first { it }
                 }
                 val strategy = if (loaded == null) null else store.findById(strategyId)
                 if (strategy != null) {

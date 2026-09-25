@@ -170,6 +170,28 @@ class RunLauncherTest {
 
     // ── 检查 ─────────────────────────────────────────────────────────
 
+    /** 定时触发绝不抢占正在跑的轮次：已有执行时直接拒绝，不动挂载物也不进倒计时 */
+    @Test
+    fun `scheduled trigger while a run is busy is rejected without engaging hooks`() = runTest(testDispatcher) {
+        val hook = RecordingHook("env", Anchor.BeforeDispatch)
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val launcher = launcher(scope = backgroundScope, runner = runner, hooks = listOf(hook))
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+        hook.log.clear()
+
+        val result = launcher.launch(RunTrigger.Schedule("s1"))
+
+        assertTrue(result is RunLaunchResult.Rejected)
+        assertTrue(
+            (result as RunLaunchResult.Rejected).reason.isResource(R.string.msg_reject_already_running),
+        )
+        assertEquals(emptyList<String>(), hook.log)
+    }
+
     @Test
     fun `blocking precheck stops before the runner is touched`() = runTest(testDispatcher) {
         val runner = fastStub(backgroundScope)
@@ -191,18 +213,18 @@ class RunLauncherTest {
     }
 
     @Test
-    fun `foreground mode blocks schedule trigger but passes manual`() = runTest(testDispatcher) {
+    fun `foreground and background schedule both pass once the precheck is gone`() = runTest(testDispatcher) {
         suspend fun launchIn(mode: RunMode, trigger: RunTrigger = RunTrigger.Manual) = launcher(
             scope = backgroundScope,
             runner = fastStub(backgroundScope),
-            prechecks = listOf(ForegroundModePrecheck),
             runMode = mode,
         ).launch(trigger)
 
         // 悬浮窗手动开跑是前台模式的正路
         assertEquals(RunLaunchResult.Started, launchIn(RunMode.FOREGROUND))
         assertEquals(RunLaunchResult.Started, launchIn(RunMode.BACKGROUND))
-        assertTrue(launchIn(RunMode.FOREGROUND, RunTrigger.Schedule("s1")) is RunLaunchResult.Blocked)
+        // 前台定时不再整体拦下；倒计时那一步由 CountdownHook 负责
+        assertEquals(RunLaunchResult.Started, launchIn(RunMode.FOREGROUND, RunTrigger.Schedule("s1")))
     }
 
     /** 确认循环：先问，带着 token 重跑就该放行 */
