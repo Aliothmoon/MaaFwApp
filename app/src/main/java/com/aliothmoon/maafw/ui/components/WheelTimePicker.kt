@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -76,6 +77,9 @@ private const val SHRINK_DEPTH = 0.24f
 
 /** 向中心收拢的比例，模拟滚筒透视 */
 private const val GATHER_RATIO = 0.09f
+
+/** 24 小时制没有时段列，收窄一点保持时分列的疏密 */
+private val PICKER_MAX_WIDTH = 248.dp
 
 /**
  * 24 小时制滚轮状态
@@ -128,7 +132,7 @@ fun WheelTimePicker(
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            modifier = Modifier.widthIn(max = 304.dp).fillMaxWidth(),
+            modifier = Modifier.widthIn(max = PICKER_MAX_WIDTH).fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {
             // 选中行：居中铺一条渐变胶囊，滚轮在其上滚动
@@ -210,6 +214,7 @@ private fun WheelColumn(
 ) {
     val startIndex = count * (LOOP_CYCLES / 2) + initialIndex
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
+    val currentOnSelect by rememberUpdatedState(onSelect)
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val edgeRows = (rows / 2).toFloat()
@@ -234,7 +239,7 @@ private fun WheelColumn(
             .map { it % count }
             .distinctUntilChanged()
             .collect { index ->
-                onSelect(index)
+                currentOnSelect(index)
                 if (!first) haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                 first = false
             }
