@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
+import java.util.UUID
 
 /** 谁发起的这一轮；决定「需要确认」时有没有人可问 */
 sealed interface RunTrigger {
@@ -76,8 +77,6 @@ fun interface RunProgress {
  * 在里面读到的就已经是冻结值，捕获进闭包即可；塞进来只会让本类随挂载物数量膨胀
  */
 class RunContext(
-    /** 一轮日志、状态机与迟到回调共用的身份；由编排层生成 */
-    val executionId: String = java.util.UUID.randomUUID().toString(),
     val trigger: RunTrigger,
     val runMode: RunMode,
     val plan: RunPlan,
@@ -89,4 +88,6 @@ class RunContext(
     val progress: RunProgress = RunProgress { _, _ -> },
     /** 本轮运行日志；单测可传 [DiscardingRunJournal] */
     val journal: RunJournal,
+    /** 会话日志、Runner 事件、挂载物写的行都靠它归到同一轮 */
+    val executionId: String = UUID.randomUUID().toString(),
 )

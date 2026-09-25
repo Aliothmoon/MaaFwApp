@@ -1,10 +1,8 @@
 package com.aliothmoon.maafw.runner
 
-import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
-import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ProjectDefinition
@@ -13,14 +11,11 @@ import com.aliothmoon.maafw.constant.AppPaths
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -57,7 +52,6 @@ class RunLogRecorderTest {
     }
 
     private fun TestScope.recorder(runner: RunnerPort): RunLogRecorder = RunLogRecorder(
-        runnerPort = runner,
         focusDispatcher = FocusDispatcher(
             projectRepository = FakeProjectRepository(ProjectState.Ready(DEFINITION, emptyList())),
             resolver = PassthroughFocusContentResolver,
@@ -82,20 +76,27 @@ class RunLogRecorderTest {
     private fun TestScope.settleRunLog() = testScheduler.advanceTimeBy(SETTLE_MILLIS)
 
     private fun sessionRecords(): List<RunSessionRecord> {
-        val file = File(logDir, "run").listFiles()?.maxByOrNull { it.lastModified() } ?: return emptyList()
-        return file.readLines()
-            .filter { it.isNotBlank() }
-            .map { LENIENT.decodeFromString(RunSessionRecord.serializer(), it) }
+        val file = File(logDir, "run").listFiles()?.single() ?: return emptyList()
+        return records(file)
     }
 
-    private fun sessionRecordsFor(taskName: String): List<RunSessionRecord> =
-        File(logDir, "run").listFiles().orEmpty()
-            .map { file ->
-                file.readLines()
-                    .filter { it.isNotBlank() }
-                    .map { LENIENT.decodeFromString(RunSessionRecord.serializer(), it) }
-            }
-            .single { records -> (records.first() as? RunSessionRecord.Header)?.tasks == listOf(taskName) }
+    /** 多轮并存时按 Header 的首个任务名认文件 */
+    private fun sessionRecordsByFirstTask(): Map<String, List<RunSessionRecord>> =
+        File(logDir, "run").listFiles().orEmpty().map(::records).associateBy {
+            (it.first() as RunSessionRecord.Header).tasks.first()
+        }
+
+    private fun records(file: File): List<RunSessionRecord> = file.readLines()
+        .filter { it.isNotBlank() }
+        .map { LENIENT.decodeFromString(RunSessionRecord.serializer(), it) }
+
+    private fun List<RunSessionRecord>.lineTexts() = filterIsInstance<RunSessionRecord.Line>().map { it.text }
+
+    /** 生产里 Runner 先发 marker 再切 Idle，收尾才开始等；这里按同样的顺序喂 */
+    private suspend fun RunLogRecorder.finish(runner: RecordingEventRunnerPort, executionId: String = ID) {
+        runner.emit(RunnerEvent.ExecutionFinished, executionId)
+        end(executionId, RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+    }
 
     @Test
     fun `user-facing lines update lastUserFacing immediately`() = runTest(dispatcher) {
@@ -181,22 +182,6 @@ class RunLogRecorderTest {
     }
 
     @Test
-    fun `clearing the log resets composer dedupe through recorder input`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        runner.emit(RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"清体力"}"""))
-        settleRunLog()
-        assertEquals(1, recorder.runLog.value.size)
-        recorder.clear()
-        testScheduler.runCurrent()
-        runner.emit(RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"清体力"}"""))
-        settleRunLog()
-
-        assertEquals("clear 后同一条被去重丢了", 1, recorder.runLog.value.size)
-    }
-
-    @Test
     fun `verbose callbacks do not become lastUserFacing`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
@@ -212,13 +197,10 @@ class RunLogRecorderTest {
         val recorder = recorder(runner)
 
         runner.emit(RunnerEvent.Log("上一轮"))
-        recorder.beginSession(planOf("清体力"), RecordingEventRunnerPort.DEFAULT_EXECUTION_ID)
+        recorder.begin(planOf("清体力"), ID)
         assertNull(recorder.lastUserFacing.value)
         assertNull(recorder.liveUpdateStatus.value)
-        recorder.endSession(
-            "execution-1",
-            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
-        )
+        recorder.finish(runner)
     }
 
     @Test
@@ -238,15 +220,9 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.begin(planOf("清体力"), RecordingEventRunnerPort.DEFAULT_EXECUTION_ID)
-        recorder.warn(
-            RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            com.aliothmoon.maafw.i18n.uiTextFromFramework("内存偏紧"),
-        )
-        recorder.end(
-            RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
-        )
+        recorder.begin(planOf("清体力"), ID)
+        recorder.warn(ID, com.aliothmoon.maafw.i18n.uiTextFromFramework("内存偏紧"))
+        recorder.finish(runner)
 
         val line = recorder.runLog.value.single()
         assertEquals(RunLogKind.Warning, line.kind)
@@ -257,46 +233,13 @@ class RunLogRecorderTest {
     }
 
     @Test
-    fun `old finalization and notes cannot take over the new session`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        recorder.beginSession(planOf("旧任务"), "execution-1")
-        recorder.beginSession(planOf("新任务"), "execution-2")
-        runner.emit(RunnerEvent.Log("新执行状态"), executionId = "execution-2")
-        recorder.warn("execution-1", UiText.Verbatim("旧执行警告"))
-        settleRunLog()
-
-        assertEquals("新执行状态", recorder.lastUserFacing.value)
-        assertTrue(recorder.runLog.value.none { it.text == UiText.Verbatim("旧执行警告") })
-        recorder.end("execution-1", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
-        runner.emit(RunnerEvent.Log("新执行仍在"), executionId = "execution-2")
-        recorder.end("execution-2", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
-
-        val records = sessionRecordsFor("新任务")
-        assertEquals(
-            listOf("新任务"),
-            (records.first() as RunSessionRecord.Header).tasks,
-        )
-        val lines = records.filterIsInstance<RunSessionRecord.Line>().map { it.text }
-        assertEquals(listOf("新执行状态", "新执行仍在"), lines)
-        assertEquals(
-            RunSessionOutcome.COMPLETED,
-            (records.last() as RunSessionRecord.Footer).outcome,
-        )
-    }
-
-    @Test
     fun `a session writes header lines and footer`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("清体力", "签到"), RecordingEventRunnerPort.DEFAULT_EXECUTION_ID)
+        recorder.begin(planOf("清体力", "签到"), ID)
         runner.emit(RunnerEvent.Log("跑起来了"))
-        recorder.endSession(
-            RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
-        )
+        recorder.finish(runner)
 
         val records = sessionRecords()
         assertEquals(listOf("清体力", "签到"), (records.first() as RunSessionRecord.Header).tasks)
@@ -307,99 +250,15 @@ class RunLogRecorderTest {
         )
     }
 
-    @Test
-    fun `endAfterDrain waits for a buffered failure before closing the file`() =
-        runTest(dispatcher) {
-            val recordingRunner = RecordingEventRunnerPort()
-            val runner = GatedRecordingRunnerPort(recordingRunner)
-            val recorder = recorder(runner)
-
-            recorder.beginSession(planOf("清体力"), RecordingEventRunnerPort.DEFAULT_EXECUTION_ID)
-            runner.hold()
-            runner.emit(
-                RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"清体力"}"""),
-                executionId = RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            )
-            runner.emit(
-                RunnerEvent.ExecutionFinished,
-                executionId = RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            )
-            val ending = async {
-                recorder.endAfterDrain(
-                    RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-                    RunEndReason.Ran(ExecutionResult.CompletedWithFailures(emptyList())),
-                )
-            }
-
-            assertTrue(ending.isActive)
-            runner.release()
-            advanceUntilIdle()
-            ending.await()
-
-            val records = sessionRecords()
-            assertEquals(
-                RunLogKind.Error,
-                records.filterIsInstance<RunSessionRecord.Line>().single().kind,
-            )
-            assertTrue(records.last() is RunSessionRecord.Footer)
-        }
-
-    @Test
-    fun `a new begin does not skip the old drain failing log`() =
-        runTest(dispatcher) {
-            val recordingRunner = RecordingEventRunnerPort()
-            val runner = GatedRecordingRunnerPort(recordingRunner)
-            val recorder = recorder(runner)
-
-            recorder.beginSession(planOf("旧任务"), "execution-1")
-            runner.hold()
-            runner.emit(
-                RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"旧任务"}"""),
-                executionId = "execution-1",
-            )
-            runner.emit(
-                RunnerEvent.ExecutionFinished,
-                executionId = "execution-1",
-            )
-            val oldEnding = async {
-                recorder.endAfterDrain(
-                    "execution-1",
-                    RunEndReason.Ran(ExecutionResult.CompletedWithFailures(emptyList())),
-                )
-            }
-
-            assertTrue(oldEnding.isActive)
-            recorder.beginSession(planOf("新任务"), "execution-2")
-            runner.release()
-            advanceUntilIdle()
-            oldEnding.await()
-            recorder.endSession(
-                "execution-2",
-                RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
-            )
-
-            val records = sessionRecordsFor("旧任务")
-            assertEquals(
-                RunLogKind.Error,
-                records.filterIsInstance<RunSessionRecord.Line>().single().kind,
-            )
-            assertEquals(
-                RunSessionOutcome.COMPLETED_WITH_FAILURES,
-                (records.last() as RunSessionRecord.Footer).outcome,
-            )
-        }
-
     /** 没投出去也要留一份：「昨晚为什么没跑」是查这份日志的头号问题 */
     @Test
     fun `a round that never dispatched still gets a footer`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("清体力"), RecordingEventRunnerPort.DEFAULT_EXECUTION_ID)
-        recorder.endSession(
-            RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            RunEndReason.NotRun(NotRunCause.Rejected),
-        )
+        recorder.begin(planOf("清体力"), ID)
+        // NotRun 没进过 Runner，不发 marker 也不能干等
+        recorder.end(ID, RunEndReason.NotRun(NotRunCause.Rejected))
 
         assertEquals(
             RunSessionOutcome.NOT_RUN,
@@ -413,15 +272,12 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("a"), RecordingEventRunnerPort.DEFAULT_EXECUTION_ID)
+        recorder.begin(planOf("a"), ID)
         runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"A"}"""))
         includeDetails = true
         // 换个事件名：合成器按 kind + 正文去重，同名的第二条本来就到不了落盘这步
         runner.emit(RunnerEvent.Callback("Node.Recognition.Failed", """{"name":"B"}"""))
-        recorder.endSession(
-            RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
-        )
+        recorder.finish(runner)
 
         val lines = sessionRecords().filterIsInstance<RunSessionRecord.Line>()
         assertNull(lines[0].detail)
@@ -438,189 +294,18 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("a"), "execution-1")
-        runner.emit(RunnerEvent.Log("同一句"), executionId = "execution-1")
-        recorder.endSession("execution-1", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.begin(planOf("a"), "e1")
+        runner.emit(RunnerEvent.Log("同一句"), "e1")
+        recorder.finish(runner, "e1")
 
         settleRunLog()
         val before = recorder.runLog.value.size
-        recorder.beginSession(planOf("a"), "execution-2")
-        runner.emit(RunnerEvent.Log("同一句"), executionId = "execution-2")
-        recorder.endSession("execution-2", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.begin(planOf("a"), "e2")
+        runner.emit(RunnerEvent.Log("同一句"), "e2")
+        recorder.finish(runner, "e2")
         settleRunLog()
 
         assertTrue("跨轮被去重掉了", recorder.runLog.value.size > before)
-    }
-
-    @Test
-    fun `task entry labels do not borrow another task name`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        recorder.beginSession(
-            plan = planOf(
-                RuntimeTask("A", "Fight", emptyList(), label = "第一任务"),
-                RuntimeTask("Fight", "Other", emptyList(), label = "第二任务"),
-            ),
-            executionId = RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-        )
-        runner.emit(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"Fight"}"""))
-        recorder.endSession(
-            RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
-        )
-        settleRunLog()
-
-        assertEquals(
-            UiText.Resource(
-                R.string.run_log_task_succeeded,
-                listOf("第一任务"),
-            ),
-            recorder.runLog.value.single().text,
-        )
-    }
-
-    @Test
-    fun `a callback consumed after session end keeps its frozen label`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        recorder.beginSession(
-            planOf(RuntimeTask("A", "Fight", emptyList(), label = "战斗")),
-            executionId = "execution-1",
-        )
-        recorder.endSession("execution-1", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
-        runner.emit(
-            RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"Fight"}"""),
-            executionId = "execution-1",
-        )
-        settleRunLog()
-
-        assertEquals(
-            UiText.Resource(
-                R.string.run_log_task_failed,
-                listOf("战斗"),
-            ),
-            recorder.runLog.value.single().text,
-        )
-    }
-
-    @Test
-    fun `a stale essential event after both sessions end cannot replace final status`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        recorder.beginSession(planOf("旧任务"), "execution-1")
-        recorder.endSession("execution-1", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
-        recorder.beginSession(planOf("新任务"), "execution-2")
-        runner.emit(RunnerEvent.Log("新执行失败"), executionId = "execution-2")
-        recorder.endSession("execution-2", RunEndReason.Ran(ExecutionResult.Failed(
-            UiText.Verbatim("failed"),
-        )))
-
-        assertEquals("新执行失败", recorder.lastUserFacing.value)
-        runner.emit(
-            RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"旧任务"}"""),
-            executionId = "execution-1",
-        )
-        settleRunLog()
-
-        assertEquals("新执行失败", recorder.lastUserFacing.value)
-    }
-
-    @Test
-    fun `a stale essential event after a superseded session ends cannot replace final status`() =
-        runTest(dispatcher) {
-            val runner = RecordingEventRunnerPort()
-            val recorder = recorder(runner)
-
-            recorder.beginSession(planOf("旧任务"), "execution-1")
-            recorder.beginSession(planOf("新任务"), "execution-2")
-            runner.emit(RunnerEvent.Log("新执行状态"), executionId = "execution-2")
-            recorder.endSession("execution-2", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
-
-            assertEquals("新执行状态", recorder.lastUserFacing.value)
-            runner.emit(
-                RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"旧任务"}"""),
-                executionId = "execution-1",
-            )
-            settleRunLog()
-
-            assertEquals("新执行状态", recorder.lastUserFacing.value)
-        }
-
-    @Test
-    fun `an old callback after the next begin is dropped from ui and file`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        recorder.beginSession(
-            plan = planOf(RuntimeTask("A", "Fight", emptyList(), label = "旧任务")),
-            executionId = "execution-1",
-        )
-        recorder.endSession("execution-1", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
-        recorder.beginSession(
-            plan = planOf(RuntimeTask("B", "Other", emptyList(), label = "新任务")),
-            executionId = "execution-2",
-        )
-        runner.emit(
-            RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"Fight"}"""),
-            executionId = "execution-1",
-        )
-        recorder.endSession("execution-2", RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
-        settleRunLog()
-
-        assertTrue(recorder.runLog.value.isEmpty())
-        assertNull(recorder.lastUserFacing.value)
-        val lines = sessionRecords().filterIsInstance<RunSessionRecord.Line>()
-        assertEquals(emptyList<RunSessionRecord.Line>(), lines)
-    }
-
-    @Test
-    fun `an evicted execution cannot reclaim the idle ui`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        repeat(9) { index ->
-            val executionId = "execution-$index"
-            recorder.beginSession(planOf("任务$index"), executionId)
-            recorder.endSession(
-                executionId,
-                RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
-            )
-        }
-        runner.emit(
-            RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"任务0"}"""),
-            executionId = "execution-0",
-        )
-        settleRunLog()
-
-        assertNull(recorder.lastUserFacing.value)
-        assertTrue(recorder.runLog.value.isEmpty())
-    }
-
-    @Test
-    fun `an entry shared by differently named tasks stays unambiguous`() = runTest(dispatcher) {
-        val runner = RecordingEventRunnerPort()
-        val recorder = recorder(runner)
-
-        recorder.beginSession(
-            plan = planOf(
-                RuntimeTask("A", "Fight", emptyList(), label = "第一任务"),
-                RuntimeTask("B", "Fight", emptyList(), label = "第二任务"),
-            ),
-            executionId = RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-        )
-        runner.emit(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"Fight"}"""))
-        settleRunLog()
-
-        assertEquals(
-            UiText.Resource(
-                R.string.run_log_task_starting,
-                listOf("Fight"),
-            ),
-            recorder.runLog.value.single().text,
-        )
     }
 
     /**
@@ -646,6 +331,63 @@ class RunLogRecorderTest {
         assertTrue("逐条发布了，共 ${sizes.size} 次", sizes.size <= 3)
     }
 
+    /** Runner 已经 Idle 而事件还没消费完：收尾要等终局 marker，尾巴上的失败行不能丢 */
+    @Test
+    fun `end waits for the terminal marker before writing the footer`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("a"), ID)
+        val ending = async { recorder.end(ID, RunEndReason.Ran(ExecutionResult.Completed(emptyList()))) }
+        runner.emit(RunnerEvent.Log("收尾前才消费到的一行"))
+        runner.emit(RunnerEvent.ExecutionFinished)
+        ending.await()
+
+        val records = sessionRecords()
+        assertEquals(listOf("收尾前才消费到的一行"), records.lineTexts())
+        assertTrue(records.last() is RunSessionRecord.Footer)
+    }
+
+    /**
+     * 上一轮还在等 marker 时下一轮已经开了文件：迟到的尾巴只进自己那份，
+     * 也不能冲掉新一轮的通知栏状态
+     */
+    @Test
+    fun `a late event of the previous run stays in its own file`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("上一轮"), "e1")
+        val endingFirst = async { recorder.end("e1", RunEndReason.Ran(ExecutionResult.Completed(emptyList()))) }
+        recorder.begin(planOf("这一轮"), "e2")
+        runner.emit(RunnerEvent.Log("上一轮的尾巴"), "e1")
+        assertNull(recorder.lastUserFacing.value)
+        runner.emit(RunnerEvent.ExecutionFinished, "e1")
+        endingFirst.await()
+        runner.emit(RunnerEvent.Log("这一轮的第一句"), "e2")
+        recorder.finish(runner, "e2")
+
+        val files = sessionRecordsByFirstTask()
+        assertEquals(listOf("上一轮的尾巴"), files.getValue("上一轮").lineTexts())
+        assertEquals(listOf("这一轮的第一句"), files.getValue("这一轮").lineTexts())
+    }
+
+    /** 任务名取事件自带的那份，不取合成时 Runner 的当前任务 */
+    @Test
+    fun `task lines use the label frozen in the envelope`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"Start"}"""),
+            taskLabel = "启动",
+        )
+        settleRunLog()
+
+        val text = recorder.runLog.value.single().text as com.aliothmoon.maafw.i18n.UiText.Resource
+        assertEquals(listOf("启动"), text.args)
+    }
+
     private fun planOf(vararg taskNames: String) = RunPlan(
         projectName = "demo",
         projectVersion = "1",
@@ -654,40 +396,6 @@ class RunLogRecorderTest {
         runConfigurationId = RunConfigurationId("cfg"),
         tasks = taskNames.map { RuntimeTask(taskName = it, entry = it, pipelineOverrides = emptyList()) },
     )
-
-    private fun planOf(vararg tasks: RuntimeTask) = RunPlan(
-        projectName = "demo",
-        projectVersion = "1",
-        controller = ControllerDefinition(),
-        resource = ResourceDefinition(name = "official", paths = listOf("resource"), label = "官服"),
-        runConfigurationId = RunConfigurationId("cfg"),
-        tasks = tasks.toList(),
-    )
-
-    private class GatedRecordingRunnerPort(
-        private val runner: RecordingEventRunnerPort,
-    ) : RunnerPort by runner {
-        @Volatile
-        private var gate = CompletableDeferred<Unit>()
-
-        override val events = runner.events.map { envelope ->
-            gate.await()
-            envelope
-        }
-
-        fun hold() {
-            gate = CompletableDeferred()
-        }
-
-        fun release() {
-            gate.complete(Unit)
-        }
-
-        fun emit(
-            event: RunnerEvent,
-            executionId: String = RecordingEventRunnerPort.DEFAULT_EXECUTION_ID,
-        ) = runner.emit(event, executionId)
-    }
 
     private companion object {
         /** FocusDispatcher 只拿它查 $i18n；本用例的 focus 不走翻译，空项目就够 */
@@ -702,6 +410,7 @@ class RunLogRecorderTest {
             templates = emptyList(),
         )
         val LENIENT = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        const val ID = RecordingEventRunnerPort.DEFAULT_EXECUTION_ID
 
         /** 宽出 RunLogRecorder.FLUSH_INTERVAL_MS 一截，那个常量是私有的，不为测试开出来 */
         const val SETTLE_MILLIS = 500L

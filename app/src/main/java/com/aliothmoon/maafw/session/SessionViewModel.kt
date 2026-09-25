@@ -206,7 +206,7 @@ class SessionViewModel(
             for (intent in intents) handle(intent)
         }
         viewModelScope.launch {
-            focusDispatcher.resolved.collect { dispatch -> dispatchFocus(dispatch.focus) }
+            focusDispatcher.resolved.collect { focus -> dispatchFocus(focus) }
         }
         viewModelScope.launch {
             combine(projectRepository.state, configurationStore.data) { p, c -> p to c }

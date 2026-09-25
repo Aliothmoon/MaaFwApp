@@ -19,8 +19,7 @@ class SessionLogHook(private val journal: RunJournal) : RunEnvHook {
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): EngageResult {
-        val executionId = ctx.executionId
-        journal.begin(ctx.plan, executionId)
-        return EngageResult.Engaged { reason -> journal.endAfterDrain(executionId, reason) }
+        journal.begin(ctx.plan, ctx.executionId)
+        return EngageResult.Engaged { reason -> journal.end(ctx.executionId, reason) }
     }
 }

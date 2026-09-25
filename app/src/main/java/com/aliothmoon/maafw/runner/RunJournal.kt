@@ -15,10 +15,6 @@ interface RunJournal {
 
     suspend fun end(executionId: String, reason: RunEndReason)
 
-    /** 生产会话日志用：先等事件流终局被消费，再写 Footer 并关文件 */
-    suspend fun endAfterDrain(executionId: String, reason: RunEndReason) =
-        end(executionId, reason)
-
     fun note(executionId: String, level: RunNote, text: UiText)
 }
 
@@ -29,14 +25,11 @@ enum class RunNote {
     Error,
 }
 
-fun RunJournal.info(executionId: String, text: UiText) =
-    note(executionId, RunNote.Info, text)
+fun RunJournal.info(executionId: String, text: UiText) = note(executionId, RunNote.Info, text)
 
-fun RunJournal.warn(executionId: String, text: UiText) =
-    note(executionId, RunNote.Warning, text)
+fun RunJournal.warn(executionId: String, text: UiText) = note(executionId, RunNote.Warning, text)
 
-fun RunJournal.error(executionId: String, text: UiText) =
-    note(executionId, RunNote.Error, text)
+fun RunJournal.error(executionId: String, text: UiText) = note(executionId, RunNote.Error, text)
 
 /** 单测与没有落盘的调用方 */
 object DiscardingRunJournal : RunJournal {

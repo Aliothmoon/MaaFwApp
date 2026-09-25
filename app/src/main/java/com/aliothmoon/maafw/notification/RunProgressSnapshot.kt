@@ -43,12 +43,7 @@ object RunProgressSnapshots {
         val done = execution?.completedTaskCount?.coerceIn(0, total) ?: 0
         val indeterminate = phase == RunnerPhase.Preparing || total <= 0
         val progressLabel = "$done/$total".takeIf { total > 0 }
-        val taskLabel = execution?.let { current ->
-            current.currentTaskLabel?.takeIf(String::isNotBlank)
-                ?: current.currentTaskName?.let { name ->
-                    current.taskLabels[name]?.takeIf(String::isNotBlank) ?: name
-                }
-        }
+        val taskLabel = execution?.currentTaskLabel
         val status = firstLine(statusText)?.takeIf { it != taskLabel && it != progressLabel }
         return RunProgressSnapshot(
             title = title,

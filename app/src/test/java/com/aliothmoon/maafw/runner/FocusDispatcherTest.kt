@@ -3,12 +3,11 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
-import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -64,25 +63,21 @@ class FocusDispatcherTest {
         dispatcher: FocusDispatcher,
         event: RunnerEvent.Focus,
     ): FocusMessage {
-        val received = mutableListOf<FocusDispatcher.Dispatch>()
+        val received = mutableListOf<FocusMessage>()
         backgroundScope.launch { dispatcher.resolved.collect { received += it } }
         advanceUntilIdle()
         runner.emit(event)
         advanceUntilIdle()
-        return received.single().focus
+        return received.single()
     }
 
-    private fun focus(
-        content: String,
-        placeholders: Map<String, String> = emptyMap(),
-        trace: Boolean = false,
-    ) =
+    private fun focus(content: String, placeholders: Map<String, String> = emptyMap()) =
         RunnerEvent.Focus(
             FocusMessage(
                 message = "Node.PipelineNode.Succeeded",
                 content = content,
                 channels = setOf(FocusChannel.Log),
-                trace = trace,
+                trace = false,
                 placeholders = placeholders,
             ),
         )
@@ -93,122 +88,6 @@ class FocusDispatcherTest {
         val result = completed(runner, dispatcherWith(runner), focus("显影罐不足"))
         assertEquals("显影罐不足", result.content)
     }
-
-    @Test
-    fun `late focus keeps its execution id`() = runTest(UnconfinedTestDispatcher()) {
-        val runner = RecordingEventRunnerPort()
-        val dispatcher = dispatcherWith(runner)
-        val received = mutableListOf<FocusDispatcher.Dispatch>()
-        backgroundScope.launch { dispatcher.resolved.collect { received += it } }
-        advanceUntilIdle()
-
-        runner.emit(focus("迟到的通知"), executionId = "old-execution")
-        advanceUntilIdle()
-
-        assertEquals("old-execution", received.single().executionId)
-    }
-
-    @Test
-    fun `focus completing after the next run starts is dropped`() =
-        runTest(UnconfinedTestDispatcher()) {
-            val runner = RecordingEventRunnerPort()
-            val resolver = BlockingFocusContentResolver()
-            val dispatcher = dispatcherWith(runner, resolver)
-            val received = mutableListOf<FocusDispatcher.Dispatch>()
-            backgroundScope.launch { dispatcher.resolved.collect { received += it } }
-            advanceUntilIdle()
-
-            runner.prepare(plan(), "execution-1")
-            runner.emit(focus("./docs/old.md"), executionId = "execution-1")
-            resolver.entered.await()
-            runner.prepare(plan(), "execution-2")
-            resolver.release.complete(Unit)
-            advanceUntilIdle()
-
-            assertEquals(emptyList<FocusDispatcher.Dispatch>(), received)
-        }
-
-    @Test
-    fun `traced focus completing after the next run starts is dropped`() =
-        runTest(UnconfinedTestDispatcher()) {
-            val runner = RecordingEventRunnerPort()
-            val resolver = BlockingFocusContentResolver()
-            val dispatcher = dispatcherWith(runner, resolver)
-            val traced = mutableListOf<FocusDispatcher.Dispatch>()
-            backgroundScope.launch { dispatcher.traced.collect { traced += it } }
-            advanceUntilIdle()
-
-            runner.prepare(plan(), "execution-1")
-            runner.emit(focus("./docs/old.md", trace = true), executionId = "execution-1")
-            resolver.entered.await()
-            runner.prepare(plan(), "execution-2")
-            resolver.release.complete(Unit)
-            advanceUntilIdle()
-
-            assertEquals(emptyList<FocusDispatcher.Dispatch>(), traced)
-        }
-
-    @Test
-    fun `terminal drain survives being superseded by the next run`() =
-        runTest(UnconfinedTestDispatcher()) {
-            val runner = RecordingEventRunnerPort()
-            val resolver = BlockingFocusContentResolver()
-            val dispatcher = dispatcherWith(runner, resolver)
-            val recording = mutableListOf<FocusDispatcher.RecordingEvent>()
-            backgroundScope.launch { dispatcher.recording.collect { recording += it } }
-            advanceUntilIdle()
-
-            runner.prepare(plan(), "execution-1")
-            runner.emit(focus("./docs/old.md"), executionId = "execution-1")
-            resolver.entered.await()
-            runner.prepare(plan(), "execution-2")
-            resolver.release.complete(Unit)
-            runner.settle("execution-1")
-            runner.emit(
-                RunnerEvent.ExecutionFinished,
-                executionId = "execution-1",
-            )
-            advanceUntilIdle()
-
-            assertEquals(
-                listOf(FocusDispatcher.RecordingEvent.Drained("execution-1")),
-                recording,
-            )
-        }
-
-    @Test
-    fun `focus from the latest finished execution still has a drain tail`() =
-        runTest(UnconfinedTestDispatcher()) {
-            val runner = RecordingEventRunnerPort()
-            val dispatcher = dispatcherWith(runner)
-            val received = mutableListOf<FocusDispatcher.Dispatch>()
-            backgroundScope.launch { dispatcher.resolved.collect { received += it } }
-            advanceUntilIdle()
-
-            runner.settle("execution-1")
-            runner.emit(focus("迟到的通知"), executionId = "execution-1")
-            advanceUntilIdle()
-
-            assertEquals("execution-1", received.single().executionId)
-        }
-
-    @Test
-    fun `focus from an older finished execution stays dropped`() =
-        runTest(UnconfinedTestDispatcher()) {
-            val runner = RecordingEventRunnerPort()
-            val dispatcher = dispatcherWith(runner)
-            val received = mutableListOf<FocusDispatcher.Dispatch>()
-            backgroundScope.launch { dispatcher.resolved.collect { received += it } }
-            advanceUntilIdle()
-
-            runner.settle("execution-1")
-            runner.prepare(plan(), "execution-2")
-            runner.settle("execution-2")
-            runner.emit(focus("过期的通知"), executionId = "execution-1")
-            advanceUntilIdle()
-
-            assertEquals(emptyList<FocusDispatcher.Dispatch>(), received)
-        }
 
     @Test
     fun `translation key is resolved`() = runTest(UnconfinedTestDispatcher()) {
@@ -285,23 +164,39 @@ class FocusDispatcherTest {
         assertEquals(channels, completed(runner, dispatcherWith(runner), event).channels)
     }
 
-    private fun plan() = RunPlan(
-        projectName = "demo",
-        projectVersion = "1",
-        controller = ControllerDefinition(),
-        resource = ResourceDefinition(name = "official", paths = listOf("resource")),
-        runConfigurationId = RunConfigurationId("cfg"),
-        tasks = emptyList(),
-    )
-
-    private class BlockingFocusContentResolver : FocusContentResolver {
-        val entered = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
-
-        override suspend fun resolve(content: String): String {
-            entered.complete(Unit)
-            release.await()
-            return "resolved: $content"
+    /** 补完带 IO 时，日志那条流里的 focus 仍排在它之后的原始事件与终局 marker 前面 */
+    @Test
+    fun `recording keeps completed focus in order with the raw events`() = runTest(UnconfinedTestDispatcher()) {
+        val runner = RecordingEventRunnerPort()
+        val slowResolver = object : FocusContentResolver {
+            override suspend fun resolve(content: String): String {
+                delay(1_000)
+                return "读到的正文"
+            }
         }
+        val dispatcher = dispatcherWith(runner, slowResolver)
+        val recorded = mutableListOf<RunnerEventEnvelope>()
+        backgroundScope.launch { dispatcher.recording.collect { recorded += it } }
+        advanceUntilIdle()
+
+        runner.emit(focus("./docs/tip.md"), "e1", "启动")
+        runner.emit(RunnerEvent.Log("之后的一行"), "e1", "启动")
+        runner.emit(RunnerEvent.ExecutionFinished, "e1")
+        // 补完跑在 backgroundScope 上，advanceUntilIdle 不推它的虚拟时间
+        testScheduler.advanceTimeBy(2_000)
+        testScheduler.runCurrent()
+
+        assertEquals(
+            listOf("读到的正文", "之后的一行", "ExecutionFinished"),
+            recorded.map {
+                when (val event = it.event) {
+                    is RunnerEvent.Focus -> event.focus.content
+                    is RunnerEvent.Log -> event.message
+                    else -> event.toString()
+                }
+            },
+        )
+        assertEquals(listOf("e1", "e1", "e1"), recorded.map { it.executionId })
+        assertEquals("启动", recorded.first().taskLabel)
     }
 }

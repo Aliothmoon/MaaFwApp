@@ -10,28 +10,24 @@ interface RunnerPort {
     val state: StateFlow<RunnerState>
     val events: Flow<RunnerEventEnvelope>
 
+    /** [executionId] 由编排层先生成：会话日志在 start 之前就要按它开文件 */
     suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult
     suspend fun stop(): RunnerCommandResult
 }
 
 /**
- * 事件产生那一刻的执行身份与任务现场。
- *
- * executionId 不能等消费时再查 state：onFinished 之后迟到回调仍应归属旧轮，
- * 而下一轮 start 之后旧回调更不能借用新轮的任务名。
+ * 轮次与任务展示名在收到回调那一刻冻下，不能等消费时再查 state：
+ * 日志是异步消费的，那时 state 可能已经进了下一个任务，甚至下一轮
  */
 data class RunnerEventEnvelope(
     val executionId: String,
-    val currentTaskName: String? = null,
-    val currentTaskLabel: String? = null,
+    val taskLabel: String?,
     val event: RunnerEvent,
 )
 
 data class RunnerState(
     val phase: RunnerPhase = RunnerPhase.Idle,
     val activeExecution: ActiveExecution? = null,
-    /** Idle 后保留最近一轮身份；用于区分「本轮尾部」与「下一轮已开始后的旧回调」 */
-    val latestExecutionId: String? = null,
     /** 仅内存；进程重启可清空 */
     val latestResult: ExecutionResult? = null,
 )
@@ -52,14 +48,16 @@ data class ActiveExecution(
     val executionId: String,
     val runConfigurationId: RunConfigurationId,
     val currentTaskName: String?,
-    val currentTaskLabel: String? = null,
     /** 恒等于 [taskResults] 的条数：已结束的才算完成，正在跑的那条不算 */
     val completedTaskCount: Int,
     val totalTaskCount: Int,
     val taskResults: List<TaskResult>,
     /** 本轮冻住的 name → 展示名；缺的回落 [currentTaskName] */
     val taskLabels: Map<String, String> = emptyMap(),
-)
+) {
+    val currentTaskLabel: String?
+        get() = currentTaskName?.let { taskLabels[it]?.takeIf(String::isNotBlank) ?: it }
+}
 
 data class TaskResult(
     val taskName: String,
@@ -78,18 +76,13 @@ sealed interface ExecutionResult {
 
 /** 旁路观测（日志/进度）；不参与状态机判定 */
 sealed interface RunnerEvent {
-    /** 内部 drain marker：只标识事件流终局，不生成 UI 日志或屏保文本 */
+    /** 一轮的最后一个事件；会话日志等它被消费到再关文件，本身不成行 */
     data object ExecutionFinished : RunnerEvent
 
     /** 外壳自产的一句话，不是 MaaFramework 的原话 */
     data class Log(val message: String) : RunnerEvent
 
-    data class Progress(
-        val taskName: String,
-        val completed: Int,
-        val total: Int,
-        val taskLabel: String? = null,
-    ) : RunnerEvent
+    data class Progress(val taskName: String, val completed: Int, val total: Int) : RunnerEvent
 
     /**
      * MaaFramework 的一条原样通知

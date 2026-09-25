@@ -117,8 +117,7 @@ object RunPlanBuilder {
                 taskName = task.name,
                 entry = task.entry,
                 pipelineOverrides = patches,
-                label = configured.customLabel?.trim()?.takeIf { it.isNotBlank() }
-                    ?: task.label.ifBlank { task.name },
+                label = task.label.ifBlank { task.name },
             )
         }
 

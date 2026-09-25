@@ -25,20 +25,9 @@ import kotlinx.coroutines.launch
 class FocusDispatcher(
     private val projectRepository: ProjectRepository,
     private val resolver: FocusContentResolver,
-    private val runnerPort: RunnerPort,
+    runnerPort: RunnerPort,
     scope: CoroutineScope,
 ) {
-
-    data class Dispatch(
-        val executionId: String,
-        val focus: FocusMessage,
-    )
-
-    /** Recorder 专用流：Message 与 Drained 保序，Drained 表示之前的 Message 已全部入流 */
-    sealed interface RecordingEvent {
-        data class Message(val dispatch: Dispatch) : RecordingEvent
-        data class Drained(val executionId: String) : RecordingEvent
-    }
 
     /**
      * 补完后的模板消息
@@ -46,70 +35,52 @@ class FocusDispatcher(
      * SharedFlow 而不是 StateFlow：这些是一次性消息，订阅者晚到不该补看上一条。
      * 容量给足 32——补完带 IO，慢订阅者不该把消息挤掉
      */
-    private val _resolved = MutableSharedFlow<Dispatch>(
+    private val _resolved = MutableSharedFlow<FocusMessage>(
         extraBufferCapacity = 32,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val resolved: Flow<Dispatch> = _resolved.asSharedFlow()
-
-    private val _recording = MutableSharedFlow<RecordingEvent>(
-        extraBufferCapacity = 32,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
-
-    /**
-     * 日志不能同时订阅 resolved 与另一个独立 terminal 流：两个 SharedFlow 到达 recorder
-     * 的顺序没有保证。这里用单流保序，Drained 只有在之前的 Message emit 完才会发出。
-     */
-    val recording: Flow<RecordingEvent> = _recording.asSharedFlow()
+    val resolved: Flow<FocusMessage> = _resolved.asSharedFlow()
 
     /**
      * `trace` 命中的条目，未补完
      *
      * 上报侧要的是事件名与节点名，正文一概不带：PI 可以把用户输入拼进 focus 正文
      */
-    private val _traced = MutableSharedFlow<Dispatch>(
+    private val _traced = MutableSharedFlow<FocusMessage>(
         extraBufferCapacity = 32,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    val traced: Flow<Dispatch> = _traced.asSharedFlow()
+    val traced: Flow<FocusMessage> = _traced.asSharedFlow()
+
+    /**
+     * 给会话日志的整条事件流：focus 换成补完后的，其余原样透传
+     *
+     * 日志不能分别订 events 与 [resolved] 再合并：补完带 IO，两条流谁先到没保证，
+     * 终局 marker 会抢在最后几条 focus 前面，文件就在它们落盘前关了。容量对齐 Runner 那条
+     */
+    private val _recording = MutableSharedFlow<RunnerEventEnvelope>(
+        extraBufferCapacity = 256,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val recording: Flow<RunnerEventEnvelope> = _recording.asSharedFlow()
 
     init {
         scope.launch {
             runnerPort.events.collect { envelope ->
-                if (envelope.event is RunnerEvent.ExecutionFinished) {
-                    // Drained carries no user-visible stale content; it only unblocks that
-                    // execution's recorder session. A newer run must not suppress it.
-                    _recording.emit(RecordingEvent.Drained(envelope.executionId))
+                val event = envelope.event
+                if (event !is RunnerEvent.Focus) {
+                    _recording.emit(envelope)
                     return@collect
                 }
-
-                val event = envelope.event as? RunnerEvent.Focus ?: return@collect
-                if (!accepts(envelope.executionId)) return@collect
-                val dispatch = Dispatch(envelope.executionId, event.focus)
-                val completed = if (event.focus.displayable) {
-                    dispatch.copy(focus = complete(event.focus))
-                } else {
-                    null
-                }
-                // IO 期间下一轮可能已经开始；补完结果不能再回到旧消费者面前
-                if (!accepts(envelope.executionId)) return@collect
-                if (event.focus.trace) _traced.emit(dispatch)
-                if (completed != null) {
+                val focus = event.focus
+                if (focus.trace) _traced.emit(focus)
+                if (focus.displayable) {
+                    val completed = complete(focus)
                     _resolved.emit(completed)
-                    _recording.emit(RecordingEvent.Message(completed))
+                    _recording.emit(envelope.copy(event = RunnerEvent.Focus(completed)))
                 }
             }
         }
-    }
-
-    private fun accepts(executionId: String): Boolean {
-        val state = runnerPort.state.value
-        val active = state.activeExecution
-        if (active != null) return active.executionId == executionId
-
-        val latest = state.latestExecutionId
-        return latest == null || latest == executionId
     }
 
     private suspend fun complete(focus: FocusMessage): FocusMessage {

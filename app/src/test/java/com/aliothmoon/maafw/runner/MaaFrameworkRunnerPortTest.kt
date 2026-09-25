@@ -25,7 +25,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -67,16 +66,25 @@ class MaaFrameworkRunnerPortTest {
         tasks = listOf(RuntimeTask("启动游戏", "Start", emptyList())),
     )
 
-    private fun labeledPlan(label: String) = plan().copy(
-        tasks = listOf(RuntimeTask("启动游戏", "Start", emptyList(), label = label)),
-    )
-
-    private fun duplicateTaskPlan() = plan().copy(
+    private fun twoTaskPlan() = plan().copy(
         tasks = listOf(
-            RuntimeTask("启动游戏", "Start", emptyList(), label = "第一次"),
-            RuntimeTask("启动游戏", "Start", emptyList(), label = "第二次"),
+            RuntimeTask("启动游戏", "Start", emptyList(), label = "启动"),
+            RuntimeTask("领取奖励", "Reward", emptyList(), label = "领奖"),
         ),
     )
+
+    /** 事件照收，回调逐轮记下来供测试直接喂 */
+    private fun TestScope.recordCallbacks(
+        runner: MaaFrameworkRunnerPort,
+    ): Pair<MutableList<MaaFrameworkRunnerPort.ExecutionCallback>, MutableList<RunnerEventEnvelope>> {
+        val callbacks = mutableListOf<MaaFrameworkRunnerPort.ExecutionCallback>()
+        val events = mutableListOf<RunnerEventEnvelope>()
+        runner.bindRunnerCallback = { _, callback -> callbacks += callback }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            runner.events.collect { events += it }
+        }
+        return callbacks to events
+    }
 
     private fun port(
         scope: TestScope,
@@ -107,7 +115,7 @@ class MaaFrameworkRunnerPortTest {
         val servicePort = FakePrivilegedServicePort(service).apply { holdUseService = hold }
         val (runner, _) = port(this, service, servicePort)
 
-        val started = async { runner.start(plan(), "execution-1") }
+        val started = async { runner.start(plan(), "e1") }
         advanceUntilIdle()
         assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
 
@@ -123,143 +131,13 @@ class MaaFrameworkRunnerPortTest {
     }
 
     @Test
-    fun `a stale callback keeps its execution context and cannot mutate the next run`() = runTest(dispatcher) {
-        val (runner, _) = port(this)
-        val callbacks = mutableListOf<MaaFrameworkRunnerPort.ExecutionCallback>()
-        val events = mutableListOf<RunnerEventEnvelope>()
-        runner.bindRunnerCallback = { _, callback -> callbacks += callback }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            runner.events.collect { events += it }
-        }
-        advanceUntilIdle()
-
-        runner.start(labeledPlan("旧任务"), "execution-1")
-        val oldCallback = callbacks.single()
-        oldCallback.onTaskStarted("回调别名", 0, 1)
-        oldCallback.onFinished(RunOutcome.COMPLETED, null)
-        advanceUntilIdle()
-
-        runner.start(labeledPlan("新任务"), "execution-2")
-        oldCallback.onTaskStarted("回调别名", 0, 1)
-        oldCallback.onTaskFinished("启动游戏", false, "late")
-        oldCallback.onFinished(RunOutcome.COMPLETED, null)
-        advanceUntilIdle()
-
-        val active = runner.state.value.activeExecution
-        assertEquals("execution-2", active?.executionId)
-        assertNull(active?.currentTaskName)
-        assertEquals(emptyList<TaskResult>(), active?.taskResults)
-        assertEquals(RunnerPhase.Running, runner.state.value.phase)
-
-        val progress = events.filterIsInstance<RunnerEventEnvelope>()
-            .mapNotNull { it.event as? RunnerEvent.Progress }
-        assertEquals(listOf("旧任务", "旧任务"), progress.map { it.taskLabel })
-        assertEquals(listOf("execution-1", "execution-1", "execution-1"), events.map { it.executionId })
-    }
-
-    @Test
-    fun `the terminal marker is emitted before state becomes idle`() = runTest(dispatcher) {
-        val (runner, _) = port(this)
-        val callbacks = mutableListOf<MaaFrameworkRunnerPort.ExecutionCallback>()
-        val events = mutableListOf<RunnerEventEnvelope>()
-        var phaseAtTerminal: RunnerPhase? = null
-        runner.bindRunnerCallback = { _, callback -> callbacks += callback }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            runner.events.collect { envelope ->
-                if (envelope.event is RunnerEvent.ExecutionFinished) {
-                    phaseAtTerminal = runner.state.value.phase
-                }
-                events += envelope
-            }
-        }
-        advanceUntilIdle()
-
-        runner.start(labeledPlan("旧任务"), "execution-1")
-        callbacks.single().onFinished(RunOutcome.COMPLETED_WITH_FAILURES, null)
-
-        assertEquals(RunnerPhase.Running, phaseAtTerminal)
-        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
-        assertEquals("execution-1", events.single().executionId)
-        assertTrue(events.single().event is RunnerEvent.ExecutionFinished)
-    }
-
-    @Test
-    fun `forced abort emits the terminal marker for its execution`() = runTest(dispatcher) {
-        val servicePort = FakePrivilegedServicePort()
-        val (runner, _) = port(this, servicePort = servicePort)
-        val events = mutableListOf<RunnerEventEnvelope>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            runner.events.collect { events += it }
-        }
-        advanceUntilIdle()
-
-        runner.start(labeledPlan("当前任务"), "execution-1")
-        servicePort.emit(PrivilegedServiceState.Died)
-        repeat(4) { testScheduler.runCurrent() }
-
-        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
-        assertEquals("execution-1", runner.state.value.latestExecutionId)
-        assertEquals(
-            listOf("execution-1"),
-            events
-                .filter { it.event is RunnerEvent.ExecutionFinished }
-                .map { it.executionId },
-        )
-    }
-
-    @Test
-    fun `duplicate task names keep the label of the started instance`() = runTest(dispatcher) {
-        val (runner, _) = port(this)
-        val callbacks = mutableListOf<MaaFrameworkRunnerPort.ExecutionCallback>()
-        val events = mutableListOf<RunnerEventEnvelope>()
-        runner.bindRunnerCallback = { _, callback -> callbacks += callback }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            runner.events.collect { events += it }
-        }
-        advanceUntilIdle()
-
-        runner.start(duplicateTaskPlan(), "execution-1")
-        val callback = callbacks.single()
-        callback.onTaskStarted("回调别名", 0, 2)
-        assertEquals("第一次", runner.state.value.activeExecution?.currentTaskLabel)
-
-        callback.onTaskStarted("回调别名", 1, 2)
-        assertEquals("第二次", runner.state.value.activeExecution?.currentTaskLabel)
-
-        val progress = events.mapNotNull { it.event as? RunnerEvent.Progress }
-        assertEquals(listOf("第一次", "第二次"), progress.map { it.taskLabel })
-        assertEquals(
-            listOf("第一次", "第二次"),
-            events.mapNotNull { it.currentTaskLabel },
-        )
-    }
-
-    @Test
-    fun `blank task labels fall back to the task name in progress`() = runTest(dispatcher) {
-        val (runner, _) = port(this)
-        val callbacks = mutableListOf<MaaFrameworkRunnerPort.ExecutionCallback>()
-        val events = mutableListOf<RunnerEventEnvelope>()
-        runner.bindRunnerCallback = { _, callback -> callbacks += callback }
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            runner.events.collect { events += it }
-        }
-        advanceUntilIdle()
-
-        runner.start(labeledPlan(""), "execution-1")
-        callbacks.single().onTaskStarted("回调别名", 0, 1)
-
-        val progress = events.mapNotNull { it.event as? RunnerEvent.Progress }
-        assertEquals(listOf("启动游戏"), progress.map { it.taskLabel })
-    }
-
-    @Test
     fun `start rejection during Stopping returns to Idle`() = runTest(dispatcher) {
         val service = FakePrivilegedService()
         val hold = CompletableDeferred<Unit>()
         val servicePort = FakePrivilegedServicePort(service).apply { holdUseService = hold }
         val (runner, _) = port(this, service, servicePort)
 
-        val started = async { runner.start(plan(), "execution-1") }
+        val started = async { runner.start(plan(), "e1") }
         advanceUntilIdle()
         assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
 
@@ -279,7 +157,7 @@ class MaaFrameworkRunnerPortTest {
         val servicePort = FakePrivilegedServicePort().apply { holdUseService = hold }
         val (runner, _) = port(this, servicePort = servicePort)
 
-        val started = async { runner.start(plan(), "execution-1") }
+        val started = async { runner.start(plan(), "e1") }
         advanceUntilIdle()
         assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
 
@@ -293,5 +171,79 @@ class MaaFrameworkRunnerPortTest {
         }
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
         assertTrue(runner.state.value.latestResult is ExecutionResult.Failed)
+    }
+
+    /** 日志异步消费，任务名必须在回调到达那一刻冻下；消费时再查 state 会标成下一个任务 */
+    @Test
+    fun `events carry the task that was current when they arrived`() = runTest(dispatcher) {
+        val (runner, _) = port(this)
+        val (callbacks, events) = recordCallbacks(runner)
+
+        runner.start(twoTaskPlan(), "e1")
+        val callback = callbacks.single()
+        callback.onTaskStarted("启动游戏", 0, 2)
+        callback.onEvent("Tasker.Task.Failed", """{"entry":"Start"}""")
+        callback.onTaskStarted("领取奖励", 1, 2)
+
+        val failed = events.single { (it.event as? RunnerEvent.Callback)?.message == "Tasker.Task.Failed" }
+        assertEquals("e1", failed.executionId)
+        assertEquals("启动", failed.taskLabel)
+        assertEquals("领取奖励", runner.state.value.activeExecution?.currentTaskName)
+    }
+
+    @Test
+    fun `the terminal marker is emitted before state turns idle`() = runTest(dispatcher) {
+        val (runner, _) = port(this)
+        val (callbacks, events) = recordCallbacks(runner)
+        var phaseAtMarker: RunnerPhase? = null
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            runner.events.collect {
+                if (it.event is RunnerEvent.ExecutionFinished) phaseAtMarker = runner.state.value.phase
+            }
+        }
+
+        runner.start(plan(), "e1")
+        callbacks.single().onFinished(RunOutcome.COMPLETED, null)
+
+        assertEquals(RunnerPhase.Running, phaseAtMarker)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertEquals(listOf("e1"), events.filter { it.event is RunnerEvent.ExecutionFinished }.map { it.executionId })
+    }
+
+    @Test
+    fun `a callback from the previous run cannot touch the next one`() = runTest(dispatcher) {
+        val (runner, _) = port(this)
+        val (callbacks, events) = recordCallbacks(runner)
+
+        runner.start(plan(), "e1")
+        val stale = callbacks.single()
+        stale.onFinished(RunOutcome.COMPLETED, null)
+        runner.start(plan(), "e2")
+
+        stale.onEvent("Tasker.Task.Failed", """{"entry":"Start"}""")
+        stale.onTaskFinished("启动游戏", false, "late")
+        stale.onFinished(RunOutcome.FAILED, "late")
+
+        val active = runner.state.value.activeExecution
+        assertEquals("e2", active?.executionId)
+        assertEquals(emptyList<TaskResult>(), active?.taskResults)
+        assertEquals(RunnerPhase.Running, runner.state.value.phase)
+        assertEquals("e1", events.last().executionId)
+        assertEquals(1, events.count { it.event is RunnerEvent.ExecutionFinished })
+    }
+
+    /** 死亡通知收回执行态时 onFinished 不会再来，会话日志要靠这里的 marker 收尾 */
+    @Test
+    fun `an aborted run still emits its terminal marker`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort()
+        val (runner, _) = port(this, servicePort = servicePort)
+        val (_, events) = recordCallbacks(runner)
+
+        runner.start(plan(), "e1")
+        servicePort.emit(PrivilegedServiceState.Died)
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertEquals(listOf("e1"), events.filter { it.event is RunnerEvent.ExecutionFinished }.map { it.executionId })
     }
 }

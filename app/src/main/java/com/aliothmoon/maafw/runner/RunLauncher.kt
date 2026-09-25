@@ -144,16 +144,7 @@ class RunLauncher(
                 is RunPlanResult.Success -> built.plan
             }
 
-            val ctx = RunContext(
-                executionId = java.util.UUID.randomUUID().toString(),
-                trigger = trigger,
-                runMode = runMode(),
-                plan = plan,
-                acknowledged = acknowledged,
-                signals = signals,
-                progress = progress,
-                journal = journal,
-            )
+            val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal)
             runPrechecks(ctx)?.let { return it }
 
             if (force) preemptRunning()
