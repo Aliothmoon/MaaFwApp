@@ -16,6 +16,7 @@ import com.aliothmoon.maafw.di.viewModelModule
 import com.aliothmoon.maafw.log.AppLogWriter
 import com.aliothmoon.maafw.log.CrashHandler
 import com.aliothmoon.maafw.log.LogTreeHolder
+import com.aliothmoon.maafw.notification.StartAppFailureNotifier
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.ui.SessionMessagePresenter
@@ -80,6 +81,7 @@ class MaaFwApp : Application() {
         koin.get<OverlayController>().setup()
         koin.get<SessionMessagePresenter>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
+        koin.get<StartAppFailureNotifier>().setup()
         koin.get<TelemetryController>().setup()
     }
 }

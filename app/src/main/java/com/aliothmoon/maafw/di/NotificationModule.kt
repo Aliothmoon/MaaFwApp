@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.notification.ExternalNotificationService
 import com.aliothmoon.maafw.notification.NotificationCenter
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.RunEventNotifier
+import com.aliothmoon.maafw.notification.StartAppFailureNotifier
 import com.aliothmoon.maafw.notification.provider.BarkProvider
 import com.aliothmoon.maafw.notification.provider.CustomWebhookProvider
 import com.aliothmoon.maafw.notification.provider.DingTalkProvider
@@ -24,6 +25,14 @@ import org.koin.dsl.module
 val notificationModule = module {
     single { NotificationSettingsManager(androidContext()) }
     single { RunEventNotifier(androidContext(), get()) }
+
+    single {
+        StartAppFailureNotifier(
+            runnerPort = get(),
+            notifyStartAppFailed = get<RunEventNotifier>()::notifyStartAppFailed,
+            scope = get(named<AppCoroutineScope>()),
+        )
+    }
 
     single {
         val http = get<HttpClientHelper>()

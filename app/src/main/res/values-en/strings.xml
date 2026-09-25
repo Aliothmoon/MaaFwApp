@@ -465,6 +465,7 @@
     <string name="run_log_task_starting">Task started: %1$s</string>
     <string name="run_log_task_succeeded">Task completed: %1$s</string>
     <string name="run_log_task_failed">Task failed: %1$s</string>
+    <string name="run_log_app_not_started">App not started</string>
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
     <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s). Try foreground mode instead.</string>
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
@@ -684,6 +685,8 @@
     <string name="notification_event_run_partial">Run ended with failures</string>
     <string tools:ignore="PluralsCandidate" name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
     <string name="notification_event_run_failed">Run failed</string>
+    <string name="notification_event_app_not_started_body">The target app could not be launched</string>
+    <string name="notification_event_app_not_started_task_body">The target app could not be launched; current node: %1$s</string>
     <string name="notification_event_service_died">Background service stopped</string>
     <string name="notification_event_service_died_body">The background service ended unexpectedly and this run was aborted</string>
 

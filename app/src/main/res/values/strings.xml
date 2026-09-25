@@ -457,6 +457,7 @@
     <string name="run_log_task_starting">任务开始: %1$s</string>
     <string name="run_log_task_succeeded">任务完成: %1$s</string>
     <string name="run_log_task_failed">任务失败: %1$s</string>
+    <string name="run_log_app_not_started">应用未启动</string>
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
     <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)，可改用前台模式</string>
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
@@ -673,6 +674,8 @@
     <string name="notification_event_run_partial">任务已结束，有失败项</string>
     <string name="notification_event_run_partial_body">成功 %1$d/%2$d；失败：%3$s</string>
     <string name="notification_event_run_failed">任务执行失败</string>
+    <string name="notification_event_app_not_started_body">目标应用没有被拉起</string>
+    <string name="notification_event_app_not_started_task_body">目标应用没有被拉起；当前节点：%1$s</string>
     <string name="notification_event_service_died">后台服务中断</string>
     <string name="notification_event_service_died_body">运行中的后台服务意外结束，本轮任务已中止</string>
 

@@ -154,12 +154,20 @@ class RunLogComposer {
                 event.details,
             )
 
+            NODE_ACTION_FAILED ->
+                if (details.isStartAppAction()) {
+                    Composed(
+                        RunLogKind.Error,
+                        uiTextOf(R.string.run_log_app_not_started),
+                        event.details,
+                    )
+                } else {
+                    verbose
+                }
+
             else -> verbose
         }
     }
-
-    private fun parseDetails(raw: String): JsonObject? =
-        runCatching { LOG_JSON.parseToJsonElement(raw) }.getOrNull() as? JsonObject
 
     private data class Composed(
         val kind: RunLogKind,
@@ -167,22 +175,39 @@ class RunLogComposer {
         val detail: String? = null,
     )
 
-    private companion object {
-        const val CONTROLLER_STARTING = "Controller.Action.Starting"
-        const val CONTROLLER_SUCCEEDED = "Controller.Action.Succeeded"
-        const val CONTROLLER_FAILED = "Controller.Action.Failed"
-        const val RESOURCE_STARTING = "Resource.Loading.Starting"
-        const val RESOURCE_SUCCEEDED = "Resource.Loading.Succeeded"
-        const val RESOURCE_FAILED = "Resource.Loading.Failed"
-        const val TASK_STARTING = "Tasker.Task.Starting"
-        const val TASK_SUCCEEDED = "Tasker.Task.Succeeded"
-        const val TASK_FAILED = "Tasker.Task.Failed"
+    companion object {
+        /** 供通知这类日志之外的消费方复用同一套识别规则 */
+        fun isStartAppFailure(event: RunnerEvent.Callback): Boolean =
+            event.message == NODE_ACTION_FAILED && parseDetails(event.details).isStartAppAction()
 
-        const val AGENT_FLOOD_WINDOW_MS = 2_000L
-        const val AGENT_FLOOD_THRESHOLD = 15
+        /** StartApp 的包名在特权进程里才展开；这里能给出的只有任务/节点这个可指称的名字 */
+        fun startAppFailureTaskLabel(event: RunnerEvent.Callback, currentTaskLabel: String?): String? {
+            val details = parseDetails(event.details)
+            return currentTaskLabel?.takeIf(String::isNotBlank)
+                ?: details.string("entry")
+                ?: details.string("name")
+        }
 
-        val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
+        private fun parseDetails(raw: String): JsonObject? =
+            runCatching { LOG_JSON.parseToJsonElement(raw) }.getOrNull() as? JsonObject
+
+        private const val CONTROLLER_STARTING = "Controller.Action.Starting"
+        private const val CONTROLLER_SUCCEEDED = "Controller.Action.Succeeded"
+        private const val CONTROLLER_FAILED = "Controller.Action.Failed"
+        private const val RESOURCE_STARTING = "Resource.Loading.Starting"
+        private const val RESOURCE_SUCCEEDED = "Resource.Loading.Succeeded"
+        private const val RESOURCE_FAILED = "Resource.Loading.Failed"
+        private const val TASK_STARTING = "Tasker.Task.Starting"
+        private const val TASK_SUCCEEDED = "Tasker.Task.Succeeded"
+        private const val TASK_FAILED = "Tasker.Task.Failed"
+        private const val NODE_ACTION_FAILED = "Node.Action.Failed"
+
+        private const val AGENT_FLOOD_WINDOW_MS = 2_000L
+        private const val AGENT_FLOOD_THRESHOLD = 15
+
+        private val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
     }
+
 }
 
 /**
@@ -212,8 +237,16 @@ data class RunLogContext(
 internal fun JsonObject?.string(key: String): String? =
     (this?.get(key) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 
+internal fun JsonObject?.obj(key: String): JsonObject? =
+    this?.get(key) as? JsonObject
+
 /** `action` 的取值官方是 `Connect`，宽容收一个小写写法 */
 private fun JsonObject?.isConnectAction(): Boolean =
     this.string("action")?.equals("Connect", ignoreCase = true) == true
+
+/** MaaFramework 的 StartApp 动作失败即目标应用没有被拉起 */
+private fun JsonObject?.isStartAppAction(): Boolean =
+    this.string("action")?.equals("StartApp", ignoreCase = true) == true ||
+        this.obj("action_details").string("action")?.equals("StartApp", ignoreCase = true) == true
 
 private const val UNKNOWN_SUBJECT = "?"
