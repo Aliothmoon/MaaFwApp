@@ -72,6 +72,7 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
             android:exported="true"
             android:launchMode="singleTop"
+            android:screenOrientation="portrait"
             android:supportsPictureInPicture="true"
             android:theme="@style/Theme.MaaFwApp.Starting"
             android:windowSoftInputMode="adjustResize">
