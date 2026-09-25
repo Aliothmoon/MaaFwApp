@@ -103,9 +103,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
             return false
         }
         return runCatching {
-            ServiceManager.getActivityManager().forceStopPackage(target)
-            Ln.i("$TAG: force-stopped $target")
-            true
+            ServiceManager.getActivityManager().forceStopPackage(target).also { stopped ->
+                if (stopped) {
+                    Ln.i("$TAG: force-stopped $target")
+                }
+            }
         }.getOrElse {
             Ln.w("$TAG: stopTargetApp failed: ${'$'}it")
             false
