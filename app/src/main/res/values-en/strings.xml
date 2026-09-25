@@ -114,6 +114,10 @@
     <string name="settings_section_resource_option">Resource settings</string>
     <string name="settings_section_display">Display</string>
     <string name="settings_section_schedule">Scheduled tasks</string>
+    <string name="settings_section_duration_limit">Run duration limit</string>
+    <string name="settings_duration_limit_enabled">Stop automatically after timeout</string>
+    <string name="settings_duration_limit_minutes">Maximum run duration (minutes)</string>
+    <string name="settings_duration_limit_hint">%1$d–%2$d minutes; changes while a run is in progress apply to the next run</string>
     <string name="settings_section_other">Other</string>
     <string name="settings_pip_on_home">Auto picture-in-picture while running</string>
     <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The game cannot be controlled inside the window</string>
@@ -281,6 +285,13 @@
     <string name="schedule_edit_days">Days</string>
     <string name="schedule_edit_times">Times</string>
     <string name="schedule_edit_add_time">Add time</string>
+    <string name="schedule_time_picker_title">Choose time</string>
+    <string name="time_picker_hour">Hour</string>
+    <string name="time_picker_minute">Minute</string>
+    <string name="time_picker_am">AM</string>
+    <string name="time_picker_pm">PM</string>
+    <string name="time_picker_format_12h">12h</string>
+    <string name="time_picker_format_24h">24h</string>
     <string name="schedule_edit_start_time">First run</string>
     <string name="schedule_edit_interval">Execution interval</string>
     <string name="schedule_edit_save">Save</string>
@@ -316,6 +327,8 @@
     <string name="run_log_screen_saver_skipped">Screen-off overlay did not show; it will not be dismissed automatically</string>
     <string name="run_log_auto_sleep_skipped_not_run">The run did not start; skip auto-sleep</string>
     <string name="run_log_auto_sleep_skipped_awake">The screen was already on at start; skip auto-sleep</string>
+    <string name="run_log_duration_limit_reached">Run duration limit reached (%1$d minutes); stopping the task</string>
+    <string name="run_log_duration_limit_stop_failed">Failed to stop at the duration limit: %1$s</string>
     <string name="wake_unlock_need_pin">A PIN is required to unlock; add it in Settings</string>
     <string name="wake_unlock_pin_rejected">Wrong PIN, or this lock screen does not accept injected keys</string>
     <string name="wake_unlock_screen_off">The screen did not turn on</string>
@@ -470,6 +483,8 @@
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
     <string name="run_log_app_unknown">unknown app</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
+    <string name="run_log_game_fps_low">The game is running at only %1$d FPS, below 30; automation may fail. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_game_fps_degraded">The game is running at %1$d FPS, below 50; battle timing may drift. Enable high frame rate mode in the game and disable power saving mode</string>
 
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>
@@ -563,6 +578,7 @@
     <string name="settings_resolution_1080p">1080P</string>
     <string name="settings_debug_mode">Debug mode</string>
     <string name="settings_debug_mode_desc">Records everything in the error log; detailed MaaFramework logs start on the next run</string>
+    <string name="settings_save_on_error">Save debug screenshots</string>
     <string name="dialog_enable_debug_title">Enable debug mode</string>
     <string name="dialog_enable_debug_message">Requires an app restart to take effect. Detailed MaaFramework logs plus app and privileged-process logcat will be recorded.</string>
 

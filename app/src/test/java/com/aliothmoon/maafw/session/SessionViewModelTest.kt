@@ -43,6 +43,8 @@ import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.GameFpsReader
+import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PassthroughFocusContentResolver
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.isEssential
@@ -184,7 +186,7 @@ class SessionViewModelTest {
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
-        val focusDispatcher = idleFocusDispatcher()
+        val focusDispatcher = focusDispatcherFor(runner)
         val vm = SessionViewModel(
             projectRepository = project,
             configurationStore = store,
@@ -196,7 +198,14 @@ class SessionViewModelTest {
             displaySize = displaySize,
             appSettings = settings,
             focusDispatcher = focusDispatcher,
-            recorder = recorderFor(runner, focusDispatcher),
+            recorder = recorderFor(focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
         )
         return Triple(vm, store, runner)
@@ -205,7 +214,7 @@ class SessionViewModelTest {
     /** 只换 RunnerPort 的构造点；createVm 的返回三元组绑死了 StubRunnerPort */
     private fun TestScope.createVmWithRunner(
         runner: RunnerPort,
-        focusDispatcher: FocusDispatcher = idleFocusDispatcher(),
+        focusDispatcher: FocusDispatcher = focusDispatcherFor(runner),
     ): SessionViewModel {
         val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
         val store = readyStore()
@@ -221,7 +230,14 @@ class SessionViewModelTest {
             displaySize = FakeDisplaySizeGateway(),
             appSettings = settings,
             focusDispatcher = focusDispatcher,
-            recorder = recorderFor(runner, focusDispatcher),
+            recorder = recorderFor(focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
         )
     }
@@ -232,11 +248,7 @@ class SessionViewModelTest {
      * 落盘那条路走不到——单测不经 `SessionLogHook` 开会话，[RunSessionLogStore] 的目录
      * 因此从头到尾没被碰过
      */
-    private fun TestScope.recorderFor(
-        runner: RunnerPort,
-        focusDispatcher: FocusDispatcher,
-    ) = RunLogRecorder(
-        runnerPort = runner,
+    private fun TestScope.recorderFor(focusDispatcher: FocusDispatcher) = RunLogRecorder(
         focusDispatcher = focusDispatcher,
         store = RunSessionLogStore(),
         renderText = { it.toString() },
@@ -250,10 +262,10 @@ class SessionViewModelTest {
     private fun emptyPiInstall() =
         PiInstallCoordinator(PiInstaller(EmptyPiPackage, versionCode = 1))
 
-    /** 不接任何 RunnerPort 的 dispatcher：focus 的补完另有 FocusDispatcherTest 覆盖 */
-    private fun TestScope.idleFocusDispatcher(
+    /** 运行日志只从它那条流取事件，必须接在 VM 用的同一个 runner 上 */
+    private fun TestScope.focusDispatcherFor(
+        runner: RunnerPort,
         resolver: FocusContentResolver = PassthroughFocusContentResolver,
-        runner: RunnerPort = RecordingEventRunnerPort(),
     ) = FocusDispatcher(
         projectRepository = FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
         resolver = resolver,
@@ -330,7 +342,7 @@ class SessionViewModelTest {
     @Test
     fun `focus with the log channel reaches the run log`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
-        val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
+        val vm = createVmWithRunner(runner)
 
         runner.emit(RunnerEvent.Focus(FocusMessage(
                 message = "Node.PipelineNode.Succeeded",
@@ -348,7 +360,7 @@ class SessionViewModelTest {
     @Test
     fun `toast only focus does not reach the log`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
-        val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
+        val vm = createVmWithRunner(runner)
 
         runner.emit(RunnerEvent.Focus(FocusMessage(
                 message = "Node.PipelineNode.Succeeded",

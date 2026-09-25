@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.AppWatchdog
+import com.aliothmoon.maafw.remote.internal.GameFpsMonitor
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
@@ -103,9 +104,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
             return false
         }
         return runCatching {
-            ServiceManager.getActivityManager().forceStopPackage(target)
-            Ln.i("$TAG: force-stopped $target")
-            true
+            ServiceManager.getActivityManager().forceStopPackage(target).also { stopped ->
+                if (stopped) {
+                    Ln.i("$TAG: force-stopped $target")
+                }
+            }
         }.getOrElse {
             Ln.w("$TAG: stopTargetApp failed: ${'$'}it")
             false
@@ -137,6 +140,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
         return true
     }
 
+    override fun setSaveOnError(enabled: Boolean): Boolean {
+        runner.setSaveOnError(enabled)
+        return true
+    }
+
     private fun ensureWritableDir(path: String): Boolean {
         val dir = File(path)
         if (!dir.isDirectory && !dir.mkdirs()) {
@@ -150,6 +158,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun setVirtualDisplayMode(mode: Int): Boolean = when (mode) {
         DisplayMode.PRIMARY -> {
+            GameFpsMonitor.stop()
             VirtualDisplayManager.stop()
             virtualDisplayMode.set(mode)
             true
@@ -181,6 +190,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun stopVirtualDisplay() {
         AppWatchdog.stopWatching()
+        GameFpsMonitor.stop()
         when (virtualDisplayMode.get()) {
             DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
             DisplayMode.BACKGROUND -> {
@@ -194,7 +204,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun isAppOnVirtualDisplay(packageName: String): Boolean {
         val displayId = VirtualDisplayManager.getDisplayId()
         if (displayId == DefaultDisplayConfig.DISPLAY_NONE) return true
-        return ActivityUtils.isAppOnDisplay(packageName, displayId)
+        return ActivityUtils.isAppOnDisplay(packageName, displayId).also { onDisplay ->
+            if (onDisplay) GameFpsMonitor.ensureStarted(packageName)
+        }
     }
 
     override fun moveAppToVirtualDisplay(packageName: String): Boolean {
@@ -284,6 +296,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun saveCachedImage(path: String?): Boolean =
         !path.isNullOrBlank() && runner.saveCachedImage(path)
 
+    override fun getGameFps(): Float = GameFpsMonitor.currentFps()
+
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
 
     /**
@@ -293,6 +307,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int {
         if (packageName.isNullOrBlank()) return 0
         var granted = 0
+        // 结果不进返回位免改 AIDL 返回协议；放开失败由 App 侧预检兜底
+        if (permissions and PrivilegedGrant.FGS_SPECIAL_USE != 0) {
+            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName)
+        }
         if (permissions and PrivilegedGrant.NOTIFICATION != 0 &&
             PermissionGrantHelper.grantNotificationPermission(packageName, uid)
         ) {
@@ -344,6 +362,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
      * 它自己按 flag 文件判要不要动手，没改过时是空操作
      */
     private fun cleanup() {
+        step("game fps") { GameFpsMonitor.stop() }
         step("screen size") { ScreenManager.destroy() }
         step("power") { PowerController.destroy() }
         step("primary display") { PrimaryDisplayManager.stop() }

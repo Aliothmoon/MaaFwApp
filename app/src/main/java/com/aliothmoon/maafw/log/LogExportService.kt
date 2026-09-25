@@ -11,6 +11,7 @@ import timber.log.Timber
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -73,13 +74,32 @@ class LogExportService(
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
             if (debugMode()) appendDeviceProperties(out)
             appendDeviceInfo(out)
+            val skipped = mutableListOf<String>()
             files.forEach { file ->
-                val entry = ZipEntry(file.relativeTo(base).invariantSeparatorsPath)
-                entry.time = file.lastModified()
-                out.putNextEntry(entry)
-                file.inputStream().use { it.copyTo(out, BUFFER_SIZE) }
+                appendLogFile(out, file, base, skipped)
+            }
+            if (skipped.isNotEmpty()) {
+                out.putNextEntry(ZipEntry(SKIPPED_ENTRY))
+                out.write(skipped.joinToString("\n").toByteArray(Charsets.UTF_8))
                 out.closeEntry()
             }
+        }
+    }
+
+    /** 提权进程写的文件可能对 App 不可读，逐个跳过，不拖垮整包 */
+    private fun appendLogFile(out: ZipOutputStream, file: File, base: File, skipped: MutableList<String>) {
+        val name = file.relativeTo(base).invariantSeparatorsPath
+        try {
+            file.inputStream().use { input ->
+                val entry = ZipEntry(name).apply { time = file.lastModified() }
+                out.putNextEntry(entry)
+                input.copyTo(out, BUFFER_SIZE)
+                out.closeEntry()
+            }
+        } catch (e: IOException) {
+            Timber.w(e, "Skip unreadable log file: %s", name)
+            skipped += "$name: ${e.message ?: e::class.java.simpleName}"
+            runCatching { out.closeEntry() }
         }
     }
 
@@ -125,6 +145,7 @@ class LogExportService(
         const val LOG_DIR_NAME = "log"
         const val PROPERTIES_ENTRY = "properties.txt"
         const val DEVICE_INFO_ENTRY = "device_info.txt"
+        const val SKIPPED_ENTRY = "export_skipped.txt"
         const val MIME_ZIP = "application/zip"
         const val BUFFER_SIZE = 8 * 1024
 

@@ -69,6 +69,10 @@ class MaaRunner(private val agentHost: AgentHost) {
     private var agents: List<ActiveAgent> = emptyList()
     private var loadedAgents: List<AgentPayload> = emptyList()
 
+    /** app 侧经 binder 现读设置后设置；不设时框架核心默认 false，出错不存现场图 */
+    @Volatile
+    private var saveOnError = true
+
     private class ActiveAgent(val client: Pointer, val session: AgentSession)
 
     fun setProjectRoot(path: String) {
@@ -141,8 +145,15 @@ class MaaRunner(private val agentHost: AgentHost) {
             if (debug) MaaLoggingLevel.INFO else MaaLoggingLevel.ERROR,
         )
         // 节点出错时自动存一张现场图，比事后复现便宜；SAVE_DRAW 会每次识别都写盘，暂不开
-        setBoolOption(lib, MaaGlobalOption.SAVE_ON_ERROR, debug)
+        setBoolOption(lib, MaaGlobalOption.SAVE_ON_ERROR, saveOnError)
         Ln.i("MaaRunner: global options applied, logDir=$logDir debug=$debug")
+    }
+
+    /** binder 途径独立更新；立即生效，PipelineTask 每次出错时现读这个进程级单例 */
+    fun setSaveOnError(enabled: Boolean) {
+        saveOnError = enabled
+        MaaFrameworkLoader.library?.let { setBoolOption(it, MaaGlobalOption.SAVE_ON_ERROR, enabled) }
+        Ln.i("MaaRunner: saveOnError=$enabled")
     }
 
     private fun setStringOption(lib: MaaFrameworkLibrary, key: Int, value: String): Boolean {

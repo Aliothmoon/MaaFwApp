@@ -103,6 +103,12 @@ interface RemoteService {
     /** MaaFramework 版本；未加载返回 null */
     String maaVersion() = 54;
 
+    /**
+     * MaaGlobalOption_SaveOnError：节点出错时把现场截图落到 logDir/on_error
+     * app 每轮 setup 后现读设置再调；框架核心默认 false，不设就永远不存
+     */
+    boolean setSaveOnError(boolean enabled) = 55;
+
     /** 看门狗状态：0=IDLE / 1=WATCHING / 2=APP_DIED（目标 app 是否仍在虚拟屏上） */
     int watchdogState() = 60;
 
@@ -138,4 +144,7 @@ interface RemoteService {
      * 走文件不回传字节：一张 720p PNG 几百 KB，binder 事务缓冲总共才 1MB
      */
     boolean saveCachedImage(String path) = 75;
+
+    /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
+    float getGameFps() = 76;
 }

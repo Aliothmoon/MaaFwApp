@@ -136,6 +136,7 @@ fun SettingsScreen(
             ResourceOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
+            RunDurationCard(settingsState, onSettingsIntent)
             NotificationCard(onOpenNotificationSettings)
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
             PiCard(onIntent)
@@ -352,6 +353,15 @@ private fun LogCard(
             text = stringResource(R.string.settings_debug_mode_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        MaaLabeledControlRow(
+            label = stringResource(R.string.settings_save_on_error),
+            trailing = {
+                MaaSwitch(
+                    checked = state.saveOnError,
+                    onCheckedChange = { enabled -> onIntent(SessionIntent.SetSaveOnError(enabled)) },
+                )
+            },
         )
     }
     if (showEnableConfirm) {

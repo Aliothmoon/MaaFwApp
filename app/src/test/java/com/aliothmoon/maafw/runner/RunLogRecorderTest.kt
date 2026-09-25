@@ -12,6 +12,7 @@ import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -51,7 +52,6 @@ class RunLogRecorderTest {
     }
 
     private fun TestScope.recorder(runner: RunnerPort): RunLogRecorder = RunLogRecorder(
-        runnerPort = runner,
         focusDispatcher = FocusDispatcher(
             projectRepository = FakeProjectRepository(ProjectState.Ready(DEFINITION, emptyList())),
             resolver = PassthroughFocusContentResolver,
@@ -77,9 +77,23 @@ class RunLogRecorderTest {
 
     private fun sessionRecords(): List<RunSessionRecord> {
         val file = File(logDir, "run").listFiles()?.single() ?: return emptyList()
-        return file.readLines()
-            .filter { it.isNotBlank() }
-            .map { LENIENT.decodeFromString(RunSessionRecord.serializer(), it) }
+        return records(file)
+    }
+
+    private fun sessionRecordsByFirstTask(): Map<String, List<RunSessionRecord>> =
+        File(logDir, "run").listFiles().orEmpty().map(::records).associateBy {
+            (it.first() as RunSessionRecord.Header).tasks.first()
+        }
+
+    private fun records(file: File): List<RunSessionRecord> = file.readLines()
+        .filter { it.isNotBlank() }
+        .map { LENIENT.decodeFromString(RunSessionRecord.serializer(), it) }
+
+    private fun List<RunSessionRecord>.lineTexts() = filterIsInstance<RunSessionRecord.Line>().map { it.text }
+
+    private suspend fun RunLogRecorder.finish(runner: RecordingEventRunnerPort, executionId: String = ID) {
+        runner.emit(RunnerEvent.ExecutionFinished, executionId)
+        end(executionId, RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
     }
 
     @Test
@@ -181,10 +195,10 @@ class RunLogRecorderTest {
         val recorder = recorder(runner)
 
         runner.emit(RunnerEvent.Log("上一轮"))
-        recorder.beginSession(planOf("清体力"))
+        recorder.begin(planOf("清体力"), ID)
         assertNull(recorder.lastUserFacing.value)
         assertNull(recorder.liveUpdateStatus.value)
-        recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.finish(runner)
     }
 
     @Test
@@ -204,9 +218,9 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.begin(planOf("清体力"))
-        recorder.warn(com.aliothmoon.maafw.i18n.uiTextFromFramework("内存偏紧"))
-        recorder.end(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.begin(planOf("清体力"), ID)
+        recorder.warn(ID, com.aliothmoon.maafw.i18n.uiTextFromFramework("内存偏紧"))
+        recorder.finish(runner)
 
         val line = recorder.runLog.value.single()
         assertEquals(RunLogKind.Warning, line.kind)
@@ -221,9 +235,9 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("清体力", "签到"))
+        recorder.begin(planOf("清体力", "签到"), ID)
         runner.emit(RunnerEvent.Log("跑起来了"))
-        recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.finish(runner)
 
         val records = sessionRecords()
         assertEquals(listOf("清体力", "签到"), (records.first() as RunSessionRecord.Header).tasks)
@@ -240,8 +254,8 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("清体力"))
-        recorder.endSession(RunEndReason.NotRun(NotRunCause.Rejected))
+        recorder.begin(planOf("清体力"), ID)
+        recorder.end(ID, RunEndReason.NotRun(NotRunCause.Rejected))
 
         assertEquals(
             RunSessionOutcome.NOT_RUN,
@@ -255,12 +269,12 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("a"))
+        recorder.begin(planOf("a"), ID)
         runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"A"}"""))
         includeDetails = true
         // 换个事件名：合成器按 kind + 正文去重，同名的第二条本来就到不了落盘这步
         runner.emit(RunnerEvent.Callback("Node.Recognition.Failed", """{"name":"B"}"""))
-        recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.finish(runner)
 
         val lines = sessionRecords().filterIsInstance<RunSessionRecord.Line>()
         assertNull(lines[0].detail)
@@ -277,15 +291,15 @@ class RunLogRecorderTest {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
-        recorder.beginSession(planOf("a"))
-        runner.emit(RunnerEvent.Log("同一句"))
-        recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.begin(planOf("a"), "e1")
+        runner.emit(RunnerEvent.Log("同一句"), "e1")
+        recorder.finish(runner, "e1")
 
         settleRunLog()
         val before = recorder.runLog.value.size
-        recorder.beginSession(planOf("a"))
-        runner.emit(RunnerEvent.Log("同一句"))
-        recorder.endSession(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        recorder.begin(planOf("a"), "e2")
+        runner.emit(RunnerEvent.Log("同一句"), "e2")
+        recorder.finish(runner, "e2")
         settleRunLog()
 
         assertTrue("跨轮被去重掉了", recorder.runLog.value.size > before)
@@ -314,6 +328,57 @@ class RunLogRecorderTest {
         assertTrue("逐条发布了，共 ${sizes.size} 次", sizes.size <= 3)
     }
 
+    @Test
+    fun `end waits for the terminal marker before writing the footer`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("a"), ID)
+        val ending = async { recorder.end(ID, RunEndReason.Ran(ExecutionResult.Completed(emptyList()))) }
+        runner.emit(RunnerEvent.Log("收尾前才消费到的一行"))
+        runner.emit(RunnerEvent.ExecutionFinished)
+        ending.await()
+
+        val records = sessionRecords()
+        assertEquals(listOf("收尾前才消费到的一行"), records.lineTexts())
+        assertTrue(records.last() is RunSessionRecord.Footer)
+    }
+
+    @Test
+    fun `a late event of the previous run stays in its own file`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("上一轮"), "e1")
+        val endingFirst = async { recorder.end("e1", RunEndReason.Ran(ExecutionResult.Completed(emptyList()))) }
+        recorder.begin(planOf("这一轮"), "e2")
+        runner.emit(RunnerEvent.Log("上一轮的尾巴"), "e1")
+        assertNull(recorder.lastUserFacing.value)
+        runner.emit(RunnerEvent.ExecutionFinished, "e1")
+        endingFirst.await()
+        runner.emit(RunnerEvent.Log("这一轮的第一句"), "e2")
+        recorder.finish(runner, "e2")
+
+        val files = sessionRecordsByFirstTask()
+        assertEquals(listOf("上一轮的尾巴"), files.getValue("上一轮").lineTexts())
+        assertEquals(listOf("这一轮的第一句"), files.getValue("这一轮").lineTexts())
+    }
+
+    @Test
+    fun `task lines use the label frozen in the envelope`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(
+            RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"Start"}"""),
+            taskLabel = "启动",
+        )
+        settleRunLog()
+
+        val text = recorder.runLog.value.single().text as com.aliothmoon.maafw.i18n.UiText.Resource
+        assertEquals(listOf("启动"), text.args)
+    }
+
     private fun planOf(vararg taskNames: String) = RunPlan(
         projectName = "demo",
         projectVersion = "1",
@@ -336,6 +401,7 @@ class RunLogRecorderTest {
             templates = emptyList(),
         )
         val LENIENT = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        const val ID = RecordingEventRunnerPort.DEFAULT_EXECUTION_ID
 
         /** 宽出 RunLogRecorder.FLUSH_INTERVAL_MS 一截，那个常量是私有的，不为测试开出来 */
         const val SETTLE_MILLIS = 500L

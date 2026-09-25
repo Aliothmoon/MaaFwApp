@@ -25,6 +25,8 @@ object TouchPointerSequence {
         val contact: Int,
         val x: Float,
         val y: Float,
+        /** Android pointerId 与调用方 contact 分开；首指从 0 开始，按住期间保持不变。 */
+        val pointerId: Int = contact,
     )
 
     data class Step(
@@ -47,14 +49,17 @@ object TouchPointerSequence {
             return Step(ok = false, failureReason = FailureReason.InvalidContact)
         }
         val idx = current.indexOfFirst { it.contact == contact }
-        val nextPointer = Pointer(contact, x, y)
+        val pointerId = current.getOrNull(idx)?.pointerId
+            ?: (0 until MAX_CONTACTS).firstOrNull { id -> current.none { it.pointerId == id } }
+            ?: return Step(ok = false)
+        val nextPointer = Pointer(contact, x, y, pointerId)
         return when (kind) {
             Kind.Down -> when {
                 // 同一手指重复按下：上一序列未正常结束，先整体 CANCEL 再开新手势
                 idx >= 0 -> Step(
                     ok = true,
                     actionMasked = ACTION_DOWN,
-                    pointers = listOf(nextPointer),
+                    pointers = listOf(nextPointer.copy(pointerId = 0)),
                     cancelFirst = true,
                 )
 

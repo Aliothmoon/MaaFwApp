@@ -64,7 +64,8 @@ public final class InputControlUtils {
         int n = pointers.size();
         for (int i = 0; i < n; i++) {
             TouchPointerSequence.Pointer p = pointers.get(i);
-            POINTER_PROPERTIES[i].id = p.getContact();
+            // contact 隔离手动与自动操作；发给应用的 pointerId 独立分配并保持稳定。
+            POINTER_PROPERTIES[i].id = p.getPointerId();
             MotionEvent.PointerCoords coord = POINTER_COORDS[i];
             coord.x = Math.max(0, p.getX());
             coord.y = Math.max(0, p.getY());

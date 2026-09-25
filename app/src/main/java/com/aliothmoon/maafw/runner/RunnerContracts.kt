@@ -8,11 +8,19 @@ import kotlinx.coroutines.flow.StateFlow
 /** 与 MaaFramework 的唯一执行边界；隐藏 JNI / handle / callback */
 interface RunnerPort {
     val state: StateFlow<RunnerState>
-    val events: Flow<RunnerEvent>
+    val events: Flow<RunnerEventEnvelope>
 
-    suspend fun start(plan: RunPlan): RunnerCommandResult
+    /** [executionId] 由编排层先生成：会话日志在 start 之前就要按它开文件 */
+    suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult
     suspend fun stop(): RunnerCommandResult
 }
+
+/** 轮次与任务名在收到回调时冻下：日志异步消费，那时 state 可能已进下一个任务甚至下一轮 */
+data class RunnerEventEnvelope(
+    val executionId: String,
+    val taskLabel: String?,
+    val event: RunnerEvent,
+)
 
 data class RunnerState(
     val phase: RunnerPhase = RunnerPhase.Idle,
@@ -65,6 +73,9 @@ sealed interface ExecutionResult {
 
 /** 旁路观测（日志/进度）；不参与状态机判定 */
 sealed interface RunnerEvent {
+    /** 一轮的最后一个事件；会话日志等它被消费到再关文件，本身不成行 */
+    data object ExecutionFinished : RunnerEvent
+
     /** 外壳自产的一句话，不是 MaaFramework 的原话 */
     data class Log(val message: String) : RunnerEvent
 
