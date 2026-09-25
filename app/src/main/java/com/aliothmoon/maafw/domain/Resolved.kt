@@ -101,6 +101,7 @@ data class OptionEditorState(
     val cases: List<OptionCaseState>,
     val inputs: List<InputFieldState>,
     val icon: String? = null,
+    val selectionPolicy: CheckboxSelectionPolicy? = null,
 ) {
     /** 含默认回退；Select/Switch 至多一个，Checkbox 按声明序 */
     val activeCases: List<OptionCaseState> get() = cases.filter { it.active }
@@ -135,6 +136,7 @@ data class InputFieldState(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
+    val password: Boolean = false,
 )
 
 /** UI 即时校验与 Builder 复验共用（docs/domain-model.md §6.6） */

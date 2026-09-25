@@ -212,6 +212,12 @@ object RunPlanBuilder {
                             DiagnosticMessages.selectedCaseMissing(name, it),
                         )
                     }
+                    if (!option.selectionPolicy.isSelectionCountValid(selected.size)) {
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessages.checkboxSelectionCountInvalid(name),
+                        )
+                    }
                     // patch 按 definition 声明序，不按用户勾选序
                     for (case in option.cases) {
                         if (case.name !in selected) continue
@@ -229,11 +235,15 @@ object RunPlanBuilder {
                         if (!validateInputCandidate(field.pipelineType, field.verify, raw)) {
                             diagnostics += runtimeError(
                                 scopeLabel,
-                                DiagnosticMessages.invalidInput(
-                                    option = name,
-                                    input = field.name,
-                                    detail = field.patternMessage ?: raw,
-                                ),
+                                if (field.password) {
+                                    DiagnosticMessages.invalidPasswordInput(option = name, input = field.name)
+                                } else {
+                                    DiagnosticMessages.invalidInput(
+                                        option = name,
+                                        input = field.name,
+                                        detail = field.patternMessage ?: raw,
+                                    )
+                                },
                             )
                             valid = false
                         }
@@ -294,7 +304,7 @@ object RunPlanBuilder {
         val whole = PLACEHOLDER.matchEntire(content)
         if (whole != null) {
             val (field, raw) = fields[whole.groupValues[1]] ?: return JsonPrimitive(content)
-            return typedPrimitive(field.pipelineType, raw, scopeLabel, optionName, diagnostics)
+            return typedPrimitive(field, raw, scopeLabel, optionName, diagnostics)
                 ?: JsonPrimitive(content)
         }
         val replaced = PLACEHOLDER.replace(content) { match ->
@@ -304,12 +314,12 @@ object RunPlanBuilder {
     }
 
     private fun typedPrimitive(
-        type: PipelineType,
+        field: InputFieldDefinition,
         raw: String,
         scopeLabel: String,
         optionName: String,
         diagnostics: MutableList<Diagnostic>,
-    ): JsonPrimitive? = when (type) {
+    ): JsonPrimitive? = when (field.pipelineType) {
         PipelineType.StringType -> JsonPrimitive(raw)
         PipelineType.IntType -> raw.toLongOrNull()?.let { JsonPrimitive(it) } ?: run {
             diagnostics += runtimeError(

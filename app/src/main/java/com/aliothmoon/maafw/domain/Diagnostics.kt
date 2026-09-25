@@ -67,6 +67,12 @@ object DiagnosticMessages {
     /** PI 未声明 Adb controller：该 PI 不面向 Android，带 controller 限定的任务都会不适用 */
     fun noAdbController(): UiText = uiTextOf(R.string.diagnostic_no_adb_controller)
 
+    fun controllerDisplayConflict(controller: String): UiText =
+        uiTextOf(R.string.diagnostic_controller_display_conflict, controller)
+
+    fun controllerDisplayInvalid(controller: String, field: String): UiText =
+        uiTextOf(R.string.diagnostic_controller_display_invalid, controller, field)
+
     fun languagePathInvalid(language: String): UiText =
         uiTextOf(R.string.diagnostic_language_path_invalid, language)
 
@@ -110,6 +116,15 @@ object DiagnosticMessages {
     fun optionCaseNameMissing(option: String): UiText =
         uiTextOf(R.string.diagnostic_option_case_name_missing, option)
 
+    fun checkboxCountInvalid(option: String, field: String): UiText =
+        uiTextOf(R.string.diagnostic_checkbox_count_invalid, option, field)
+
+    fun checkboxDefaultCountInvalid(option: String): UiText =
+        uiTextOf(R.string.diagnostic_checkbox_default_count_invalid, option)
+
+    fun passwordDefaultForbidden(option: String, input: String): UiText =
+        uiTextOf(R.string.diagnostic_password_default_forbidden, option, input)
+
     fun invalidPipelineType(option: String, input: String, type: String): UiText =
         uiTextOf(R.string.diagnostic_invalid_pipeline_type, option, input, type)
 
@@ -152,6 +167,12 @@ object DiagnosticMessages {
 
     fun invalidInput(option: String, input: String, detail: String): UiText =
         uiTextOf(R.string.diagnostic_invalid_input, option, input, detail)
+
+    fun invalidPasswordInput(option: String, input: String): UiText =
+        uiTextOf(R.string.diagnostic_invalid_password_input, option, input)
+
+    fun checkboxSelectionCountInvalid(option: String): UiText =
+        uiTextOf(R.string.diagnostic_checkbox_selection_count_invalid, option)
 
     fun integerConversionFailed(option: String, value: String): UiText =
         uiTextOf(R.string.diagnostic_integer_conversion_failed, option, value)

@@ -3,10 +3,13 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.InputFieldDefinition
+import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
+import com.aliothmoon.maafw.domain.PipelineType
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -16,6 +19,8 @@ import com.aliothmoon.maafw.project.ProjectLoadResult
 import com.aliothmoon.maafw.project.ProjectLoader
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -187,6 +192,96 @@ class RunPlanBuilderTest {
             switch.activeCases.map { it.name },
         )
         assertTrue("Builder 侧应同样回落而非拦下", RunPlanBuilder.build(definition, config) is RunPlanResult.Success)
+    }
+
+    @Test
+    fun `checkbox 运行值必须满足声明数量范围`() {
+        val box = OptionDefinition.Checkbox(
+            name = "box",
+            label = "Box",
+            description = null,
+            cases = listOf(
+                OptionCaseDefinition("a", "A", null, JsonObject(emptyMap()), emptyList()),
+                OptionCaseDefinition("b", "B", null, JsonObject(emptyMap()), emptyList()),
+            ),
+            defaultCases = listOf("a"),
+            minCount = 2,
+            maxCount = null,
+        )
+        val custom = definition.copy(
+            tasks = definition.tasks.map {
+                if (it.name == "启动游戏") it.copy(optionNames = listOf("box")) else it
+            },
+            options = definition.options + ("box" to box),
+        )
+        val result = RunPlanBuilder.build(
+            custom,
+            configWith(ConfiguredTask("启动游戏", optionValues = mapOf("box" to OptionValue.MultipleCases(listOf("a"))))),
+        )
+
+        assertTrue(result is RunPlanResult.Invalid)
+        assertTrue(
+            (result as RunPlanResult.Invalid).diagnostics.any {
+                it.message.isResource(R.string.diagnostic_checkbox_selection_count_invalid, "box")
+            },
+        )
+    }
+
+    @Test
+    fun `password 输入用于替换但不进入错误诊断`() {
+        val passwordOption = OptionDefinition.Input(
+            name = "cred",
+            label = "Cred",
+            description = null,
+            fields = listOf(
+                InputFieldDefinition(
+                    name = "secret",
+                    pipelineType = PipelineType.StringType,
+                    default = "",
+                    verify = Regex("""(?i)good-secret"""),
+                    patternMessage = null,
+                    description = null,
+                    password = true,
+                ),
+            ),
+            pipelineOverride = buildJsonObject { put("token", "{secret}") },
+        )
+        val custom = definition.copy(
+            tasks = definition.tasks.map {
+                if (it.name == "启动游戏") it.copy(optionNames = listOf("cred")) else it
+            },
+            options = definition.options + ("cred" to passwordOption),
+        )
+
+        val invalid = RunPlanBuilder.build(
+            custom,
+            configWith(
+                ConfiguredTask(
+                    "启动游戏",
+                    optionValues = mapOf("cred" to OptionValue.Inputs(mapOf("secret" to "bad-secret"))),
+                ),
+            ),
+        )
+        assertTrue(invalid is RunPlanResult.Invalid)
+        assertTrue(
+            (invalid as RunPlanResult.Invalid).diagnostics.any {
+                it.message.isResource(R.string.diagnostic_invalid_password_input, "cred", "secret")
+            },
+        )
+
+        val valid = RunPlanBuilder.build(
+            custom,
+            configWith(
+                ConfiguredTask(
+                    "启动游戏",
+                    optionValues = mapOf("cred" to OptionValue.Inputs(mapOf("secret" to "good-secret"))),
+                ),
+            ),
+        )
+        assertTrue("应编译成功: $valid", valid is RunPlanResult.Success)
+        val patch = (valid as RunPlanResult.Success).plan.tasks.single().pipelineOverrides
+            .first { "token" in it }
+        assertEquals("good-secret", patch["token"]!!.jsonPrimitive.content)
     }
 
     /** 自定义关卡 3-9 的常规作战任务；其余 option 选定避免级联出 Unset 诊断 */

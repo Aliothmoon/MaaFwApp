@@ -528,6 +528,8 @@
     <string name="diagnostic_required_field_missing">%1$s is missing %2$s</string>
     <string name="diagnostic_resource_path_missing">Resource "%1$s" is missing path</string>
     <string name="diagnostic_no_adb_controller">This project declares no Adb controller; tasks restricted to a controller are unavailable</string>
+    <string name="diagnostic_controller_display_conflict">Controller "%1$s" display_* fields are mutually exclusive; using the default screenshot target</string>
+    <string name="diagnostic_controller_display_invalid">Controller "%1$s" has invalid %2$s; using the default screenshot target</string>
     <string name="diagnostic_language_path_invalid">Language "%1$s" path is not a string</string>
     <string name="diagnostic_import_read_failed">Failed to read import; skipped: %1$s</string>
     <string name="diagnostic_project_has_no_tasks">Project declares no tasks</string>
@@ -540,6 +542,9 @@
     <string name="diagnostic_invalid_option_type">Option "%1$s" has invalid type: %2$s</string>
     <string name="diagnostic_option_case_not_object">Option "%1$s" contains a case that is not an object</string>
     <string name="diagnostic_option_case_name_missing">Option "%1$s" contains a case without name</string>
+    <string name="diagnostic_checkbox_count_invalid">Option "%1$s" %2$s must be a non-negative integer no larger than cases, and min_count cannot exceed max_count</string>
+    <string name="diagnostic_checkbox_default_count_invalid">Option "%1$s" default_case count does not satisfy min_count / max_count</string>
+    <string name="diagnostic_password_default_forbidden">Password input "%1$s.%2$s" cannot declare default; the default was ignored</string>
     <string name="diagnostic_invalid_pipeline_type">Input "%1$s.%2$s" has invalid pipeline_type %3$s; using string</string>
     <string name="diagnostic_regex_compile_failed">Input "%1$s.%2$s" verify regex failed to compile: %3$s</string>
     <string name="diagnostic_missing_reference">References missing %1$s "%2$s"</string>
@@ -555,6 +560,8 @@
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
     <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
+    <string name="diagnostic_invalid_password_input">Option "%1$s" password input "%2$s" is invalid</string>
+    <string name="diagnostic_checkbox_selection_count_invalid">Option "%1$s" selection count does not satisfy min_count / max_count</string>
     <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
     <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
     <string name="schedule_default_name">Schedule %1$d</string>

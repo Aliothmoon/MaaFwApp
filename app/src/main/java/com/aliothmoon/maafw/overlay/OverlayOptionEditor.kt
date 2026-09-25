@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.R
@@ -170,6 +172,7 @@ private fun OverlayChoiceFlow(
     onSetOption: (String, OptionValue) -> Unit,
 ) {
     val activeNames = option.activeCases.map { it.name }
+    val policy = option.selectionPolicy
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
@@ -179,7 +182,7 @@ private fun OverlayChoiceFlow(
             OverlayChoiceChip(
                 label = case.label,
                 selected = case.active,
-                enabled = !locked,
+                enabled = !locked && (case.active || policy?.canAdd(activeNames.size) != false),
                 leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
                 onClick = {
                     if (multiple) {
@@ -223,6 +226,11 @@ private fun OverlayInputEditor(
                 },
                 hint = field.label,
                 enabled = !locked,
+                visualTransformation = if (field.password) {
+                    PasswordVisualTransformation()
+                } else {
+                    VisualTransformation.None
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
             supporting?.let {

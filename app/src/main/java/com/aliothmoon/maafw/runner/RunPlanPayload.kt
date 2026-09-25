@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.constant.DisplayMode
+import com.aliothmoon.maafw.domain.ControllerDisplay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -21,6 +22,8 @@ data class RunPlanPayload(
     val screenHeight: Int,
     /** [com.aliothmoon.maafw.constant.DisplayMode] 取值；决定 Runner 找谁要屏幕尺寸 */
     val displayMode: Int = DisplayMode.BACKGROUND,
+    /** PI controller display_* 的互斥投影；默认与官方 PI runner 一致使用短边 720 */
+    val screenshotTarget: ScreenshotTarget = ScreenshotTarget.ShortSide(720),
     val tasks: List<RuntimeTaskPayload>,
     /** PI 声明的 agent，按声明顺序；空表示本次不起 agent */
     val agents: List<AgentPayload> = emptyList(),
@@ -34,6 +37,29 @@ data class RunPlanPayload(
      */
     val piEnv: Map<String, String> = emptyMap(),
 )
+
+@Serializable
+sealed interface ScreenshotTarget {
+    @Serializable
+    data object Raw : ScreenshotTarget
+
+    @Serializable
+    data class Expand(val width: Int, val height: Int) : ScreenshotTarget
+
+    @Serializable
+    data class LongSide(val value: Int) : ScreenshotTarget
+
+    @Serializable
+    data class ShortSide(val value: Int) : ScreenshotTarget
+}
+
+fun ControllerDisplay.toScreenshotTarget(): ScreenshotTarget = when (this) {
+    ControllerDisplay.Default -> ScreenshotTarget.ShortSide(720)
+    is ControllerDisplay.Raw -> ScreenshotTarget.Raw
+    is ControllerDisplay.Expand -> ScreenshotTarget.Expand(width, height)
+    is ControllerDisplay.LongSide -> ScreenshotTarget.LongSide(value)
+    is ControllerDisplay.ShortSide -> ScreenshotTarget.ShortSide(value)
+}
 
 @Serializable
 data class AgentPayload(

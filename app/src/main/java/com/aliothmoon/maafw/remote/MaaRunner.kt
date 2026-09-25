@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaAgentClientLibrary
 import com.aliothmoon.maafw.maa.MaaAgentClientLoader
+import com.aliothmoon.maafw.maa.MaaCtrlOption
 import com.aliothmoon.maafw.maa.MaaFrameworkLibrary
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.maa.MaaGlobalOption
@@ -16,6 +17,7 @@ import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.runner.AgentPayload
 import com.aliothmoon.maafw.runner.RunOutcome
 import com.aliothmoon.maafw.runner.RunPlanPayload
+import com.aliothmoon.maafw.runner.ScreenshotTarget
 import com.aliothmoon.maafw.runner.runPlanWireJson
 import com.aliothmoon.maafw.third.Ln
 import com.sun.jna.Memory
@@ -61,6 +63,7 @@ class MaaRunner(private val agentHost: AgentHost) {
      * 而被系统拒（`SecurityException: Permission Denial ... with launchDisplayId=<旧 id>`）
      */
     private var boundDisplayId: Int? = null
+    private var boundScreenshotTarget: ScreenshotTarget? = null
 
     /** agent child 的 cwd，对齐上游 MaaPiCli 的 `agent.cwd = resource_dir_` */
     private var projectRoot: String? = null
@@ -333,6 +336,7 @@ class MaaRunner(private val agentHost: AgentHost) {
 
         if (controller == null ||
             boundDisplayId != displayId ||
+            boundScreenshotTarget != payload.screenshotTarget ||
             lib.MaaControllerConnected(controller).toInt() == 0
         ) {
             releaseController(lib)
@@ -340,6 +344,10 @@ class MaaRunner(private val agentHost: AgentHost) {
             val ctrl = lib.MaaAndroidNativeControllerCreate(config)
                 ?: return "MaaAndroidNativeControllerCreate 失败: $config"
             lib.MaaControllerAddSink(ctrl, eventSink, null)
+            if (!setScreenshotOption(lib, ctrl, payload.screenshotTarget)) {
+                lib.MaaControllerDestroy(ctrl)
+                return "controller 截图目标设置失败"
+            }
             val ctrlId = lib.MaaControllerPostConnection(ctrl)
             if (ctrlId == INVALID_ID || lib.MaaControllerWait(
                     ctrl,
@@ -351,6 +359,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             }
             controller = ctrl
             boundDisplayId = displayId
+            boundScreenshotTarget = payload.screenshotTarget
             releaseTasker(lib)
         }
 
@@ -518,6 +527,60 @@ class MaaRunner(private val agentHost: AgentHost) {
         }.toString()
     }
 
+    private fun setScreenshotOption(
+        lib: MaaFrameworkLibrary,
+        ctrl: Pointer?,
+        target: ScreenshotTarget,
+    ): Boolean = when (target) {
+        ScreenshotTarget.Raw -> {
+            val memory = Memory(1)
+            memory.setByte(0, 1)
+            lib.MaaControllerSetOption(
+                ctrl,
+                MaaCtrlOption.SCREENSHOT_USE_RAW_SIZE,
+                memory,
+                1,
+            ).toInt() != 0
+        }
+
+        is ScreenshotTarget.Expand -> {
+            val memory = Memory((Int.SIZE_BYTES * 2).toLong())
+            memory.setInt(0, target.width)
+            memory.setInt(Int.SIZE_BYTES.toLong(), target.height)
+            lib.MaaControllerSetOption(
+                ctrl,
+                MaaCtrlOption.SCREENSHOT_TARGET_EXPAND,
+                memory,
+                (Int.SIZE_BYTES * 2).toLong(),
+            ).toInt() != 0
+        }
+
+        is ScreenshotTarget.LongSide -> setControllerIntOption(
+            lib,
+            ctrl,
+            MaaCtrlOption.SCREENSHOT_TARGET_LONG_SIDE,
+            target.value,
+        )
+
+        is ScreenshotTarget.ShortSide -> setControllerIntOption(
+            lib,
+            ctrl,
+            MaaCtrlOption.SCREENSHOT_TARGET_SHORT_SIDE,
+            target.value,
+        )
+    }
+
+    private fun setControllerIntOption(
+        lib: MaaFrameworkLibrary,
+        ctrl: Pointer?,
+        key: Int,
+        value: Int,
+    ): Boolean {
+        val memory = Memory(Int.SIZE_BYTES.toLong())
+        memory.setInt(0, value)
+        return lib.MaaControllerSetOption(ctrl, key, memory, Int.SIZE_BYTES.toLong()).toInt() != 0
+    }
+
     private fun releaseNative() {
         val lib = MaaFrameworkLoader.library ?: return
         releaseTasker(lib)
@@ -539,6 +602,7 @@ class MaaRunner(private val agentHost: AgentHost) {
         controller?.let(lib::MaaControllerDestroy)
         controller = null
         boundDisplayId = null
+        boundScreenshotTarget = null
     }
 
     /** agent client 绑在 resource 上，销毁 resource 前必须先把 client 与 child 收掉 */

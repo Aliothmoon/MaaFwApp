@@ -17,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.R
@@ -257,11 +259,12 @@ private fun CheckboxCases(
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
         val activeNames = option.activeCases.map { it.name }
+        val policy = option.selectionPolicy
         option.cases.forEach { case ->
             MaaChoiceChip(
                 label = case.label,
                 selected = case.active,
-                enabled = !locked,
+                enabled = !locked && (case.active || policy?.canAdd(activeNames.size) != false),
                 leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
                 onClick = {
                     val updated = if (case.active) activeNames - case.name else activeNames + case.name
@@ -319,6 +322,7 @@ private fun InputFields(
                 isError = !valid,
                 enabled = !locked,
                 singleLine = true,
+                visualTransformation = if (field.password) PasswordVisualTransformation() else VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

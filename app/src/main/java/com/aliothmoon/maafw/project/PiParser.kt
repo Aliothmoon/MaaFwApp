@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
+import com.aliothmoon.maafw.domain.ControllerDisplay
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
@@ -57,10 +58,8 @@ data class PiResourceContent(
 data class PiControllerContent(
     val name: String,
     val type: String,
-    /** 三者互斥；都缺省时由外壳按默认分辨率兜底 */
-    val displayShortSide: Int? = null,
-    val displayLongSide: Int? = null,
-    val displayRaw: Boolean = false,
+    /** 已归一化的互斥投影；非法或冲突时安全回退 [ControllerDisplay.Default] */
+    val display: ControllerDisplay = ControllerDisplay.Default,
     /** 原样条目，PI_CONTROLLER 要整条 */
     val raw: JsonObject = JsonObject(emptyMap()),
 )
@@ -183,9 +182,7 @@ object PiParser {
             PiControllerContent(
                 name = name,
                 type = type,
-                displayShortSide = obj.int("display_short_side"),
-                displayLongSide = obj.int("display_long_side"),
-                displayRaw = obj.boolean("display_raw") ?: false,
+                display = parseControllerDisplay(source, name, obj, diagnostics),
                 raw = obj,
             )
         }
@@ -425,6 +422,12 @@ object PiParser {
 
             "checkbox" -> {
                 val cases = parseCases(source, name, obj, diagnostics, text)
+                val minCount = parseCheckboxCount(source, name, obj, "min_count", cases.size, diagnostics) ?: 0
+                val maxCount =
+                    parseCheckboxCount(source, name, obj, "max_count", cases.size, diagnostics)
+                if (maxCount != null && minCount > maxCount) {
+                    diagnostics += error(source, DiagnosticMessages.checkboxCountInvalid(name, "min_count"))
+                }
                 val defaults = when (val d = obj["default_case"]) {
                     null -> emptyList()
                     is JsonArray -> d.mapNotNull { (it as? JsonPrimitive)?.content }
@@ -436,8 +439,21 @@ object PiParser {
                             diagnostics += warning(source, DiagnosticMessages.defaultCaseMissing(name, d))
                         }
                     }
+                }.distinct()
+                if (defaults.size !in minCount..(maxCount ?: cases.size)) {
+                    diagnostics += error(source, DiagnosticMessages.checkboxDefaultCountInvalid(name))
                 }
-                OptionDefinition.Checkbox(name, label, description, cases, defaults, icon, applicability)
+                OptionDefinition.Checkbox(
+                    name = name,
+                    label = label,
+                    description = description,
+                    cases = cases,
+                    defaultCases = defaults,
+                    minCount = minCount,
+                    maxCount = maxCount,
+                    icon = icon,
+                    applicability = applicability,
+                )
             }
 
             "input" -> {
@@ -546,6 +562,10 @@ object PiParser {
                 null
             }
         }
+        val password = obj.boolean("password") ?: false
+        if (password && obj.containsKey("default")) {
+            diagnostics += error(source, DiagnosticMessages.passwordDefaultForbidden(optionName, name))
+        }
         val default = when (val d = obj["default"]) {
             null -> ""
             is JsonPrimitive -> d.content
@@ -554,12 +574,92 @@ object PiParser {
         return InputFieldDefinition(
             name = name,
             pipelineType = pipelineType,
-            default = default,
+            default = if (password) "" else default,
             verify = verify,
             patternMessage = text.label(obj.string("pattern_msg")),
             description = text.description(obj.string("description")),
             label = text.label(obj.string("label")) ?: name,
+            password = password,
         )
+    }
+
+    private fun parseControllerDisplay(
+        source: String,
+        controllerName: String,
+        obj: JsonObject,
+        diagnostics: MutableList<Diagnostic>,
+    ): ControllerDisplay {
+        val candidates = mutableListOf<ControllerDisplay>()
+
+        obj["display_short_side"]?.let { element ->
+            val value = (element as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+            if (value == null || value <= 0) {
+                diagnostics += error(
+                    source,
+                    DiagnosticMessages.controllerDisplayInvalid(controllerName, "display_short_side"),
+                )
+            } else {
+                candidates += ControllerDisplay.ShortSide(value)
+            }
+        }
+        obj["display_long_side"]?.let { element ->
+            val value = (element as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+            if (value == null || value <= 0) {
+                diagnostics += error(
+                    source,
+                    DiagnosticMessages.controllerDisplayInvalid(controllerName, "display_long_side"),
+                )
+            } else {
+                candidates += ControllerDisplay.LongSide(value)
+            }
+        }
+        obj["display_raw"]?.let { element ->
+            when ((element as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()) {
+                null -> diagnostics += error(
+                    source,
+                    DiagnosticMessages.controllerDisplayInvalid(controllerName, "display_raw"),
+                )
+
+                true -> candidates += ControllerDisplay.Raw()
+
+                false -> Unit
+            }
+        }
+        obj["display_expand"]?.let { element ->
+            val values = (element as? JsonArray)
+                ?.map { primitive -> (primitive as? JsonPrimitive)?.contentOrNull?.toIntOrNull() }
+                .orEmpty()
+            if (values.size != 2 || values.any { it == null || it <= 0 }) {
+                diagnostics += error(
+                    source,
+                    DiagnosticMessages.controllerDisplayInvalid(controllerName, "display_expand"),
+                )
+            } else {
+                candidates += ControllerDisplay.Expand(values[0]!!, values[1]!!)
+            }
+        }
+
+        if (candidates.size > 1) {
+            diagnostics += error(source, DiagnosticMessages.controllerDisplayConflict(controllerName))
+        }
+        return candidates.singleOrNull() ?: ControllerDisplay.Default
+    }
+
+    private fun parseCheckboxCount(
+        source: String,
+        optionName: String,
+        obj: JsonObject,
+        field: String,
+        caseCount: Int,
+        diagnostics: MutableList<Diagnostic>,
+    ): Int? {
+        val element = obj[field] ?: return null
+        val value = (element as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+        if (value == null || value < 0 || value > caseCount) {
+            diagnostics += error(source, DiagnosticMessages.checkboxCountInvalid(optionName, field))
+            return null
+        }
+        return value
     }
 
     private fun parsePreset(
@@ -621,8 +721,6 @@ object PiParser {
                             value.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.let { k to it.content } }.toMap(),
                         ),
                     )
-
-                    else -> Unit
                 }
             }
         }

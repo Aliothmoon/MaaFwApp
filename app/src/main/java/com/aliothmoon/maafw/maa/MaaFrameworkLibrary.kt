@@ -44,6 +44,13 @@ interface MaaFrameworkLibrary : Library {
 
     fun MaaControllerPostConnection(ctrl: Pointer?): Long
 
+    fun MaaControllerSetOption(
+        ctrl: Pointer?,
+        key: Int,
+        value: Pointer?,
+        valSize: Long,
+    ): Byte
+
     fun MaaControllerWait(ctrl: Pointer?, id: Long): Int
 
     fun MaaControllerConnected(ctrl: Pointer?): Byte
@@ -131,6 +138,14 @@ object MaaGlobalOption {
     const val STDOUT_LEVEL = 4
     const val DEBUG_MODE = 6
     const val SAVE_ON_ERROR = 7
+}
+
+/** 本项目用到的 `MaaCtrlOptionEnum` */
+object MaaCtrlOption {
+    const val SCREENSHOT_TARGET_LONG_SIDE = 1
+    const val SCREENSHOT_TARGET_SHORT_SIDE = 2
+    const val SCREENSHOT_USE_RAW_SIZE = 3
+    const val SCREENSHOT_TARGET_EXPAND = 8
 }
 
 /** `MaaLoggingLevelEnum` */

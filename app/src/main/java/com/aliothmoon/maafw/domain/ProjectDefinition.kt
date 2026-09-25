@@ -62,16 +62,22 @@ data class ProjectMetadata(
 data class ControllerDefinition(
     val name: String = "Android",
     val type: String = "ADB",
-    /** 三者互斥，都缺省时由 Runner 按默认分辨率兜底 */
-    val displayShortSide: Int? = null,
-    val displayLongSide: Int? = null,
-    val displayRaw: Boolean = false,
+    /** PI display_* 的互斥投影；Runner 负责把它翻译成截图目标 */
+    val display: ControllerDisplay = ControllerDisplay.Default,
     /**
      * PI 里这一条的原样对象，供 `PI_CONTROLLER` 整条透传（见 PiAgentEnv）
      * 投影只留外壳用得上的字段，而协议要求交给 agent 的是完整条目；空对象表示该条不是 PI 声明的
      */
     val raw: JsonObject = JsonObject(emptyMap()),
 )
+
+sealed interface ControllerDisplay {
+    data object Default : ControllerDisplay
+    data class ShortSide(val value: Int) : ControllerDisplay
+    data class LongSide(val value: Int) : ControllerDisplay
+    data class Expand(val width: Int, val height: Int) : ControllerDisplay
+    data class Raw(val enabled: Boolean = true) : ControllerDisplay
+}
 
 data class ResourceDefinition(
     val name: String,
@@ -184,9 +190,14 @@ sealed interface OptionDefinition {
         override val description: String?,
         val cases: List<OptionCaseDefinition>,
         val defaultCases: List<String>,
+        val minCount: Int = 0,
+        val maxCount: Int? = null,
         override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
-    ) : OptionDefinition
+    ) : OptionDefinition {
+        val selectionPolicy: CheckboxSelectionPolicy
+            get() = CheckboxSelectionPolicy(minCount = minCount, maxCount = maxCount)
+    }
 
     data class Input(
         override val name: String,
@@ -227,7 +238,19 @@ data class InputFieldDefinition(
     val description: String?,
     /** $i18n 已物化；placeholder 仍用 [name] */
     val label: String = name,
+    val password: Boolean = false,
 )
+
+data class CheckboxSelectionPolicy(
+    val minCount: Int,
+    val maxCount: Int?,
+) {
+    fun canAdd(selectedCount: Int): Boolean =
+        selectedCount >= 0 && (maxCount == null || selectedCount < maxCount)
+
+    fun isSelectionCountValid(selectedCount: Int): Boolean =
+        selectedCount >= minCount && (maxCount == null || selectedCount <= maxCount)
+}
 
 /** PI preset 一次性模板；name 标识，label 展示 */
 data class ConfigurationTemplate(

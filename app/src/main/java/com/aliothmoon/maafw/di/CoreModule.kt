@@ -8,6 +8,8 @@ import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.SystemApkInstaller
 import com.aliothmoon.maafw.config.DataStoreUserConfigurationStore
+import com.aliothmoon.maafw.config.AndroidKeystoreUserConfigurationCipher
+import com.aliothmoon.maafw.config.UserConfigurationCipher
 import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.constant.DataStoreFile
@@ -49,16 +51,19 @@ val coreModule = module {
         CoroutineScope(SupervisorJob() + MaaDispatchers.Default + handler)
     }
 
+    single<UserConfigurationCipher> { AndroidKeystoreUserConfigurationCipher() }
+    single { UserConfigurationSerializer(get()) }
+
     single<DataStore<UserConfiguration>> {
         DataStoreFactory.create(
-            serializer = UserConfigurationSerializer,
+            serializer = get(),
             corruptionHandler = ReplaceFileCorruptionHandler { UserConfiguration() },
             produceFile = {
                 androidContext().dataStoreFile(DataStoreFile.USER_CONFIGRATION)
             },
         )
     }
-    single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
+    single<UserConfigurationStore> { DataStoreUserConfigurationStore(get(), get()) }
 
     single { AppSettingsManager(androidContext()) }
     single<AppSettingsGateway> { get<AppSettingsManager>() }

@@ -297,6 +297,7 @@ object ConfigurationResolver {
                     cases = buildCaseStates(definition, option.cases, selected.toSet(), values, resourceName, depth, visited),
                     inputs = emptyList(),
                     icon = option.icon,
+                    selectionPolicy = option.selectionPolicy,
                 )
             }
 
@@ -320,6 +321,7 @@ object ConfigurationResolver {
                             verify = field.verify,
                             patternMessage = field.patternMessage,
                             description = field.description,
+                            password = field.password,
                         )
                     },
                     icon = option.icon,

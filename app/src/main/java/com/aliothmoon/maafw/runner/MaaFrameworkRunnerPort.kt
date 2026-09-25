@@ -329,6 +329,7 @@ class MaaFrameworkRunnerPort(
             screenWidth = width,
             screenHeight = height,
             displayMode = mode.displayMode,
+            screenshotTarget = plan.controller.display.toScreenshotTarget(),
             tasks = plan.tasks.map {
                 RuntimeTaskPayload(
                     taskName = it.taskName,

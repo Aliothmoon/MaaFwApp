@@ -519,6 +519,8 @@
     <string name="diagnostic_required_field_missing">%1$s 缺少 %2$s</string>
     <string name="diagnostic_resource_path_missing">resource "%1$s" 缺少 path</string>
     <string name="diagnostic_no_adb_controller">该项目未声明 Adb controller，限定 controller 的任务都不可用</string>
+    <string name="diagnostic_controller_display_conflict">controller "%1$s" 的 display_* 字段互斥，已回退默认截图目标</string>
+    <string name="diagnostic_controller_display_invalid">controller "%1$s" 的 %2$s 非法，已回退默认截图目标</string>
     <string name="diagnostic_language_path_invalid">languages "%1$s" 的路径不是字符串</string>
     <string name="diagnostic_import_read_failed">import 分片读取失败，已跳过：%1$s</string>
     <string name="diagnostic_project_has_no_tasks">项目未声明任何任务</string>
@@ -531,6 +533,9 @@
     <string name="diagnostic_invalid_option_type">option "%1$s" 的 type 非法：%2$s</string>
     <string name="diagnostic_option_case_not_object">option "%1$s" 存在非对象 case</string>
     <string name="diagnostic_option_case_name_missing">option "%1$s" 存在缺少 name 的 case</string>
+    <string name="diagnostic_checkbox_count_invalid">option "%1$s" 的 %2$s 必须是不超过 cases 数量的非负整数，且 min_count 不能大于 max_count</string>
+    <string name="diagnostic_checkbox_default_count_invalid">option "%1$s" 的 default_case 数量不满足 min_count / max_count</string>
+    <string name="diagnostic_password_default_forbidden">password input "%1$s.%2$s" 不能声明 default，已忽略该默认值</string>
     <string name="diagnostic_invalid_pipeline_type">input "%1$s.%2$s" 的 pipeline_type 非法：%3$s，按 string 处理</string>
     <string name="diagnostic_regex_compile_failed">input "%1$s.%2$s" 的 verify regex 编译失败：%3$s</string>
     <string name="diagnostic_missing_reference">引用了不存在的 %1$s "%2$s"</string>
@@ -546,6 +551,8 @@
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
     <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>
+    <string name="diagnostic_invalid_password_input">option "%1$s" 的密码输入 "%2$s" 不合法</string>
+    <string name="diagnostic_checkbox_selection_count_invalid">option "%1$s" 的勾选数量不满足 min_count / max_count</string>
     <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
     <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
     <string name="schedule_default_name">定时任务 %1$d</string>

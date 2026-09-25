@@ -58,6 +58,14 @@ class PiAgentEnvTest {
     }
 
     @Test
+    fun `display_expand 随原始 controller 透传给 agent`() {
+        val raw = """{"name":"ADB","type":"Adb","display_expand":[1280,720]}"""
+        val env = build(controller = controller(raw))
+
+        assertEquals(raw, env["PI_CONTROLLER"])
+    }
+
+    @Test
     fun `美元前缀递归查表，普通字符串原样保留`() {
         val env = build(
             resource = resource("""{"name":"官服","label":"${'$'}res.cn","nested":{"deep":["${'$'}res.cn","./resource/base"]}}"""),

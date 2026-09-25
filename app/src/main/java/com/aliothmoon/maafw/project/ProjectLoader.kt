@@ -182,9 +182,7 @@ class ProjectLoader(
         return ControllerDefinition(
             name = adb.name,
             type = adb.type,
-            displayShortSide = adb.displayShortSide,
-            displayLongSide = adb.displayLongSide,
-            displayRaw = adb.displayRaw,
+            display = adb.display,
             raw = adb.raw,
         )
     }
