@@ -219,12 +219,15 @@ internal fun TasksQuickOptionsPanel(
                 }
                 ActionTile(
                     icon = Icons.Outlined.Refresh,
-                    label = stringResource(R.string.settings_reload_project),
+                    label = stringResource(R.string.quick_action_reset_task_list),
                     accent = MaterialTheme.colorScheme.secondary,
-                    enabled = !state.configurationLocked,
+                    enabled = !state.configurationLocked && state.activeConfiguration != null,
                     onClick = {
-                        onDismiss()
-                        onIntent(SessionIntent.ReloadProject)
+                        val configurationId = state.activeConfiguration?.id
+                        if (configurationId != null) {
+                            onDismiss()
+                            onIntent(SessionIntent.ResetTaskList(configurationId))
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )

@@ -128,6 +128,30 @@ object ConfigurationResolver {
 
     fun newConfigurationId(): RunConfigurationId = RunConfigurationId(UUID.randomUUID().toString())
 
+    /**
+     * 重置任务参数但不改变列表身份。preset 只在任务名序列唯一对应时用于恢复勾选状态，
+     * 参数始终回落到 interface option 自己的默认值。
+     */
+    fun resetTaskList(
+        definition: ProjectDefinition,
+        configuration: RunConfiguration,
+    ): RunConfiguration {
+        val taskNames = configuration.tasks.map { it.taskName }
+        val templateTasks = definition.templates
+            .map { it.distinctTasks }
+            .filter { it.map { templateTask -> templateTask.taskName } == taskNames }
+            .singleOrNull()
+
+        return configuration.copy(
+            tasks = configuration.tasks.mapIndexed { index, task ->
+                task.copy(
+                    enabled = templateTasks?.getOrNull(index)?.enabled ?: task.enabled,
+                    optionValues = emptyMap(),
+                )
+            },
+        )
+    }
+
     private fun resolveConfiguration(
         definition: ProjectDefinition,
         runConfiguration: RunConfiguration,

@@ -8,6 +8,9 @@ import com.aliothmoon.maafw.runner.CloseTargetAppHook
 import com.aliothmoon.maafw.runner.CountdownHook
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
+import com.aliothmoon.maafw.runner.GameFpsHook
+import com.aliothmoon.maafw.runner.GameFpsWatcher
+import com.aliothmoon.maafw.runner.RemoteGameFpsReader
 import com.aliothmoon.maafw.telemetry.TelemetryController
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
@@ -93,6 +96,14 @@ val runnerModule = module {
     }
     single<RunJournal> { get<RunLogRecorder>() }
 
+    single {
+        GameFpsWatcher(
+            reader = RemoteGameFpsReader(get()),
+            journal = get(),
+            scope = get(named<AppCoroutineScope>()),
+        )
+    }
+
     single<PreviewPort> {
         RemotePreviewPort(
             scope = get(named<AppCoroutineScope>()),
@@ -126,6 +137,7 @@ val runnerModule = module {
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,
                 KeepAliveHook(get()),
+                GameFpsHook(get()),
                 WatchdogNoticeHook(
                     watchdogState = get<PermissionGateway>().watchdogState,
                     servicePort = get(),

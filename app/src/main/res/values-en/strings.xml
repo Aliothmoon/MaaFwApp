@@ -390,6 +390,7 @@
     <string name="runner_quick_options">Options</string>
     <string name="quick_actions_title">Quick actions</string>
     <string name="quick_settings_title">Automation</string>
+    <string name="quick_action_reset_task_list">Reset task list</string>
     <string name="quick_action_screen_saver">Screen off</string>
     <string name="quick_action_close_app">Close target app</string>
     <string name="quick_setting_close_app_after_task">Close the target app when task ends</string>
@@ -470,6 +471,8 @@
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
     <string name="run_log_app_unknown">unknown app</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
+    <string name="run_log_game_fps_low">The game is running at only %1$d FPS, below 30; automation may fail. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_game_fps_degraded">The game is running at %1$d FPS, below 50; battle timing may drift. Enable high frame rate mode in the game and disable power saving mode</string>
 
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>

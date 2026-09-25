@@ -37,6 +37,11 @@ public final class WindowManager {
 
     private Method syncInputTransactions;
 
+    private static final String TASK_FPS_CALLBACK_CLASS = "android.window.ITaskFpsCallback";
+
+    private Method registerTaskFpsCallbackMethod;
+    private Method unregisterTaskFpsCallbackMethod;
+
     static WindowManager create() {
         IInterface manager = ServiceManager.getService("window", "android.view.IWindowManager");
         return new WindowManager(manager);
@@ -133,6 +138,45 @@ public final class WindowManager {
             clearForcedDisplaySizeMethod = manager.getClass().getMethod("clearForcedDisplaySize", int.class);
         }
         return clearForcedDisplaySizeMethod;
+    }
+
+    private Method getRegisterTaskFpsCallbackMethod() throws ReflectiveOperationException {
+        if (registerTaskFpsCallbackMethod == null) {
+            Class<?> callbackClass = Class.forName(TASK_FPS_CALLBACK_CLASS);
+            registerTaskFpsCallbackMethod = manager.getClass()
+                    .getMethod("registerTaskFpsCallback", int.class, callbackClass);
+        }
+        return registerTaskFpsCallbackMethod;
+    }
+
+    private Method getUnregisterTaskFpsCallbackMethod() throws ReflectiveOperationException {
+        if (unregisterTaskFpsCallbackMethod == null) {
+            Class<?> callbackClass = Class.forName(TASK_FPS_CALLBACK_CLASS);
+            unregisterTaskFpsCallbackMethod = manager.getClass()
+                    .getMethod("unregisterTaskFpsCallback", callbackClass);
+        }
+        return unregisterTaskFpsCallbackMethod;
+    }
+
+    /** Android 13+；callback 需实现框架侧 ITaskFpsCallback，调用方持有 ACCESS_FPS_COUNTER */
+    public boolean registerTaskFpsCallback(int taskId, Object callback) {
+        try {
+            getRegisterTaskFpsCallbackMethod().invoke(manager, taskId, callback);
+            return true;
+        } catch (ReflectiveOperationException e) {
+            Ln.e("Could not invoke method", e);
+            return false;
+        }
+    }
+
+    public boolean unregisterTaskFpsCallback(Object callback) {
+        try {
+            getUnregisterTaskFpsCallbackMethod().invoke(manager, callback);
+            return true;
+        } catch (ReflectiveOperationException e) {
+            Ln.e("Could not invoke method", e);
+            return false;
+        }
     }
 
 

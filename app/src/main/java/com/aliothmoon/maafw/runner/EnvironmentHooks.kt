@@ -59,6 +59,9 @@ internal object HookOrder {
 
     /** 只是挂一个监听，排在最后，收尾时最先摘掉 */
     const val WATCHDOG_NOTICE = 50
+
+    /** 同为观察者，排在看门狗之后；收尾时先停 FPS 轮询，再看门狗 */
+    const val GAME_FPS = 55
 }
 
 /**

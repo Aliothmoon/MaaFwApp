@@ -113,6 +113,116 @@ class ConfigurationResolverTest {
     }
 
     @Test
+    fun `reset task list clears values and restores unique preset checks`() {
+        val def = definition(
+            templates = listOf(
+                ConfigurationTemplate(
+                    name = "P",
+                    label = "模板",
+                    description = null,
+                    tasks = listOf(
+                        TemplateTask("T1", enabled = false, optionValues = emptyMap()),
+                        TemplateTask("T2", enabled = true, optionValues = emptyMap()),
+                    ),
+                ),
+            ),
+        )
+        val configuration = RunConfiguration(
+            id = RunConfigurationId("c1"),
+            name = "日常",
+            tasks = listOf(
+                ConfiguredTask(
+                    taskName = "T1",
+                    enabled = true,
+                    optionValues = mapOf("option" to OptionValue.Inputs(mapOf("count" to "2"))),
+                    customLabel = "别名",
+                    instanceId = "i1",
+                ),
+                ConfiguredTask(
+                    taskName = "T2",
+                    enabled = false,
+                    optionValues = mapOf("option" to OptionValue.SingleCase("a")),
+                    instanceId = "i2",
+                ),
+            ),
+        )
+
+        val result = ConfigurationResolver.resetTaskList(def, configuration)
+
+        assertEquals(listOf(false, true), result.tasks.map { it.enabled })
+        assertTrue(result.tasks.all { it.optionValues.isEmpty() })
+        assertEquals("别名", result.tasks[0].customLabel)
+        assertEquals(listOf("i1", "i2"), result.tasks.map { it.instanceId })
+    }
+
+    @Test
+    fun `reset task list keeps checks when task sequence differs from preset`() {
+        val def = definition(
+            templates = listOf(
+                ConfigurationTemplate(
+                    name = "P",
+                    label = "模板",
+                    description = null,
+                    tasks = listOf(
+                        TemplateTask("T1", enabled = false, optionValues = emptyMap()),
+                        TemplateTask("T2", enabled = true, optionValues = emptyMap()),
+                    ),
+                ),
+            ),
+        )
+        val configuration = RunConfiguration(
+            id = RunConfigurationId("c1"),
+            name = "日常",
+            tasks = listOf(
+                ConfiguredTask(
+                    taskName = "T2",
+                    enabled = true,
+                    optionValues = mapOf("option" to OptionValue.SingleCase("a")),
+                    instanceId = "i1",
+                ),
+                ConfiguredTask(
+                    taskName = "T1",
+                    enabled = true,
+                    optionValues = mapOf("option" to OptionValue.SingleCase("b")),
+                    instanceId = "i2",
+                ),
+            ),
+        )
+
+        val result = ConfigurationResolver.resetTaskList(def, configuration)
+
+        assertEquals(listOf(true, true), result.tasks.map { it.enabled })
+        assertTrue(result.tasks.all { it.optionValues.isEmpty() })
+    }
+
+    @Test
+    fun `reset task list keeps checks when multiple presets match task sequence`() {
+        val template = ConfigurationTemplate(
+            name = "P",
+            label = "模板",
+            description = null,
+            tasks = listOf(
+                TemplateTask("T1", enabled = false, optionValues = emptyMap()),
+                TemplateTask("T2", enabled = true, optionValues = emptyMap()),
+            ),
+        )
+        val def = definition(templates = listOf(template, template.copy(name = "P2", label = "模板2")))
+        val configuration = RunConfiguration(
+            id = RunConfigurationId("c1"),
+            name = "日常",
+            tasks = listOf(
+                ConfiguredTask("T1", enabled = true, mapOf("option" to OptionValue.SingleCase("a")), instanceId = "i1"),
+                ConfiguredTask("T2", enabled = false, mapOf("option" to OptionValue.SingleCase("b")), instanceId = "i2"),
+            ),
+        )
+
+        val result = ConfigurationResolver.resetTaskList(def, configuration)
+
+        assertEquals(listOf(true, false), result.tasks.map { it.enabled })
+        assertTrue(result.tasks.all { it.optionValues.isEmpty() })
+    }
+
+    @Test
     fun `resource selection falls back with warning when missing`() {
         val session = ConfigurationResolver.resolve(
             definition(),

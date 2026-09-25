@@ -85,6 +85,14 @@ object ActivityUtils {
     @JvmStatic
     fun packageNameOf(spec: String): String = componentOf(spec)?.packageName ?: spec
 
+    /** Android 13+ task FPS callback 只认 taskId；找不到则由调用方走帧计数回退 */
+    @JvmStatic
+    fun findTaskId(packageName: String): Int? {
+        val task = runCatching { findRecentTask(packageName) }.getOrNull() ?: return null
+        @Suppress("DEPRECATION")
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) task.taskId else task.id
+    }
+
     private fun componentOf(spec: String): ComponentName? =
         spec.takeIf { it.contains('/') }?.let { ComponentName.unflattenFromString(it) }
 
@@ -243,12 +251,10 @@ object ActivityUtils {
     }
 
     private fun moveAppTaskToDisplay(packageName: String, displayId: Int): Boolean {
-        val task = runCatching { findRecentTask(packageName) }.getOrNull() ?: run {
+        val taskId = findTaskId(packageName) ?: run {
             Ln.w("moveAppTaskToDisplay: no running task of $packageName")
             return false
         }
-        @Suppress("DEPRECATION")
-        val taskId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) task.taskId else task.id
         moveTaskToDisplayMethod?.let { method ->
             runCatching {
                 method.invoke(activityTaskManager, taskId, displayId)
