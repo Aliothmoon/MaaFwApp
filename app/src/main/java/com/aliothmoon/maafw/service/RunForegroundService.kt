@@ -7,8 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
@@ -65,6 +63,9 @@ class RunForegroundService : Service() {
     private var focusChannelReady = false
     private var focusNotificationSeq = 0
 
+    /** startForeground 被系统拒绝后本实例已 stopSelf，排队中的 start 不再重试 */
+    private var foregroundDenied = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -72,7 +73,7 @@ class RunForegroundService : Service() {
         ensureChannel()
         // 必须先 startForeground 再判终态：慢一步就是 ForegroundServiceDidNotStartInTimeException
         val initial = runnerPort.state.value
-        startAsForeground(buildNotification(initial, recorder.liveUpdateStatus.value))
+        if (!startAsForeground(buildNotification(initial, recorder.liveUpdateStatus.value))) return
         if (!initial.phase.isBusy) {
             stopNow()
             return
@@ -81,9 +82,12 @@ class RunForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (foregroundDenied) return START_NOT_STICKY
         // 系统可能只走 onStartCommand；FGS 提升要在这里再保一次
         val snapshot = runnerPort.state.value
-        startAsForeground(buildNotification(snapshot, recorder.liveUpdateStatus.value))
+        if (!startAsForeground(buildNotification(snapshot, recorder.liveUpdateStatus.value))) {
+            return START_NOT_STICKY
+        }
         if (!snapshot.phase.isBusy) {
             stopNow()
         } else {
@@ -194,11 +198,18 @@ class RunForegroundService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun startAsForeground(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+    /** 被拒时停服务，onDestroy 撤掉已发出的进度通知；任务本身仍在提权进程继续 */
+    private fun startAsForeground(notification: Notification): Boolean {
+        try {
+            SpecialUseFgsGate.startForeground(this, NOTIFICATION_ID, notification)
+            return true
+        } catch (e: SecurityException) {
+            // 预检放行但系统仍拒（如 appop 为 FOREGROUND）；AOSP 抛出前已清 fgRequired，
+            // stopSelf 不会触发 ForegroundServiceDidNotStartInTimeException
+            Timber.w(e, "RunForegroundService: startForeground denied, run without FGS")
+            foregroundDenied = true
+            stopSelf()
+            return false
         }
     }
 
@@ -274,6 +285,10 @@ class RunForegroundService : Service() {
         private const val FOCUS_NOTIFICATION_ID_SLOTS = 20
 
         fun start(context: Context) {
+            if (SpecialUseFgsGate.isDenied(context)) {
+                Timber.w("RunForegroundService: specialUse appop denied, skip FGS start")
+                return
+            }
             runCatching {
                 context.startForegroundService(Intent(context, RunForegroundService::class.java))
             }.onFailure { Timber.w(it, "Failed to start foreground service") }

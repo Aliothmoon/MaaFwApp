@@ -75,6 +75,7 @@ private data class SettingsSnapshot(
     val screenSaverEnabled: Boolean,
     val resolutionPreference: ResolutionPreference,
     val debugMode: Boolean,
+    val saveOnError: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     val env: EnvSnapshot = EnvSnapshot(),
     val quick: QuickSnapshot = QuickSnapshot(),
@@ -143,6 +144,8 @@ class SessionViewModel(
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
     }.combine(appSettings.themeStyle) { snapshot, style ->
         snapshot.copy(themeStyle = style)
+    }.combine(appSettings.saveOnError) { snapshot, save ->
+        snapshot.copy(saveOnError = save)
     }.combine(
         combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
     ) { snapshot, env -> snapshot.copy(env = env) }
@@ -270,6 +273,7 @@ class SessionViewModel(
             runner = runner,
             themeMode = config.themeMode,
             debugMode = settings.debugMode,
+            saveOnError = settings.saveOnError,
             themeStyle = settings.themeStyle,
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
@@ -451,6 +455,10 @@ class SessionViewModel(
                 appSettings.setDebugMode(intent.enabled)
                 if (intent.enabled) emitEffect(SessionEffect.RestartApp)
             }
+
+            // 环境开关：每轮 setup 后现读，运行中改不影响本轮已冻结的状态
+            is SessionIntent.SetSaveOnError ->
+                appSettings.setSaveOnError(intent.enabled)
 
             is SessionIntent.SetThemeStyle ->
                 appSettings.setThemeStyle(intent.style)

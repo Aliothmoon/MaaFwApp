@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.preferences.PrefKey
 import com.aliothmoon.preferences.PrefSchema
@@ -65,6 +66,15 @@ data class AppSettings(
     @PrefKey(default = "false")
     val debugMode: String = "false",
 
+    /**
+     * 节点出错时把现场截图存到运行日志（logDir/on_error）
+     *
+     * 默认开：一张出错瞬间的图比事后复现便宜。对应 MaaGlobalOption_SaveOnError；
+     * 框架核心默认 false，此项是唯一的开启途径，关了就永远不存
+     */
+    @PrefKey(default = "true")
+    val saveOnError: String = "true",
+
     /** [com.aliothmoon.maafw.theme.ThemeStyle] 的 name；DEFAULT 暖石蓝，SEMI_DESIGN 取 Semi Design 配色 */
     @PrefKey(default = "DEFAULT")
     val themeStyle: String = "DEFAULT",
@@ -91,6 +101,13 @@ data class AppSettings(
      */
     @PrefKey(default = "")
     val wakeCredential: String = "",
+
+    /** 单轮超过 [runDurationLimitMinutes] 就自动停；见 [com.aliothmoon.maafw.runner.RunDurationLimitHook] */
+    @PrefKey(default = "false")
+    val runDurationLimitEnabled: String = "false",
+
+    @PrefKey(default = "${RunDurationLimit.DEFAULT_MINUTES}")
+    val runDurationLimitMinutes: String = RunDurationLimit.DEFAULT_MINUTES.toString(),
 
     /**
      * PI 声明了 `telemetry.sentry` 时才有意义；默认关

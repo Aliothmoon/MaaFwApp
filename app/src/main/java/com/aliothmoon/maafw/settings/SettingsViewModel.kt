@@ -108,8 +108,16 @@ class SettingsViewModel(
         permissionGateway.state,
         updatePanel,
         appSettings.pipOnHome,
-    ) { remote, update, pipOnHome ->
-        SettingsUiState(remoteAccess = remote, update = update, pipOnHome = pipOnHome)
+        appSettings.runDurationLimitEnabled,
+        appSettings.runDurationLimitMinutes,
+    ) { remote, update, pipOnHome, durationLimitEnabled, durationLimitMinutes ->
+        SettingsUiState(
+            remoteAccess = remote,
+            update = update,
+            pipOnHome = pipOnHome,
+            runDurationLimitEnabled = durationLimitEnabled,
+            runDurationLimitMinutes = durationLimitMinutes,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -150,6 +158,14 @@ class SettingsViewModel(
 
             is SettingsIntent.SetPipOnHome -> viewModelScope.launch {
                 appSettings.setPipOnHome(intent.enabled)
+            }
+
+            is SettingsIntent.SetRunDurationLimitEnabled -> viewModelScope.launch {
+                appSettings.setRunDurationLimitEnabled(intent.enabled)
+            }
+
+            is SettingsIntent.SetRunDurationLimitMinutes -> viewModelScope.launch {
+                appSettings.setRunDurationLimitMinutes(intent.minutes)
             }
 
             SettingsIntent.CheckUpdate -> viewModelScope.launch { checkUpdate() }

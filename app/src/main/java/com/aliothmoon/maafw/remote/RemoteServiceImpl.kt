@@ -104,9 +104,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
             return false
         }
         return runCatching {
-            ServiceManager.getActivityManager().forceStopPackage(target)
-            Ln.i("$TAG: force-stopped $target")
-            true
+            ServiceManager.getActivityManager().forceStopPackage(target).also { stopped ->
+                if (stopped) {
+                    Ln.i("$TAG: force-stopped $target")
+                }
+            }
         }.getOrElse {
             Ln.w("$TAG: stopTargetApp failed: ${'$'}it")
             false
@@ -135,6 +137,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
             Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")
         }
         Ln.i("$TAG: setup ok, piRoot=$piRoot")
+        return true
+    }
+
+    override fun setSaveOnError(enabled: Boolean): Boolean {
+        runner.setSaveOnError(enabled)
         return true
     }
 
@@ -300,6 +307,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int {
         if (packageName.isNullOrBlank()) return 0
         var granted = 0
+        // 结果不进返回位免改 AIDL 返回协议；放开失败由 App 侧预检兜底
+        if (permissions and PrivilegedGrant.FGS_SPECIAL_USE != 0) {
+            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName)
+        }
         if (permissions and PrivilegedGrant.NOTIFICATION != 0 &&
             PermissionGrantHelper.grantNotificationPermission(packageName, uid)
         ) {

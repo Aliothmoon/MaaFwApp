@@ -41,13 +41,13 @@ class GameFpsWatcher(
     private var job: Job? = null
 
     @Synchronized
-    fun start() {
+    fun start(executionId: String) {
         stop()
         advisor.reset()
         job = scope.launch {
             while (isActive) {
                 delay(POLL_INTERVAL_MS)
-                pollOnce()
+                pollOnce(executionId)
             }
         }
     }
@@ -59,17 +59,17 @@ class GameFpsWatcher(
         _fps.value = null
     }
 
-    internal suspend fun pollOnce() {
+    internal suspend fun pollOnce(executionId: String) {
         val value = reader.readGameFps()
         _fps.value = value
         advisor.onSample(value ?: 0f)?.let { advice ->
             val fps = advice.medianFps.roundToInt()
             when (advice.level) {
                 GameFpsAdvisor.Level.LOW ->
-                    journal.note(RunNote.Error, uiTextOf(R.string.run_log_game_fps_low, fps))
+                    journal.note(executionId, RunNote.Error, uiTextOf(R.string.run_log_game_fps_low, fps))
 
                 GameFpsAdvisor.Level.DEGRADED ->
-                    journal.note(RunNote.Warning, uiTextOf(R.string.run_log_game_fps_degraded, fps))
+                    journal.note(executionId, RunNote.Warning, uiTextOf(R.string.run_log_game_fps_degraded, fps))
             }
         }
     }

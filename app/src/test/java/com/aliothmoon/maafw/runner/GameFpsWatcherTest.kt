@@ -8,6 +8,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
+private const val EXECUTION_ID = "e1"
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class GameFpsWatcherTest {
 
@@ -25,9 +27,9 @@ class GameFpsWatcherTest {
     private class RecordingJournal : RunJournal {
         val notes = mutableListOf<Pair<RunNote, UiText>>()
 
-        override suspend fun begin(plan: RunPlan) = Unit
-        override suspend fun end(reason: RunEndReason) = Unit
-        override fun note(level: RunNote, text: UiText) {
+        override suspend fun begin(plan: RunPlan, executionId: String) = Unit
+        override suspend fun end(executionId: String, reason: RunEndReason) = Unit
+        override fun note(executionId: String, level: RunNote, text: UiText) {
             notes += level to text
         }
     }
@@ -37,7 +39,7 @@ class GameFpsWatcherTest {
         val reader = QueueReader(60f, null)
         val watcher = GameFpsWatcher(reader, DiscardingRunJournal, backgroundScope)
 
-        watcher.start()
+        watcher.start(EXECUTION_ID)
         advanceTimeBy(1_001)
         assertEquals(60f, watcher.fps.value)
 
@@ -55,8 +57,8 @@ class GameFpsWatcherTest {
             override suspend fun readGameFps(): Float? = 25f
         }, journal, backgroundScope)
 
-        repeat(15) { watcher.pollOnce() }
-        repeat(5) { watcher.pollOnce() }
+        repeat(15) { watcher.pollOnce(EXECUTION_ID) }
+        repeat(5) { watcher.pollOnce(EXECUTION_ID) }
 
         assertEquals(1, journal.notes.size)
         assertEquals(RunNote.Error, journal.notes.single().first)
@@ -69,7 +71,7 @@ class GameFpsWatcherTest {
             override suspend fun readGameFps(): Float? = 40f
         }, journal, backgroundScope)
 
-        repeat(15) { watcher.pollOnce() }
+        repeat(15) { watcher.pollOnce(EXECUTION_ID) }
 
         assertEquals(listOf(RunNote.Warning), journal.notes.map { it.first })
     }
@@ -82,7 +84,7 @@ class GameFpsWatcherTest {
         }, journal, backgroundScope)
 
         repeat(GameFpsAdvisor.DEFAULT_WINDOW_SIZE + GameFpsAdvisor.DEFAULT_MAX_IDLE_STREAK) {
-            watcher.pollOnce()
+            watcher.pollOnce(EXECUTION_ID)
         }
 
         assertNull(watcher.fps.value)

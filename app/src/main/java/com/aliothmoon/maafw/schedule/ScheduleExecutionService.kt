@@ -8,8 +8,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.BuildConfig
@@ -23,6 +21,7 @@ import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDU
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.service.SpecialUseFgsGate
 import com.aliothmoon.maafw.runner.RunProgress
 import com.aliothmoon.maafw.runner.ScheduleRunOptions
 import com.aliothmoon.maafw.runner.RunRequestId
@@ -225,14 +224,11 @@ class ScheduleExecutionService : Service() {
     }
 
     private fun startAsForeground(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            SpecialUseFgsGate.startForeground(this, NOTIFICATION_ID, notification)
+        } catch (e: SecurityException) {
+            // specialUse 被系统拒绝：尽力继续触发，uid 转空闲后服务可能被系统停掉
+            Timber.w(e, "ScheduleExecutionService: startForeground denied, continue without FGS")
         }
     }
 

@@ -104,8 +104,8 @@ object PermissionGrantHelper {
         return try {
             // OP_RUN_IN_BACKGROUND = 63, MODE_ALLOWED = 0
             RemoteUtils.appOpsService.setMode(63, uid, packageName, 0)
-            // OP_RUN_ANY_IN_BACKGROUND = 65, MODE_ALLOWED = 0
-            RemoteUtils.appOpsService.setMode(65, uid, packageName, 0)
+            // OP_RUN_ANY_IN_BACKGROUND = 70, MODE_ALLOWED = 0
+            RemoteUtils.appOpsService.setMode(70, uid, packageName, 0)
 
             RemoteUtils.shellExec("am set-standby-bucket $packageName active")
             RemoteUtils.shellExec("am set-inactive $packageName false")
@@ -168,6 +168,26 @@ object PermissionGrantHelper {
             true
         } catch (e: Exception) {
             Ln.e("$TAG: Failed to grant storage permission: $e", e)
+            false
+        }
+    }
+
+    /** specialUse FGS 的 appop 可能被 ROM 或管控工具拒绝，任务 FGS 会因此起不来 */
+    fun grantForegroundServiceSpecialUse(packageName: String): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        return try {
+            // uid 级 op：非默认的 uid 模式会盖过包模式，两级都放开；用 op 名免硬编码编号
+            val uidExit = RemoteUtils.shellExec("appops set --uid $packageName FOREGROUND_SERVICE_SPECIAL_USE allow")
+            val pkgExit = RemoteUtils.shellExec("appops set $packageName FOREGROUND_SERVICE_SPECIAL_USE allow")
+            val ok = uidExit == 0 && pkgExit == 0
+            if (ok) {
+                Ln.i("$TAG: FOREGROUND_SERVICE_SPECIAL_USE allowed for $packageName")
+            } else {
+                Ln.w("$TAG: FOREGROUND_SERVICE_SPECIAL_USE allow failed (uid=$uidExit, pkg=$pkgExit)")
+            }
+            ok
+        } catch (e: Exception) {
+            Ln.e("$TAG: Failed to allow FOREGROUND_SERVICE_SPECIAL_USE: $e")
             false
         }
     }

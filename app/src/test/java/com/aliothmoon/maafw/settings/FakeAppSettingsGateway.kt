@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.settings
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
@@ -68,6 +69,12 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         debugMode.value = enabled
     }
 
+    override val saveOnError = MutableStateFlow(true)
+
+    override suspend fun setSaveOnError(enabled: Boolean) {
+        saveOnError.value = enabled
+    }
+
     override val themeStyle = MutableStateFlow(ThemeStyle.DEFAULT)
 
     override suspend fun setThemeStyle(style: ThemeStyle) {
@@ -84,6 +91,18 @@ class FakeAppSettingsGateway : AppSettingsGateway {
 
     override suspend fun setWakeCredential(credential: String) {
         wakeCredential.value = credential.filter(Char::isDigit)
+    }
+
+    override val runDurationLimitEnabled = MutableStateFlow(false)
+
+    override suspend fun setRunDurationLimitEnabled(enabled: Boolean) {
+        runDurationLimitEnabled.value = enabled
+    }
+
+    override val runDurationLimitMinutes = MutableStateFlow(RunDurationLimit.DEFAULT_MINUTES)
+
+    override suspend fun setRunDurationLimitMinutes(minutes: Int) {
+        runDurationLimitMinutes.value = RunDurationLimit.normalize(minutes)
     }
 
     override val telemetryEnabled = MutableStateFlow(false)

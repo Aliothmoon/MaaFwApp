@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -161,5 +162,40 @@ class FocusDispatcherTest {
             ),
         )
         assertEquals(channels, completed(runner, dispatcherWith(runner), event).channels)
+    }
+
+    @Test
+    fun `recording keeps completed focus in order with the raw events`() = runTest(UnconfinedTestDispatcher()) {
+        val runner = RecordingEventRunnerPort()
+        val slowResolver = object : FocusContentResolver {
+            override suspend fun resolve(content: String): String {
+                delay(1_000)
+                return "读到的正文"
+            }
+        }
+        val dispatcher = dispatcherWith(runner, slowResolver)
+        val recorded = mutableListOf<RunnerEventEnvelope>()
+        backgroundScope.launch { dispatcher.recording.collect { recorded += it } }
+        advanceUntilIdle()
+
+        runner.emit(focus("./docs/tip.md"), "e1", "启动")
+        runner.emit(RunnerEvent.Log("之后的一行"), "e1", "启动")
+        runner.emit(RunnerEvent.ExecutionFinished, "e1")
+        // 补完跑在 backgroundScope 上，advanceUntilIdle 不推它的虚拟时间
+        testScheduler.advanceTimeBy(2_000)
+        testScheduler.runCurrent()
+
+        assertEquals(
+            listOf("读到的正文", "之后的一行", "ExecutionFinished"),
+            recorded.map {
+                when (val event = it.event) {
+                    is RunnerEvent.Focus -> event.focus.content
+                    is RunnerEvent.Log -> event.message
+                    else -> event.toString()
+                }
+            },
+        )
+        assertEquals(listOf("e1", "e1", "e1"), recorded.map { it.executionId })
+        assertEquals("启动", recorded.first().taskLabel)
     }
 }

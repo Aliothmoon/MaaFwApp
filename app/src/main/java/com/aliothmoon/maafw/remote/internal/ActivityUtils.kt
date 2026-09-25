@@ -97,6 +97,16 @@ object ActivityUtils {
         spec.takeIf { it.contains('/') }?.let { ComponentName.unflattenFromString(it) }
 
     @JvmStatic
+    fun stopApp(packageName: String): Boolean {
+        val targetPackage = packageNameOf(packageName)
+        return runCatching {
+            ServiceManager.getActivityManager().forceStopPackage(targetPackage)
+        }.onFailure {
+            Ln.w("stopApp: failed to force-stop $targetPackage", it)
+        }.getOrDefault(false)
+    }
+
+    @JvmStatic
     @JvmOverloads
     fun startApp(
         packageName: String,

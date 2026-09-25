@@ -12,7 +12,7 @@ class GameFpsHook(private val watcher: GameFpsWatcher) : RunEnvHook {
 
     override suspend fun engage(ctx: RunContext): EngageResult {
         if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
-        watcher.start()
+        watcher.start(ctx.executionId)
         return EngageResult.Engaged(Release { watcher.stop() })
     }
 }
