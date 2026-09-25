@@ -137,6 +137,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
         return true
     }
 
+    override fun setSaveOnError(enabled: Boolean): Boolean {
+        runner.setSaveOnError(enabled)
+        return true
+    }
+
     private fun ensureWritableDir(path: String): Boolean {
         val dir = File(path)
         if (!dir.isDirectory && !dir.mkdirs()) {

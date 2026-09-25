@@ -103,6 +103,12 @@ interface RemoteService {
     /** MaaFramework 版本；未加载返回 null */
     String maaVersion() = 54;
 
+    /**
+     * MaaGlobalOption_SaveOnError：节点出错时把现场截图落到 logDir/on_error
+     * app 每轮 setup 后现读设置再调；框架核心默认 false，不设就永远不存
+     */
+    boolean setSaveOnError(boolean enabled) = 55;
+
     /** 看门狗状态：0=IDLE / 1=WATCHING / 2=APP_DIED（目标 app 是否仍在虚拟屏上） */
     int watchdogState() = 60;
 
