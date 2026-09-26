@@ -64,7 +64,14 @@ interface RunEnvHook {
     /** [EngageResult.Failed] 是否中止整轮。解锁失败还硬跑 = 对着锁屏识别到超时 */
     val gating: Boolean
 
+    /** engage 的超时；本身就要等一段的挂载物得按自己的时长放宽，否则等完之前就被判超时 */
+    val engageTimeoutMs: Long get() = DEFAULT_ENGAGE_TIMEOUT_MS
+
     suspend fun engage(ctx: RunContext): EngageResult
+
+    companion object {
+        const val DEFAULT_ENGAGE_TIMEOUT_MS = 30_000L
+    }
 }
 
 /** 收尾理由；投递之后的结局直接复用 [ExecutionResult]，不另造一套平行分类 */

@@ -374,6 +374,17 @@ class RunLauncherTest {
     }
 
     @Test
+    fun `a full scheduled countdown is not cut off by the engage timeout`() = runTest(testDispatcher) {
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            hooks = listOf(CountdownHook),
+        )
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Schedule("s1")))
+    }
+
+    @Test
     fun `a failed gating result is recorded then blocks`() = runTest(testDispatcher) {
         val steps = mutableListOf<RunStep>()
         val hook = object : RunEnvHook {

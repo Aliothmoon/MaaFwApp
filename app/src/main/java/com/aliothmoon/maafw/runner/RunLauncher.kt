@@ -242,7 +242,7 @@ class RunLauncher(
                 "gating hook ${hook.id} cannot use AfterAccepted"
             }
             val result = try {
-                withTimeout(ENGAGE_TIMEOUT_MS) { hook.engage(ctx) }
+                withTimeout(hook.engageTimeoutMs) { hook.engage(ctx) }
             } catch (timeout: TimeoutCancellationException) {
                 EngageResult.Failed(uiTextOf(R.string.msg_hook_timeout, hook.id))
             } catch (cancellation: CancellationException) {
@@ -301,7 +301,6 @@ class RunLauncher(
     }
 
     private companion object {
-        const val ENGAGE_TIMEOUT_MS = 30_000L
         const val RELEASE_TIMEOUT_MS = 10_000L
 
         /** 闹钟重投的间隔是秒级，记这么多足够，也不至于无限长 */

@@ -216,11 +216,15 @@ object CountdownHook : RunEnvHook {
 
     /** 与 MaaMeow 的 `LaunchRequest.DEFAULT_COUNTDOWN_SECONDS` 一致，同样不开放配置 */
     private const val COUNTDOWN_SECONDS = 30
+    private const val TIMEOUT_MARGIN_MS = 10_000L
 
     override val id: String = "countdown"
     override val anchor: Anchor = Anchor.BeforeDispatch
     override val order: Int = HookOrder.COUNTDOWN
     override val gating: Boolean = true
+
+    // 倒计时满打满算就是 30 秒，外加每秒一次的通知刷新，套默认 30 秒超时必然先被判超时
+    override val engageTimeoutMs: Long = COUNTDOWN_SECONDS * 1_000L + TIMEOUT_MARGIN_MS
 
     override suspend fun engage(ctx: RunContext): EngageResult {
         if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
