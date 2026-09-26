@@ -38,6 +38,10 @@ gradlePlugin {
             id = "maafw.android.library"
             implementationClass = "com.aliothmoon.maafw.gradle.AndroidLibraryConventionPlugin"
         }
+        register("androidTestApp") {
+            id = "maafw.android.testapp"
+            implementationClass = "com.aliothmoon.maafw.gradle.AndroidTestAppConventionPlugin"
+        }
         register("androidBenchmark") {
             id = "maafw.android.benchmark"
             implementationClass = "com.aliothmoon.maafw.gradle.AndroidBenchmarkConventionPlugin"

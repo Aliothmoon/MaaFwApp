@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ControllerDefinition
@@ -40,6 +41,9 @@ class MaaFrameworkRunnerPortTest {
     val temp = TemporaryFolder()
 
     private val dispatcher = StandardTestDispatcher()
+
+    // 同 bindRunnerCallback：JVM 单测构造不了 AIDL Stub，只拿接口本身验注册
+    private val textInputSink = mockk<ITextInputSink>()
 
     @Before
     fun setUp() {
@@ -104,6 +108,7 @@ class MaaFrameworkRunnerPortTest {
             saveOnError = saveOnError,
             scope = scope.backgroundScope,
             servicePort = servicePort,
+            textInputSink = { textInputSink },
         )
         // JVM 单测构造不了 AIDL Stub；本文件只测 phase，不测回调转发
         runner.bindRunnerCallback = { _, _ -> }
@@ -141,6 +146,18 @@ class MaaFrameworkRunnerPortTest {
         advanceUntilIdle()
 
         assertFalse(service.saveOnError)
+    }
+
+    /** 特权进程可能在两轮之间重启过，sink 要每轮都注册，不能只在绑定时注册一次 */
+    @Test
+    fun `text input sink is registered on every run`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+
+        assertEquals(RunnerCommandResult.Accepted, runner.start(plan(), "e1"))
+        advanceUntilIdle()
+
+        assertTrue(service.textInputSink === textInputSink)
     }
 
     @Test

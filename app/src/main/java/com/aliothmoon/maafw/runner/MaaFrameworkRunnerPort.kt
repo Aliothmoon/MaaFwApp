@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.runner
 import android.os.Process
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.IMaaRunnerCallback
+import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
@@ -56,6 +57,8 @@ class MaaFrameworkRunnerPort(
     private val saveOnError: () -> Boolean,
     private val scope: CoroutineScope,
     private val servicePort: PrivilegedServicePort,
+    /** 取值函数而不是实例：sink → RunJournal → FocusDispatcher → RunnerPort 成环，构造时解析会栈溢出 */
+    private val textInputSink: () -> ITextInputSink,
 ) : RunnerPort {
 
     private val _state = MutableStateFlow(RunnerState())
@@ -328,6 +331,8 @@ class MaaFrameworkRunnerPort(
         // 环境性开关，不作为拒跑理由：设不上只是不存图，下一轮再试
         runCatching { service.setSaveOnError(saveOnError()) }
             .onFailure { Timber.w(it, "setSaveOnError failed") }
+        runCatching { service.setTextInputSink(textInputSink()) }
+            .onFailure { Timber.w(it, "setTextInputSink failed") }
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
         // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作
         if (debugMode()) {

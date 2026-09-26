@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.privileged
 import android.os.IBinder
 import android.view.Surface
 import com.aliothmoon.maafw.IMaaRunnerCallback
+import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.ITouchEventCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.WakeUnlockResult
@@ -75,6 +76,13 @@ open class FakePrivilegedService : RemoteService {
 
     var saveOnError: Boolean = true
         private set
+
+    var textInputSink: ITextInputSink? = null
+        private set
+
+    override fun setTextInputSink(sink: ITextInputSink?) {
+        textInputSink = sink
+    }
 
     override fun setSaveOnError(enabled: Boolean): Boolean {
         saveOnError = enabled

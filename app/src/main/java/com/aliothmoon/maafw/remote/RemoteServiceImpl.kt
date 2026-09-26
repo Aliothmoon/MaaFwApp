@@ -1,10 +1,12 @@
 package com.aliothmoon.maafw.remote
 
 import com.aliothmoon.maafw.IMaaRunnerCallback
+import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.ITouchEventCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.bridge.InputControlUtils
 import com.aliothmoon.maafw.bridge.NativeBridgeLib
+import com.aliothmoon.maafw.bridge.TextInputDispatcher
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
@@ -65,6 +67,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         Ln.i("$TAG: destroy()")
         AppWatchdog.stopWatching()
         InputControlUtils.setTouchCallback(null)
+        TextInputDispatcher.sink = null
         runner.destroy()
         cleanup()
         exitProcess(0)
@@ -254,6 +257,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun setTouchCallback(callback: ITouchEventCallback?) {
         InputControlUtils.setTouchCallback(callback)
+    }
+
+    override fun setTextInputSink(sink: ITextInputSink?) {
+        TextInputDispatcher.sink = sink
     }
 
     // ── 预览上的手动操作；主屏模式下不接管输入 ──

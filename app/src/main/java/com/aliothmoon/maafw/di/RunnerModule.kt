@@ -32,6 +32,7 @@ import com.aliothmoon.maafw.runner.SessionLogHook
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.runner.WakeUnlockHook
 import com.aliothmoon.maafw.runner.WatchdogNoticeHook
+import com.aliothmoon.maafw.service.AccessibilityTextInputSink
 import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import org.koin.android.ext.koin.androidContext
@@ -52,6 +53,14 @@ val runnerModule = module {
             saveOnError = get<AppSettingsManager>().saveOnError::value,
             scope = get(named<AppCoroutineScope>()),
             servicePort = get(),
+            textInputSink = { get<AccessibilityTextInputSink>() },
+        )
+    }
+
+    single {
+        AccessibilityTextInputSink(
+            journal = get(),
+            activeExecutionId = { get<RunnerPort>().state.value.activeExecution?.executionId },
         )
     }
 

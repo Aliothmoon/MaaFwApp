@@ -216,7 +216,12 @@
     <string name="notification_run_stopping">正在停止</string>
 
     <!-- 前台模式控制层 -->
-    <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板。只拦按键，不读取屏幕内容</string>
+    <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板；任务要输入中文等文本时，把文字写进目标应用的输入框。只在输入的那一刻查找输入框，不记录也不上传屏幕内容</string>
+    <string name="text_input_accessibility_unavailable">要输入的文本含有中文等键盘打不出的字符，需要无障碍服务写入，但服务没有开启：请到系统设置的无障碍页面手动开启本应用的无障碍服务后重试</string>
+    <string name="text_input_unsupported_display">Android 11 以下无法向后台虚拟屏写入中文等键盘打不出的文本，请改用前台模式运行</string>
+    <string name="text_input_no_focused_input">没有找到获得焦点的输入框，文本没有写入：输入前要先点中输入框</string>
+    <string name="text_input_foreign_package">获得焦点的输入框不属于目标应用 %1$s，为防止输进别的应用已放弃写入</string>
+    <string name="text_input_action_failed">输入框拒绝了无障碍写入，文本没有写入</string>
     <string name="overlay_tab_tasks">任务</string>
     <string name="overlay_tab_log">日志</string>
     <string name="overlay_hide">隐藏</string>

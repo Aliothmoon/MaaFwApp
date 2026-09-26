@@ -222,7 +222,12 @@
     <string name="notification_run_stopping">Stopping</string>
 
     <!-- Foreground control layer -->
-    <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
+    <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode, and type text such as Chinese into the target app\'s input box when a task needs it. The input box is looked up only at that moment; screen content is never recorded or uploaded.</string>
+    <string name="text_input_accessibility_unavailable">The text contains characters a keyboard can\'t type, such as Chinese, which need the accessibility service, but it is not enabled. Enable this app\'s accessibility service in the system accessibility settings and try again.</string>
+    <string name="text_input_unsupported_display">Below Android 11, text such as Chinese can\'t be written to the background virtual display. Run in primary-display mode instead.</string>
+    <string name="text_input_no_focused_input">No focused input box was found, so the text was not written. Tap the input box before typing.</string>
+    <string name="text_input_foreign_package">The focused input box does not belong to the target app %1$s; the text was not written to avoid typing into another app.</string>
+    <string name="text_input_action_failed">The input box rejected the accessibility write; the text was not written.</string>
     <string name="overlay_tab_tasks">Tasks</string>
     <string name="overlay_tab_log">Log</string>
     <string name="overlay_hide">Hide</string>

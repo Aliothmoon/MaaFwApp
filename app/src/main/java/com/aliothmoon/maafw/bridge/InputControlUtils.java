@@ -235,6 +235,28 @@ public final class InputControlUtils {
         return injected;
     }
 
+    /** 最后一个事件等目标窗口处理完才返回，紧接着的点击不能抢在文字送达之前；失败日志不带键码，能拼回原文 */
+    public static boolean injectTextKeys(KeyEvent[] events, int displayId) {
+        for (int i = 0; i < events.length; i++) {
+            KeyEvent event = events[i];
+            if (!setDisplayId(event, displayId)) {
+                Ln.w(TAG + ": text key inject failed stage=" + STAGE_SET_DISPLAY_ID
+                        + " index=" + i + "/" + events.length + " displayId=" + displayId);
+                return false;
+            }
+            int mode = i == events.length - 1
+                    ? InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH
+                    : InputManager.INJECT_INPUT_EVENT_MODE_ASYNC;
+            if (!getManager().injectInputEvent(event, mode)) {
+                Ln.w(TAG + ": text key inject failed stage=" + STAGE_INJECT
+                        + " index=" + i + "/" + events.length + " displayId=" + displayId
+                        + " mode=" + injectModeName(mode) + displaySnapshot(displayId));
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static void logPlanFailure(TouchPointerSequence.Step step, TouchPointerSequence.Kind kind,
                                        int x, int y, int contact, int displayId) {
         Ln.w(TAG + ": touch plan failed"

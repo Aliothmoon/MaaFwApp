@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MaaFw 输入测试</string>
+    <string name="hint_normal">普通输入框</string>
+    <string name="hint_password">密码输入框</string>
+</resources>

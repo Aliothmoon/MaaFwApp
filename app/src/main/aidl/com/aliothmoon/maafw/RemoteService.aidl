@@ -3,6 +3,7 @@ package com.aliothmoon.maafw;
 import android.view.Surface;
 import com.aliothmoon.maafw.ITouchEventCallback;
 import com.aliothmoon.maafw.IMaaRunnerCallback;
+import com.aliothmoon.maafw.ITextInputSink;
 
 /**
  * 特权进程的服务面（docs/privileged-runtime.md §6）
@@ -147,4 +148,6 @@ interface RemoteService {
 
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;
+    /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */
+    oneway void setTextInputSink(ITextInputSink sink) = 77;
 }

@@ -105,7 +105,7 @@
                 android:value="Keeps the app process alive while the privileged service drives a MaaFramework run" />
         </service>
 
-        <!-- 只过滤按键，不读窗口内容；用途见 AccessibilityHelperService -->
+        <!-- 过滤音量键组合，并在 InputText 时写入输入框；用途见 AccessibilityHelperService -->
         <service
             android:name=".service.AccessibilityHelperService"
             android:exported="false"
