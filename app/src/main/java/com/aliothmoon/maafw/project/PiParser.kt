@@ -247,10 +247,11 @@ object PiParser {
 
     /** 与 [parseInterface] 分开是因为物化要等翻译表，那一步在 loader 里读完 languages 才有 */
     fun parseMetadata(root: JsonObject, text: PiTextResolver): ProjectMetadata {
-        val welcomeRaw = root.string("welcome")
+        val welcomeRaw = welcomeDeclarations(root["welcome"])
         return ProjectMetadata(
-            welcome = text.description(welcomeRaw),
-            welcomeFingerprint = welcomeRaw?.let { welcomeFingerprint(it, root.string("version")) },
+            welcome = welcomeRaw.mapNotNull(text::description),
+            welcomeFingerprint = welcomeRaw.takeIf { it.isNotEmpty() }
+                ?.let { welcomeFingerprint(it, root.string("version")) },
             description = text.description(root.string("description")),
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
@@ -282,11 +283,24 @@ object PiParser {
         )
     }
 
-    private fun welcomeFingerprint(raw: String, version: String?): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest("$raw@${version.orEmpty()}".toByteArray())
+    /** v2.10.2 起可写字符串数组，按数组顺序展示；空串与非字符串元素跳过 */
+    private fun welcomeDeclarations(element: JsonElement?): List<String> = when (element) {
+        is JsonArray -> element.mapNotNull { (it as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content }
+        is JsonPrimitive -> listOfNotNull(element.contentOrNull)
+        else -> emptyList()
+    }.filter(String::isNotBlank)
+
+    /**
+     * 单条沿用数组支持之前的算法：看过的用户升级后不重弹，`"x"` 改写成 `["x"]` 也不算内容变化。
+     * 多条按有序原文整体算，增删、重排、改任一条都会重弹
+     */
+    private fun welcomeFingerprint(raws: List<String>, version: String?): String {
+        val declaration = raws.singleOrNull() ?: JsonArray(raws.map(::JsonPrimitive)).toString()
+        return MessageDigest.getInstance("SHA-256")
+            .digest("$declaration@${version.orEmpty()}".toByteArray())
             .take(8)
             .joinToString("") { "%02x".format(it) }
+    }
 
     fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {
         val root = try {

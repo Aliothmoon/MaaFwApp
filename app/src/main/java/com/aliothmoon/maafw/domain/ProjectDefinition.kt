@@ -44,7 +44,8 @@ data class TelemetryDefinition(
  * [welcomeFingerprint] 算在物化前的原始声明上：算在正文上的话，切一次语言换了译文就会重弹
  */
 data class ProjectMetadata(
-    val welcome: String? = null,
+    /** 按 PI 声明顺序排好的公告正文，已物化；空表示没有 welcome */
+    val welcome: List<String> = emptyList(),
     val welcomeFingerprint: String? = null,
     val description: String? = null,
     val contact: String? = null,

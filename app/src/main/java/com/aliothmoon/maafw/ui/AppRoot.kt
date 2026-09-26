@@ -328,7 +328,7 @@ fun AppRoot(
 
         MaaMarkdownSheet(
             title = stringResource(R.string.welcome_title),
-            body = state.welcomePrompt,
+            bodies = state.welcomePrompt,
             onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
         )
 
