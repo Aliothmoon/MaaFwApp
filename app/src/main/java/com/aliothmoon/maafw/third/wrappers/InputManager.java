@@ -24,6 +24,7 @@ public final class InputManager {
 
     private static Method injectInputEventMethod;
     private static Method setDisplayIdMethod;
+    private static Method getDisplayIdMethod;
     private static Method setActionButtonMethod;
     private static Method addUniqueIdAssociationByPortMethod;
     private static Method removeUniqueIdAssociationByPortMethod;
@@ -69,6 +70,17 @@ public final class InputManager {
             }
             Ln.e("Could not invoke method", e);
             return false;
+        }
+    }
+
+    public static String getDisplayIdForLog(InputEvent inputEvent) {
+        try {
+            if (getDisplayIdMethod == null) {
+                getDisplayIdMethod = InputEvent.class.getMethod("getDisplayId");
+            }
+            return String.valueOf(getDisplayIdMethod.invoke(inputEvent));
+        } catch (ReflectiveOperationException e) {
+            return "unavailable:" + e.getClass().getSimpleName();
         }
     }
 
