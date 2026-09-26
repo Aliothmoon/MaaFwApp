@@ -5,7 +5,7 @@
 
 用法:
     python scripts/setup_maa_framework.py                  # 取 latest release
-    python scripts/setup_maa_framework.py --tag v4.5.0     # 取指定 tag
+    python scripts/setup_maa_framework.py --tag v5.13.0    # 取指定 tag
     python scripts/setup_maa_framework.py --skip-download  # 只用缓存重新铺一遍
     python scripts/setup_maa_framework.py --abi arm64-v8a  # 只处理一个 ABI
 
@@ -14,6 +14,7 @@
   - libc++_shared.so 保留上游那份：MaaFramework 各 so 都链接它
   - bin/plugins/ 是 MaaPluginDemo 的示例插件，默认不打包，要的话加 --with-plugins
   - 目标目录每次铺之前先清空，避免残留上个版本的 .so
+  - 低于 MIN_VERSION 的 release 拒绝下载，缓存里的旧版本产物铺开时跳过
 """
 
 import argparse
@@ -63,6 +64,26 @@ REQUIRED_SO = {
 
 # MAA-android-aarch64-v4.5.0.zip / MAA-android-x86_64-v4.5.0-beta.1.zip
 ZIP_VERSION_RE = re.compile(r"-android-(?:aarch64|x86_64)-(v[0-9A-Za-z.\-+]+)\.zip$")
+
+# 外壳支持的最低 MaaFramework 版本；bridge 无条件读 TouchArgs.contact（#1447，v5.13.0-beta.3 起），
+# 更旧的产物不会报错，只会让多指静默退化成单指
+MIN_VERSION = (5, 13, 0)
+SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.\-]+)?(\+[0-9A-Za-z.\-]+)?$")
+
+
+def min_version_text() -> str:
+    return "v" + ".".join(map(str, MIN_VERSION))
+
+
+def is_supported_version(tag: str) -> bool:
+    """解析不出版本号的 tag 一律不认；5.13.0-beta.x 按 semver 排在 5.13.0 之前"""
+    m = SEMVER_RE.match(tag)
+    if not m:
+        return False
+    core = tuple(int(part) for part in m.group(1, 2, 3))
+    if core != MIN_VERSION:
+        return core > MIN_VERSION
+    return m.group(4) is None
 
 
 def get_project_root() -> Path:
@@ -269,7 +290,10 @@ def main():
     print("=" * 55)
 
     if not args.skip_download:
-        _, assets = get_release_assets(args.tag)
+        tag_name, assets = get_release_assets(args.tag)
+        if not is_supported_version(tag_name):
+            print(f"[ERROR] {tag_name} 低于最低支持版本 {min_version_text()}（或解析不出版本号），拒绝安装")
+            sys.exit(1)
         android_assets = find_android_assets(assets)
         if not android_assets:
             print("[ERROR] release 里没有 Android 产物，确认该 tag 是否包含 MAA-android-*.zip")
@@ -292,26 +316,23 @@ def main():
         print("[SKIP] 跳过下载，使用缓存")
 
     print("\n[DEPLOY] 铺开产物")
-    deployed = False
     deployed_version = None
     for archive in sorted(cache_dir.glob("MAA-android-*.zip")):
         for keyword, abi in ABI_MAP.items():
             if keyword in archive.name and abi in target_abis:
-                deploy_zip(archive, abi, project_root, args.with_plugins)
-                deployed = True
                 m = ZIP_VERSION_RE.search(archive.name)
-                if m:
-                    deployed_version = m.group(1)
+                if not m or not is_supported_version(m.group(1)):
+                    print(f"  [SKIP] {archive.name}: 低于最低支持版本 {min_version_text()}（或解析不出版本号）")
+                    continue
+                deploy_zip(archive, abi, project_root, args.with_plugins)
+                deployed_version = m.group(1)
 
-    if not deployed:
-        print("[ERROR] 缓存里没有 MAA-android-*.zip，先不带 --skip-download 跑一次")
+    if deployed_version is None:
+        print(f"[ERROR] 缓存里没有 {min_version_text()} 及以上的 MAA-android-*.zip，先不带 --skip-download 跑一次")
         sys.exit(1)
 
-    if deployed_version:
-        (project_root / VERSION_FILE).write_text(deployed_version + "\n", encoding="utf-8")
-        print(f"  [VERSION] {VERSION_FILE}: {deployed_version}")
-    else:
-        print(f"[WARN] 从产物名解析不出版本，{VERSION_FILE} 未更新")
+    (project_root / VERSION_FILE).write_text(deployed_version + "\n", encoding="utf-8")
+    print(f"  [VERSION] {VERSION_FILE}: {deployed_version}")
 
     print("\n" + "=" * 55)
     print("[DONE] 部署完成")
