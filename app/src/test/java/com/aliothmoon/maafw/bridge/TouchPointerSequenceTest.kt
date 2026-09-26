@@ -164,10 +164,14 @@ class TouchPointerSequenceTest {
 
     @Test
     fun `adding another contact beyond capacity is rejected`() {
-        val current = List(TouchPointerSequence.MAX_CONTACTS) { p(1) }
-        val step = TouchPointerSequence.plan(Kind.Down, current, 0, 0f, 0f)
+        // 正常槽位里 contact 互不相同，满 16 个时任何 contact 都已在场、走不到这里；造重复 contact 只为覆盖防御分支
+        val sharedPointerId = List(TouchPointerSequence.MAX_CONTACTS) { p(1) }
+        val noFreePointerId = List(TouchPointerSequence.MAX_CONTACTS) { Pointer(1, 0f, 0f, pointerId = it) }
+        for (current in listOf(sharedPointerId, noFreePointerId)) {
+            val step = TouchPointerSequence.plan(Kind.Down, current, 0, 0f, 0f)
 
-        assertFalse(step.ok)
-        assertEquals(FailureReason.TooManyContacts, step.failureReason)
+            assertFalse(step.ok)
+            assertEquals(FailureReason.TooManyContacts, step.failureReason)
+        }
     }
 }

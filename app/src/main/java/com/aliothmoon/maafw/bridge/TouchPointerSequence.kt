@@ -51,7 +51,7 @@ object TouchPointerSequence {
         val idx = current.indexOfFirst { it.contact == contact }
         val pointerId = current.getOrNull(idx)?.pointerId
             ?: (0 until MAX_CONTACTS).firstOrNull { id -> current.none { it.pointerId == id } }
-            ?: return Step(ok = false)
+            ?: return Step(ok = false, failureReason = FailureReason.TooManyContacts)
         val nextPointer = Pointer(contact, x, y, pointerId)
         return when (kind) {
             Kind.Down -> when {
