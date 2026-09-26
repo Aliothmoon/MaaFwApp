@@ -140,8 +140,22 @@ class FocusParserTest {
     }
 
     @Test
-    fun `focus that is not an object is ignored`() {
-        assertNull(FocusParser.parse("M", """{"focus":"log"}"""))
+    fun `whole string focus applies to action starting only`() {
+        val details = """{"name":"NodeA","focus":"{name} 开始执行"}"""
+        val focus = FocusParser.parse("Node.Action.Starting", details)!!
+        assertEquals("{name} 开始执行", focus.content)
+        assertEquals(setOf(FocusChannel.Log), focus.channels)
+        assertFalse(focus.trace)
+        assertEquals(mapOf("name" to "NodeA"), focus.placeholders)
+
+        assertNull(FocusParser.parse("Node.Recognition.Starting", details))
+        assertNull(FocusParser.parse("Node.Action.Succeeded", details))
+    }
+
+    @Test
+    fun `non-string scalar focus is ignored`() {
+        assertNull(FocusParser.parse("Node.Action.Starting", """{"focus":true}"""))
+        assertNull(FocusParser.parse("Node.Action.Starting", """{"focus":123}"""))
     }
 
     @Test

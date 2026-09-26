@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.maa.MaaMsg
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -95,10 +96,17 @@ object FocusParser {
     fun parse(message: String, detailsJson: String): FocusMessage? {
         if (message.isEmpty()) return null
         if (!detailsJson.contains(FOCUS_MARKER) || detailsJson.contains(FOCUS_ABSENT)) return null
+        // 字典写法以 message 为键；串里没有它，就只剩挂在 Starting 上的整串写法
+        if (message != MaaMsg.NODE_ACTION_STARTING && !detailsJson.contains("\"$message\"")) return null
 
         val details = runCatching { json.parseToJsonElement(detailsJson) }.getOrNull() as? JsonObject
             ?: return null
-        val entry = (details[FOCUS_KEY] as? JsonObject)?.get(message) ?: return null
+        val entry = when (val focus = details[FOCUS_KEY]) {
+            is JsonObject -> focus[message]
+            // 协议外的整串写法（见 pi-compatibility.md）；v4 的 bool 开关 `true` 不算正文
+            is JsonPrimitive -> focus.takeIf { it.isString && message == MaaMsg.NODE_ACTION_STARTING }
+            else -> null
+        } ?: return null
 
         val (rawContent, channels, trace) = when (entry) {
             // 简写：等价于 display: "log"
@@ -129,9 +137,10 @@ object FocusParser {
         )
     }
 
-    /** `focus` 自己是对象，不会混进来；其余非标量同样取不出可比的文本 */
+    /** 非标量取不出可比的文本；整串写法的 `focus` 本身是标量，要单独排掉 */
     private fun scalarFields(details: JsonObject): Map<String, String> = buildMap {
         details.forEach { (key, value) ->
+            if (key == FOCUS_KEY) return@forEach
             (value as? JsonPrimitive)?.contentOrNullIfNotString()?.let { put(key, it) }
         }
     }
