@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CORE_REPO = "Aliothmoon/MaaAgentCoreAndroid"
-CORE_TAG = "3.13.15-maafw5.12.3"
+CORE_TAG = "3.13.15-maafw5.13.0"
 CORE_PY = "3.13.15"
 CORE_URL = "https://github.com/{repo}/releases/download/{tag}/{asset}"
 CORE_MANIFEST = "agent-core.json"
