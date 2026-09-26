@@ -72,6 +72,23 @@ class TelemetrySummaryTest {
         assertEquals("count=3,flag=false", summary.getValue("settings"))
     }
 
+    /** 纯数字 PIN 按 int 走也不能报原值 */
+    @Test
+    fun `password 不论类型只报填没填`() {
+        val definition = definition(
+            input(
+                field("pin", PipelineType.IntType).copy(password = true),
+                field("token", PipelineType.StringType).copy(password = true),
+            ),
+        )
+        val summary = TelemetrySummary.summarize(
+            definition,
+            listOf("settings"),
+            mapOf("settings" to OptionValue.Inputs(mapOf("pin" to "123456"))),
+        )
+        assertEquals("pin=filled,token=empty", summary.getValue("settings"))
+    }
+
     @Test
     fun `case 名原样上报并递归子选项`() {
         val child = OptionDefinition.Select(

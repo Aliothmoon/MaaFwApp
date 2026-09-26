@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -333,6 +334,8 @@ private fun InputFields(
                 isError = !valid,
                 enabled = !locked,
                 singleLine = true,
+                visualTransformation = field.visualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType()),
                 modifier = Modifier.fillMaxWidth(),
             )
         }

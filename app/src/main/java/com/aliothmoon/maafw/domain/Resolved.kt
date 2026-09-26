@@ -154,6 +154,8 @@ data class InputFieldState(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
+    /** 输入框掩码，不回显原文 */
+    val password: Boolean = false,
 )
 
 /** UI 即时校验与 Builder 复验共用（docs/domain-model.md §6.6） */

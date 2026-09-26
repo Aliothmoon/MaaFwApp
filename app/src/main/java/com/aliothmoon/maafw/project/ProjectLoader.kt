@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.OptionDefinition
+import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
@@ -126,7 +127,8 @@ class ProjectLoader(
             template.copy(
                 tasks = template.tasks.map {
                     it.copy(
-                        label = taskLabels[it.taskName] ?: it.taskName
+                        label = taskLabels[it.taskName] ?: it.taskName,
+                        optionValues = withoutPresetPasswords(template.name, it.optionValues, state.options, diagnostics),
                     )
                 },
             )
@@ -161,6 +163,26 @@ class ProjectLoader(
             translations = translations,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
+    }
+
+    /**
+     * 协议要求 preset 不写 password 字段：interface.json 随资源分发，写进去的就是人人可见的明文。
+     * 放在合并之后做，是因为 preset 与它引用的 option 可以分在不同的 import 分片里
+     */
+    private fun withoutPresetPasswords(
+        preset: String,
+        values: Map<String, OptionValue>,
+        options: Map<String, OptionDefinition>,
+        diagnostics: MutableList<Diagnostic>,
+    ): Map<String, OptionValue> = values.mapValues { (optionName, value) ->
+        val inputs = value as? OptionValue.Inputs ?: return@mapValues value
+        val passwords = (options[optionName] as? OptionDefinition.Input)?.fields
+            ?.filter { it.password && it.name in inputs.values }
+            .orEmpty()
+        passwords.forEach {
+            diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.presetPasswordIgnored(preset, optionName, it.name))
+        }
+        if (passwords.isEmpty()) value else inputs.copy(values = inputs.values - passwords.map { it.name }.toSet())
     }
 
     /**

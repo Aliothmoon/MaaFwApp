@@ -6,12 +6,14 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.domain.SECRET_MASK
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,6 +37,11 @@ class LogExportService(
     private val debugMode: () -> Boolean,
     /** 设备快照文本；采集在 [DeviceInfoCollector] */
     private val deviceInfo: () -> String,
+    /**
+     * 当前保存着的 PI password 明文，打包时在文本日志里换成掩码。
+     * MaaFramework 的 `MaaTaskerPostTask` 会把替换后的整份 pipeline_override 写进框架日志 `log/maafw.log`，外壳拦不住，只能在导出这一步补
+     */
+    private val secrets: suspend () -> Collection<String> = { emptyList() },
 ) {
 
     /** 返回 null = 打包失败；没有日志时也保留设备信息快照 */
@@ -49,7 +56,7 @@ class LogExportService(
             // 只留最新一份：旧包对用户没用，留着纯占空间
             dir.listFiles()?.forEach { it.delete() }
             val zip = File(dir, "maafw_logs_${STAMP.format(Date())}.zip")
-            writeZip(zip, files)
+            writeZip(zip, files, redactable(secrets()))
             zip
         }.onFailure { Timber.w(it, "export logs failed") }.getOrNull()
     }
@@ -69,14 +76,14 @@ class LogExportService(
 
     fun suggestedFileName(): String = "maafw_logs_${STAMP.format(Date())}.zip"
 
-    private fun writeZip(zip: File, files: List<File>) {
+    private fun writeZip(zip: File, files: List<File>, secrets: List<String>) {
         val base = baseDir()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
             if (debugMode()) appendDeviceProperties(out)
             appendDeviceInfo(out)
             val skipped = mutableListOf<String>()
             files.forEach { file ->
-                appendLogFile(out, file, base, skipped)
+                appendLogFile(out, file, base, secrets, skipped)
             }
             if (skipped.isNotEmpty()) {
                 out.putNextEntry(ZipEntry(SKIPPED_ENTRY))
@@ -87,13 +94,23 @@ class LogExportService(
     }
 
     /** 提权进程写的文件可能对 App 不可读，逐个跳过，不拖垮整包 */
-    private fun appendLogFile(out: ZipOutputStream, file: File, base: File, skipped: MutableList<String>) {
+    private fun appendLogFile(
+        out: ZipOutputStream,
+        file: File,
+        base: File,
+        secrets: List<String>,
+        skipped: MutableList<String>,
+    ) {
         val name = file.relativeTo(base).invariantSeparatorsPath
         try {
             file.inputStream().use { input ->
                 val entry = ZipEntry(name).apply { time = file.lastModified() }
                 out.putNextEntry(entry)
-                input.copyTo(out, BUFFER_SIZE)
+                if (secrets.isNotEmpty() && file.extension.lowercase() in TEXT_EXTENSIONS) {
+                    copyRedacted(input, out, secrets)
+                } else {
+                    input.copyTo(out, BUFFER_SIZE)
+                }
                 out.closeEntry()
             }
         } catch (e: IOException) {
@@ -101,6 +118,16 @@ class LogExportService(
             skipped += "$name: ${e.message ?: e::class.java.simpleName}"
             runCatching { out.closeEntry() }
         }
+    }
+
+    /** 逐行替换，大文件不整份读进内存，换行统一成 LF；writer 只 flush 不 close，close 会把整个 zip 流关掉 */
+    private fun copyRedacted(input: InputStream, out: ZipOutputStream, secrets: List<String>) {
+        val writer = out.bufferedWriter(Charsets.UTF_8)
+        input.bufferedReader(Charsets.UTF_8).forEachLine { line ->
+            writer.write(secrets.fold(line) { text, secret -> text.replace(secret, SECRET_MASK) })
+            writer.write("\n")
+        }
+        writer.flush()
     }
 
     /** 取不到就跳过：少一份设备属性不该让整个导出失败 */
@@ -148,6 +175,14 @@ class LogExportService(
         const val SKIPPED_ENTRY = "export_skipped.txt"
         const val MIME_ZIP = "application/zip"
         const val BUFFER_SIZE = 8 * 1024
+
+        /** 一两个字符的串在日志里到处都是，替换掉会把整份日志毁了；更短的密码不打码 */
+        const val MIN_REDACT_LENGTH = 4
+        val TEXT_EXTENSIONS = setOf("log", "txt", "json", "jsonl")
+
+        /** 长的先换：一个密码是另一个的子串时，先换短的会留下长的那截尾巴 */
+        fun redactable(secrets: Collection<String>): List<String> =
+            secrets.filter { it.length >= MIN_REDACT_LENGTH }.distinct().sortedByDescending { it.length }
 
         val STAMP = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     }

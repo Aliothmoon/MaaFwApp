@@ -69,6 +69,30 @@ class LogExportServiceTest {
         assertTrue(log.exists())
     }
 
+    /** MaaFramework 会把替换后的 pipeline_override 原样写进 maafw.log，只能在导出这一步打码 */
+    @Test
+    fun `password plaintexts are masked in text logs only`() = runTest {
+        File(base, "log/maafw.log").apply {
+            parentFile!!.mkdirs()
+            writeText("override={\"pin\":\"secret12\",\"code\":\"abc\"}\r\nsecret1234 again")
+        }
+        val image = byteArrayOf(0x73, 0x65, 0x63, 0x72, 0x65, 0x74, 0x31, 0x32)
+        File(base, "debug/on_error/shot.png").apply {
+            parentFile!!.mkdirs()
+            writeBytes(image)
+        }
+
+        val zip = service(secrets = listOf("secret12", "secret1234", "abc")).exportZip()
+
+        ZipFile(zip!!).use { archive ->
+            assertEquals(
+                "override={\"pin\":\"***\",\"code\":\"abc\"}\n*** again\n",
+                archive.getInputStream(archive.getEntry("log/maafw.log")).readBytes().decodeToString(),
+            )
+            assertTrue(image.contentEquals(archive.getInputStream(archive.getEntry("debug/on_error/shot.png")).readBytes()))
+        }
+    }
+
     @Test
     fun `unreadable log file is skipped without failing export`() = runTest {
         assumeTrue(
@@ -113,11 +137,12 @@ class LogExportServiceTest {
         assertTrue(unreadable.exists())
     }
 
-    private fun service() = LogExportService(
+    private fun service(secrets: List<String> = emptyList()) = LogExportService(
         context = mockk<Context>(),
         baseDir = { base },
         roots = { listOf(File(base, "log"), File(base, "debug")) },
         debugMode = { false },
         deviceInfo = { "device snapshot" },
+        secrets = { secrets },
     )
 }

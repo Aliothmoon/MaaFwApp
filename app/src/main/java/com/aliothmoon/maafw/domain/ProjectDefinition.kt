@@ -234,7 +234,18 @@ data class InputFieldDefinition(
     val description: String?,
     /** $i18n 已物化；placeholder 仍用 [name] */
     val label: String = name,
-)
+    /**
+     * v2.10.0：界面掩码、日志与遥测不带原文、落盘加密（见 UserConfigurationSerializer）；
+     * 为 true 时 [default] 恒为空，PI 写了也在解析期丢掉
+     */
+    val password: Boolean = false,
+) {
+    /** 要进诊断、日志的输入值一律过这里：password 字段只给掩码 */
+    fun displayValue(raw: String): String = if (password) SECRET_MASK else raw
+}
+
+/** 诊断、日志与导出文件里代替 password 原文的占位 */
+const val SECRET_MASK = "***"
 
 /** PI preset 一次性模板；name 标识，label 展示 */
 data class ConfigurationTemplate(

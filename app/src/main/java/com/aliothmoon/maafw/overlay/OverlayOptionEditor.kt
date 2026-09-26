@@ -41,6 +41,8 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.options.keyboardType
+import com.aliothmoon.maafw.ui.options.visualTransformation
 
 /**
  * 悬浮窗选项树：字号 / 开关 / 描述面板都按 overlay 密度，不套任务页 OptionEditorList
@@ -235,6 +237,8 @@ private fun OverlayInputEditor(
                 },
                 hint = field.label,
                 enabled = !locked,
+                visualTransformation = field.visualTransformation(),
+                keyboardType = field.keyboardType(),
                 modifier = Modifier.fillMaxWidth(),
             )
             supporting?.let {

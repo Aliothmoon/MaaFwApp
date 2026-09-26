@@ -617,9 +617,14 @@ object PiParser {
                 null
             }
         }
+        val password = obj.boolean("password") == true
+        // 协议禁止 password 带 default：interface.json 随资源分发，写进去的就是明文密钥
+        if (password && obj["default"] != null) {
+            diagnostics += warning(source, DiagnosticMessages.passwordDefaultIgnored(optionName, name))
+        }
         val default = when (val d = obj["default"]) {
             null -> ""
-            is JsonPrimitive -> d.content
+            is JsonPrimitive -> if (password) "" else d.content
             else -> ""
         }
         return InputFieldDefinition(
@@ -630,6 +635,7 @@ object PiParser {
             patternMessage = text.label(obj.string("pattern_msg")),
             description = text.description(obj.string("description")),
             label = text.label(obj.string("label")) ?: name,
+            password = password,
         )
     }
 

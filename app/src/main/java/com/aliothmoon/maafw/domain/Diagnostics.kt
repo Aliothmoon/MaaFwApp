@@ -98,6 +98,12 @@ object DiagnosticMessages {
     fun inputHasNoFields(option: String): UiText =
         uiTextOf(R.string.diagnostic_input_has_no_fields, option)
 
+    fun passwordDefaultIgnored(option: String, input: String): UiText =
+        uiTextOf(R.string.diagnostic_password_default_ignored, option, input)
+
+    fun presetPasswordIgnored(preset: String, option: String, input: String): UiText =
+        uiTextOf(R.string.diagnostic_preset_password_ignored, preset, option, input)
+
     fun checkboxCountAdjusted(option: String, field: String, declared: Int, used: Int): UiText =
         uiTextOf(R.string.diagnostic_checkbox_count_adjusted, option, field, declared, used)
 

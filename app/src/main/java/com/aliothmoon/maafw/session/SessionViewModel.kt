@@ -4,9 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.config.passwordFields
+import com.aliothmoon.maafw.config.withPasswordFieldsMarked
+import com.aliothmoon.maafw.config.withSecretFields
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.duplicateTask
 import com.aliothmoon.maafw.domain.renameTask
 import com.aliothmoon.maafw.domain.RunConfiguration
@@ -225,6 +229,11 @@ class SessionViewModel(
                             if (current.initialized) current
                             else ConfigurationResolver.initialize(project.definition, current)
                         }
+                    } else if (project is ProjectState.Ready &&
+                        config.withPasswordFieldsMarked(project.definition) !== config
+                    ) {
+                        // PI 更新后才把某个字段改成 password：旧配置里的明文补上标记，这一次写回就加密了
+                        configurationStore.update { it.withPasswordFieldsMarked(project.definition) }
                     }
                 }
         }
@@ -244,6 +253,12 @@ class SessionViewModel(
         if (FocusChannel.Toast in focus.channels) {
             emitEffect(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
         }
+    }
+
+    /** 写入口当场补 password 标记：等加载时的迁移去补的话，这一笔会先以明文落一次盘 */
+    private fun OptionValue.secured(optionName: String): OptionValue {
+        val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition ?: return this
+        return withSecretFields(definition.passwordFields()[optionName])
     }
 
     // resolve 只依赖 (project, config)；runner tick 触发 combine 时复用缓存
@@ -418,14 +433,16 @@ class SessionViewModel(
             }
 
             is SessionIntent.SetTaskOption -> guarded {
+                val value = intent.value.secured(intent.optionName)
                 mutateTask(intent.configurationId, intent.taskInstanceId) { task ->
-                    task.copy(optionValues = task.optionValues + (intent.optionName to intent.value))
+                    task.copy(optionValues = task.optionValues + (intent.optionName to value))
                 }
             }
 
             is SessionIntent.SetGlobalOption -> guarded {
+                val value = intent.value.secured(intent.optionName)
                 configurationStore.update {
-                    it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to intent.value))
+                    it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to value))
                 }
             }
 
@@ -433,11 +450,12 @@ class SessionViewModel(
                 val known = (projectRepository.state.value as? ProjectState.Ready)
                     ?.definition?.resources?.any { it.name == intent.resourceName } == true
                 if (!known) return@guarded
+                val value = intent.value.secured(intent.optionName)
                 configurationStore.update { config ->
                     val current = config.resourceOptionValues[intent.resourceName].orEmpty()
                     config.copy(
                         resourceOptionValues = config.resourceOptionValues +
-                            (intent.resourceName to (current + (intent.optionName to intent.value))),
+                            (intent.resourceName to (current + (intent.optionName to value))),
                     )
                 }
             }

@@ -246,7 +246,7 @@ object RunPlanBuilder {
                                 DiagnosticMessages.invalidInput(
                                     option = name,
                                     input = field.name,
-                                    detail = field.patternMessage ?: raw,
+                                    detail = field.patternMessage ?: field.displayValue(raw),
                                 ),
                             )
                             valid = false
@@ -308,7 +308,7 @@ object RunPlanBuilder {
         val whole = PLACEHOLDER.matchEntire(content)
         if (whole != null) {
             val (field, raw) = fields[whole.groupValues[1]] ?: return JsonPrimitive(content)
-            return typedPrimitive(field.pipelineType, raw, scopeLabel, optionName, diagnostics)
+            return typedPrimitive(field, raw, scopeLabel, optionName, diagnostics)
                 ?: JsonPrimitive(content)
         }
         val replaced = PLACEHOLDER.replace(content) { match ->
@@ -318,17 +318,17 @@ object RunPlanBuilder {
     }
 
     private fun typedPrimitive(
-        type: PipelineType,
+        field: InputFieldDefinition,
         raw: String,
         scopeLabel: String,
         optionName: String,
         diagnostics: MutableList<Diagnostic>,
-    ): JsonPrimitive? = when (type) {
+    ): JsonPrimitive? = when (field.pipelineType) {
         PipelineType.StringType -> JsonPrimitive(raw)
         PipelineType.IntType -> raw.toLongOrNull()?.let { JsonPrimitive(it) } ?: run {
             diagnostics += runtimeError(
                 scopeLabel,
-                DiagnosticMessages.integerConversionFailed(optionName, raw),
+                DiagnosticMessages.integerConversionFailed(optionName, field.displayValue(raw)),
             )
             null
         }
@@ -336,7 +336,7 @@ object RunPlanBuilder {
         PipelineType.BoolType -> raw.toBooleanStrictOrNull()?.let { JsonPrimitive(it) } ?: run {
             diagnostics += runtimeError(
                 scopeLabel,
-                DiagnosticMessages.booleanConversionFailed(optionName, raw),
+                DiagnosticMessages.booleanConversionFailed(optionName, field.displayValue(raw)),
             )
             null
         }
