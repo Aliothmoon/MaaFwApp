@@ -546,6 +546,7 @@
     <string name="diagnostic_description_read_failed">description 文件读取失败，保留原始文本：%1$s</string>
     <string name="diagnostic_default_case_missing">option "%1$s" 的 default_case "%2$s" 不在 cases 中</string>
     <string name="diagnostic_input_has_no_fields">input option "%1$s" 没有可用的 inputs</string>
+    <string name="diagnostic_setting_option_not_global">setting "%1$s" 列出的 option "%2$s" 不在 global_option 里，不显示</string>
     <string name="diagnostic_password_default_ignored">option "%1$s" 的 password 输入 "%2$s" 不能带 default，已忽略</string>
     <string name="diagnostic_preset_password_ignored">preset "%1$s" 给 option "%2$s" 的 password 输入 "%3$s" 写了值，已忽略</string>
     <string name="diagnostic_checkbox_count_adjusted">option "%1$s" 的 %2$s 为 %3$d，已按 %4$d 处理</string>

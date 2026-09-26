@@ -4,6 +4,7 @@ import android.view.Surface
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.OptionEditorState
+import com.aliothmoon.maafw.domain.OptionSectionState
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
@@ -41,6 +42,8 @@ data class SessionUiState(
     val taskCatalog: List<TaskCatalogGroup> = emptyList(),
     /** 空 = PI 没声明 global_option，设置页据此决定要不要出这张卡 */
     val globalOptions: List<OptionEditorState> = emptyList(),
+    /** PI `setting[]` 分区；与 [globalOptions] 是同一批选项，没被任何分区收录的留给「任务设置」卡 */
+    val settingSections: List<OptionSectionState> = emptyList(),
     /** 空 = 当前 resource 没有 option[]，设置页不出「资源设置」 */
     val resourceOptions: List<OptionEditorState> = emptyList(),
     val projectMetadata: ProjectMetadata = ProjectMetadata(),

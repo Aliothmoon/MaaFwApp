@@ -98,6 +98,9 @@ object DiagnosticMessages {
     fun inputHasNoFields(option: String): UiText =
         uiTextOf(R.string.diagnostic_input_has_no_fields, option)
 
+    fun settingOptionNotGlobal(section: String, option: String): UiText =
+        uiTextOf(R.string.diagnostic_setting_option_not_global, section, option)
+
     fun passwordDefaultIgnored(option: String, input: String): UiText =
         uiTextOf(R.string.diagnostic_password_default_ignored, option, input)
 

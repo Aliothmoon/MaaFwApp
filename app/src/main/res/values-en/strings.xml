@@ -555,6 +555,7 @@
     <string name="diagnostic_description_read_failed">Failed to read description file; keeping original text: %1$s</string>
     <string name="diagnostic_default_case_missing">Option "%1$s" default_case "%2$s" is not in cases</string>
     <string name="diagnostic_input_has_no_fields">Input option "%1$s" has no usable inputs</string>
+    <string name="diagnostic_setting_option_not_global">Setting "%1$s" lists option "%2$s", which is not in global_option; hidden</string>
     <string name="diagnostic_password_default_ignored">Option "%1$s" password input "%2$s" must not have a default; ignored</string>
     <string name="diagnostic_preset_password_ignored">Preset "%1$s" sets a value for option "%2$s" password input "%3$s"; ignored</string>
     <string name="diagnostic_checkbox_count_adjusted">Option "%1$s" %2$s is %3$d; using %4$d</string>

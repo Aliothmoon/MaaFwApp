@@ -16,6 +16,7 @@ import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.domain.ResolvedResource
+import com.aliothmoon.maafw.domain.OptionSectionState
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -71,16 +72,18 @@ object ConfigurationResolver {
             diagnostics += warning("configuration", DiagnosticMessages.activeConfigurationMissing())
         }
 
+        val globalOptions = buildOptionEditors(
+            definition = definition,
+            optionNames = definition.globalOptionNames,
+            values = config.globalOptionValues,
+            resourceName = resourceName,
+        )
         return ResolvedProjectSession(
             configurationList = configurationList,
             activeConfiguration = activeConfiguration,
             taskCatalog = buildTaskCatalog(definition, resourceName),
-            globalOptions = buildOptionEditors(
-                definition = definition,
-                optionNames = definition.globalOptionNames,
-                values = config.globalOptionValues,
-                resourceName = resourceName,
-            ),
+            globalOptions = globalOptions,
+            settingSections = buildSettingSections(definition, globalOptions),
             resourceOptions = buildOptionEditors(
                 definition = definition,
                 optionNames = definition.resources.firstOrNull { it.name == resourceName }?.optionNames.orEmpty(),
@@ -328,6 +331,26 @@ object ConfigurationResolver {
                     icon = option.icon,
                 )
             }
+        }
+    }
+
+    /** 分区直接取全局选项的投影：不适用的 option 在那边已被滤掉，这里跟着不出现 */
+    private fun buildSettingSections(
+        definition: ProjectDefinition,
+        globalOptions: List<OptionEditorState>,
+    ): List<OptionSectionState> {
+        val byName = globalOptions.associateBy { it.name }
+        return definition.settingSections.mapNotNull { section ->
+            val options = section.optionNames.mapNotNull(byName::get)
+            if (options.isEmpty()) return@mapNotNull null
+            OptionSectionState(
+                name = section.name,
+                label = section.label,
+                description = section.description,
+                icon = section.icon,
+                defaultExpand = section.defaultExpand,
+                options = options,
+            )
         }
     }
 

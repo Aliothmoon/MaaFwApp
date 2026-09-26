@@ -13,6 +13,8 @@ data class ProjectDefinition(
     val options: Map<String, OptionDefinition>,
     /** PI v2.3.0 `global_option[]`：参与每个任务的 override，优先级最低，且不依赖任何选择 */
     val globalOptionNames: List<String> = emptyList(),
+    /** PI v2.8.0 `setting[]`：只给 [globalOptionNames] 在设置页分区，不参与编译 */
+    val settingSections: List<SettingSectionDefinition> = emptyList(),
     val templates: List<ConfigurationTemplate>,
     /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
     val agents: List<AgentDefinition> = emptyList(),
@@ -116,6 +118,21 @@ data class TaskGroupDefinition(
     val defaultExpand: Boolean = true,
     /** 加载器合成的未分组兜底；用标记判定，避免与真实同名 group 冲突 */
     val isUngrouped: Boolean = false,
+)
+
+/**
+ * PI v2.8.0 顶层 setting[] 的一个分区；label 缺省回落 name
+ *
+ * 协议把它定为展示层元数据：值照旧存 globalOptionValues，编译只认 global_option
+ */
+data class SettingSectionDefinition(
+    val name: String,
+    val label: String = name,
+    val description: String? = null,
+    val icon: String? = null,
+    /** 按声明顺序；加载期已剔除不存在的与不在 global_option 里的键 */
+    val optionNames: List<String> = emptyList(),
+    val defaultExpand: Boolean = true,
 )
 
 /**

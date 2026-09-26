@@ -132,7 +132,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             UpdateCard(settingsState, onSettingsIntent)
-            GlobalOptionCard(state, onIntent)
+            TaskSettingCards(state, onIntent)
             ResourceOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
@@ -143,23 +143,6 @@ fun SettingsScreen(
             OtherCard(state, settingsState, onIntent, onSettingsIntent)
             AboutCard(state)
         }
-    }
-}
-
-/**
- * 落在设置页而不是任务页：`global_option` 对所有运行配置生效
- *
- * 卡名取「任务设置」而非「全局选项」：对齐 MXU 同名分区，且「全局」在用户侧不指称什么
- */
-@Composable
-private fun GlobalOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    if (state.globalOptions.isEmpty()) return
-    MaaCard(title = stringResource(R.string.settings_section_global_option), collapsible = true) {
-        OptionEditorList(
-            options = state.globalOptions,
-            locked = state.configurationLocked,
-            onSetOption = { name, value -> onIntent(SessionIntent.SetGlobalOption(name, value)) },
-        )
     }
 }
 

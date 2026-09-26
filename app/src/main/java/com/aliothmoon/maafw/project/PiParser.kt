@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
 import com.aliothmoon.maafw.domain.ProjectMetadata
+import com.aliothmoon.maafw.domain.SettingSectionDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
@@ -28,12 +29,14 @@ import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.security.MessageDigest
 
-/** 单个 PI 分片文件（task[] / option{} / global_option[] / preset[] / group[]）的解析结果 */
+/** 单个 PI 分片文件（task[] / option{} / global_option[] / setting[] / preset[] / group[]）的解析结果 */
 data class PiFileContent(
     val tasks: List<TaskDefinition> = emptyList(),
     val options: Map<String, OptionDefinition> = emptyMap(),
     /** 只是 option 键名，定义仍在 [options] 里；引用完整性由 ProjectLoader 校验 */
     val globalOptionNames: List<String> = emptyList(),
+    /** 分区里的 option 键名同样由 ProjectLoader 校验 */
+    val settingSections: List<SettingSectionDefinition> = emptyList(),
     val templates: List<ConfigurationTemplate> = emptyList(),
     val groups: List<TaskGroupDefinition> = emptyList(),
     val diagnostics: List<Diagnostic> = emptyList(),
@@ -332,11 +335,41 @@ object PiParser {
             tasks = tasks,
             options = options,
             globalOptionNames = root.stringList("global_option"),
+            settingSections = parseSettingSections(source, root, diagnostics, text),
             templates = templates,
             groups = groups,
             diagnostics = diagnostics,
         )
     }
+
+    /** v2.8.0 顶层 setting[]：根 interface.json 与 import 分片均可出现，合并时按声明顺序追加 */
+    private fun parseSettingSections(
+        source: String,
+        root: JsonObject,
+        diagnostics: MutableList<Diagnostic>,
+        text: PiTextResolver,
+    ): List<SettingSectionDefinition> =
+        (root["setting"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val obj = element as? JsonObject
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessages.entryNotObject("setting"))
+                }
+            val name = obj.string("name")
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessages.requiredFieldMissing("setting", "name"),
+                    )
+                }
+            SettingSectionDefinition(
+                name = name,
+                label = text.label(obj.string("label")) ?: name,
+                description = text.description(obj.string("description")),
+                icon = obj.iconPath(),
+                optionNames = obj.stringList("option"),
+                defaultExpand = obj.boolean("default_expand") ?: true,
+            )
+        }
 
     /** v2.4.0 顶层 group[] 声明：根 interface.json 与 import 分片均可出现 */
     private fun parseGroups(

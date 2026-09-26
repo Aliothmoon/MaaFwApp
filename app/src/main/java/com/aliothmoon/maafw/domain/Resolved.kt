@@ -11,6 +11,8 @@ data class ResolvedProjectSession(
     val taskCatalog: List<TaskCatalogGroup>,
     /** PI `global_option[]` 的编辑投影，按声明顺序；不随运行配置走 */
     val globalOptions: List<OptionEditorState>,
+    /** PI `setting[]` 分区：[globalOptions] 里的同一批投影，只是分了组；没有可见选项的分区不出现 */
+    val settingSections: List<OptionSectionState> = emptyList(),
     /** 当前选中 resource 的 `option[]`；换资源换这份，值按 resource name 分桶 */
     val resourceOptions: List<OptionEditorState> = emptyList(),
     val environment: ResolvedEnvironment,
@@ -85,6 +87,16 @@ data class TaskCatalogItem(
     val unavailableReason: UiText?,
     val defaultChecked: Boolean,
     val icon: String? = null,
+)
+
+/** PI v2.8.0 `setting` 分区的展示投影；选项按分区声明的顺序排 */
+data class OptionSectionState(
+    val name: String,
+    val label: String,
+    val description: String?,
+    val icon: String?,
+    val defaultExpand: Boolean,
+    val options: List<OptionEditorState>,
 )
 
 enum class OptionKind { Select, Switch, Checkbox, Input }

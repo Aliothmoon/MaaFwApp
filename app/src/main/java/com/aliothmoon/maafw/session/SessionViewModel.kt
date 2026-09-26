@@ -319,6 +319,7 @@ class SessionViewModel(
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
             globalOptions = session.globalOptions,
+            settingSections = session.settingSections,
             resourceOptions = session.resourceOptions,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
