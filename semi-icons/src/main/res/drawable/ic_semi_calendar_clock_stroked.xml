@@ -6,7 +6,7 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24"
-    android:tint="?attr/colorControlNormal">
+    android:tint="?android:attr/colorControlNormal">
     <path android:fillType="evenOdd"
         android:fillColor="@android:color/white"
         android:pathData="M20 2C21.1046 2 22 2.89543 22 4V12.5283C21.4229 12.0117 20.7453 11.6052 20 11.3418V8C20 7.44772 19.5523 7 19 7H5C4.44772 7 4 7.44772 4 8V19C4 19.5523 4.44772 20 5 20H12.8047C13.2692 20.8027 13.9133 21.4881 14.6836 22H4C2.89543 22 2 21.1046 2 20V4C2 2.89543 2.89543 2 4 2H20ZM4.5 4C4.22386 4 4 4.22386 4 4.5C4 4.77614 4.22386 5 4.5 5H19.5C19.7761 5 20 4.77614 20 4.5C20 4.22386 19.7761 4 19.5 4H4.5Z"/>

@@ -6,7 +6,7 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24"
-    android:tint="?attr/colorControlNormal">
+    android:tint="?android:attr/colorControlNormal">
     <path
         android:fillColor="@android:color/white"
         android:pathData="M9 2C7.89543 2 7 2.89543 7 4V5H16C18 5 19 6 19 8V17H20C21.1046 17 22 16.1046 22 15V4C22 2.89543 21.1046 2 20 2H9Z"/>
