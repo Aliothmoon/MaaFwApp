@@ -28,6 +28,8 @@
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 定时触发从闹钟到投递持 CPU 锁，见 ScheduleWakeLock -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
       前台模式的控制层：屏幕让给了目标应用，没有悬浮球或音量键就没法停任务

@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.MaaDispatchers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
@@ -31,6 +32,9 @@ class ScheduleReceiver : BroadcastReceiver() {
             putExtra(EXTRA_STRATEGY_ID, strategyId)
             putExtra(EXTRA_SCHEDULED_TIME, scheduledTime)
         }
+        // onReceive 一返回闹钟的锁就撤了，服务的 onStartCommand 还没轮到主线程，中间这段靠接力锁；
+        // 成功路径不放，交给超时，服务那边自己再持一把
+        val handoff = ScheduleWakeLock.acquire(context, HANDOFF_WAKE_TIMEOUT_MS)
         try {
             ContextCompat.startForegroundService(context, serviceIntent)
         } catch (e: IllegalStateException) {
@@ -38,7 +42,7 @@ class ScheduleReceiver : BroadcastReceiver() {
             // 前台服务的后台启动限制。真到了这里，服务不会跑、scheduleNext 也不会被调用，
             // 闹钟链就此断掉——所以在这里补注册下一环，让下次还有机会恢复
             Timber.e(e, "Failed to start foreground service; rescheduling next alarm: %s", strategyId)
-            rescheduleAfterFailure(strategyId, scheduledTime, e.message)
+            rescheduleAfterFailure(strategyId, scheduledTime, e.message, handoff)
         }
     }
 
@@ -46,6 +50,7 @@ class ScheduleReceiver : BroadcastReceiver() {
         strategyId: String,
         scheduledTime: Long,
         reason: String?,
+        handoff: PowerManager.WakeLock,
     ) {
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + MaaDispatchers.IO).launch {
@@ -62,6 +67,7 @@ class ScheduleReceiver : BroadcastReceiver() {
                     alarms.scheduleNext(strategy, scheduledTime)
                 }
             } finally {
+                ScheduleWakeLock.release(handoff)
                 pendingResult.finish()
             }
         }
@@ -69,5 +75,6 @@ class ScheduleReceiver : BroadcastReceiver() {
 
     private companion object {
         const val STORE_READY_TIMEOUT_MS = 5_000L
+        const val HANDOFF_WAKE_TIMEOUT_MS = 10_000L
     }
 }

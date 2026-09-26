@@ -93,12 +93,15 @@ class ScheduleExecutionService : Service() {
         }
 
         val scheduledTime = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0L)
+        // 锁覆盖到 launch 受理为止：亮屏解锁、倒计时、投递都在这段，之后的保活归 RunForegroundService
+        val wakeLock = ScheduleWakeLock.acquire(this, TRIGGER_WAKE_TIMEOUT_MS)
         // 必须先于 launch：协程调度前计数还是 0，会被并发触发的收尾停掉
         inFlight.incrementAndGet()
         serviceScope.launch {
             try {
                 handleTrigger(strategyId, scheduledTime)
             } finally {
+                ScheduleWakeLock.release(wakeLock)
                 inFlight.decrementAndGet()
                 stopIfIdle()
             }
@@ -307,5 +310,8 @@ class ScheduleExecutionService : Service() {
         const val CHANNEL_ID = "schedule_execution"
         const val NOTIFICATION_ID = 1002
         const val STORE_READY_TIMEOUT_MS = 5_000L
+
+        /** 超时只兜漏放；正常一次触发在倒计时 30 秒加投递之内就放掉 */
+        const val TRIGGER_WAKE_TIMEOUT_MS = 5 * 60_000L
     }
 }
