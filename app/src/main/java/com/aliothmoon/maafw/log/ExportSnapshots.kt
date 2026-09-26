@@ -16,7 +16,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 
-/** 导出日志附带的可读快照；凭据只保留「是否已设置」这一层信息 */
+/** 导出日志附带的可读快照；非调试导出时凭据只保留「是否已设置」这一层信息 */
 object ExportSnapshots {
 
     private val json = Json {
@@ -24,7 +24,7 @@ object ExportSnapshots {
         encodeDefaults = true
     }
 
-    fun settings(settings: AppSettings): String = buildJsonObject {
+    fun settings(settings: AppSettings, redactSecrets: Boolean = true): String = buildJsonObject {
         put("snapshotVersion", 1)
         put("startupBackend", settings.startupBackend)
         put("skipShizukuCheck", settings.skipShizukuCheck)
@@ -40,27 +40,41 @@ object ExportSnapshots {
         put("themeStyle", settings.themeStyle)
         put("eventNotificationLevel", settings.eventNotificationLevel)
         put("wakeUnlockEnabled", settings.wakeUnlockEnabled)
-        put("wakeCredential", redact(settings.wakeCredential))
+        put(
+            "wakeCredential",
+            settings.wakeCredential.takeUnless { redactSecrets } ?: redact(settings.wakeCredential),
+        )
         put("telemetryEnabled", settings.telemetryEnabled)
         put("autoCheckUpdate", settings.autoCheckUpdate)
         put("autoDownloadUpdate", settings.autoDownloadUpdate)
         put("updateChannel", settings.updateChannel)
         put("updateSource", settings.updateSource)
         put("pipOnHome", settings.pipOnHome)
-        put("mirrorchyanCdk", redact(settings.mirrorchyanCdk))
+        put(
+            "mirrorchyanCdk",
+            settings.mirrorchyanCdk.takeUnless { redactSecrets } ?: redact(settings.mirrorchyanCdk),
+        )
     }.toString()
 
-    fun piConfig(config: UserConfiguration, definition: ProjectDefinition? = null): String = buildJsonObject {
+    fun piConfig(
+        config: UserConfiguration,
+        definition: ProjectDefinition? = null,
+        redactSecrets: Boolean = true,
+    ): String = buildJsonObject {
         put("snapshotVersion", 1)
         put("schemaVersion", UserConfigurationSerializer.SCHEMA_VERSION)
         put(
             "config",
-            redactSensitive(
-                json.encodeToJsonElement(
-                    UserConfiguration.serializer(),
-                    config.redactDeclaredPasswords(definition.declaredPasswordFields()),
-                ),
-            ),
+            if (redactSecrets) {
+                redactSensitive(
+                    json.encodeToJsonElement(
+                        UserConfiguration.serializer(),
+                        config.redactDeclaredPasswords(definition.declaredPasswordFields()),
+                    ),
+                )
+            } else {
+                json.encodeToJsonElement(UserConfiguration.serializer(), config)
+            },
         )
     }.toString()
 

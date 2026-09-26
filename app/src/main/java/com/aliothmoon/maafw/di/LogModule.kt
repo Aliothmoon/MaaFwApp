@@ -31,12 +31,16 @@ val logModule = module {
                 DeviceInfoText.render(DeviceInfoCollector.collect(context, AppPaths.ROOT))
             },
             settingsSnapshot = {
-                ExportSnapshots.settings(appSettings.settings.first())
+                ExportSnapshots.settings(
+                    appSettings.settings.first(),
+                    redactSecrets = !appSettings.debugMode.value,
+                )
             },
             piConfigSnapshot = {
                 ExportSnapshots.piConfig(
                     configurationStore.data.first(),
                     (projectRepository.state.value as? ProjectState.Ready)?.definition,
+                    redactSecrets = !appSettings.debugMode.value,
                 )
             },
         )

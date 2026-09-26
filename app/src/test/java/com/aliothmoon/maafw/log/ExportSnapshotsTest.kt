@@ -43,6 +43,21 @@ class ExportSnapshotsTest {
     }
 
     @Test
+    fun `settings snapshot preserves credentials in debug mode`() {
+        val settings = AppSettings(
+            wakeCredential = "123456",
+            mirrorchyanCdk = "secret-cdk",
+        )
+
+        val snapshot = Json.parseToJsonElement(
+            ExportSnapshots.settings(settings, redactSecrets = false),
+        ).jsonObject
+
+        assertEquals("123456", snapshot.getValue("wakeCredential").jsonPrimitive.content)
+        assertEquals("secret-cdk", snapshot.getValue("mirrorchyanCdk").jsonPrimitive.content)
+    }
+
+    @Test
     fun `pi config snapshot preserves the persisted aggregate`() {
         val config = UserConfiguration(
             initialized = true,
@@ -128,6 +143,33 @@ class ExportSnapshotsTest {
         assertEquals("alice", session.getValue("account").jsonPrimitive.content)
         assertEquals("[redacted]", session.getValue("credential").jsonPrimitive.content)
         assertFalse(snapshot.toString().contains("declared-secret"))
+    }
+
+    @Test
+    fun `pi config snapshot preserves secrets in debug mode`() {
+        val config = UserConfiguration(
+            globalOptionValues = mapOf(
+                "session" to OptionValue.Inputs(
+                    mapOf(
+                        "account" to "alice",
+                        "credential" to "declared-secret",
+                        "api_key" to "heuristic-secret",
+                    ),
+                ),
+            ),
+        )
+
+        val snapshot = Json.parseToJsonElement(
+            ExportSnapshots.piConfig(config, definition(), redactSecrets = false),
+        ).jsonObject
+        val values = snapshot.getValue("config").jsonObject
+            .getValue("globalOptionValues").jsonObject
+            .getValue("session").jsonObject
+            .getValue("values").jsonObject
+
+        assertEquals("alice", values.getValue("account").jsonPrimitive.content)
+        assertEquals("declared-secret", values.getValue("credential").jsonPrimitive.content)
+        assertEquals("heuristic-secret", values.getValue("api_key").jsonPrimitive.content)
     }
 
     private fun definition() = ProjectDefinition(
