@@ -187,7 +187,13 @@ sealed interface OptionDefinition {
         val defaultCases: List<String>,
         override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
-    ) : OptionDefinition
+        /** v2.10.1；解析期已收敛到 0..cases.size，且不大于 [maxCount] */
+        val minCount: Int = 0,
+        /** null = 不限 */
+        val maxCount: Int? = null,
+    ) : OptionDefinition {
+        fun acceptsCount(count: Int): Boolean = count >= minCount && (maxCount == null || count <= maxCount)
+    }
 
     data class Input(
         override val name: String,

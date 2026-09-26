@@ -101,9 +101,28 @@ data class OptionEditorState(
     val cases: List<OptionCaseState>,
     val inputs: List<InputFieldState>,
     val icon: String? = null,
+    /** 仅 Checkbox 有意义，见 [OptionDefinition.Checkbox.minCount] */
+    val minCount: Int = 0,
+    val maxCount: Int? = null,
 ) {
     /** 含默认回退；Select/Switch 至多一个，Checkbox 按声明序 */
     val activeCases: List<OptionCaseState> get() = cases.filter { it.active }
+
+    val countRule: UiText? get() = checkboxCountRule(minCount, maxCount)
+
+    val belowMinCount: Boolean get() = activeCases.size < minCount
+
+    /** 选满 [maxCount] 后未选的 case 不能再点；已选的始终能取消，PI 收紧上限后旧选择才减得下来 */
+    fun canToggle(case: OptionCaseState): Boolean =
+        case.active || maxCount == null || activeCases.size < maxCount
+}
+
+/** checkbox 选择数量的要求，UI 提示与运行期诊断共用；不限时为 null */
+fun checkboxCountRule(minCount: Int, maxCount: Int?): UiText? = when {
+    maxCount == null -> if (minCount > 0) uiTextOf(R.string.option_checkbox_count_at_least, minCount) else null
+    minCount == maxCount -> uiTextOf(R.string.option_checkbox_count_exactly, minCount)
+    minCount > 0 -> uiTextOf(R.string.option_checkbox_count_between, minCount, maxCount)
+    else -> uiTextOf(R.string.option_checkbox_count_at_most, maxCount)
 }
 
 data class OptionCaseState(

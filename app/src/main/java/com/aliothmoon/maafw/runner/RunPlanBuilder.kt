@@ -212,6 +212,20 @@ object RunPlanBuilder {
                             DiagnosticMessages.selectedCaseMissing(name, it),
                         )
                     }
+                    // 协议要求不带着不满足上下限的选择启动；PI 更新后收紧了限制，旧配置也在这里拦
+                    val selectedCount = option.cases.count { it.name in selected }
+                    if (!option.acceptsCount(selectedCount)) {
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessages.checkboxCountOutOfRange(
+                                name,
+                                selectedCount,
+                                option.minCount,
+                                option.maxCount,
+                            ),
+                        )
+                        return
+                    }
                     // patch 按 definition 声明序，不按用户勾选序
                     for (case in option.cases) {
                         if (case.name !in selected) continue

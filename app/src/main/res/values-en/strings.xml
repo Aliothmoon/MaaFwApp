@@ -366,6 +366,10 @@
 
     <!-- Option editor -->
     <string name="option_input_invalid">Invalid input</string>
+    <string name="option_checkbox_count_at_least">Select at least %1$d</string>
+    <string name="option_checkbox_count_at_most">Select at most %1$d</string>
+    <string name="option_checkbox_count_between">Select %1$d–%2$d</string>
+    <string name="option_checkbox_count_exactly">Select exactly %1$d</string>
 
     <!-- Localized text for structured domain/VM semantics (ui/i18n/DomainStrings) -->
     <string name="tasks_ungrouped">Ungrouped</string>
@@ -551,6 +555,9 @@
     <string name="diagnostic_description_read_failed">Failed to read description file; keeping original text: %1$s</string>
     <string name="diagnostic_default_case_missing">Option "%1$s" default_case "%2$s" is not in cases</string>
     <string name="diagnostic_input_has_no_fields">Input option "%1$s" has no usable inputs</string>
+    <string name="diagnostic_checkbox_count_adjusted">Option "%1$s" %2$s is %3$d; using %4$d</string>
+    <string name="diagnostic_checkbox_count_ignored">Option "%1$s" %2$s is %3$d; ignored</string>
+    <string name="diagnostic_checkbox_default_count_out_of_range">Option "%1$s" default_case has %2$d items; requirement: %3$s</string>
     <string name="diagnostic_unsupported_option_type">Option "%1$s" type "%2$s" is unsupported on Android; skipped</string>
     <string name="diagnostic_invalid_option_type">Option "%1$s" has invalid type: %2$s</string>
     <string name="diagnostic_option_case_not_object">Option "%1$s" contains a case that is not an object</string>
@@ -570,6 +577,7 @@
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
     <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
+    <string name="diagnostic_checkbox_count_out_of_range">Option "%1$s" has %2$d selected; requirement: %3$s</string>
     <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
     <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
     <string name="schedule_default_name">Schedule %1$d</string>

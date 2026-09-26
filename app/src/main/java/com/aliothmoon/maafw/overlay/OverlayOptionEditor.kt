@@ -34,6 +34,7 @@ import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.standardSwitchCases
 import com.aliothmoon.maafw.domain.validateInputCandidate
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
@@ -158,6 +159,17 @@ private fun OverlayCheckboxCasesEditor(
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs)) {
         OverlayOptionLabel(option)
         OverlayChoiceFlow(option, locked, multiple = true, onSetOption = onSetOption)
+        option.countRule?.let { rule ->
+            Text(
+                text = rule.asString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (option.belowMinCount) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
     }
 }
 
@@ -179,7 +191,7 @@ private fun OverlayChoiceFlow(
             OverlayChoiceChip(
                 label = case.label,
                 selected = case.active,
-                enabled = !locked,
+                enabled = !locked && (!multiple || option.canToggle(case)),
                 leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
                 onClick = {
                     if (multiple) {

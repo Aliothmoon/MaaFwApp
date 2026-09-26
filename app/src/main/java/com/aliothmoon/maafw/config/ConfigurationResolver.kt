@@ -297,6 +297,8 @@ object ConfigurationResolver {
                     cases = buildCaseStates(definition, option.cases, selected.toSet(), values, resourceName, depth, visited),
                     inputs = emptyList(),
                     icon = option.icon,
+                    minCount = option.minCount,
+                    maxCount = option.maxCount,
                 )
             }
 

@@ -359,6 +359,10 @@
 
     <!-- option 编辑器 -->
     <string name="option_input_invalid">输入不合法</string>
+    <string name="option_checkbox_count_at_least">至少选 %1$d 项</string>
+    <string name="option_checkbox_count_at_most">最多选 %1$d 项</string>
+    <string name="option_checkbox_count_between">选 %1$d–%2$d 项</string>
+    <string name="option_checkbox_count_exactly">选 %1$d 项</string>
 
     <!-- 跨层结构化语义的展示文案（domain/VM -> ui/i18n/DomainStrings） -->
     <string name="tasks_ungrouped">未分组</string>
@@ -542,6 +546,9 @@
     <string name="diagnostic_description_read_failed">description 文件读取失败，保留原始文本：%1$s</string>
     <string name="diagnostic_default_case_missing">option "%1$s" 的 default_case "%2$s" 不在 cases 中</string>
     <string name="diagnostic_input_has_no_fields">input option "%1$s" 没有可用的 inputs</string>
+    <string name="diagnostic_checkbox_count_adjusted">option "%1$s" 的 %2$s 为 %3$d，已按 %4$d 处理</string>
+    <string name="diagnostic_checkbox_count_ignored">option "%1$s" 的 %2$s 为 %3$d，已忽略</string>
+    <string name="diagnostic_checkbox_default_count_out_of_range">option "%1$s" 的 default_case 有 %2$d 项，不满足：%3$s</string>
     <string name="diagnostic_unsupported_option_type">option "%1$s" 的 type "%2$s" 在 Android 端不支持，已跳过</string>
     <string name="diagnostic_invalid_option_type">option "%1$s" 的 type 非法：%2$s</string>
     <string name="diagnostic_option_case_not_object">option "%1$s" 存在非对象 case</string>
@@ -561,6 +568,7 @@
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
     <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>
+    <string name="diagnostic_checkbox_count_out_of_range">option "%1$s" 选了 %2$d 项，不满足：%3$s</string>
     <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
     <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
     <string name="schedule_default_name">定时任务 %1$d</string>

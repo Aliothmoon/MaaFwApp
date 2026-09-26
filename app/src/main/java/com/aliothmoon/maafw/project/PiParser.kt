@@ -451,7 +451,24 @@ object PiParser {
                         }
                     }
                 }
-                OptionDefinition.Checkbox(name, label, description, cases, defaults, icon, applicability)
+                val (minCount, maxCount) = parseCheckboxCounts(source, name, obj, cases.size, diagnostics)
+                if (obj["default_case"] != null && defaults.size.let { it < minCount || (maxCount != null && it > maxCount) }) {
+                    diagnostics += warning(
+                        source,
+                        DiagnosticMessages.checkboxDefaultCountOutOfRange(name, defaults.size, minCount, maxCount),
+                    )
+                }
+                OptionDefinition.Checkbox(
+                    name,
+                    label,
+                    description,
+                    cases,
+                    defaults,
+                    icon,
+                    applicability,
+                    minCount = minCount,
+                    maxCount = maxCount,
+                )
             }
 
             "input" -> {
@@ -513,6 +530,46 @@ object PiParser {
                 icon = case.iconPath(),
             )
         }
+
+    /**
+     * v2.10.1 的 `min_count` / `max_count`；写坏的值收敛到一个能满足的区间并记 warning，
+     * 不然 min 大于 cases 数时这个 option 永远过不了运行期校验
+     */
+    private fun parseCheckboxCounts(
+        source: String,
+        optionName: String,
+        obj: JsonObject,
+        caseCount: Int,
+        diagnostics: MutableList<Diagnostic>,
+    ): Pair<Int, Int?> {
+        fun adjusted(field: String, declared: Int, used: Int) {
+            diagnostics += warning(source, DiagnosticMessages.checkboxCountAdjusted(optionName, field, declared, used))
+        }
+
+        var min = obj.int("min_count") ?: 0
+        if (min < 0) {
+            adjusted("min_count", min, 0)
+            min = 0
+        }
+        if (min > caseCount) {
+            adjusted("min_count", min, caseCount)
+            min = caseCount
+        }
+        var max = obj.int("max_count")
+        if (max != null && max < 0) {
+            diagnostics += warning(source, DiagnosticMessages.checkboxCountIgnored(optionName, "max_count", max))
+            max = null
+        }
+        if (max != null && max > caseCount) {
+            adjusted("max_count", max, caseCount)
+            max = caseCount
+        }
+        if (max != null && max < min) {
+            adjusted("max_count", max, min)
+            max = min
+        }
+        return min to max
+    }
 
     private fun parseInputField(
         source: String,
