@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class MaaRunner(private val agentHost: AgentHost) {
 
+    // agent child 由这条线程 fork，PDEATHSIG 认线程：线程被换掉时 child 一并收走，下一轮判不可复用重拉
     private val worker = Executors.newSingleThreadExecutor { r ->
         Thread(r, "maa-runner").apply { isDaemon = true }
     }

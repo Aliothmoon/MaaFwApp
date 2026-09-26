@@ -50,9 +50,16 @@ class ExecAgentHost(
             throw AgentLaunchException("agent 可执行体不可执行：${executable.absolutePath}")
         }
 
+        val wrapper = File(request.nativeLibraryDir, AGENT_EXEC)
+        if (!wrapper.canExecute()) {
+            throw AgentLaunchException("agent 启动包装不可执行：${wrapper.absolutePath}")
+        }
+
         // identifier 恒在末位，对齐上游 Runner.cpp；它之前的部分全部来自 agent-runtime.json
         // PI 那边真正需要的参数由适配方一并写进 args——入口脚本本来就写在那儿了
         val command = buildList {
+            add(wrapper.absolutePath)
+            add(android.os.Process.myPid().toString())
             add(executable.absolutePath)
             entry.args.mapTo(this) {
                 it.resolveAgentPlaceholders(bundleDir, request.nativeLibraryDir)
@@ -91,6 +98,8 @@ class ExecAgentHost(
         Ln.e("ExecAgentHost: bad ${AgentRuntimeDescriptor.ASSET_PATH}: ${it.message}")
     }.getOrThrow()
 }
+
+private const val AGENT_EXEC = "libagentexec.so"
 
 /**
  * CSI 转义序列（含 SGR 配色）

@@ -38,5 +38,11 @@ set_target_properties(launcher PROPERTIES
         SUFFIX ".so"
         LINKER_LANGUAGE C)
 
+add_executable(agentexec agent_exec.c)
+set_target_properties(agentexec PROPERTIES
+        OUTPUT_NAME "libagentexec"
+        SUFFIX ".so"
+        LINKER_LANGUAGE C)
+
 target_link_libraries(bridge log android jnigraphics mediandk EGL GLESv2)
 target_link_libraries(launcher log)
