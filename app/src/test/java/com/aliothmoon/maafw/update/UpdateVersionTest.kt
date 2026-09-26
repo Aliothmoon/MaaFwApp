@@ -32,16 +32,27 @@ class UpdateVersionTest {
     }
 
     @Test
-    fun `stable channel excludes prereleases and beta channel excludes release candidates`() {
+    fun `release candidates rank above betas by identifier order`() {
+        assertTrue(UpdateVersion.parse("1.0.0-rc.1")!! > UpdateVersion.parse("1.0.0-beta.10")!!)
+        assertTrue(UpdateVersion.parse("1.0.0")!! > UpdateVersion.parse("1.0.0-rc.1")!!)
+    }
+
+    @Test
+    fun `stable channel excludes every prerelease and beta channel accepts any`() {
+        listOf("1.0.0-alpha.1", "1.0.0-beta.1", "1.0.0-rc.1", "1.0.0-preview").forEach { raw ->
+            val version = UpdateVersion.parse(raw)!!
+            assertFalse(raw, version.allowedFor(UpdateChannel.STABLE))
+            assertTrue(raw, version.allowedFor(UpdateChannel.BETA))
+        }
         assertTrue(UpdateVersion.parse("1.0.0")!!.allowedFor(UpdateChannel.STABLE))
-        assertFalse(UpdateVersion.parse("1.0.0-beta.1")!!.allowedFor(UpdateChannel.STABLE))
-        assertTrue(UpdateVersion.parse("1.0.0-beta.1")!!.allowedFor(UpdateChannel.BETA))
-        assertFalse(UpdateVersion.parse("1.0.0-rc.1")!!.allowedFor(UpdateChannel.BETA))
+        assertTrue(UpdateVersion.parse("1.0.0")!!.allowedFor(UpdateChannel.BETA))
     }
 
     @Test
     fun `invalid versions cannot be parsed`() {
         assertNull(UpdateVersion.parse("latest"))
         assertNull(UpdateVersion.parse("unknown"))
+        // SemVer 不允许数字标识带前导零
+        assertNull(UpdateVersion.parse("1.02.0"))
     }
 }

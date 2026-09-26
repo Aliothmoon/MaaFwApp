@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.util.parseJsonArray
 import com.aliothmoon.maafw.util.parseJsonObject
 import com.aliothmoon.maafw.util.readBody
 import com.aliothmoon.maafw.util.string
+import io.github.z4kn4fein.semver.Version
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import timber.log.Timber
@@ -71,7 +72,7 @@ internal class GitHubReleasesApi(
     }
 
     /** 渠道过滤 + 版本解析；无一条合格返回 null */
-    fun latestEligible(releases: List<Release>, channel: UpdateChannel): Pair<Release, UpdateVersion>? =
+    fun latestEligible(releases: List<Release>, channel: UpdateChannel): Pair<Release, Version>? =
         releases
             .mapNotNull { candidate ->
                 val version = UpdateVersion.parse(candidate.tag) ?: return@mapNotNull null
