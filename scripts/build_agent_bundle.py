@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CORE_REPO = "Aliothmoon/MaaAgentCoreAndroid"
-CORE_TAG = "3.13.15-maafw5.13.0"
+CORE_TAG = "3.13.15-maafw5.14.0"
 CORE_PY = "3.13.15"
 CORE_URL = "https://github.com/{repo}/releases/download/{tag}/{asset}"
 CORE_MANIFEST = "agent-core.json"
@@ -217,10 +217,12 @@ def requirement_name(spec: str) -> str:
 def fetch_core(abi: str, repo: str, tag: str, work: Path) -> Path:
     """下载并解包内核，两步都以 .maafw 里已有的产物为准，不重复拉"""
     asset = f"agent-core-{CORE_PY}-{abi}.tar.gz"
-    archive = work / asset
+    # 资产名只带 CPython 版本，换 maafw 版本时同名；缓存不按 tag 分目录会把旧内核当新的用
+    archive = work / "download" / tag / asset
     if not archive.is_file() or archive.stat().st_size == 0:
         url = CORE_URL.format(repo=repo, tag=tag, asset=asset)
         log(f"download {url}")
+        archive.parent.mkdir(parents=True, exist_ok=True)
         part = archive.with_suffix(archive.suffix + ".part")
         with urllib.request.urlopen(url, timeout=120) as response, part.open("wb") as sink:
             shutil.copyfileobj(response, sink)
