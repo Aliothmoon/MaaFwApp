@@ -94,7 +94,7 @@ class RunLogRecorder(
             focusDispatcher.recording
                 .filter {
                     val event = it.event
-                    event !is RunnerEvent.Focus || FocusChannel.Log in event.focus.channels
+                    event !is RunnerEvent.Focus || event.focus.any { focus -> FocusChannel.Log in focus.channels }
                 }
                 .collect(::record)
         }
@@ -205,8 +205,11 @@ class RunLogRecorder(
                 }
             }
             is RunnerEvent.Focus -> {
-                event.focus.content.lineSequence()
-                    .firstOrNull { it.isNotBlank() }
+                event.focus.asSequence()
+                    .mapNotNull { focus ->
+                        focus.content.lineSequence().firstOrNull { it.isNotBlank() }
+                    }
+                    .firstOrNull()
                     ?.trim()
                     ?.let {
                         _lastFocus.value = it

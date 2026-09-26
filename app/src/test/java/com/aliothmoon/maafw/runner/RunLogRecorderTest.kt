@@ -135,11 +135,13 @@ class RunLogRecorderTest {
         )
         runner.emit(
             RunnerEvent.Focus(
-                FocusMessage(
-                    message = "Node.PipelineNode.Succeeded",
-                    content = "刷到第3关",
-                    channels = setOf(FocusChannel.Log),
-                    trace = false,
+                listOf(
+                    FocusMessage(
+                        message = "Node.PipelineNode.Succeeded",
+                        content = "刷到第3关",
+                        channels = setOf(FocusChannel.Log),
+                        trace = false,
+                    ),
                 ),
             ),
         )

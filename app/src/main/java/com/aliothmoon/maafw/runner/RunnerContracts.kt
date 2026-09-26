@@ -117,8 +117,8 @@ sealed interface RunnerEvent {
                 .ifBlank { "agent[$index]" }
     }
 
-    /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */
-    data class Focus(val focus: FocusMessage) : RunnerEvent
+    /** 一条回调命中的 PI focus 模板；旧协议可能同时产出 start/toast 多条 */
+    data class Focus(val focus: List<FocusMessage>) : RunnerEvent
 }
 
 sealed interface RunnerCommandResult {

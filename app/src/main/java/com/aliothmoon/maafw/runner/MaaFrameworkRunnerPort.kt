@@ -425,7 +425,9 @@ class MaaFrameworkRunnerPort(
      */
     private fun toRunnerEvent(message: String, detailsJson: String): RunnerEvent {
         if (message.isEmpty()) return RunnerEvent.MalformedCallback(detailsJson)
-        FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it) }
+        FocusParser.parseAll(message, detailsJson)
+            .takeIf(List<FocusMessage>::isNotEmpty)
+            ?.let { return RunnerEvent.Focus(it) }
         return RunnerEvent.Callback(message, detailsJson)
     }
 

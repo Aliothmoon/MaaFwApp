@@ -56,6 +56,9 @@ interface MaaFrameworkLibrary : Library {
 
     fun MaaTaskerAddSink(tasker: Pointer?, sink: MaaEventCallback?, transArg: Pointer?): Long
 
+    /** Tasker sink 只收 Tasker 层事件；pipeline focus 在 Node 层回调里，需要单独注册 context sink */
+    fun MaaTaskerAddContextSink(tasker: Pointer?, sink: MaaEventCallback?, transArg: Pointer?): Long
+
     fun MaaTaskerBindResource(tasker: Pointer?, res: Pointer?): Byte
 
     fun MaaTaskerBindController(tasker: Pointer?, ctrl: Pointer?): Byte
