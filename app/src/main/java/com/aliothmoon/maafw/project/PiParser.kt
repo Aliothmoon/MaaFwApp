@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
 import com.aliothmoon.maafw.domain.ProjectMetadata
+import com.aliothmoon.maafw.domain.SettingSectionDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
@@ -28,12 +29,14 @@ import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.security.MessageDigest
 
-/** 单个 PI 分片文件（task[] / option{} / global_option[] / preset[] / group[]）的解析结果 */
+/** 单个 PI 分片文件（task[] / option{} / global_option[] / setting[] / preset[] / group[]）的解析结果 */
 data class PiFileContent(
     val tasks: List<TaskDefinition> = emptyList(),
     val options: Map<String, OptionDefinition> = emptyMap(),
     /** 只是 option 键名，定义仍在 [options] 里；引用完整性由 ProjectLoader 校验 */
     val globalOptionNames: List<String> = emptyList(),
+    /** 分区里的 option 键名同样由 ProjectLoader 校验 */
+    val settingSections: List<SettingSectionDefinition> = emptyList(),
     val templates: List<ConfigurationTemplate> = emptyList(),
     val groups: List<TaskGroupDefinition> = emptyList(),
     val diagnostics: List<Diagnostic> = emptyList(),
@@ -247,10 +250,11 @@ object PiParser {
 
     /** 与 [parseInterface] 分开是因为物化要等翻译表，那一步在 loader 里读完 languages 才有 */
     fun parseMetadata(root: JsonObject, text: PiTextResolver): ProjectMetadata {
-        val welcomeRaw = root.string("welcome")
+        val welcomeRaw = welcomeDeclarations(root["welcome"])
         return ProjectMetadata(
-            welcome = text.description(welcomeRaw),
-            welcomeFingerprint = welcomeRaw?.let { welcomeFingerprint(it, root.string("version")) },
+            welcome = welcomeRaw.mapNotNull(text::description),
+            welcomeFingerprint = welcomeRaw.takeIf { it.isNotEmpty() }
+                ?.let { welcomeFingerprint(it, root.string("version")) },
             description = text.description(root.string("description")),
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
@@ -282,11 +286,24 @@ object PiParser {
         )
     }
 
-    private fun welcomeFingerprint(raw: String, version: String?): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest("$raw@${version.orEmpty()}".toByteArray())
+    /** v2.10.2 起可写字符串数组，按数组顺序展示；空串与非字符串元素跳过 */
+    private fun welcomeDeclarations(element: JsonElement?): List<String> = when (element) {
+        is JsonArray -> element.mapNotNull { (it as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content }
+        is JsonPrimitive -> listOfNotNull(element.contentOrNull)
+        else -> emptyList()
+    }.filter(String::isNotBlank)
+
+    /**
+     * 单条沿用数组支持之前的算法：看过的用户升级后不重弹，`"x"` 改写成 `["x"]` 也不算内容变化。
+     * 多条按有序原文整体算，增删、重排、改任一条都会重弹
+     */
+    private fun welcomeFingerprint(raws: List<String>, version: String?): String {
+        val declaration = raws.singleOrNull() ?: JsonArray(raws.map(::JsonPrimitive)).toString()
+        return MessageDigest.getInstance("SHA-256")
+            .digest("$declaration@${version.orEmpty()}".toByteArray())
             .take(8)
             .joinToString("") { "%02x".format(it) }
+    }
 
     fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {
         val root = try {
@@ -318,11 +335,41 @@ object PiParser {
             tasks = tasks,
             options = options,
             globalOptionNames = root.stringList("global_option"),
+            settingSections = parseSettingSections(source, root, diagnostics, text),
             templates = templates,
             groups = groups,
             diagnostics = diagnostics,
         )
     }
+
+    /** v2.8.0 顶层 setting[]：根 interface.json 与 import 分片均可出现，合并时按声明顺序追加 */
+    private fun parseSettingSections(
+        source: String,
+        root: JsonObject,
+        diagnostics: MutableList<Diagnostic>,
+        text: PiTextResolver,
+    ): List<SettingSectionDefinition> =
+        (root["setting"] as? JsonArray).orEmpty().mapNotNull { element ->
+            val obj = element as? JsonObject
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(source, DiagnosticMessages.entryNotObject("setting"))
+                }
+            val name = obj.string("name")
+                ?: return@mapNotNull null.also {
+                    diagnostics += error(
+                        source,
+                        DiagnosticMessages.requiredFieldMissing("setting", "name"),
+                    )
+                }
+            SettingSectionDefinition(
+                name = name,
+                label = text.label(obj.string("label")) ?: name,
+                description = text.description(obj.string("description")),
+                icon = obj.iconPath(),
+                optionNames = obj.stringList("option"),
+                defaultExpand = obj.boolean("default_expand") ?: true,
+            )
+        }
 
     /** v2.4.0 顶层 group[] 声明：根 interface.json 与 import 分片均可出现 */
     private fun parseGroups(
@@ -437,7 +484,24 @@ object PiParser {
                         }
                     }
                 }
-                OptionDefinition.Checkbox(name, label, description, cases, defaults, icon, applicability)
+                val (minCount, maxCount) = parseCheckboxCounts(source, name, obj, cases.size, diagnostics)
+                if (obj["default_case"] != null && defaults.size.let { it < minCount || (maxCount != null && it > maxCount) }) {
+                    diagnostics += warning(
+                        source,
+                        DiagnosticMessages.checkboxDefaultCountOutOfRange(name, defaults.size, minCount, maxCount),
+                    )
+                }
+                OptionDefinition.Checkbox(
+                    name,
+                    label,
+                    description,
+                    cases,
+                    defaults,
+                    icon,
+                    applicability,
+                    minCount = minCount,
+                    maxCount = maxCount,
+                )
             }
 
             "input" -> {
@@ -500,6 +564,46 @@ object PiParser {
             )
         }
 
+    /**
+     * v2.10.1 的 `min_count` / `max_count`；写坏的值收敛到一个能满足的区间并记 warning，
+     * 不然 min 大于 cases 数时这个 option 永远过不了运行期校验
+     */
+    private fun parseCheckboxCounts(
+        source: String,
+        optionName: String,
+        obj: JsonObject,
+        caseCount: Int,
+        diagnostics: MutableList<Diagnostic>,
+    ): Pair<Int, Int?> {
+        fun adjusted(field: String, declared: Int, used: Int) {
+            diagnostics += warning(source, DiagnosticMessages.checkboxCountAdjusted(optionName, field, declared, used))
+        }
+
+        var min = obj.int("min_count") ?: 0
+        if (min < 0) {
+            adjusted("min_count", min, 0)
+            min = 0
+        }
+        if (min > caseCount) {
+            adjusted("min_count", min, caseCount)
+            min = caseCount
+        }
+        var max = obj.int("max_count")
+        if (max != null && max < 0) {
+            diagnostics += warning(source, DiagnosticMessages.checkboxCountIgnored(optionName, "max_count", max))
+            max = null
+        }
+        if (max != null && max > caseCount) {
+            adjusted("max_count", max, caseCount)
+            max = caseCount
+        }
+        if (max != null && max < min) {
+            adjusted("max_count", max, min)
+            max = min
+        }
+        return min to max
+    }
+
     private fun parseInputField(
         source: String,
         optionName: String,
@@ -546,30 +650,25 @@ object PiParser {
                 null
             }
         }
+        val password = obj.boolean("password") == true
+        // 协议禁止 password 带 default：interface.json 随资源分发，写进去的就是明文密钥
+        if (password && obj["default"] != null) {
+            diagnostics += warning(source, DiagnosticMessages.passwordDefaultIgnored(optionName, name))
+        }
         val default = when (val d = obj["default"]) {
             null -> ""
-            is JsonPrimitive -> d.content
+            is JsonPrimitive -> if (password) "" else d.content
             else -> ""
-        }
-        val password = obj.boolean("password") ?: false
-        val effectiveDefault = if (password && default.isNotEmpty()) {
-            diagnostics += warning(
-                source,
-                DiagnosticMessages.passwordFieldHasDefault(optionName, name),
-            )
-            ""
-        } else {
-            default
         }
         return InputFieldDefinition(
             name = name,
             pipelineType = pipelineType,
-            default = effectiveDefault,
+            default = default,
             verify = verify,
             patternMessage = text.label(obj.string("pattern_msg")),
             description = text.description(obj.string("description")),
-            password = password,
             label = text.label(obj.string("label")) ?: name,
+            password = password,
         )
     }
 

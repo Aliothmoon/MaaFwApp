@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.bridge
 
+import com.aliothmoon.maafw.bridge.TouchPointerSequence.FailureReason
 import com.aliothmoon.maafw.bridge.TouchPointerSequence.Kind
 import com.aliothmoon.maafw.bridge.TouchPointerSequence.Pointer
 import org.junit.Assert.assertEquals
@@ -14,6 +15,49 @@ import org.junit.Test
 class TouchPointerSequenceTest {
 
     private fun p(contact: Int, x: Float = contact * 10f) = Pointer(contact, x, 0f)
+
+    @Test
+    fun `manual high contact starts with Android pointer zero`() {
+        val down = TouchPointerSequence.plan(Kind.Down, emptyList(), 15, 20f, 30f)
+        assertEquals(15, down.pointers.single().contact)
+        assertEquals(0, down.pointers.single().pointerId)
+        for (kind in listOf(Kind.Move, Kind.Up)) {
+            val next = TouchPointerSequence.plan(kind, down.pointers, 15, 40f, 50f)
+            assertEquals(0, next.pointers.single().pointerId)
+        }
+    }
+
+    @Test
+    fun `manual and automated touches have separate contacts and stable low pointer ids`() {
+        val manual = TouchPointerSequence.plan(Kind.Down, emptyList(), 15, 10f, 20f)
+        val both = TouchPointerSequence.plan(Kind.Down, manual.pointers, 0, 30f, 40f)
+        assertFalse(both.cancelFirst)
+        assertEquals(listOf(15, 0), both.pointers.map { it.contact })
+        assertEquals(listOf(0, 1), both.pointers.map { it.pointerId })
+        val manualUp = TouchPointerSequence.plan(Kind.Up, both.pointers, 15, 10f, 20f)
+        assertEquals(TouchPointerSequence.ACTION_POINTER_UP, manualUp.actionMasked)
+        val remaining = manualUp.pointers.filter { it.contact != 15 }
+        val secondManual = TouchPointerSequence.plan(Kind.Down, remaining, 14, 50f, 60f)
+        assertEquals(listOf(1, 0), secondManual.pointers.map { it.pointerId })
+        val automaticMove = TouchPointerSequence.plan(Kind.Move, secondManual.pointers, 0, 31f, 41f)
+        assertEquals(1, automaticMove.pointers[automaticMove.changingIndex].pointerId)
+    }
+
+    @Test
+    fun `automation first leaves pointer one for manual touch without cancel`() {
+        val automatic = TouchPointerSequence.plan(Kind.Down, emptyList(), 0, 10f, 20f)
+        val manual = TouchPointerSequence.plan(Kind.Down, automatic.pointers, 15, 30f, 40f)
+        assertFalse(manual.cancelFirst)
+        assertEquals(listOf(0, 1), manual.pointers.map { it.pointerId })
+    }
+
+    @Test
+    fun `duplicate logical contact resets Android pointer id after cancellation`() {
+        val current = listOf(Pointer(0, 1f, 2f, 1), Pointer(15, 3f, 4f, 0))
+        val repeated = TouchPointerSequence.plan(Kind.Down, current, 0, 5f, 6f)
+        assertTrue(repeated.cancelFirst)
+        assertEquals(0, repeated.pointers.single().pointerId)
+    }
 
     @Test
     fun `first down is ACTION_DOWN`() {
@@ -91,21 +135,43 @@ class TouchPointerSequenceTest {
 
     @Test
     fun `move or up without that contact is rejected`() {
-        assertFalse(TouchPointerSequence.plan(Kind.Move, listOf(p(0)), 1, 0f, 0f).ok)
-        assertFalse(TouchPointerSequence.plan(Kind.Up, listOf(p(0)), 1, 0f, 0f).ok)
+        val move = TouchPointerSequence.plan(Kind.Move, listOf(p(0)), 1, 0f, 0f)
+        val up = TouchPointerSequence.plan(Kind.Up, listOf(p(0)), 1, 0f, 0f)
+
+        assertFalse(move.ok)
+        assertEquals(FailureReason.MissingContact, move.failureReason)
+        assertFalse(up.ok)
+        assertEquals(FailureReason.MissingContact, up.failureReason)
     }
 
     @Test
     fun `out of range contact is rejected`() {
-        assertFalse(TouchPointerSequence.plan(Kind.Down, emptyList(), -1, 0f, 0f).ok)
-        assertFalse(
+        val negative = TouchPointerSequence.plan(Kind.Down, emptyList(), -1, 0f, 0f)
+        val tooLarge =
             TouchPointerSequence.plan(
                 Kind.Down,
                 emptyList(),
                 TouchPointerSequence.MAX_CONTACTS,
                 0f,
                 0f,
-            ).ok,
-        )
+            )
+
+        assertFalse(negative.ok)
+        assertEquals(FailureReason.InvalidContact, negative.failureReason)
+        assertFalse(tooLarge.ok)
+        assertEquals(FailureReason.InvalidContact, tooLarge.failureReason)
+    }
+
+    @Test
+    fun `adding another contact beyond capacity is rejected`() {
+        // 正常槽位里 contact 互不相同，满 16 个时任何 contact 都已在场、走不到这里；造重复 contact 只为覆盖防御分支
+        val sharedPointerId = List(TouchPointerSequence.MAX_CONTACTS) { p(1) }
+        val noFreePointerId = List(TouchPointerSequence.MAX_CONTACTS) { Pointer(1, 0f, 0f, pointerId = it) }
+        for (current in listOf(sharedPointerId, noFreePointerId)) {
+            val step = TouchPointerSequence.plan(Kind.Down, current, 0, 0f, 0f)
+
+            assertFalse(step.ok)
+            assertEquals(FailureReason.TooManyContacts, step.failureReason)
+        }
     }
 }

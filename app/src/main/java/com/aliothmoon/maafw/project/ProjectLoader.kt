@@ -7,9 +7,11 @@ import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.OptionDefinition
+import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
+import com.aliothmoon.maafw.domain.SettingSectionDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.casesOrEmpty
@@ -44,6 +46,7 @@ class ProjectLoader(
         val templates = mutableListOf<ConfigurationTemplate>()
         val declaredGroups = mutableListOf<TaskGroupDefinition>()
         val globalOptionNames = mutableListOf<String>()
+        val settingSections = mutableListOf<SettingSectionDefinition>()
     }
 
     fun load(): ProjectLoadResult {
@@ -126,7 +129,8 @@ class ProjectLoader(
             template.copy(
                 tasks = template.tasks.map {
                     it.copy(
-                        label = taskLabels[it.taskName] ?: it.taskName
+                        label = taskLabels[it.taskName] ?: it.taskName,
+                        optionValues = withoutPresetPasswords(template.name, it.optionValues, state.options, diagnostics),
                     )
                 },
             )
@@ -154,6 +158,7 @@ class ProjectLoader(
             options = state.options,
             // 引用不存在的项已在上面报 Error；这里过滤掉，免得 builder 再报一遍同一件事
             globalOptionNames = state.globalOptionNames.filter { it in state.options },
+            settingSections = resolveSettingSections(state, diagnostics),
             templates = templates,
             agents = pi.agents,
             metadata = pi.root?.let { PiParser.parseMetadata(it, text) } ?: ProjectMetadata(),
@@ -161,6 +166,26 @@ class ProjectLoader(
             translations = translations,
         )
         return ProjectLoadResult.Ready(definition, diagnostics)
+    }
+
+    /**
+     * 协议要求 preset 不写 password 字段：interface.json 随资源分发，写进去的就是人人可见的明文。
+     * 放在合并之后做，是因为 preset 与它引用的 option 可以分在不同的 import 分片里
+     */
+    private fun withoutPresetPasswords(
+        preset: String,
+        values: Map<String, OptionValue>,
+        options: Map<String, OptionDefinition>,
+        diagnostics: MutableList<Diagnostic>,
+    ): Map<String, OptionValue> = values.mapValues { (optionName, value) ->
+        val inputs = value as? OptionValue.Inputs ?: return@mapValues value
+        val passwords = (options[optionName] as? OptionDefinition.Input)?.fields
+            ?.filter { it.password && it.name in inputs.values }
+            .orEmpty()
+        passwords.forEach {
+            diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.presetPasswordIgnored(preset, optionName, it.name))
+        }
+        if (passwords.isEmpty()) value else inputs.copy(values = inputs.values - passwords.map { it.name }.toSet())
     }
 
     /**
@@ -228,6 +253,13 @@ class ProjectLoader(
         // 按声明顺序追加、去重即可（对齐 MXU 的 import 合并）
         for (name in parsed.globalOptionNames) {
             if (name !in state.globalOptionNames) state.globalOptionNames += name
+        }
+        for (section in parsed.settingSections) {
+            if (state.settingSections.any { it.name == section.name }) {
+                diagnostics += warning(file, DiagnosticMessages.duplicateDeclaration("setting", section.name))
+            } else {
+                state.settingSections += section
+            }
         }
         for (group in parsed.groups) {
             if (state.declaredGroups.any { it.name == group.name }) {
@@ -336,6 +368,39 @@ class ProjectLoader(
         }
         val groups = if (hasUngrouped) declared + ungroupedGroup() else declared
         return normalized to groups
+    }
+
+    /**
+     * setting 分区只给 global_option 分组：不存在的键记 Error，存在但不在 global_option 里的记 warning，都剔除。
+     * 后者 MXU 照样渲染，但编译只认 global_option，控件改了不起作用，这边宁可不显示
+     */
+    private fun resolveSettingSections(
+        state: MergeState,
+        diagnostics: MutableList<Diagnostic>,
+    ): List<SettingSectionDefinition> {
+        val globalNames = state.globalOptionNames.toSet()
+        return state.settingSections.map { section ->
+            section.copy(
+                optionNames = section.optionNames.filter { ref ->
+                    when {
+                        ref !in state.options -> {
+                            diagnostics += error("setting", DiagnosticMessages.missingReference("option", ref))
+                            false
+                        }
+
+                        ref !in globalNames -> {
+                            diagnostics += warning(
+                                "setting",
+                                DiagnosticMessages.settingOptionNotGlobal(section.name, ref),
+                            )
+                            false
+                        }
+
+                        else -> true
+                    }
+                },
+            )
+        }
     }
 
     /** 合成「未分组」兜底组：消费方按 isUngrouped 标记判定，不依赖显示名 */

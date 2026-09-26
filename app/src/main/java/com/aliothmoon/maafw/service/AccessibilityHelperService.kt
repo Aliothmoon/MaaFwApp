@@ -12,10 +12,10 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 
 /**
- * 只为一件事存在：前台模式下同时按音量 ± 唤起控制面板
- *
- * 前台模式把屏幕让给了目标应用，没有这条快捷键就只剩悬浮球一条路，而悬浮球会挡住画面。
- * 不读窗口内容（`canRetrieveWindowContent=false`），只过滤按键
+ * 两件事：
+ * - 前台模式下同时按音量 ± 唤起控制面板。前台模式把屏幕让给了目标应用，没有这条快捷键
+ *   就只剩悬浮球一条路，而悬浮球会挡住画面
+ * - InputText 里按键打不出来的文本经 [AccessibilityTextWriter] 写进输入框
  *
  * 服务本身不认识执行状态，收到组合键就调 [onVolumeUpDownPressed]，由
  * [com.aliothmoon.maafw.overlay.OverlayController] 决定做什么
@@ -30,6 +30,7 @@ class AccessibilityHelperService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         _isConnected.value = true
         Timber.d("Accessibility service connected")
     }
@@ -84,6 +85,7 @@ class AccessibilityHelperService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         _isConnected.value = false
         Timber.d("Accessibility service disconnected")
     }
@@ -97,6 +99,10 @@ class AccessibilityHelperService : AccessibilityService() {
          */
         val SERVICE_ID: String =
             BuildConfig.APPLICATION_ID + "/" + AccessibilityHelperService::class.java.name
+
+        @Volatile
+        var instance: AccessibilityHelperService? = null
+            private set
 
         /** 由 OverlayController 装卸；null 表示当前不需要拦截 */
         val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()

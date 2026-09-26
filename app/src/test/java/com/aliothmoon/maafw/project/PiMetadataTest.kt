@@ -38,7 +38,7 @@ class PiMetadataTest {
             MapTextResolver(mapOf("welcome.body" to "欢迎使用")),
         )
 
-        assertEquals("欢迎使用", metadata.welcome)
+        assertEquals(listOf("欢迎使用"), metadata.welcome)
         assertEquals("一句话说明", metadata.description)
         assertEquals("CONTACT", metadata.contact)
         assertEquals("https://example.com/owner/repo", metadata.github)
@@ -96,8 +96,46 @@ class PiMetadataTest {
     @Test
     fun `没有 welcome 就没有指纹`() {
         val metadata = PiParser.parseMetadata(root("""{ "name": "x" }"""), MapTextResolver(emptyMap()))
-        assertNull(metadata.welcome)
+        assertTrue(metadata.welcome.isEmpty())
         assertNull(metadata.welcomeFingerprint)
+    }
+
+    @Test
+    fun `welcome 数组按声明顺序物化`() {
+        val metadata = PiParser.parseMetadata(
+            root("""{ "welcome": ["${'$'}notice", "announcements/update.md", 3, ""] }"""),
+            MapTextResolver(mapOf("notice" to "公告")),
+        )
+
+        assertEquals(listOf("公告", "announcements/update.md"), metadata.welcome)
+    }
+
+    @Test
+    fun `welcome 空数组视为没有`() {
+        val metadata = PiParser.parseMetadata(root("""{ "welcome": [] }"""), MapTextResolver(emptyMap()))
+        assertTrue(metadata.welcome.isEmpty())
+        assertNull(metadata.welcomeFingerprint)
+    }
+
+    /** 已看过单条 welcome 的用户，PI 改写成单元素数组后不该再弹一次 */
+    @Test
+    fun `单元素数组与字符串指纹相同`() {
+        val text = MapTextResolver(emptyMap())
+        val single = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": "hi" }"""), text)
+        val array = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": ["hi"] }"""), text)
+        assertEquals(single.welcomeFingerprint, array.welcomeFingerprint)
+    }
+
+    @Test
+    fun `公告增删与重排都换指纹`() {
+        val text = MapTextResolver(emptyMap())
+        fun fingerprint(welcome: String) =
+            PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": $welcome }"""), text).welcomeFingerprint
+        val base = fingerprint("""["a", "b"]""")
+        assertNotEquals(base, fingerprint("""["b", "a"]"""))
+        assertNotEquals(base, fingerprint("""["a", "b", "c"]"""))
+        assertNotEquals(base, fingerprint("""["a"]"""))
+        assertEquals(base, fingerprint("""["a", "b"]"""))
     }
 
     @Test

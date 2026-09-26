@@ -108,6 +108,10 @@
     <string name="settings_section_resource_option">资源设置</string>
     <string name="settings_section_display">显示设置</string>
     <string name="settings_section_schedule">定时任务设置</string>
+    <string name="settings_section_duration_limit">运行时长上限</string>
+    <string name="settings_duration_limit_enabled">单轮超时后自动停止</string>
+    <string name="settings_duration_limit_minutes">最长运行分钟数</string>
+    <string name="settings_duration_limit_hint">范围 %1$d–%2$d 分钟；运行中改动下一轮生效</string>
     <string name="settings_section_other">其他设置</string>
     <string name="settings_pip_on_home">后台运行时自动画中画</string>
     <string name="settings_pip_on_home_desc">后台模式任务运行中，停在任务页时按 Home 或手势回桌面，自动缩为画中画小窗继续显示画面。小窗内无法操作游戏</string>
@@ -212,7 +216,12 @@
     <string name="notification_run_stopping">正在停止</string>
 
     <!-- 前台模式控制层 -->
-    <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板。只拦按键，不读取屏幕内容</string>
+    <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板；任务要输入中文等文本时，把文字写进目标应用的输入框。只在输入的那一刻查找输入框，不记录也不上传屏幕内容</string>
+    <string name="text_input_accessibility_unavailable">要输入的文本含有中文等键盘打不出的字符，需要无障碍服务写入，但服务没有开启：请到系统设置的无障碍页面手动开启本应用的无障碍服务后重试</string>
+    <string name="text_input_unsupported_display">Android 11 以下无法向后台虚拟屏写入中文等键盘打不出的文本，请改用前台模式运行</string>
+    <string name="text_input_no_focused_input">没有找到获得焦点的输入框，文本没有写入：输入前要先点中输入框</string>
+    <string name="text_input_foreign_package">获得焦点的输入框不属于目标应用 %1$s，为防止输进别的应用已放弃写入</string>
+    <string name="text_input_action_failed">输入框拒绝了无障碍写入，文本没有写入</string>
     <string name="overlay_tab_tasks">任务</string>
     <string name="overlay_tab_log">日志</string>
     <string name="overlay_hide">隐藏</string>
@@ -275,6 +284,13 @@
     <string name="schedule_edit_days">星期</string>
     <string name="schedule_edit_times">时刻</string>
     <string name="schedule_edit_add_time">添加时刻</string>
+    <string name="schedule_time_picker_title">选择时间</string>
+    <string name="time_picker_hour">小时</string>
+    <string name="time_picker_minute">分钟</string>
+    <string name="time_picker_am">AM</string>
+    <string name="time_picker_pm">PM</string>
+    <string name="time_picker_format_12h">12h</string>
+    <string name="time_picker_format_24h">24h</string>
     <string name="schedule_edit_start_time">首次触发</string>
     <string name="schedule_edit_interval">执行间隔</string>
     <string name="schedule_edit_save">保存</string>
@@ -309,6 +325,8 @@
     <string name="run_log_screen_saver_skipped">熄屏挂机未能打开，本轮不自动关闭</string>
     <string name="run_log_auto_sleep_skipped_not_run">任务未开始，跳过自动熄屏</string>
     <string name="run_log_auto_sleep_skipped_awake">启动时屏幕已亮，跳过自动熄屏</string>
+    <string name="run_log_duration_limit_reached">已达到运行时长上限（%1$d 分钟），停止任务</string>
+    <string name="run_log_duration_limit_stop_failed">按时长上限停止失败：%1$s</string>
     <string name="wake_unlock_need_pin">需要 PIN 才能解锁，请到设置里填写</string>
     <string name="wake_unlock_pin_rejected">PIN 不对，或该机型锁屏不接受注入按键</string>
     <string name="wake_unlock_screen_off">屏幕没有亮起来</string>
@@ -346,6 +364,10 @@
 
     <!-- option 编辑器 -->
     <string name="option_input_invalid">输入不合法</string>
+    <string name="option_checkbox_count_at_least">至少选 %1$d 项</string>
+    <string name="option_checkbox_count_at_most">最多选 %1$d 项</string>
+    <string name="option_checkbox_count_between">选 %1$d–%2$d 项</string>
+    <string name="option_checkbox_count_exactly">选 %1$d 项</string>
 
     <!-- 跨层结构化语义的展示文案（domain/VM -> ui/i18n/DomainStrings） -->
     <string name="tasks_ungrouped">未分组</string>
@@ -462,6 +484,8 @@
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
     <string name="run_log_app_unknown">未知应用</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
+    <string name="run_log_game_fps_low">游戏画面帧率仅 %1$d FPS，低于 30，自动战斗可能出错；请在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_game_fps_degraded">游戏画面帧率 %1$d FPS，低于 50，战斗时机可能不准；建议在游戏设置中开启高帧率模式，并关闭省电模式</string>
 
     <!-- 历史日志：每轮运行落盘一份 -->
     <string name="log_archive_title">运行历史</string>
@@ -527,13 +551,18 @@
     <string name="diagnostic_description_read_failed">description 文件读取失败，保留原始文本：%1$s</string>
     <string name="diagnostic_default_case_missing">option "%1$s" 的 default_case "%2$s" 不在 cases 中</string>
     <string name="diagnostic_input_has_no_fields">input option "%1$s" 没有可用的 inputs</string>
+    <string name="diagnostic_setting_option_not_global">setting "%1$s" 列出的 option "%2$s" 不在 global_option 里，不显示</string>
+    <string name="diagnostic_password_default_ignored">option "%1$s" 的 password 输入 "%2$s" 不能带 default，已忽略</string>
+    <string name="diagnostic_preset_password_ignored">preset "%1$s" 给 option "%2$s" 的 password 输入 "%3$s" 写了值，已忽略</string>
+    <string name="diagnostic_checkbox_count_adjusted">option "%1$s" 的 %2$s 为 %3$d，已按 %4$d 处理</string>
+    <string name="diagnostic_checkbox_count_ignored">option "%1$s" 的 %2$s 为 %3$d，已忽略</string>
+    <string name="diagnostic_checkbox_default_count_out_of_range">option "%1$s" 的 default_case 有 %2$d 项，不满足：%3$s</string>
     <string name="diagnostic_unsupported_option_type">option "%1$s" 的 type "%2$s" 在 Android 端不支持，已跳过</string>
     <string name="diagnostic_invalid_option_type">option "%1$s" 的 type 非法：%2$s</string>
     <string name="diagnostic_option_case_not_object">option "%1$s" 存在非对象 case</string>
     <string name="diagnostic_option_case_name_missing">option "%1$s" 存在缺少 name 的 case</string>
     <string name="diagnostic_invalid_pipeline_type">input "%1$s.%2$s" 的 pipeline_type 非法：%3$s，按 string 处理</string>
     <string name="diagnostic_regex_compile_failed">input "%1$s.%2$s" 的 verify regex 编译失败：%3$s</string>
-    <string name="diagnostic_password_field_has_default">input "%1$s.%2$s" 标记为 password 时不能设置 default，已忽略</string>
     <string name="diagnostic_missing_reference">引用了不存在的 %1$s "%2$s"</string>
     <string name="diagnostic_option_cycle">option 引用形成 cycle：%1$s</string>
     <string name="diagnostic_directory_enumeration_failed">无法枚举 %1$s 目录：%2$s</string>
@@ -547,6 +576,7 @@
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
     <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>
+    <string name="diagnostic_checkbox_count_out_of_range">option "%1$s" 选了 %2$d 项，不满足：%3$s</string>
     <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
     <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
     <string name="schedule_default_name">定时任务 %1$d</string>
@@ -555,6 +585,7 @@
     <string name="settings_resolution_1080p">1080P</string>
     <string name="settings_debug_mode">调试模式</string>
     <string name="settings_debug_mode_desc">启用后错误日志记录全部过程，MaaFramework 详细日志从下一轮运行起</string>
+    <string name="settings_save_on_error">保存调试图像</string>
     <string name="dialog_enable_debug_title">启用调试模式</string>
     <string name="dialog_enable_debug_message">启用后需要重启 App 生效，将记录 MaaFramework 详细日志与 app、特权进程的 logcat。</string>
 

@@ -167,7 +167,7 @@ class ProjectLoaderPasswordInputTest {
         assertTrue(
             result.diagnostics.any {
                 it.severity == DiagnosticSeverity.Warning &&
-                    it.message.isResource(R.string.diagnostic_password_field_has_default, "login", "credential")
+                    it.message.isResource(R.string.diagnostic_password_default_ignored, "login", "credential")
             },
         )
     }

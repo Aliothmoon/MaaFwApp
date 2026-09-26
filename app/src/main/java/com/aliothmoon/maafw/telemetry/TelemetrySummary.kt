@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.telemetry
 
+import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.PipelineType
@@ -52,7 +53,7 @@ object TelemetrySummary {
                 val inputs = (value as? OptionValue.Inputs)?.values.orEmpty()
                 into[optionName] = option.fields.joinToString(",") { field ->
                     val raw = inputs[field.name] ?: field.default
-                    "${field.name}=${summarizeInput(field.pipelineType, raw)}"
+                    "${field.name}=${summarizeInput(field, raw)}"
                 }
                 return
             }
@@ -65,9 +66,9 @@ object TelemetrySummary {
             .forEach { collect(definition, it, values, into, visited + optionName) }
     }
 
-    /** 数值与布尔的取值域由 PI 定死，带不出隐私 */
-    private fun summarizeInput(type: PipelineType, value: String): String = when (type) {
-        PipelineType.IntType, PipelineType.BoolType -> value.ifBlank { EMPTY }
-        PipelineType.StringType -> if (value.isBlank()) EMPTY else FILLED
+    /** 数值与布尔的取值域由 PI 定死，带不出隐私；password 例外，纯数字 PIN 也只报填没填 */
+    private fun summarizeInput(field: InputFieldDefinition, value: String): String = when {
+        field.password || field.pipelineType == PipelineType.StringType -> if (value.isBlank()) EMPTY else FILLED
+        else -> value.ifBlank { EMPTY }
     }
 }

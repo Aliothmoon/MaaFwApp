@@ -166,10 +166,9 @@ internal class MirrorChyanUpdateClient(
                 return UpdateResolveResult.Failed(source, outcome.reason, outcome.detail)
             is UpdateSourceOutcome.Ok -> outcome.value
         }
+        // 下载地址是不带扩展名的令牌链接，不能按 .apk 后缀认；产物已由 os/arch 过滤，下载后再校验 sha256
         val url = latest.url
-        if (url == null || !url.isApkUrl()) {
-            return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
-        }
+            ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
         UpdateResolveResult.Resolved(
             ResolvedUpdate(source = source, version = latest.version, downloadUrl = url, sha256 = latest.sha256),
         )

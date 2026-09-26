@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -67,6 +68,7 @@ import com.aliothmoon.maafw.ui.components.MaaPreviewSurface
 import com.aliothmoon.maafw.ui.components.MaaTouchOverlay
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.pip.LocalIsInPip
+import kotlin.math.roundToInt
 
 /**
  * 预览面做成 movableContent：在内嵌卡片与全屏宿主之间搬家时复用同一份组合状态
@@ -82,12 +84,14 @@ internal fun rememberMovablePreview(
     resolution: DisplayResolution,
     /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
     markers: () -> List<PreviewTouchMarker>,
+    fps: () -> Float?,
     onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
 ): @Composable () -> Unit {
     val currentResolution by rememberUpdatedState(resolution)
     val currentMarkers by rememberUpdatedState(markers)
+    val currentFps by rememberUpdatedState(fps)
     val currentCreated by rememberUpdatedState(onSurfaceCreated)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
@@ -117,6 +121,22 @@ internal fun rememberMovablePreview(
                         resolution = currentResolution,
                         modifier = Modifier.fillMaxSize(),
                     )
+                }
+                currentFps()?.let { value ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.TopStart,
+                    ) {
+                        Text(
+                            text = "${value.roundToInt()} FPS",
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 5.dp, vertical = 2.dp),
+                        )
+                    }
                 }
             }
         }
@@ -236,11 +256,17 @@ internal fun FullscreenPreview(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .previewTouchInput(resolution, onTouch),
+            .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .previewTouchInput(resolution, onTouch),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
         IconButton(
             onClick = onExit,
             modifier = Modifier
@@ -303,14 +329,14 @@ private fun Modifier.previewTouchInput(
 }
 
 /** [offset] 已钳进虚拟屏范围；[inside] 是钳之前落没落在画面上 */
-private data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
+internal data class DisplayPoint(val offset: IntOffset, val inside: Boolean)
 
 /**
  * 把手指位置换算到虚拟屏坐标
  *
  * 越界钳回边缘而不是丢掉：手指拖出画面后抬起，那条 up 也得送达，否则远端以为它还按着
  */
-private fun viewToVirtualDisplay(
+internal fun viewToVirtualDisplay(
     view: Offset,
     viewSize: IntSize,
     resolution: DisplayResolution,
@@ -321,14 +347,14 @@ private fun viewToVirtualDisplay(
     )
     val offsetX = (viewSize.width - resolution.width * scale) / 2f
     val offsetY = (viewSize.height - resolution.height * scale) / 2f
-    val vx = ((view.x - offsetX) / scale).toInt()
-    val vy = ((view.y - offsetY) / scale).toInt()
+    val vx = (view.x - offsetX) / scale
+    val vy = (view.y - offsetY) / scale
     return DisplayPoint(
         offset = IntOffset(
-            vx.coerceIn(0, resolution.width - 1),
-            vy.coerceIn(0, resolution.height - 1),
+            vx.toInt().coerceIn(0, resolution.width - 1),
+            vy.toInt().coerceIn(0, resolution.height - 1),
         ),
-        inside = vx in 0 until resolution.width && vy in 0 until resolution.height,
+        inside = vx >= 0f && vx < resolution.width && vy >= 0f && vy < resolution.height,
     )
 }
 

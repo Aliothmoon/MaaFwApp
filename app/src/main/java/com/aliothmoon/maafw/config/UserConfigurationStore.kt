@@ -63,11 +63,15 @@ object UserConfigurationSerializer : Serializer<UserConfiguration> {
             throw CorruptionException("UserConfiguration 结构非法", e)
         }
         if (envelope.schemaVersion != SCHEMA_VERSION) return defaultValue
-        return envelope.config
+        return envelope.config.withSecretsOpened(OptionSecretCipher::open)
     }
 
+    /**
+     * password 字段只在这一层加解密：内存里的领域值恒为明文，磁盘上恒为密文。
+     * 新增的 secretFields / sealed 都有缺省值，旧文件照常读，所以 [SCHEMA_VERSION] 不动
+     */
     override suspend fun writeTo(t: UserConfiguration, output: OutputStream) {
-        val text = json.encodeToString(PersistedUserConfiguration(SCHEMA_VERSION, t))
+        val text = json.encodeToString(PersistedUserConfiguration(SCHEMA_VERSION, t.withSecretsSealed(OptionSecretCipher::seal)))
         withContext(Dispatchers.IO) {
             output.write(text.encodeToByteArray())
         }

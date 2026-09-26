@@ -13,6 +13,8 @@ data class ProjectDefinition(
     val options: Map<String, OptionDefinition>,
     /** PI v2.3.0 `global_option[]`：参与每个任务的 override，优先级最低，且不依赖任何选择 */
     val globalOptionNames: List<String> = emptyList(),
+    /** PI v2.8.0 `setting[]`：只给 [globalOptionNames] 在设置页分区，不参与编译 */
+    val settingSections: List<SettingSectionDefinition> = emptyList(),
     val templates: List<ConfigurationTemplate>,
     /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
     val agents: List<AgentDefinition> = emptyList(),
@@ -44,7 +46,8 @@ data class TelemetryDefinition(
  * [welcomeFingerprint] 算在物化前的原始声明上：算在正文上的话，切一次语言换了译文就会重弹
  */
 data class ProjectMetadata(
-    val welcome: String? = null,
+    /** 按 PI 声明顺序排好的公告正文，已物化；空表示没有 welcome */
+    val welcome: List<String> = emptyList(),
     val welcomeFingerprint: String? = null,
     val description: String? = null,
     val contact: String? = null,
@@ -118,6 +121,21 @@ data class TaskGroupDefinition(
 )
 
 /**
+ * PI v2.8.0 顶层 setting[] 的一个分区；label 缺省回落 name
+ *
+ * 协议把它定为展示层元数据：值照旧存 globalOptionValues，编译只认 global_option
+ */
+data class SettingSectionDefinition(
+    val name: String,
+    val label: String = name,
+    val description: String? = null,
+    val icon: String? = null,
+    /** 按声明顺序；加载期已剔除不存在的与不在 global_option 里的键 */
+    val optionNames: List<String> = emptyList(),
+    val defaultExpand: Boolean = true,
+)
+
+/**
  * option 的适用范围（PI v2.3.0 的 `controller` / `resource`）；空列表 = 不限
  *
  * v2.3.1 起这是硬约束而不只是展示提示：不满足时该 option **连同其子 option** 都不产生
@@ -186,7 +204,13 @@ sealed interface OptionDefinition {
         val defaultCases: List<String>,
         override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
-    ) : OptionDefinition
+        /** v2.10.1；解析期已收敛到 0..cases.size，且不大于 [maxCount] */
+        val minCount: Int = 0,
+        /** null = 不限 */
+        val maxCount: Int? = null,
+    ) : OptionDefinition {
+        fun acceptsCount(count: Int): Boolean = count >= minCount && (maxCount == null || count <= maxCount)
+    }
 
     data class Input(
         override val name: String,
@@ -225,11 +249,20 @@ data class InputFieldDefinition(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
-    /** PI v2.10.0：显式声明的密码/密钥输入，任何可分享输出都不得带原文 */
-    val password: Boolean = false,
     /** $i18n 已物化；placeholder 仍用 [name] */
     val label: String = name,
-)
+    /**
+     * v2.10.0：界面掩码、日志与遥测不带原文、落盘加密（见 UserConfigurationSerializer）；
+     * 为 true 时 [default] 恒为空，PI 写了也在解析期丢掉
+     */
+    val password: Boolean = false,
+) {
+    /** 要进诊断、日志的输入值一律过这里：password 字段只给掩码 */
+    fun displayValue(raw: String): String = if (password) SECRET_MASK else raw
+}
+
+/** 诊断、日志与导出文件里代替 password 原文的占位 */
+const val SECRET_MASK = "***"
 
 /** PI preset 一次性模板；name 标识，label 展示 */
 data class ConfigurationTemplate(

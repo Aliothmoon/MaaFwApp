@@ -242,12 +242,31 @@ class MirrorChyanUpdateTest {
     }
 
     @Test
-    fun `non apk resolve url has no matching asset`() = runBlocking {
+    fun `extensionless download url resolves`() = runBlocking {
         val gateway = RecordingHttpClientHelper(
             FakeHttpResponse(
                 200,
-                """{"code":0,"data":{"version_name":"1.1.0","url":"https://example.com/app.zip"}}""",
+                """{"code":0,"data":{"version_name":"1.1.0","url":"https://mirrorchyan.com/api/resources/download/token","sha256":"abc"}}""",
             ),
+        )
+
+        assertEquals(
+            UpdateResolveResult.Resolved(
+                ResolvedUpdate(
+                    source = UpdateSource.MIRRORCHYAN,
+                    version = "1.1.0",
+                    downloadUrl = "https://mirrorchyan.com/api/resources/download/token",
+                    sha256 = "abc",
+                ),
+            ),
+            client(gateway).resolve(resolveRequest(mirrorchyanCdk = "cdk-value")),
+        )
+    }
+
+    @Test
+    fun `resolve without url has no matching asset`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, """{"code":0,"data":{"version_name":"1.1.0"}}"""),
         )
 
         assertEquals(

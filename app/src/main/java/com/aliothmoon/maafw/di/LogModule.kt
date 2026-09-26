@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.di
 
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.config.passwordPlaintexts
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.log.ExportSnapshots
 import com.aliothmoon.maafw.log.AppLogWriter
@@ -43,6 +44,7 @@ val logModule = module {
                     redactSecrets = !appSettings.debugMode.value,
                 )
             },
+            secrets = { configurationStore.data.first().passwordPlaintexts() },
         )
     }
 }

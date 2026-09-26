@@ -4,6 +4,7 @@ import android.view.Surface
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.OptionEditorState
+import com.aliothmoon.maafw.domain.OptionSectionState
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
@@ -41,6 +42,8 @@ data class SessionUiState(
     val taskCatalog: List<TaskCatalogGroup> = emptyList(),
     /** 空 = PI 没声明 global_option，设置页据此决定要不要出这张卡 */
     val globalOptions: List<OptionEditorState> = emptyList(),
+    /** PI `setting[]` 分区；与 [globalOptions] 是同一批选项，没被任何分区收录的留给「任务设置」卡 */
+    val settingSections: List<OptionSectionState> = emptyList(),
     /** 空 = 当前 resource 没有 option[]，设置页不出「资源设置」 */
     val resourceOptions: List<OptionEditorState> = emptyList(),
     val projectMetadata: ProjectMetadata = ProjectMetadata(),
@@ -49,14 +52,16 @@ data class SessionUiState(
     /** PI 版本是开发态：设置页不展示开关；上报仍由 TelemetryController 拦截 */
     val telemetryLockedByVersion: Boolean = false,
     val telemetryEnabled: Boolean = false,
-    /** 非 null = 这份 welcome 还没给用户看过 */
-    val welcomePrompt: String? = null,
+    /** 非空 = 这份 welcome 还没给用户看过 */
+    val welcomePrompt: List<String> = emptyList(),
     val environment: ResolvedEnvironment? = null,
     val sessionDiagnostics: List<Diagnostic> = emptyList(),
     val runner: RunnerState = RunnerState(),
     val themeMode: ThemeMode = ThemeMode.System,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     val debugMode: Boolean = false,
+    /** 节点出错时存现场图；默认开，对应 MaaGlobalOption_SaveOnError */
+    val saveOnError: Boolean = true,
     val runMode: RunMode = RunMode.BACKGROUND,
     val overlayControlMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL,
     val screenSaverEnabled: Boolean = false,
@@ -242,6 +247,8 @@ sealed interface SessionIntent {
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
     data class SetDebugMode(val enabled: Boolean) : SessionIntent
+
+    data class SetSaveOnError(val enabled: Boolean) : SessionIntent
 
     /** 主屏 / 后台虚拟屏；运行中不允许改，下一轮才生效 */
     data class SetRunMode(val mode: RunMode) : SessionIntent

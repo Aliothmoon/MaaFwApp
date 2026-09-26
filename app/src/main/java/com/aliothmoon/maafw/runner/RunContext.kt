@@ -2,6 +2,8 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** 谁发起的这一轮；决定「需要确认」时有没有人可问 */
 sealed interface RunTrigger {
@@ -87,4 +89,12 @@ class RunContext(
     val progress: RunProgress = RunProgress { _, _ -> },
     /** 本轮运行日志；单测可传 [DiscardingRunJournal] */
     val journal: RunJournal,
-)
+    val executionId: String = UUID.randomUUID().toString(),
+) {
+    /**
+     * 本轮被时长上限停下；结局与手动停同为 [ExecutionResult.Cancelled]，收尾靠它把两者分开
+     *
+     * 本类唯一一处运行期写入：到点停发生在 engage 之后，没法冻结在 Start 时刻
+     */
+    val stoppedAtLimit = AtomicBoolean(false)
+}

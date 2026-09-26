@@ -39,6 +39,8 @@ class RunLogComposer {
     /** 返回 null 表示这条不展示（被去重掉，或洪泛期的 agent 输出） */
     fun compose(event: RunnerEvent, id: Long, atMillis: Long, context: RunLogContext): RunLogEntry? {
         val composed = when (event) {
+            RunnerEvent.ExecutionFinished -> return null
+
             is RunnerEvent.Log -> Composed(RunLogKind.Info, uiTextFromFramework(event.message))
 
             is RunnerEvent.Progress -> Composed(

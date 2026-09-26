@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -207,8 +208,9 @@ internal fun OverlayField(
     modifier: Modifier = Modifier,
     hint: String = "",
     enabled: Boolean = true,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
     onDone: (() -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardType: KeyboardType = KeyboardType.Unspecified,
 ) {
     val scheme = MaterialTheme.colorScheme
     val style: TextStyle = MaterialTheme.typography.labelSmall.copy(color = scheme.onSurface)
@@ -232,7 +234,7 @@ internal fun OverlayField(
                 singleLine = true,
                 textStyle = style,
                 cursorBrush = SolidColor(scheme.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
                 visualTransformation = visualTransformation,
                 modifier = Modifier.fillMaxWidth(),

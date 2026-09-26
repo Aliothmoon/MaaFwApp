@@ -98,6 +98,29 @@ object DiagnosticMessages {
     fun inputHasNoFields(option: String): UiText =
         uiTextOf(R.string.diagnostic_input_has_no_fields, option)
 
+    fun settingOptionNotGlobal(section: String, option: String): UiText =
+        uiTextOf(R.string.diagnostic_setting_option_not_global, section, option)
+
+    fun passwordDefaultIgnored(option: String, input: String): UiText =
+        uiTextOf(R.string.diagnostic_password_default_ignored, option, input)
+
+    fun presetPasswordIgnored(preset: String, option: String, input: String): UiText =
+        uiTextOf(R.string.diagnostic_preset_password_ignored, preset, option, input)
+
+    fun checkboxCountAdjusted(option: String, field: String, declared: Int, used: Int): UiText =
+        uiTextOf(R.string.diagnostic_checkbox_count_adjusted, option, field, declared, used)
+
+    fun checkboxCountIgnored(option: String, field: String, declared: Int): UiText =
+        uiTextOf(R.string.diagnostic_checkbox_count_ignored, option, field, declared)
+
+    fun checkboxDefaultCountOutOfRange(option: String, count: Int, minCount: Int, maxCount: Int?): UiText =
+        uiTextOf(
+            R.string.diagnostic_checkbox_default_count_out_of_range,
+            option,
+            count,
+            checkboxCountRule(minCount, maxCount),
+        )
+
     fun unsupportedOptionType(option: String, type: String): UiText =
         uiTextOf(R.string.diagnostic_unsupported_option_type, option, type)
 
@@ -116,8 +139,6 @@ object DiagnosticMessages {
     fun regexCompileFailed(option: String, input: String, detail: String): UiText =
         uiTextOf(R.string.diagnostic_regex_compile_failed, option, input, detail)
 
-    fun passwordFieldHasDefault(option: String, input: String): UiText =
-        uiTextOf(R.string.diagnostic_password_field_has_default, option, input)
 
     fun optionCycle(path: String): UiText = uiTextOf(R.string.diagnostic_option_cycle, path)
 
@@ -155,6 +176,14 @@ object DiagnosticMessages {
 
     fun invalidInput(option: String, input: String, detail: String): UiText =
         uiTextOf(R.string.diagnostic_invalid_input, option, input, detail)
+
+    fun checkboxCountOutOfRange(option: String, count: Int, minCount: Int, maxCount: Int?): UiText =
+        uiTextOf(
+            R.string.diagnostic_checkbox_count_out_of_range,
+            option,
+            count,
+            checkboxCountRule(minCount, maxCount),
+        )
 
     fun integerConversionFailed(option: String, value: String): UiText =
         uiTextOf(R.string.diagnostic_integer_conversion_failed, option, value)

@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.privileged
 import android.os.IBinder
 import android.view.Surface
 import com.aliothmoon.maafw.IMaaRunnerCallback
+import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.ITouchEventCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.WakeUnlockResult
@@ -24,6 +25,7 @@ open class FakePrivilegedService : RemoteService {
     var unlockResult: Int = WakeUnlockResult.OK
     var lockAndSleepResult: Int = WakeUnlockResult.OK
     var screenOn: Boolean = true
+    var currentGameFps: Float = -1f
 
     var unlockCalls: MutableList<String> = mutableListOf()
         private set
@@ -61,6 +63,8 @@ open class FakePrivilegedService : RemoteService {
 
     override fun isScreenOn(): Boolean = screenOn
 
+    override fun getGameFps(): Float = currentGameFps
+
     // ── 其余：本测试用不到，保持无副作用的零值 ──
 
     override fun destroy() = Unit
@@ -69,6 +73,21 @@ open class FakePrivilegedService : RemoteService {
     override fun pid(): Int = 0
     override fun heartbeat(appPid: Int) = Unit
     override fun setup(piRoot: String?, logDir: String?, isDebug: Boolean): Boolean = setupResult
+
+    var saveOnError: Boolean = true
+        private set
+
+    var textInputSink: ITextInputSink? = null
+        private set
+
+    override fun setTextInputSink(sink: ITextInputSink?) {
+        textInputSink = sink
+    }
+
+    override fun setSaveOnError(enabled: Boolean): Boolean {
+        saveOnError = enabled
+        return true
+    }
     override fun setVirtualDisplayMode(mode: Int): Boolean = true
     override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) = Unit
     override fun startVirtualDisplay(): Int = 1

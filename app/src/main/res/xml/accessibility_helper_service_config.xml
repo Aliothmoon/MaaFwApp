@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  只为拦音量键组合：canRetrieveWindowContent=false，不读任何窗口内容
-  flagRequestFilterKeyEvents + canRequestFilterKeyEvents 是 onKeyEvent 能收到事件的前提
+  flagRequestFilterKeyEvents + canRequestFilterKeyEvents：拦音量键组合，是 onKeyEvent 能收到事件的前提
+  canRetrieveWindowContent + flagRetrieveInteractiveWindows：InputText 写中文等文本时按显示屏找焦点输入框；
+  只在写的那一刻主动查，事件只订阅低频的窗口状态变化，不接内容变化那种高频事件
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:accessibilityFlags="flagRequestFilterKeyEvents|flagRetrieveInteractiveWindows"
     android:canRequestFilterKeyEvents="true"
-    android:canRetrieveWindowContent="false"
+    android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
     android:settingsActivity="com.aliothmoon.maafw.MainActivity" />

@@ -42,6 +42,7 @@
 -keep class com.aliothmoon.maafw.RemoteService** { *; }
 -keep class com.aliothmoon.maafw.IMaaRunnerCallback** { *; }
 -keep class com.aliothmoon.maafw.ITouchEventCallback** { *; }
+-keep class com.aliothmoon.maafw.ITextInputSink** { *; }
 -keep class com.aliothmoon.maafw.ILogcatService** { *; }
 
 # hidden-api 是 compileOnly，运行时由 framework 提供，包里没有

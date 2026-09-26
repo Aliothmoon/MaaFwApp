@@ -4,9 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.config.passwordFields
+import com.aliothmoon.maafw.config.withPasswordFieldsMarked
+import com.aliothmoon.maafw.config.withSecretFields
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.duplicateTask
 import com.aliothmoon.maafw.domain.renameTask
 import com.aliothmoon.maafw.domain.RunConfiguration
@@ -32,6 +36,7 @@ import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
 import com.aliothmoon.maafw.runner.RunLogEntry
@@ -74,6 +79,7 @@ private data class SettingsSnapshot(
     val screenSaverEnabled: Boolean,
     val resolutionPreference: ResolutionPreference,
     val debugMode: Boolean,
+    val saveOnError: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     val env: EnvSnapshot = EnvSnapshot(),
     val quick: QuickSnapshot = QuickSnapshot(),
@@ -117,6 +123,8 @@ class SessionViewModel(
     private val focusDispatcher: FocusDispatcher,
     /** 运行日志的产地；VM 只转发它的流并转达「清空」 */
     private val recorder: RunLogRecorder,
+    /** 后台运行期的实时 FPS；单独转发，不并入聚合 UI 状态 */
+    private val gameFpsWatcher: GameFpsWatcher,
     private val piInstall: PiInstallCoordinator,
 ) : ViewModel() {
 
@@ -140,6 +148,8 @@ class SessionViewModel(
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
     }.combine(appSettings.themeStyle) { snapshot, style ->
         snapshot.copy(themeStyle = style)
+    }.combine(appSettings.saveOnError) { snapshot, save ->
+        snapshot.copy(saveOnError = save)
     }.combine(
         combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
     ) { snapshot, env -> snapshot.copy(env = env) }
@@ -175,6 +185,9 @@ class SessionViewModel(
      * 一次滑动能连发几十个触点，混进聚合态会让整棵树按触摸频率重组
      */
     val previewMarkers: StateFlow<List<PreviewTouchMarker>> = previewPort.markers
+
+    /** FPS 每秒更新，独立成流避免整棵 UI 树跟着重组 */
+    val gameFps: StateFlow<Float?> = gameFpsWatcher.fps
 
     /**
      * 运行日志，同样单独一条流：一次长跑上千条，混进聚合态会让整棵树按日志频率重组
@@ -216,6 +229,11 @@ class SessionViewModel(
                             if (current.initialized) current
                             else ConfigurationResolver.initialize(project.definition, current)
                         }
+                    } else if (project is ProjectState.Ready &&
+                        config.withPasswordFieldsMarked(project.definition) !== config
+                    ) {
+                        // PI 更新后才把某个字段改成 password：旧配置里的明文补上标记，这一次写回就加密了
+                        configurationStore.update { it.withPasswordFieldsMarked(project.definition) }
                     }
                 }
         }
@@ -235,6 +253,12 @@ class SessionViewModel(
         if (FocusChannel.Toast in focus.channels) {
             emitEffect(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
         }
+    }
+
+    /** 写入口当场补 password 标记：等加载时的迁移去补的话，这一笔会先以明文落一次盘 */
+    private fun OptionValue.secured(optionName: String): OptionValue {
+        val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition ?: return this
+        return withSecretFields(definition.passwordFields()[optionName])
     }
 
     // resolve 只依赖 (project, config)；runner tick 触发 combine 时复用缓存
@@ -264,6 +288,7 @@ class SessionViewModel(
             runner = runner,
             themeMode = config.themeMode,
             debugMode = settings.debugMode,
+            saveOnError = settings.saveOnError,
             themeStyle = settings.themeStyle,
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
@@ -288,11 +313,13 @@ class SessionViewModel(
             telemetryDeclared = project.definition.telemetry != null,
             telemetryLockedByVersion = isDebugProjectVersion(project.definition.version),
             welcomePrompt = metadata.welcome
-                ?.takeIf { metadata.welcomeFingerprint != config.welcomeFingerprint },
+                .takeIf { metadata.welcomeFingerprint != config.welcomeFingerprint }
+                .orEmpty(),
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
             globalOptions = session.globalOptions,
+            settingSections = session.settingSections,
             resourceOptions = session.resourceOptions,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
@@ -407,14 +434,16 @@ class SessionViewModel(
             }
 
             is SessionIntent.SetTaskOption -> guarded {
+                val value = intent.value.secured(intent.optionName)
                 mutateTask(intent.configurationId, intent.taskInstanceId) { task ->
-                    task.copy(optionValues = task.optionValues + (intent.optionName to intent.value))
+                    task.copy(optionValues = task.optionValues + (intent.optionName to value))
                 }
             }
 
             is SessionIntent.SetGlobalOption -> guarded {
+                val value = intent.value.secured(intent.optionName)
                 configurationStore.update {
-                    it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to intent.value))
+                    it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to value))
                 }
             }
 
@@ -422,11 +451,12 @@ class SessionViewModel(
                 val known = (projectRepository.state.value as? ProjectState.Ready)
                     ?.definition?.resources?.any { it.name == intent.resourceName } == true
                 if (!known) return@guarded
+                val value = intent.value.secured(intent.optionName)
                 configurationStore.update { config ->
                     val current = config.resourceOptionValues[intent.resourceName].orEmpty()
                     config.copy(
                         resourceOptionValues = config.resourceOptionValues +
-                            (intent.resourceName to (current + (intent.optionName to intent.value))),
+                            (intent.resourceName to (current + (intent.optionName to value))),
                     )
                 }
             }
@@ -445,6 +475,10 @@ class SessionViewModel(
                 appSettings.setDebugMode(intent.enabled)
                 if (intent.enabled) emitEffect(SessionEffect.RestartApp)
             }
+
+            // 环境开关：每轮 setup 后现读，运行中改不影响本轮已冻结的状态
+            is SessionIntent.SetSaveOnError ->
+                appSettings.setSaveOnError(intent.enabled)
 
             is SessionIntent.SetThemeStyle ->
                 appSettings.setThemeStyle(intent.style)

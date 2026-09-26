@@ -10,6 +10,11 @@ static jmethodID g_touch_up_method = nullptr;
 static jmethodID g_key_down_method = nullptr;
 static jmethodID g_key_up_method = nullptr;
 static jmethodID g_start_app_method = nullptr;
+static jmethodID g_stop_app_method = nullptr;
+static jmethodID g_input_text_method = nullptr;
+
+/* 超出的直接拒：binder 事务缓冲一共才 1MB，文本还要再过一次跨进程调用 */
+static constexpr size_t kMaxInputTextBytes = 16 * 1024;
 
 /* upcall 落到 DriverClass -> InputControlUtils/ActivityUtils，那边全是对隐藏 API 的反射，
  * 各家 ROM 上抛异常是常态。异常挂在 JNIEnv 上不清掉，下一次 JNI 调用就是未定义行为——
@@ -81,6 +86,57 @@ static int UpcallStartApp(JNIEnv *env, const char *packageName, int displayId, b
     return ret;
 }
 
+static int UpcallStopApp(JNIEnv *env, const char *packageName, int displayId) {
+    if (!env || !packageName || !g_driver_clz || !g_stop_app_method) {
+        LOGE("UpcallStopApp: not ready env=%p pkg=%p clz=%p mid=%p",
+             (void *) env, (void *) packageName, (void *) g_driver_clz, (void *) g_stop_app_method);
+        return -1;
+    }
+
+    LOGI("UpcallStopApp: env=%p len=%zu display=%d",
+         (void *) env, strnlen(packageName, 4096), displayId);
+
+    jstring jPackageName = env->NewStringUTF(packageName);
+    if (!jPackageName || CheckJNIException(env, "NewStringUTF(packageName)")) {
+        return -1;
+    }
+    jboolean result = env->CallStaticBooleanMethod(g_driver_clz, g_stop_app_method, jPackageName,
+                                                   displayId);
+    int ret = FinishUpcall(env, result, "DriverClass.stopApp");
+    env->DeleteLocalRef(jPackageName);
+    return ret;
+}
+
+/* 按字节交给 Java 解码：NewStringUTF 只收 Modified UTF-8，emoji 这类 4 字节字符在 CheckJNI 下直接 abort */
+static int UpcallInputText(JNIEnv *env, const char *text, int displayId) {
+    if (!env || !text || !g_driver_clz || !g_input_text_method) {
+        LOGE("UpcallInputText: not ready env=%p text=%p clz=%p mid=%p",
+             (void *) env, (void *) text, (void *) g_driver_clz, (void *) g_input_text_method);
+        return -1;
+    }
+    size_t len = strnlen(text, kMaxInputTextBytes + 1);
+    if (len > kMaxInputTextBytes) {
+        LOGE("UpcallInputText: text longer than %zu bytes, rejected", kMaxInputTextBytes);
+        return -1;
+    }
+    // 文本可能是密码，日志只记长度
+    LOGI("UpcallInputText: bytes=%zu display=%d", len, displayId);
+
+    jbyteArray bytes = env->NewByteArray(static_cast<jsize>(len));
+    if (!bytes || CheckJNIException(env, "NewByteArray(text)")) {
+        return -1;
+    }
+    env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(len), reinterpret_cast<const jbyte *>(text));
+    if (CheckJNIException(env, "SetByteArrayRegion(text)")) {
+        env->DeleteLocalRef(bytes);
+        return -1;
+    }
+    jboolean result = env->CallStaticBooleanMethod(g_driver_clz, g_input_text_method, bytes, displayId);
+    int ret = FinishUpcall(env, result, "DriverClass.inputText");
+    env->DeleteLocalRef(bytes);
+    return ret;
+}
+
 bool InitInputBridge(JavaVM *vm, JNIEnv *env, const char *driverClassName) {
     g_jvm = vm;
     LOGI("InitInputBridge: vm=%p env=%p class=%s", (void *) vm, (void *) env, driverClassName);
@@ -105,10 +161,13 @@ bool InitInputBridge(JavaVM *vm, JNIEnv *env, const char *driverClassName) {
     g_key_down_method = env->GetStaticMethodID(g_driver_clz, "keyDown", "(II)Z");
     g_key_up_method = env->GetStaticMethodID(g_driver_clz, "keyUp", "(II)Z");
     g_start_app_method = env->GetStaticMethodID(g_driver_clz, "startApp", "(Ljava/lang/String;IZ)Z");
+    g_stop_app_method = env->GetStaticMethodID(g_driver_clz, "stopApp", "(Ljava/lang/String;I)Z");
+    g_input_text_method = env->GetStaticMethodID(g_driver_clz, "inputText", "([BI)Z");
 
     if (CheckJNIException(env, "GetStaticMethodID(DriverClass)") ||
         !g_touch_down_method || !g_touch_move_method || !g_touch_up_method ||
-        !g_key_down_method || !g_key_up_method || !g_start_app_method) {
+        !g_key_down_method || !g_key_up_method || !g_start_app_method || !g_stop_app_method ||
+        !g_input_text_method) {
         ReleaseInputBridge(env);
         return false;
     }
@@ -123,6 +182,8 @@ void ReleaseInputBridge(JNIEnv *env) {
     g_key_down_method = nullptr;
     g_key_up_method = nullptr;
     g_start_app_method = nullptr;
+    g_stop_app_method = nullptr;
+    g_input_text_method = nullptr;
 
     if (g_driver_clz && env) {
         env->DeleteGlobalRef(g_driver_clz);
@@ -187,7 +248,12 @@ BRIDGE_API int DispatchInputMessage(MethodParam param) {
         case START_GAME:
             return UpcallStartApp(env, param.args.start_game.package_name, param.display_id,
                                   param.args.start_game.force_stop != 0);
+        case STOP_GAME:
+            return UpcallStopApp(env, param.args.stop_game.client_type, param.display_id);
+        case INPUT:
+            return UpcallInputText(env, param.args.input.text, param.display_id);
         default:
-            return 0;
+            LOGE("DispatchInputMessage: unknown method=%d", param.method);
+            return -1;
     }
 }

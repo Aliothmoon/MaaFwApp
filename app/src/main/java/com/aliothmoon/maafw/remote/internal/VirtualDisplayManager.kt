@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig.VD_NAME
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
+import com.aliothmoon.maafw.third.wrappers.WindowManager
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -150,6 +151,12 @@ object VirtualDisplayManager {
             ", rotation=${d.rotation}" +
             ", flags=0x${flags.toString(16)}"
         )
+
+        // 不设的话虚拟屏上的输入框一拿焦点，用户的输入法就弹到主屏且收不回去；HIDE 这一档 Android 12 起才有
+        if (Build.VERSION.SDK_INT >= AndroidVersions.API_31_ANDROID_12) {
+            runCatching { wm.setDisplayImePolicy(vdId, WindowManager.DISPLAY_IME_POLICY_HIDE) }
+                .onFailure { e -> Ln.w("setDisplayImePolicy(HIDE) failed: ${e.message}") }
+        }
 
         if (d.rotation != Surface.ROTATION_0) {
             // 所有旋转非零的情况都先尝试 freezeRotation

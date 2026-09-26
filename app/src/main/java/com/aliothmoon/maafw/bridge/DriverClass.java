@@ -4,10 +4,12 @@ package com.aliothmoon.maafw.bridge;
 import android.content.pm.PackageInfo;
 
 import com.aliothmoon.maafw.remote.internal.ActivityUtils;
+import com.aliothmoon.maafw.remote.internal.GameFpsMonitor;
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager;
 import com.aliothmoon.maafw.third.FakeContext;
 import com.aliothmoon.maafw.third.Ln;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import timber.log.Timber;
@@ -21,21 +23,25 @@ public final class DriverClass {
     private static final int FRAME_WAIT_TIMEOUT_MS = 5000;
     private static final int FRAME_WAIT_INTERVAL_MS = 50;
 
+    /** 无障碍写文本前拿它校验焦点输入框属于谁，免得写进别的应用 */
+    private static volatile String targetPackage;
+
     private DriverClass() {
     }
 
     public static boolean startApp(String packageName, int displayId, boolean forceStop) {
         Ln.i(TAG + String.format(Locale.US, "%s %d %b", packageName, displayId, forceStop));
         logTargetAppInfo(packageName, displayId, forceStop);
+        targetPackage = ActivityUtils.packageNameOf(packageName);
         if (displayId == PrimaryDisplayManager.DISPLAY_ID) {
             return ActivityUtils.startApp(packageName, displayId, forceStop);
         }
+        String target = ActivityUtils.packageNameOf(packageName);
         boolean ret = ActivityUtils.startApp(packageName, displayId, forceStop, true);
         if (ret) {
             // 部分 ROM（如 One UI）会把游戏从虚拟屏挪回主屏，启动后校验并尝试拉回；
             // 拉不回则快速失败，避免识别对着虚拟屏空转
             // 这里比对的是包名，PI 给的可能是 "包名/Activity"，先拆
-            String target = ActivityUtils.packageNameOf(packageName);
             ret = ActivityUtils.ensureAppOnDisplay(target, displayId);
             if (!ret) {
                 Ln.e(TAG + ": " + target + " could not be pinned on display " + displayId);
@@ -43,8 +49,18 @@ public final class DriverClass {
         }
         if (ret) {
             awaitFirstFrame();
+            GameFpsMonitor.start(target);
         }
         return ret;
+    }
+
+    public static boolean inputText(byte[] utf8, int displayId) {
+        return TextInputDispatcher.input(new String(utf8, StandardCharsets.UTF_8), displayId, targetPackage);
+    }
+
+    public static boolean stopApp(String packageName, int displayId) {
+        Ln.i(TAG + String.format(Locale.US, ": stopApp %s displayId=%d", packageName, displayId));
+        return ActivityUtils.stopApp(packageName);
     }
 
     private static void logTargetAppInfo(String rawSpec, int displayId, boolean forceStop) {

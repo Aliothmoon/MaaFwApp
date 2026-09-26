@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,7 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.R
@@ -28,6 +28,7 @@ import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.standardSwitchCases
 import com.aliothmoon.maafw.domain.validateInputCandidate
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
@@ -253,22 +254,35 @@ private fun CheckboxCases(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
 ) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-    ) {
-        val activeNames = option.activeCases.map { it.name }
-        option.cases.forEach { case ->
-            MaaChoiceChip(
-                label = case.label,
-                selected = case.active,
-                enabled = !locked,
-                leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
-                onClick = {
-                    val updated = if (case.active) activeNames - case.name else activeNames + case.name
-                    // emptyList() 合法，与 Unset 区分
-                    onSetOption(option.name, OptionValue.MultipleCases(updated))
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            val activeNames = option.activeCases.map { it.name }
+            option.cases.forEach { case ->
+                MaaChoiceChip(
+                    label = case.label,
+                    selected = case.active,
+                    enabled = !locked && option.canToggle(case),
+                    leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
+                    onClick = {
+                        val updated = if (case.active) activeNames - case.name else activeNames + case.name
+                        // emptyList() 合法，与 Unset 区分
+                        onSetOption(option.name, OptionValue.MultipleCases(updated))
+                    },
+                )
+            }
+        }
+        option.countRule?.let { rule ->
+            Text(
+                text = rule.asString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (option.belowMinCount) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
         }
@@ -321,11 +335,8 @@ private fun InputFields(
                 isError = !valid,
                 enabled = !locked,
                 singleLine = true,
-                visualTransformation = if (field.password) {
-                    PasswordVisualTransformation()
-                } else {
-                    VisualTransformation.None
-                },
+                visualTransformation = field.visualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType()),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
