@@ -135,6 +135,7 @@ data class InputFieldState(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
+    val password: Boolean = false,
 )
 
 /** UI 即时校验与 Builder 复验共用（docs/domain-model.md §6.6） */

@@ -225,6 +225,8 @@ data class InputFieldDefinition(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
+    /** PI v2.10.0：显式声明的密码/密钥输入，任何可分享输出都不得带原文 */
+    val password: Boolean = false,
     /** $i18n 已物化；placeholder 仍用 [name] */
     val label: String = name,
 )

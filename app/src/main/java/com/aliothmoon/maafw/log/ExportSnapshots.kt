@@ -1,6 +1,9 @@
 package com.aliothmoon.maafw.log
 
 import com.aliothmoon.maafw.config.UserConfigurationSerializer
+import com.aliothmoon.maafw.domain.OptionDefinition
+import com.aliothmoon.maafw.domain.OptionValue
+import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.settings.AppSettings
 import kotlinx.serialization.json.Json
@@ -47,11 +50,63 @@ object ExportSnapshots {
         put("mirrorchyanCdk", redact(settings.mirrorchyanCdk))
     }.toString()
 
-    fun piConfig(config: UserConfiguration): String = buildJsonObject {
+    fun piConfig(config: UserConfiguration, definition: ProjectDefinition? = null): String = buildJsonObject {
         put("snapshotVersion", 1)
         put("schemaVersion", UserConfigurationSerializer.SCHEMA_VERSION)
-        put("config", redactSensitive(json.encodeToJsonElement(UserConfiguration.serializer(), config)))
+        put(
+            "config",
+            redactSensitive(
+                json.encodeToJsonElement(
+                    UserConfiguration.serializer(),
+                    config.redactDeclaredPasswords(definition.declaredPasswordFields()),
+                ),
+            ),
+        )
     }.toString()
+
+    /** v2.10 的密码标记不再依赖字段名；名字启发式只做旧数据/坏数据的兜底 */
+    private fun UserConfiguration.redactDeclaredPasswords(
+        passwordFields: Map<String, Set<String>>,
+    ): UserConfiguration = copy(
+        globalOptionValues = redactInputPasswords(globalOptionValues, passwordFields),
+        controllerOptionValues = controllerOptionValues.mapValues { (_, values) ->
+            redactInputPasswords(values, passwordFields)
+        },
+        resourceOptionValues = resourceOptionValues.mapValues { (_, values) ->
+            redactInputPasswords(values, passwordFields)
+        },
+        configurations = configurations.map { configuration ->
+            configuration.copy(
+                tasks = configuration.tasks.map { task ->
+                    task.copy(optionValues = redactInputPasswords(task.optionValues, passwordFields))
+                },
+            )
+        },
+    )
+
+    private fun redactInputPasswords(
+        values: Map<String, OptionValue>,
+        passwordFields: Map<String, Set<String>>,
+    ): Map<String, OptionValue> = values.mapValues { (optionName, value) ->
+        val secrets = passwordFields[optionName].orEmpty()
+        if (secrets.isEmpty()) return@mapValues value
+        (value as? OptionValue.Inputs)?.takeIf { inputs -> inputs.values.keys.any(secrets::contains) }
+            ?.let { inputs ->
+                inputs.copy(
+                    values = inputs.values.mapValues { (fieldName, fieldValue) ->
+                        if (fieldName in secrets) redact(fieldValue) else fieldValue
+                    },
+                )
+            }
+            ?: value
+    }
+
+    private fun ProjectDefinition?.declaredPasswordFields(): Map<String, Set<String>> =
+        this?.options?.values?.mapNotNull { option ->
+            if (option !is OptionDefinition.Input) return@mapNotNull null
+            val names = option.fields.filter { it.password }.mapTo(mutableSetOf()) { it.name }
+            names.ifEmpty { null }?.let { option.name to it }
+        }?.toMap().orEmpty()
 
     private fun redact(value: String): String =
         if (value.isBlank()) "" else "[redacted]"

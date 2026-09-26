@@ -320,6 +320,7 @@ object ConfigurationResolver {
                             verify = field.verify,
                             patternMessage = field.patternMessage,
                             description = field.description,
+                            password = field.password,
                         )
                     },
                     icon = option.icon,

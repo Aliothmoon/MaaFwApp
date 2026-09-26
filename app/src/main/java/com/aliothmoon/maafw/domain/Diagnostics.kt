@@ -116,6 +116,9 @@ object DiagnosticMessages {
     fun regexCompileFailed(option: String, input: String, detail: String): UiText =
         uiTextOf(R.string.diagnostic_regex_compile_failed, option, input, detail)
 
+    fun passwordFieldHasDefault(option: String, input: String): UiText =
+        uiTextOf(R.string.diagnostic_password_field_has_default, option, input)
+
     fun optionCycle(path: String): UiText = uiTextOf(R.string.diagnostic_option_cycle, path)
 
     // ── 会话解析 ──

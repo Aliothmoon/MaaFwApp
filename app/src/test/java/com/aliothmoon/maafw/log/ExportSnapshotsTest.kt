@@ -1,12 +1,18 @@
 package com.aliothmoon.maafw.log
 
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.ControllerDefinition
+import com.aliothmoon.maafw.domain.InputFieldDefinition
+import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
+import com.aliothmoon.maafw.domain.PipelineType
+import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.settings.AppSettings
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -61,7 +67,7 @@ class ExportSnapshotsTest {
             ),
         )
 
-        val snapshot = Json.parseToJsonElement(ExportSnapshots.piConfig(config)).jsonObject
+        val snapshot = Json.parseToJsonElement(ExportSnapshots.piConfig(config, definition())).jsonObject
 
         assertEquals(1, snapshot.getValue("schemaVersion").jsonPrimitive.content.toInt())
         val persistedConfig = snapshot.getValue("config").jsonObject
@@ -85,4 +91,79 @@ class ExportSnapshotsTest {
             .jsonObject.getValue("optionValues").jsonObject
             .getValue("api-key").jsonPrimitive.content == "[redacted]")
     }
+
+    @Test
+    fun `pi config snapshot redacts fields explicitly declared as passwords`() {
+        val config = UserConfiguration(
+            globalOptionValues = mapOf(
+                "session" to OptionValue.Inputs(
+                    mapOf(
+                        "account" to "alice",
+                        "credential" to "declared-secret",
+                    ),
+                ),
+            ),
+            configurations = listOf(
+                RunConfiguration(
+                    id = RunConfigurationId("config-1"),
+                    name = "Daily",
+                    tasks = listOf(
+                        ConfiguredTask(
+                            taskName = "Fight",
+                            optionValues = mapOf(
+                                "session" to OptionValue.Inputs(mapOf("account" to "task-secret")),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val snapshot = Json.parseToJsonElement(ExportSnapshots.piConfig(config, definition())).jsonObject
+        val session = snapshot.getValue("config").jsonObject
+            .getValue("globalOptionValues").jsonObject
+            .getValue("session").jsonObject
+            .getValue("values").jsonObject
+
+        assertEquals("alice", session.getValue("account").jsonPrimitive.content)
+        assertEquals("[redacted]", session.getValue("credential").jsonPrimitive.content)
+        assertFalse(snapshot.toString().contains("declared-secret"))
+    }
+
+    private fun definition() = ProjectDefinition(
+        name = "test",
+        version = null,
+        controller = ControllerDefinition(),
+        resources = emptyList(),
+        tasks = emptyList(),
+        groups = emptyList(),
+        options = mapOf(
+            "session" to OptionDefinition.Input(
+                name = "session",
+                label = "Session",
+                description = null,
+                fields = listOf(
+                    InputFieldDefinition(
+                        name = "account",
+                        pipelineType = PipelineType.StringType,
+                        default = "",
+                        verify = null,
+                        patternMessage = null,
+                        description = null,
+                    ),
+                    InputFieldDefinition(
+                        name = "credential",
+                        pipelineType = PipelineType.StringType,
+                        default = "",
+                        verify = null,
+                        patternMessage = null,
+                        description = null,
+                        password = true,
+                    ),
+                ),
+                pipelineOverride = JsonObject(emptyMap()),
+            ),
+        ),
+        templates = emptyList(),
+    )
 }

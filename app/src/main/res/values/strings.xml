@@ -533,6 +533,7 @@
     <string name="diagnostic_option_case_name_missing">option "%1$s" 存在缺少 name 的 case</string>
     <string name="diagnostic_invalid_pipeline_type">input "%1$s.%2$s" 的 pipeline_type 非法：%3$s，按 string 处理</string>
     <string name="diagnostic_regex_compile_failed">input "%1$s.%2$s" 的 verify regex 编译失败：%3$s</string>
+    <string name="diagnostic_password_field_has_default">input "%1$s.%2$s" 标记为 password 时不能设置 default，已忽略</string>
     <string name="diagnostic_missing_reference">引用了不存在的 %1$s "%2$s"</string>
     <string name="diagnostic_option_cycle">option 引用形成 cycle：%1$s</string>
     <string name="diagnostic_directory_enumeration_failed">无法枚举 %1$s 目录：%2$s</string>

@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.OptionEditorState
@@ -223,6 +225,11 @@ private fun OverlayInputEditor(
                 },
                 hint = field.label,
                 enabled = !locked,
+                visualTransformation = if (field.password) {
+                    PasswordVisualTransformation()
+                } else {
+                    VisualTransformation.None
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
             supporting?.let {

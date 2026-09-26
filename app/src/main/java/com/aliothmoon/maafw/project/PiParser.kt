@@ -551,13 +551,24 @@ object PiParser {
             is JsonPrimitive -> d.content
             else -> ""
         }
+        val password = obj.boolean("password") ?: false
+        val effectiveDefault = if (password && default.isNotEmpty()) {
+            diagnostics += warning(
+                source,
+                DiagnosticMessages.passwordFieldHasDefault(optionName, name),
+            )
+            ""
+        } else {
+            default
+        }
         return InputFieldDefinition(
             name = name,
             pipelineType = pipelineType,
-            default = default,
+            default = effectiveDefault,
             verify = verify,
             patternMessage = text.label(obj.string("pattern_msg")),
             description = text.description(obj.string("description")),
+            password = password,
             label = text.label(obj.string("label")) ?: name,
         )
     }
