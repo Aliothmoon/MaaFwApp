@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import com.aliothmoon.maafw.MaaDispatchers
+import kotlinx.coroutines.CancellationException
 import com.aliothmoon.maafw.domain.SECRET_MASK
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -37,6 +38,10 @@ class LogExportService(
     private val debugMode: () -> Boolean,
     /** 设备快照文本；采集在 [DeviceInfoCollector] */
     private val deviceInfo: () -> String,
+    /** 脱敏后的设置快照文本；采集在 [ExportSnapshots] */
+    private val settingsSnapshot: suspend () -> String,
+    /** 脱敏后的 PI 运行配置快照文本；采集在 [ExportSnapshots] */
+    private val piConfigSnapshot: suspend () -> String,
     /**
      * 当前保存着的 PI password 明文，打包时在文本日志里换成掩码。
      * MaaFramework 的 `MaaTaskerPostTask` 会把替换后的整份 pipeline_override 写进框架日志 `log/maafw.log`，外壳拦不住，只能在导出这一步补
@@ -50,15 +55,23 @@ class LogExportService(
         if (files.isEmpty()) {
             Timber.w("no log files to export, packing device info only")
         }
-        runCatching {
+        val secrets = if (debugMode()) emptyList() else redactable(secrets())
+        try {
+            val settingsSnapshot = settingsSnapshot()
+            val piConfigSnapshot = piConfigSnapshot()
             val dir = File(baseDir(), "${LOG_DIR_NAME}/${LogExportCollector.EXPORT_DIR_NAME}")
                 .apply { mkdirs() }
             // 只留最新一份：旧包对用户没用，留着纯占空间
             dir.listFiles()?.forEach { it.delete() }
             val zip = File(dir, "maafw_logs_${STAMP.format(Date())}.zip")
-            writeZip(zip, files, redactable(secrets()))
+            writeZip(zip, files, secrets, settingsSnapshot, piConfigSnapshot)
             zip
-        }.onFailure { Timber.w(it, "export logs failed") }.getOrNull()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "export logs failed")
+            null
+        }
     }
 
     suspend fun shareIntent(): Intent? = exportZip()?.let(::createShareIntent)
@@ -76,11 +89,19 @@ class LogExportService(
 
     fun suggestedFileName(): String = "maafw_logs_${STAMP.format(Date())}.zip"
 
-    private fun writeZip(zip: File, files: List<File>, secrets: List<String>) {
+    private fun writeZip(
+        zip: File,
+        files: List<File>,
+        secrets: List<String>,
+        settingsSnapshot: String,
+        piConfigSnapshot: String,
+    ) {
         val base = baseDir()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
             if (debugMode()) appendDeviceProperties(out)
             appendDeviceInfo(out)
+            appendSnapshot(out, SETTINGS_SNAPSHOT_ENTRY, settingsSnapshot)
+            appendSnapshot(out, PI_CONFIG_SNAPSHOT_ENTRY, piConfigSnapshot)
             val skipped = mutableListOf<String>()
             files.forEach { file ->
                 appendLogFile(out, file, base, secrets, skipped)
@@ -149,6 +170,16 @@ class LogExportService(
         }.onFailure { Timber.w(it, "collect device info failed") }
     }
 
+    private fun appendSnapshot(
+        out: ZipOutputStream,
+        entryName: String,
+        snapshot: String,
+    ) {
+        out.putNextEntry(ZipEntry(entryName))
+        out.write(snapshot.toByteArray(Charsets.UTF_8))
+        out.closeEntry()
+    }
+
     /** 走 FileProvider 而非 file://：API 24 起后者直接抛 FileUriExposedException */
     private fun createShareIntent(zip: File): Intent {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", zip)
@@ -172,6 +203,8 @@ class LogExportService(
         const val LOG_DIR_NAME = "log"
         const val PROPERTIES_ENTRY = "properties.txt"
         const val DEVICE_INFO_ENTRY = "device_info.txt"
+        const val SETTINGS_SNAPSHOT_ENTRY = "settings_snapshot.json"
+        const val PI_CONFIG_SNAPSHOT_ENTRY = "pi_config_snapshot.json"
         const val SKIPPED_ENTRY = "export_skipped.txt"
         const val MIME_ZIP = "application/zip"
         const val BUFFER_SIZE = 8 * 1024

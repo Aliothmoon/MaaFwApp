@@ -135,6 +135,44 @@ private fun piRoot(vararg imports: String, body: String = ""): String {
     return """{"interface_version":2,"name":"t"$extra,"import":[$importJson]}"""
 }
 
+class ProjectLoaderPasswordInputTest {
+    @Test
+    fun `password 字段解析标记并拒绝默认值`() {
+        val ready = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to """
+                        {
+                            "interface_version": 2,
+                            "name": "t",
+                            "option": {
+                                "login": {
+                                    "type": "input",
+                                    "inputs": [
+                                        {"name":"credential","pipeline_type":"string","password":true,"default":"baked-in"}
+                                    ]
+                                }
+                            }
+                        }
+                    """.trimIndent(),
+                ),
+            ),
+        ).load()
+
+        assertTrue("加载应成功: $ready", ready is ProjectLoadResult.Ready)
+        val result = ready as ProjectLoadResult.Ready
+        val field = (result.definition.options.getValue("login") as OptionDefinition.Input).fields.single()
+        assertTrue(field.password)
+        assertEquals("", field.default)
+        assertTrue(
+            result.diagnostics.any {
+                it.severity == DiagnosticSeverity.Warning &&
+                    it.message.isResource(R.string.diagnostic_password_default_ignored, "login", "credential")
+            },
+        )
+    }
+}
+
 class ProjectLoaderGroupTest {
 
     private fun load(files: Map<String, String>): ProjectLoadResult.Ready {
