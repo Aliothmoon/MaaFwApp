@@ -73,12 +73,14 @@ class FocusDispatcherTest {
 
     private fun focus(content: String, placeholders: Map<String, String> = emptyMap()) =
         RunnerEvent.Focus(
-            FocusMessage(
-                message = "Node.PipelineNode.Succeeded",
-                content = content,
-                channels = setOf(FocusChannel.Log),
-                trace = false,
-                placeholders = placeholders,
+            listOf(
+                FocusMessage(
+                    message = "Node.PipelineNode.Succeeded",
+                    content = content,
+                    channels = setOf(FocusChannel.Log),
+                    trace = false,
+                    placeholders = placeholders,
+                ),
             ),
         )
 
@@ -154,11 +156,13 @@ class FocusDispatcherTest {
         val runner = RecordingEventRunnerPort()
         val channels = setOf(FocusChannel.Toast, FocusChannel.Notification)
         val event = RunnerEvent.Focus(
-            FocusMessage(
-                message = "Node.PipelineNode.Succeeded",
-                content = "x",
-                channels = channels,
-                trace = false,
+            listOf(
+                FocusMessage(
+                    message = "Node.PipelineNode.Succeeded",
+                    content = "x",
+                    channels = channels,
+                    trace = false,
+                ),
             ),
         )
         assertEquals(channels, completed(runner, dispatcherWith(runner), event).channels)
@@ -189,7 +193,7 @@ class FocusDispatcherTest {
             listOf("读到的正文", "之后的一行", "ExecutionFinished"),
             recorded.map {
                 when (val event = it.event) {
-                    is RunnerEvent.Focus -> event.focus.content
+                    is RunnerEvent.Focus -> event.focus.single().content
                     is RunnerEvent.Log -> event.message
                     else -> event.toString()
                 }

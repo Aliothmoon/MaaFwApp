@@ -67,12 +67,13 @@ class FocusDispatcher(
                     _recording.emit(envelope)
                     return@collect
                 }
-                val focus = event.focus
-                if (focus.trace) _traced.emit(focus)
-                if (focus.displayable) {
+
+                for (focus in event.focus) {
+                    if (focus.trace) _traced.emit(focus)
+                    if (!focus.displayable) continue
                     val completed = complete(focus)
                     _resolved.emit(completed)
-                    _recording.emit(envelope.copy(event = RunnerEvent.Focus(completed)))
+                    _recording.emit(envelope.copy(event = RunnerEvent.Focus(listOf(completed))))
                 }
             }
         }

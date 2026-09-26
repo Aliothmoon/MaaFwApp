@@ -70,7 +70,7 @@ fun RunnerEvent.toLogText(): String = when (this) {
     RunnerEvent.ExecutionFinished -> ""
     is RunnerEvent.Log -> message
     is RunnerEvent.Progress -> "$taskName $completed/$total"
-    is RunnerEvent.Focus -> focus.content
+    is RunnerEvent.Focus -> focus.joinToString("\n\n") { it.content }
     is RunnerEvent.AgentOutput -> line
     is RunnerEvent.AgentConnected -> label
     is RunnerEvent.MalformedCallback -> MALFORMED_LABEL

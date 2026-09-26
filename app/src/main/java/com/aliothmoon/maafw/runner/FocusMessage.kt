@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.maa.MaaMsg
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -19,7 +20,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * 因为到替换那一刻原始 details 早已不在手上
  */
 data class FocusMessage(
-    /** 回调事件名，也是 focus 字典里的键 */
+    /** 回调事件名；旧协议别名会先归一成当前 MaaFramework 事件名 */
     val message: String,
     /** 空 = 只配了 trace 的条目，没有要展示的东西 */
     val content: String,
@@ -91,42 +92,142 @@ object FocusParser {
         isLenient = true
     }
 
-    /** 返回 null 表示这条回调没有模板，按原始转储处理 */
-    fun parse(message: String, detailsJson: String): FocusMessage? {
-        if (message.isEmpty()) return null
-        if (!detailsJson.contains(FOCUS_MARKER) || detailsJson.contains(FOCUS_ABSENT)) return null
+    /** 返回空列表表示这条回调没有模板，按原始转储处理 */
+    fun parseAll(message: String, detailsJson: String): List<FocusMessage> {
+        if (message.isEmpty()) return emptyList()
+        if (!detailsJson.contains(FOCUS_MARKER) || detailsJson.contains(FOCUS_ABSENT)) return emptyList()
 
         val details = runCatching { json.parseToJsonElement(detailsJson) }.getOrNull() as? JsonObject
-            ?: return null
-        val entry = (details[FOCUS_KEY] as? JsonObject)?.get(message) ?: return null
+            ?: return emptyList()
+        val focus = details[FOCUS_KEY]
+        val canonical = canonicalMessage(message)
 
-        val (rawContent, channels, trace) = when (entry) {
-            // 简写：等价于 display: "log"
-            is JsonPrimitive -> Triple(
-                entry.contentOrNullIfNotString(),
-                setOf(FocusChannel.Log),
-                message == TRACED_BY_DEFAULT,
+        return buildList {
+            addAll(parseNewProtocolFocus(focus, canonical, details))
+            addAll(parseLegacyFocus(focus, canonical, details))
+        }.filter { it.content.isNotBlank() || it.trace }
+    }
+
+    private fun parseNewProtocolFocus(
+        focus: JsonElement?,
+        message: String,
+        details: JsonObject,
+    ): List<FocusMessage> {
+        val focusObject = focus as? JsonObject ?: return emptyList()
+        val entry = focusObject[message] ?: legacyMessageAlias(message)?.let(focusObject::get)
+            ?: return emptyList()
+        val placeholders = scalarFields(details)
+
+        return when (entry) {
+            is JsonPrimitive -> listOf(
+                FocusMessage(
+                    message = message,
+                    content = entry.contentOrNullIfNotString().orEmpty(),
+                    channels = setOf(FocusChannel.Log),
+                    trace = message == TRACED_BY_DEFAULT,
+                    placeholders = placeholders,
+                ),
             )
 
-            is JsonObject -> Triple(
-                (entry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString(),
-                parseChannels(entry[DISPLAY_KEY]),
-                (entry[TRACE_KEY] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
-                    ?: (message == TRACED_BY_DEFAULT),
+            is JsonArray -> entry.mapNotNull { item ->
+                (item as? JsonPrimitive)?.contentOrNullIfNotString()?.takeIf(String::isNotBlank)?.let {
+                    FocusMessage(
+                        message = message,
+                        content = it,
+                        channels = setOf(FocusChannel.Log),
+                        trace = message == TRACED_BY_DEFAULT,
+                        placeholders = placeholders,
+                    )
+                }
+            }
+
+            is JsonObject -> listOf(
+                FocusMessage(
+                    message = message,
+                    content = (entry[CONTENT_KEY] as? JsonPrimitive)?.contentOrNullIfNotString().orEmpty(),
+                    channels = parseChannels(entry[DISPLAY_KEY]),
+                    trace = (entry[TRACE_KEY] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+                        ?: (message == TRACED_BY_DEFAULT),
+                    placeholders = placeholders,
+                ),
             )
 
-            else -> return null
+            else -> emptyList()
         }
-        // content 缺省而 trace 为假的条目什么都不做，不必往下游发
-        if (rawContent.isNullOrBlank() && !trace) return null
+    }
 
-        return FocusMessage(
-            message = message,
-            content = rawContent.orEmpty(),
-            channels = channels,
-            trace = trace,
-            placeholders = scalarFields(details),
-        )
+    private fun parseLegacyFocus(
+        focus: JsonElement?,
+        message: String,
+        details: JsonObject,
+    ): List<FocusMessage> {
+        if (message == MaaMsg.NODE_ACTION_STARTING) {
+            (focus as? JsonPrimitive)?.contentOrNullIfNotString()?.takeIf(String::isNotBlank)?.let {
+                return listOf(legacyMessage(message, it, setOf(FocusChannel.Log), details))
+            }
+        }
+
+        val focusObject = focus as? JsonObject ?: return emptyList()
+        val field = when (message) {
+            MaaMsg.NODE_ACTION_STARTING -> "start"
+            MaaMsg.NODE_ACTION_SUCCEEDED -> "succeeded"
+            MaaMsg.NODE_ACTION_FAILED -> "failed"
+            else -> return emptyList()
+        }
+
+        val templates = stringValues(focusObject[field]).mapTo(mutableListOf()) { content ->
+            legacyMessage(message, content, setOf(FocusChannel.Log), details)
+        }
+        if (message == MaaMsg.NODE_ACTION_STARTING) {
+            templates += focusObject.legacyToastTemplates(message, details)
+        }
+        return templates
+    }
+
+    private fun JsonObject.legacyToastTemplates(
+        message: String,
+        details: JsonObject,
+    ): List<FocusMessage> {
+        val values = stringValues(get("toast"))
+        if (values.isEmpty()) return emptyList()
+        val content = values.getOrNull(1)?.let { "${values[0]}: $it" } ?: values[0]
+        return listOf(legacyMessage(message, content, setOf(FocusChannel.Toast), details))
+    }
+
+    private fun legacyMessage(
+        message: String,
+        content: String,
+        channels: Set<FocusChannel>,
+        details: JsonObject,
+    ) = FocusMessage(
+        message = message,
+        content = content,
+        channels = channels,
+        trace = false,
+        placeholders = scalarFields(details),
+    )
+
+    private fun stringValues(value: JsonElement?): List<String> = when (value) {
+        is JsonPrimitive -> listOfNotNull(value.contentOrNullIfNotString())
+        is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNullIfNotString() }
+        else -> emptyList()
+    }.filter(String::isNotBlank)
+
+    /** 有资源仍按 pre-V2 回调键写 focus；取模板前先对齐当前事件名 */
+    private fun canonicalMessage(message: String): String = when (message) {
+        "Node.Recognition.True" -> "Node.Recognition.Succeeded"
+        "Node.Recognition.False" -> "Node.Recognition.Failed"
+        "Node.Action.True" -> MaaMsg.NODE_ACTION_SUCCEEDED
+        "Node.Action.False" -> MaaMsg.NODE_ACTION_FAILED
+        else -> message
+    }
+
+    private fun legacyMessageAlias(message: String): String? = when (message) {
+        "Node.Recognition.Succeeded" -> "Node.Recognition.True"
+        "Node.Recognition.Failed" -> "Node.Recognition.False"
+        MaaMsg.NODE_ACTION_SUCCEEDED -> "Node.Action.True"
+        MaaMsg.NODE_ACTION_FAILED -> "Node.Action.False"
+        else -> null
     }
 
     /** `focus` 自己是对象，不会混进来；其余非标量同样取不出可比的文本 */

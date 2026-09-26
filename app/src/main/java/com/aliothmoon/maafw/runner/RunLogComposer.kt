@@ -50,7 +50,10 @@ class RunLogComposer {
 
             // 正文已由调用方补完（$i18n 查表、{image}、文件路径），这里只负责装进条目：
             // 那几步有先后依赖也要 IO，塞进合成器会让它既不纯也不同步
-            is RunnerEvent.Focus -> Composed(RunLogKind.Focus, uiTextFromProject(event.focus.content))
+            is RunnerEvent.Focus -> Composed(
+                RunLogKind.Focus,
+                uiTextFromProject(event.focus.joinToString("\n\n") { it.content }),
+            )
 
             is RunnerEvent.AgentOutput -> agentEntry(event, atMillis) ?: return null
 
