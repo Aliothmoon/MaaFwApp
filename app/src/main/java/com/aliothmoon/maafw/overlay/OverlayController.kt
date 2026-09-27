@@ -338,11 +338,11 @@ class OverlayController(
     }
 
     private fun registerVolumeKeyListener() {
-        AccessibilityHelperService.onVolumeUpDownPressed.set { scope.launch { togglePanel() } }
+        AccessibilityHelperService.setVolumeComboListener { scope.launch { togglePanel() } }
     }
 
     private fun unregisterVolumeKeyListener() {
-        AccessibilityHelperService.onVolumeUpDownPressed.set(null)
+        AccessibilityHelperService.setVolumeComboListener(null)
     }
 
     // ── 布局 ──
