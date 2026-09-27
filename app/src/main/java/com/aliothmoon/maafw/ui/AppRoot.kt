@@ -156,15 +156,17 @@ private val BottomBarHeight = 56.dp
  *
  * 主 tab 那层还活着只是被盖住，不截断命中测试就能隔着二级页横滑切页、点到底栏；
  * 截断之后根部那层空白失焦也够不着了，两者必须成对出现
+ *
+ * 截断靠的是这里有个指针节点、占住命中测试（重叠的兄弟节点里只有最上面命中的那个收事件），
+ * 不能靠消费：拖动在越过 touch slop 之前每个事件都会在 Final pass 回看父节点消费了没有，
+ * 消费了就当父节点接手、整次放弃。之前这里在 Main pass 全量消费，起手慢、首个事件没过 slop
+ * 的拖动一律被掐掉，二级页的列表看着像偶发拖不动
  */
 @Composable
 private fun Modifier.subPageOverlayInput(): Modifier = this
     .pointerInput(Unit) {
         awaitPointerEventScope {
-            // Main pass 排在子节点之后，二级页自己的手势先走，这里只收剩下的
-            while (true) {
-                awaitPointerEvent().changes.forEach { it.consume() }
-            }
+            while (true) awaitPointerEvent()
         }
     }
     // 排在截断内侧，先于它拿到 Press
