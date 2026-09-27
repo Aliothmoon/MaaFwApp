@@ -49,7 +49,6 @@ import com.aliothmoon.maafw.runner.GameFpsReader
 import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PassthroughFocusContentResolver
 import com.aliothmoon.maafw.runner.RunLogKind
-import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -309,13 +308,13 @@ class SessionViewModelTest {
         advanceTimeBy(100)
         advanceUntilIdle()
 
-        assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.size)
+        assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.all.size)
         // 丢的是最老的，最新一条必须还在
-        assertEquals(UiText.Verbatim("line ${RUN_LOG_CAPACITY + 19}"), vm.runLog.value.last().text)
+        assertEquals(UiText.Verbatim("line ${RUN_LOG_CAPACITY + 19}"), vm.runLog.value.all.last().text)
 
         vm.onIntent(SessionIntent.ClearRunLog)
         advanceUntilIdle()
-        assertTrue(vm.runLog.value.isEmpty())
+        assertTrue(vm.runLog.value.all.isEmpty())
     }
 
     /** 合成规则由 RunLogComposerTest 覆盖，这里只验 ViewModel 确实把事件送进了合成器 */
@@ -332,11 +331,11 @@ class SessionViewModelTest {
 
         assertEquals(
             listOf(RunLogKind.Success, RunLogKind.Verbose, RunLogKind.Error),
-            vm.runLog.value.map { it.kind },
+            vm.runLog.value.all.map { it.kind },
         )
         // 认不出的那条保留原文与 details，「全部」档才有东西可看
-        assertEquals(UiText.Verbatim("Node.Action.Failed"), vm.runLog.value[1].text)
-        assertEquals("""{"name":"NodeA"}""", vm.runLog.value[1].detail)
+        assertEquals(UiText.Verbatim("Node.Action.Failed"), vm.runLog.value.all[1].text)
+        assertEquals("""{"name":"NodeA"}""", vm.runLog.value.all[1].detail)
     }
 
     /**
@@ -357,8 +356,8 @@ class SessionViewModelTest {
             )))
         advanceUntilIdle()
 
-        assertEquals(RunLogKind.Focus, vm.runLog.value.single().kind)
-        assertEquals(UiText.Verbatim("显影罐不足"), vm.runLog.value.single().text)
+        assertEquals(RunLogKind.Focus, vm.runLog.value.all.single().kind)
+        assertEquals(UiText.Verbatim("显影罐不足"), vm.runLog.value.all.single().text)
     }
 
     /** 只声明 toast 的模板不进日志 */
@@ -375,7 +374,7 @@ class SessionViewModelTest {
             )))
         advanceUntilIdle()
 
-        assertTrue(vm.runLog.value.isEmpty())
+        assertTrue(vm.runLog.value.all.isEmpty())
     }
 
     /** 「只看关键」留下合成过的，滤掉没被合成的原始回调 */
@@ -393,7 +392,7 @@ class SessionViewModelTest {
         // 只剩「任务开始」；截图动作与节点识别失败都是原始回调，节点失败在协议里是正常控制流
         assertEquals(
             listOf(RunLogKind.Info),
-            vm.runLog.value.filter { it.isEssential }.map { it.kind },
+            vm.runLog.value.progress.map { it.kind },
         )
     }
 

@@ -469,6 +469,10 @@
     <string name="common_got_it">Got it</string>
 
     <!-- Run log -->
+    <plurals name="run_log_raw_omitted">
+        <item quantity="one">%1$d earlier raw line omitted; export the log for the full record</item>
+        <item quantity="other">%1$d earlier raw lines omitted; export the log for the full record</item>
+    </plurals>
     <plurals name="run_log_count">
         <item quantity="one">%1$d entry</item>
         <item quantity="other">%1$d entries</item>

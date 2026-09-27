@@ -34,7 +34,7 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.RunLogEntry
+import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
@@ -60,7 +60,7 @@ fun TasksScreen(
     isActivePage: Boolean,
     pipOnHome: Boolean,
     /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
-    runLog: () -> List<RunLogEntry>,
+    runLog: () -> RunLogSnapshot,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
@@ -116,7 +116,7 @@ private fun TasksContent(
     previewContent: (@Composable () -> Unit)?,
     isActivePage: Boolean,
     pipOnHome: Boolean,
-    runLog: () -> List<RunLogEntry>,
+    runLog: () -> RunLogSnapshot,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,

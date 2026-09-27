@@ -31,7 +31,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogKind
-import com.aliothmoon.maafw.runner.isEssential
+import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
@@ -60,15 +60,21 @@ import java.util.Locale
 @Composable
 internal fun RunLogPanel(
     /** 取值而不是值：这里才是真正显示日志的地方，订阅落在这一层 */
-    entries: () -> List<RunLogEntry>,
+    entries: () -> RunLogSnapshot,
     onExport: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var essentialOnly by rememberSaveable { mutableStateOf(true) }
-    val all = entries()
-    val visible = remember(all, essentialOnly) {
-        if (essentialOnly) all.filter { it.isEssential } else all
+    val snapshot = entries()
+    val visible = if (essentialOnly) snapshot.progress else snapshot.all
+    // 原始行因限额丢过时，在最老一条保留下来的原始行前面插一句，免得以为日志断档是 bug
+    val omittedAt = remember(snapshot, essentialOnly) {
+        if (essentialOnly || snapshot.omittedRaw <= 0) {
+            -1
+        } else {
+            visible.indexOfFirst { it.id == snapshot.firstRawId }
+        }
     }
 
     Column(
@@ -99,7 +105,7 @@ internal fun RunLogPanel(
             TextButton(onClick = onExport) {
                 Text(stringResource(R.string.run_log_export))
             }
-            TextButton(onClick = onClear, enabled = all.isNotEmpty()) {
+            TextButton(onClick = onClear, enabled = snapshot.all.isNotEmpty()) {
                 Text(stringResource(R.string.run_log_clear))
             }
         }
@@ -131,8 +137,9 @@ internal fun RunLogPanel(
         }
         // 只在用户本来就贴着底时才跟；否则他往上翻着看，新行一来就被拽回去；
         // 不用 animateScrollToItem：高频事件下动画会排队打架
+        val lastItemIndex = visible.lastIndex + if (omittedAt >= 0) 1 else 0
         LaunchedEffect(visible.lastOrNull()?.id) {
-            if (pinnedToBottom) listState.scrollToItem(visible.lastIndex)
+            if (pinnedToBottom) listState.scrollToItem(lastItemIndex)
         }
         val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
         LazyColumn(
@@ -140,7 +147,7 @@ internal fun RunLogPanel(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
         ) {
-            items(visible, key = { it.id }) { entry ->
+            val row: @Composable (RunLogEntry) -> Unit = { entry ->
                 RunLogRow(
                     entry = entry,
                     time = formatter.format(Date(entry.atMillis)),
@@ -148,9 +155,33 @@ internal fun RunLogPanel(
                     onToggle = { expandedId = if (expandedId == entry.id) null else entry.id },
                 )
             }
+            if (omittedAt < 0) {
+                items(visible, key = { it.id }) { row(it) }
+            } else {
+                items(visible.subList(0, omittedAt), key = { it.id }) { row(it) }
+                item(key = OMITTED_ROW_KEY) { RawOmittedRow(snapshot.omittedRaw) }
+                items(visible.subList(omittedAt, visible.size), key = { it.id }) { row(it) }
+            }
         }
     }
 }
+
+/** 省略提示那一行；完整记录在会话文件里，导出即可看到 */
+@Composable
+private fun RawOmittedRow(count: Long) {
+    val quantity = count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    Text(
+        text = pluralStringResource(R.plurals.run_log_raw_omitted, quantity, count),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = MaaDesignTokens.Spacing.xxs),
+    )
+}
+
+/** 与条目 id（Long）不同类型，不会撞键 */
+private const val OMITTED_ROW_KEY = "raw-omitted"
 
 @Composable
 private fun RunLogRow(

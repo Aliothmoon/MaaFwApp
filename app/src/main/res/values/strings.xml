@@ -462,6 +462,9 @@
     <string name="common_got_it">知道了</string>
 
     <!-- 运行日志 -->
+    <plurals name="run_log_raw_omitted">
+        <item quantity="other">已省略更早的 %1$d 条原始日志，完整记录请导出查看</item>
+    </plurals>
     <plurals name="run_log_count">
         <item quantity="other">%1$d 条</item>
     </plurals>

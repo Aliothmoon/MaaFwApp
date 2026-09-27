@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import com.aliothmoon.maafw.i18n.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -208,7 +209,7 @@ class RunLogRecorderTest {
 
         runner.emit(RunnerEvent.Log("还没开工"))
 
-        assertEquals(1, recorder.runLog.value.size)
+        assertEquals(1, recorder.runLog.value.all.size)
         // 没开会话就不该凭空造出一个文件
         assertNull(File(logDir, "run").listFiles()?.firstOrNull())
     }
@@ -222,7 +223,7 @@ class RunLogRecorderTest {
         recorder.warn(ID, com.aliothmoon.maafw.i18n.uiTextFromFramework("内存偏紧"))
         recorder.finish(runner)
 
-        val line = recorder.runLog.value.single()
+        val line = recorder.runLog.value.all.single()
         assertEquals(RunLogKind.Warning, line.kind)
         assertEquals(
             "内存偏紧",
@@ -296,13 +297,13 @@ class RunLogRecorderTest {
         recorder.finish(runner, "e1")
 
         settleRunLog()
-        val before = recorder.runLog.value.size
+        val before = recorder.runLog.value.all.size
         recorder.begin(planOf("a"), "e2")
         runner.emit(RunnerEvent.Log("同一句"), "e2")
         recorder.finish(runner, "e2")
         settleRunLog()
 
-        assertTrue("跨轮被去重掉了", recorder.runLog.value.size > before)
+        assertTrue("跨轮被去重掉了", recorder.runLog.value.all.size > before)
     }
 
     /**
@@ -317,7 +318,7 @@ class RunLogRecorderTest {
         val recorder = recorder(runner)
 
         val sizes = mutableListOf<Int>()
-        backgroundScope.launch { recorder.runLog.collect { sizes += it.size } }
+        backgroundScope.launch { recorder.runLog.collect { sizes += it.all.size } }
         settleRunLog()
 
         repeat(20) { index -> runner.emit(RunnerEvent.Log("line $index")) }
@@ -326,6 +327,63 @@ class RunLogRecorderTest {
         assertEquals(20, sizes.last())
         // 不钉死次数：攒批的节拍怎么排是实现的事，逐条发布才是要拦的那件事
         assertTrue("逐条发布了，共 ${sizes.size} 次", sizes.size <= 3)
+    }
+
+    /** 回归：进度行与原始行曾共用一个窗口，识别期原始回调一刷，「进度」档更早的行就被挤没了 */
+    @Test
+    fun `a raw callback flood does not evict progress lines`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        repeat(10) { runner.emit(RunnerEvent.Log("progress $it")) }
+        // 文本各不相同：合成器会去掉连续重复的行
+        repeat(RUN_LOG_CAPACITY + 100) { runner.emit(RunnerEvent.Callback("Raw.Callback.$it", "{}")) }
+        settleRunLog()
+
+        val snapshot = recorder.runLog.value
+        assertEquals((0 until 10).map { UiText.Verbatim("progress $it") }, snapshot.progress.map { it.text })
+        // 「全部」档：进度行一条不丢，原始行只留最新的一窗
+        assertEquals(10 + RUN_LOG_CAPACITY, snapshot.all.size)
+        assertEquals(snapshot.progress, snapshot.all.filter { it.isEssential })
+        assertEquals(UiText.Verbatim("Raw.Callback.100"), snapshot.all.first { !it.isEssential }.text)
+        assertEquals(snapshot.all.sortedBy { it.id }, snapshot.all)
+        // 省略提示插在最老一条保留下来的原始行前面
+        assertEquals(100L, snapshot.omittedRaw)
+        assertEquals(snapshot.all.first { !it.isEssential }.id, snapshot.firstRawId)
+    }
+
+    @Test
+    fun `progress lines are capped on their own`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        repeat(RUN_LOG_CAPACITY + 5) { runner.emit(RunnerEvent.Log("line $it")) }
+        settleRunLog()
+
+        val snapshot = recorder.runLog.value
+        assertEquals(RUN_LOG_CAPACITY, snapshot.progress.size)
+        assertEquals(UiText.Verbatim("line 5"), snapshot.progress.first().text)
+        // 丢的是进度行，不算进原始行的省略数
+        assertEquals(0L, snapshot.omittedRaw)
+        assertNull(snapshot.firstRawId)
+    }
+
+    @Test
+    fun `clearing resets both tiers and the omission count`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        runner.emit(RunnerEvent.Log("progress"))
+        repeat(RUN_LOG_CAPACITY + 1) { runner.emit(RunnerEvent.Callback("Raw.Callback.$it", "{}")) }
+        settleRunLog()
+        recorder.clear()
+        runner.emit(RunnerEvent.Callback("Raw.After", "{}"))
+        settleRunLog()
+
+        val snapshot = recorder.runLog.value
+        assertTrue(snapshot.progress.isEmpty())
+        assertEquals(listOf(UiText.Verbatim("Raw.After")), snapshot.all.map { it.text })
+        assertEquals(0L, snapshot.omittedRaw)
     }
 
     @Test
@@ -375,7 +433,7 @@ class RunLogRecorderTest {
         )
         settleRunLog()
 
-        val text = recorder.runLog.value.single().text as com.aliothmoon.maafw.i18n.UiText.Resource
+        val text = recorder.runLog.value.all.single().text as com.aliothmoon.maafw.i18n.UiText.Resource
         assertEquals(listOf("启动"), text.args)
     }
 

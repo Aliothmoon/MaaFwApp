@@ -50,8 +50,30 @@ enum class RunLogKind {
     Verbose,
 }
 
-/** 超过就丢最老的：一次长跑能积上万条，全留住会吃光内存也拖慢列表 */
+/**
+ * 屏上每一档各留多少：超过就丢这一档最老的。一次长跑能积上万条，全留住会吃光内存也拖慢列表
+ *
+ * 进度行与原始行分开限额：识别期原始回调一秒几十条，共用一个窗口会把更早的进度行挤掉
+ */
 const val RUN_LOG_CAPACITY = 500
+
+/**
+ * 屏上那份的一拍快照；两档与省略信息一起发，界面不会拿到彼此对不上的半份
+ *
+ * [all] 是 [progress] 与保留下来的原始行按 id 归并：进度行永远不因原始行洪泛而丢
+ */
+data class RunLogSnapshot(
+    val progress: List<RunLogEntry> = emptyList(),
+    val all: List<RunLogEntry> = emptyList(),
+    /** 因限额丢掉的原始行数；完整记录仍在会话文件里 */
+    val omittedRaw: Long = 0,
+    /** 最老一条仍保留的原始行：省略提示插在它前面 */
+    val firstRawId: Long? = null,
+) {
+    companion object {
+        val EMPTY = RunLogSnapshot()
+    }
+}
 
 /**
  * 「进度」档留下的：这一轮跑到哪了

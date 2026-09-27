@@ -43,8 +43,8 @@ class RunLogRecorder(
     private val scope: CoroutineScope,
 ) : RunJournal {
 
-    private val _runLog = MutableStateFlow<List<RunLogEntry>>(emptyList())
-    val runLog: StateFlow<List<RunLogEntry>> = _runLog.asStateFlow()
+    private val _runLog = MutableStateFlow(RunLogSnapshot.EMPTY)
+    val runLog: StateFlow<RunLogSnapshot> = _runLog.asStateFlow()
 
     /**
      * 最近一条用户可见正文；合成当下就更新，不等屏上那份攒批
@@ -81,11 +81,17 @@ class RunLogRecorder(
     private val fileLock = Mutex()
 
     /**
-     * 屏上那份的环形缓冲；[note] 与合成协程两边都写，靠 [uiLock] 串起来
+     * 屏上那份的环形缓冲，进度行与原始行各一个、各自限额；[note] 与合成协程两边都写，靠 [uiLock] 串起来
      *
-     * 不逐条改 [_runLog]：那要按条复制整份 500 元素列表，识别期一秒几十条就是在刷垃圾
+     * 分开是因为原始回调一秒几十条，共用一个窗口时更早的进度行会被它们挤出去
+     *
+     * 不逐条改 [_runLog]：那要按条复制整份列表，识别期一秒几十条就是在刷垃圾
      */
-    private val uiBuffer = ArrayDeque<RunLogEntry>(RUN_LOG_CAPACITY)
+    private val progressBuffer = ArrayDeque<RunLogEntry>(RUN_LOG_CAPACITY)
+    private val rawBuffer = ArrayDeque<RunLogEntry>(RUN_LOG_CAPACITY)
+
+    /** 原始行因限额丢掉的条数，「全部」档据此提示 */
+    private var omittedRaw = 0L
     private val uiLock = Any()
     private val uiDirty = Channel<Unit>(Channel.CONFLATED)
 
@@ -111,8 +117,12 @@ class RunLogRecorder(
     /** 只清屏上这份，不动已落盘的历史——用户按的是「清空」不是「删记录」 */
     fun clear() {
         composer.reset()
-        synchronized(uiLock) { uiBuffer.clear() }
-        _runLog.value = emptyList()
+        synchronized(uiLock) {
+            progressBuffer.clear()
+            rawBuffer.clear()
+            omittedRaw = 0
+        }
+        _runLog.value = RunLogSnapshot.EMPTY
         // FGS 状态跟这一轮走，begin 才换句子
     }
 
@@ -244,8 +254,16 @@ class RunLogRecorder(
                     }
             }
             synchronized(uiLock) {
-                while (uiBuffer.size >= RUN_LOG_CAPACITY) uiBuffer.removeFirst()
-                uiBuffer.addLast(entry)
+                if (entry.isEssential) {
+                    while (progressBuffer.size >= RUN_LOG_CAPACITY) progressBuffer.removeFirst()
+                    progressBuffer.addLast(entry)
+                } else {
+                    while (rawBuffer.size >= RUN_LOG_CAPACITY) {
+                        rawBuffer.removeFirst()
+                        omittedRaw++
+                    }
+                    rawBuffer.addLast(entry)
+                }
             }
             uiDirty.trySend(Unit)
         }
@@ -281,7 +299,14 @@ class RunLogRecorder(
     }
 
     private fun publishBuffered() {
-        _runLog.value = synchronized(uiLock) { uiBuffer.toList() }
+        _runLog.value = synchronized(uiLock) {
+            RunLogSnapshot(
+                progress = progressBuffer.toList(),
+                all = mergeById(progressBuffer, rawBuffer),
+                omittedRaw = omittedRaw,
+                firstRawId = rawBuffer.firstOrNull()?.id,
+            )
+        }
     }
 
     /** 攒批落盘；整批只 flush 一次 */
@@ -308,6 +333,24 @@ class RunLogRecorder(
         /** 要盖过 focus `{image}` 取帧的 3s 超时：marker 排在那条 focus 后面 */
         const val DRAIN_TIMEOUT_MS = 5_000L
     }
+}
+
+/**
+ * 两档各自保持入缓冲顺序，按 id 线性归并出「全部」档
+ *
+ * id 在入缓冲前分配，[RunLogRecorder.note] 与合成协程并发时两档之间可能差一位；
+ * 归并只决定交错位置，不丢不重
+ */
+private fun mergeById(a: List<RunLogEntry>, b: List<RunLogEntry>): List<RunLogEntry> {
+    val merged = ArrayList<RunLogEntry>(a.size + b.size)
+    var i = 0
+    var j = 0
+    while (i < a.size && j < b.size) {
+        merged.add(if (a[i].id <= b[j].id) a[i++] else b[j++])
+    }
+    while (i < a.size) merged.add(a[i++])
+    while (j < b.size) merged.add(b[j++])
+    return merged
 }
 
 private fun RunNote.asRunLogKind(): RunLogKind = when (this) {

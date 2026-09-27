@@ -41,7 +41,7 @@ import com.aliothmoon.maafw.runner.FocusMessage
 import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
-import com.aliothmoon.maafw.runner.RunLogEntry
+import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunTrigger
@@ -211,7 +211,7 @@ class SessionViewModel(
      * 合成与落盘都在进程级的 [RunLogRecorder] 里，这里只是转发——挂在 VM 上时切语言
      * Activity 一重建日志就没了，定时触发更是压根没有 VM
      */
-    val runLog: StateFlow<List<RunLogEntry>> = recorder.runLog
+    val runLog: StateFlow<RunLogSnapshot> = recorder.runLog
 
     private val _effects = MutableSharedFlow<SessionEffect>(
         extraBufferCapacity = 64,
