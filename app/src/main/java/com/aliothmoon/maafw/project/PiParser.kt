@@ -38,6 +38,8 @@ data class PiFileContent(
     val settingSections: List<SettingSectionDefinition> = emptyList(),
     val templates: List<ConfigurationTemplate> = emptyList(),
     val groups: List<TaskGroupDefinition> = emptyList(),
+    /** 协议允许、外壳有意不投影的 option（如 hotkey）；已记 warning，别处引用它们不算悬空 */
+    val skippedOptionNames: Set<String> = emptySet(),
     val diagnostics: List<Diagnostic> = emptyList(),
 )
 
@@ -311,9 +313,10 @@ object PiParser {
         val tasks = (root["task"] as? JsonArray).orEmpty().mapNotNull { element ->
             parseTask(source, element, diagnostics, text)
         }
+        val skippedOptionNames = mutableSetOf<String>()
         val options = buildMap {
             (root["option"] as? JsonObject)?.forEach { (name, element) ->
-                parseOption(source, name, element, diagnostics, text)?.let { put(name, it) }
+                parseOption(source, name, element, diagnostics, text, skippedOptionNames)?.let { put(name, it) }
             }
         }
         val templates = (root["preset"] as? JsonArray).orEmpty().mapNotNull { element ->
@@ -327,6 +330,7 @@ object PiParser {
             settingSections = parseSettingSections(source, root, diagnostics, text),
             templates = templates,
             groups = groups,
+            skippedOptionNames = skippedOptionNames,
             diagnostics = diagnostics,
         )
     }
@@ -431,6 +435,7 @@ object PiParser {
         element: JsonElement,
         diagnostics: MutableList<Diagnostic>,
         text: PiTextResolver,
+        skipped: MutableSet<String>,
     ): OptionDefinition? {
         val obj = element as? JsonObject
             ?: return null.also {
@@ -517,6 +522,7 @@ object PiParser {
                     source,
                     DiagnosticMessages.unsupportedOptionType(name, "hotkey"),
                 )
+                skipped += name
                 null
             }
 

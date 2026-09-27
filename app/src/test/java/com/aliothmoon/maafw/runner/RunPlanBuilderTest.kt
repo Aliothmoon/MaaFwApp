@@ -107,6 +107,18 @@ class RunPlanBuilderTest {
     }
 
     @Test
+    fun `引用被跳过的 option 不阻断编译`() {
+        val withHotkey = definition.copy(
+            tasks = definition.tasks.map {
+                if (it.name == "启动游戏") it.copy(optionNames = it.optionNames + "Keymap") else it
+            },
+            skippedOptionNames = setOf("Keymap"),
+        )
+        val result = RunPlanBuilder.build(withHotkey, configWith(ConfiguredTask("启动游戏")))
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+    }
+
+    @Test
     fun `全部禁用映射为 NoExecutableTasks`() {
         val result = RunPlanBuilder.build(
             definition,

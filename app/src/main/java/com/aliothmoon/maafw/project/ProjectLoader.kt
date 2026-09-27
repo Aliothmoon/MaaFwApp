@@ -47,6 +47,7 @@ class ProjectLoader(
         val declaredGroups = mutableListOf<TaskGroupDefinition>()
         val globalOptionNames = mutableListOf<String>()
         val settingSections = mutableListOf<SettingSectionDefinition>()
+        val skippedOptionNames = mutableSetOf<String>()
     }
 
     fun load(): ProjectLoadResult {
@@ -112,6 +113,7 @@ class ProjectLoader(
             state.globalOptionNames,
             pi.resources,
             state.options,
+            state.skippedOptionNames,
             diagnostics,
         )
         detectOptionCycles(state.options, diagnostics)
@@ -159,6 +161,7 @@ class ProjectLoader(
             // 引用不存在的项已在上面报 Error；这里过滤掉，免得 builder 再报一遍同一件事
             globalOptionNames = state.globalOptionNames.filter { it in state.options },
             settingSections = resolveSettingSections(state, diagnostics),
+            skippedOptionNames = state.skippedOptionNames.toSet(),
             templates = templates,
             agents = pi.agents,
             metadata = pi.root?.let { PiParser.parseMetadata(it, text) } ?: ProjectMetadata(),
@@ -223,6 +226,7 @@ class ProjectLoader(
         diagnostics: MutableList<Diagnostic>,
     ) {
         diagnostics += parsed.diagnostics
+        state.skippedOptionNames += parsed.skippedOptionNames
         for (task in parsed.tasks) {
             if (!state.taskNames.add(task.name)) {
                 diagnostics += error(
@@ -384,6 +388,9 @@ class ProjectLoader(
             section.copy(
                 optionNames = section.optionNames.filter { ref ->
                     when {
+                        // 跳过时已记 warning，这里只剔除
+                        ref in state.skippedOptionNames -> false
+
                         ref !in state.options -> {
                             diagnostics += error("setting", DiagnosticMessages.missingReference("option", ref))
                             false
@@ -412,10 +419,13 @@ class ProjectLoader(
         globalOptionNames: List<String>,
         resources: List<PiResourceContent>,
         options: Map<String, OptionDefinition>,
+        skipped: Set<String>,
         diagnostics: MutableList<Diagnostic>,
     ) {
+        // 有意跳过的 option 已在解析时记过 warning，引用它们不再重复报悬空
+        fun missing(ref: String) = ref !in options && ref !in skipped
         for (ref in globalOptionNames) {
-            if (ref !in options) {
+            if (missing(ref)) {
                 diagnostics += error(
                     "global_option",
                     DiagnosticMessages.missingReference("option", ref)
@@ -424,7 +434,7 @@ class ProjectLoader(
         }
         for (resource in resources) {
             for (ref in resource.optionNames) {
-                if (ref !in options) {
+                if (missing(ref)) {
                     diagnostics += error(
                         "resource:${resource.name}",
                         DiagnosticMessages.missingReference("option", ref),
@@ -434,7 +444,7 @@ class ProjectLoader(
         }
         for (task in tasks) {
             for (ref in task.optionNames) {
-                if (ref !in options) {
+                if (missing(ref)) {
                     diagnostics += error(
                         "task:${task.name}",
                         DiagnosticMessages.missingReference("option", ref),
@@ -445,7 +455,7 @@ class ProjectLoader(
         for (option in options.values) {
             for (case in option.casesOrEmpty()) {
                 for (child in case.childOptionNames) {
-                    if (child !in options) {
+                    if (missing(child)) {
                         diagnostics += error(
                             "option:${option.name}/case:${case.name}",
                             DiagnosticMessages.missingReference("option", child),

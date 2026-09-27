@@ -422,6 +422,32 @@ class ProjectLoaderGroupTest {
             },
         )
     }
+
+    /** 回归：MaaEnd Keymap.json 把 hotkey 挂进 global_option 与 setting，跳过后又被当成悬空引用报了 4 条 Error */
+    @Test
+    fun `引用被跳过的 hotkey option 不算悬空`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
+                "tasks/a.json" to """
+                    {
+                        "setting": [{"name":"Keymap","option":["Keymap"]}],
+                        "global_option": ["Keymap"],
+                        "task": [{"name":"T1","entry":"E1","option":["Keymap"]}],
+                        "option": {"Keymap": {"type":"hotkey","hotkeys":[]}}
+                    }
+                """.trimIndent(),
+            ),
+        )
+        assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
+        assertEquals(
+            1,
+            ready.diagnostics.count { it.message.isResource(R.string.diagnostic_unsupported_option_type, "Keymap", "hotkey") },
+        )
+        assertEquals(setOf("Keymap"), ready.definition.skippedOptionNames)
+        assertTrue(ready.definition.globalOptionNames.isEmpty())
+        assertTrue(ready.definition.settingSections.single().optionNames.isEmpty())
+    }
 }
 
 class ProjectLoaderProtocolTest {

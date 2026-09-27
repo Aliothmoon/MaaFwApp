@@ -174,7 +174,10 @@ object RunPlanBuilder {
             if (!processed.add(name)) return
             val option = definition.options[name]
             if (option == null) {
-                diagnostics += runtimeError(scopeLabel, DiagnosticMessages.missingReference("option", name))
+                // 有意跳过的（如 hotkey）加载时已记 warning，不能让它把整轮判成 Invalid
+                if (name !in definition.skippedOptionNames) {
+                    diagnostics += runtimeError(scopeLabel, DiagnosticMessages.missingReference("option", name))
+                }
                 return
             }
             // 见 OptionApplicability：不满足即整个跳过，且不记诊断

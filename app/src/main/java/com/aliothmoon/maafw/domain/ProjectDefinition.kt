@@ -28,6 +28,11 @@ data class ProjectDefinition(
      * `focus` 模板——那是运行期才随回调到达的正文，查表只能推迟到那时候
      */
     val translations: Map<String, String> = emptyMap(),
+    /**
+     * 外壳有意跳过的 option（如 hotkey）：加载时已记 warning 且不在 [options] 里，
+     * 引用它们的地方静默忽略，不再按悬空引用报错
+     */
+    val skippedOptionNames: Set<String> = emptySet(),
 ) {
     fun task(taskName: String): TaskDefinition? = taskIndex[taskName]
 
