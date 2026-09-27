@@ -162,10 +162,10 @@ class FocusParserTest {
         assertTrue(focus.all { setOf(FocusChannel.Log) == it.channels })
     }
 
-    /** 资源还没跟 V2 换回调名时，focus 里仍会写着旧键 */
+    /** True/False 不是 MaaFW 回调键，不能把资源笔误悄悄转成命中 */
     @Test
-    fun `pre-v2 event aliases are canonicalized`() {
-        val cases = mapOf(
+    fun `true and false event aliases are ignored`() {
+        val cases = listOf(
             "Node.Recognition.True" to "Node.Recognition.Succeeded",
             "Node.Recognition.False" to "Node.Recognition.Failed",
             "Node.Action.True" to "Node.Action.Succeeded",
@@ -173,10 +173,16 @@ class FocusParserTest {
         )
         cases.forEach { (resourceKey, callback) ->
             val details = """{"focus":{"$resourceKey":"旧键正文"}}"""
-            val focus = FocusParser.parseAll(callback, details).single()
-            assertEquals(callback, focus.message)
-            assertEquals("旧键正文", focus.content)
+            assertNoFocus(callback, details)
         }
+    }
+
+    @Test
+    fun `recognition succeeded uses the exact callback key`() {
+        val details = """{"focus":{"Node.Recognition.Succeeded":"命中正文"}}"""
+        val focus = FocusParser.parseAll("Node.Recognition.Succeeded", details).single()
+        assertEquals("Node.Recognition.Succeeded", focus.message)
+        assertEquals("命中正文", focus.content)
     }
 
     /** pre-V2 用 start/succeeded/failed/toast，而不是按回调名做 focus 键 */

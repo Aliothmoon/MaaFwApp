@@ -100,11 +100,10 @@ object FocusParser {
         val details = runCatching { json.parseToJsonElement(detailsJson) }.getOrNull() as? JsonObject
             ?: return emptyList()
         val focus = details[FOCUS_KEY]
-        val canonical = canonicalMessage(message)
 
         return buildList {
-            addAll(parseNewProtocolFocus(focus, canonical, details))
-            addAll(parseLegacyFocus(focus, canonical, details))
+            addAll(parseNewProtocolFocus(focus, message, details))
+            addAll(parseLegacyFocus(focus, message, details))
         }.filter { it.content.isNotBlank() || it.trace }
     }
 
@@ -114,8 +113,7 @@ object FocusParser {
         details: JsonObject,
     ): List<FocusMessage> {
         val focusObject = focus as? JsonObject ?: return emptyList()
-        val entry = focusObject[message] ?: legacyMessageAlias(message)?.let(focusObject::get)
-            ?: return emptyList()
+        val entry = focusObject[message] ?: return emptyList()
         val placeholders = scalarFields(details)
 
         return when (entry) {
@@ -152,7 +150,6 @@ object FocusParser {
                 ),
             )
 
-            else -> emptyList()
         }
     }
 
@@ -212,23 +209,6 @@ object FocusParser {
         is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNullIfNotString() }
         else -> emptyList()
     }.filter(String::isNotBlank)
-
-    /** 有资源仍按 pre-V2 回调键写 focus；取模板前先对齐当前事件名 */
-    private fun canonicalMessage(message: String): String = when (message) {
-        "Node.Recognition.True" -> "Node.Recognition.Succeeded"
-        "Node.Recognition.False" -> "Node.Recognition.Failed"
-        "Node.Action.True" -> MaaMsg.NODE_ACTION_SUCCEEDED
-        "Node.Action.False" -> MaaMsg.NODE_ACTION_FAILED
-        else -> message
-    }
-
-    private fun legacyMessageAlias(message: String): String? = when (message) {
-        "Node.Recognition.Succeeded" -> "Node.Recognition.True"
-        "Node.Recognition.Failed" -> "Node.Recognition.False"
-        MaaMsg.NODE_ACTION_SUCCEEDED -> "Node.Action.True"
-        MaaMsg.NODE_ACTION_FAILED -> "Node.Action.False"
-        else -> null
-    }
 
     /** `focus` 自己是对象，不会混进来；其余非标量同样取不出可比的文本 */
     private fun scalarFields(details: JsonObject): Map<String, String> = buildMap {
