@@ -37,6 +37,7 @@ import com.aliothmoon.maafw.schedule.TriggerResult
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
+import com.aliothmoon.maafw.ui.components.placeholderItem
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import org.koin.androidx.compose.koinViewModel
 
@@ -81,31 +82,17 @@ fun ScheduleTriggerLogScreen(
             )
         },
     ) { padding ->
-        if (state.triggerLog.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(MaaDesignTokens.Spacing.lg),
-            ) {
-                Text(
-                    text = stringResource(R.string.schedule_log_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(MaaDesignTokens.Spacing.lg),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-            ) {
-                // 不给 key：日志是只读快照，行没有稳定标识（同一策略可重复出现）
-                items(state.triggerLog, key = { it.stableId }) { entry ->
-                    TriggerLogRow(entry, onDelete = { viewModel.onIntent(ScheduleIntent.DeleteTriggerLogEntry(entry.stableId)) })
-                }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(MaaDesignTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        ) {
+            if (state.triggerLog.isEmpty()) placeholderItem(R.string.schedule_log_empty)
+            // 不给 key：日志是只读快照，行没有稳定标识（同一策略可重复出现）
+            items(state.triggerLog, key = { it.stableId }) { entry ->
+                TriggerLogRow(entry, onDelete = { viewModel.onIntent(ScheduleIntent.DeleteTriggerLogEntry(entry.stableId)) })
             }
         }
     }

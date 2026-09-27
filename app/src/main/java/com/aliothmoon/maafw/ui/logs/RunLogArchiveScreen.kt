@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.ui.logs
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -39,6 +38,7 @@ import com.aliothmoon.maafw.log.RunLogArchiveViewModel
 import com.aliothmoon.maafw.runner.RunSessionLogFile
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
+import com.aliothmoon.maafw.ui.components.placeholderItem
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.maaClickable
 import org.koin.androidx.compose.koinViewModel
@@ -105,25 +105,6 @@ fun RunLogArchiveScreen(
             )
         },
     ) { padding ->
-        if (state.files.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(MaaDesignTokens.Spacing.lg),
-                contentAlignment = Alignment.TopStart,
-            ) {
-                Text(
-                    text = stringResource(
-                        if (state.loading) R.string.common_loading else R.string.log_archive_empty,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            return@Scaffold
-        }
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -131,6 +112,9 @@ fun RunLogArchiveScreen(
             contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
+            if (state.files.isEmpty()) {
+                placeholderItem(if (state.loading) R.string.common_loading else R.string.log_archive_empty)
+            }
             items(state.files, key = { it.fileName }) { file ->
                 ArchiveRow(
                     file = file,

@@ -40,6 +40,7 @@ class NotificationSettingsViewModel(
                     it.copy(
                         settings = settings,
                         enabledProviders = settings.enabledProviderIds().toSet(),
+                        loaded = true,
                     )
                 }
             }
