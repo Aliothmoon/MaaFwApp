@@ -64,10 +64,19 @@ data class ResolvedConfiguredTask(
     val unavailableReason: UiText?,
     val options: List<OptionEditorState>,
     val icon: String? = null,
+    /**
+     * controller 不匹配：外壳只有 Adb 一种 controller，这种不适用不会随环境恢复，
+     * 所以不像 resource 不匹配那样保留勾选意图，而是显示为未勾选并锁住勾选框
+     */
+    val unsupported: Boolean = false,
 ) {
     /** 派生态，不写回；环境恢复后 enabled 意图自动生效 */
     val effectiveEnabled: Boolean get() = enabled && applicable && !missingDefinition
     val hasOptions: Boolean get() = options.isNotEmpty()
+
+    /** 勾选框的显示值与可点性 */
+    val checkedForDisplay: Boolean get() = enabled && !unsupported
+    val toggleable: Boolean get() = !missingDefinition && !unsupported
 }
 
 data class TaskCatalogGroup(
@@ -87,6 +96,8 @@ data class TaskCatalogItem(
     val unavailableReason: UiText?,
     val defaultChecked: Boolean,
     val icon: String? = null,
+    /** 同 [ResolvedConfiguredTask.unsupported]：目录里不可选，不能新增 */
+    val unsupported: Boolean = false,
 )
 
 /** PI v2.8.0 `setting` 分区的展示投影；选项按分区声明的顺序排 */

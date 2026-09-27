@@ -125,7 +125,12 @@ object ConfigurationResolver {
             name = configurationName?.takeIf { it.isNotBlank() } ?: template.label,
             tasks = template.distinctTasks
                 .filter { included == null || it.taskName in included }
-                .map { ConfiguredTask(it.taskName, it.enabled, it.optionValues) },
+                .map {
+                    // Android 跑不了的任务照样收进来（与模板一致），但默认不勾
+                    val supported = definition.task(it.taskName)
+                        ?.let { task -> isControllerSupported(definition, task) } ?: true
+                    ConfiguredTask(it.taskName, it.enabled && supported, it.optionValues)
+                },
         )
     }
 
@@ -170,6 +175,7 @@ object ConfigurationResolver {
                     applicable = applicability == null,
                     missingDefinition = false,
                     unavailableReason = applicability,
+                    unsupported = !isControllerSupported(definition, taskDefinition),
                     options = if (isActive) {
                         buildOptionEditors(
                             definition = definition,
@@ -192,18 +198,21 @@ object ConfigurationResolver {
         )
     }
 
+    /** task 的 `controller[]` 是否含外壳这唯一的 Adb 项；不含就是 Android 上永远跑不了 */
+    fun isControllerSupported(definition: ProjectDefinition, task: TaskDefinition): Boolean =
+        task.controllers.isEmpty() ||
+            task.controllers.any {
+                it.equals(definition.controller.type, ignoreCase = true) ||
+                    it.equals(definition.controller.name, ignoreCase = true)
+            }
+
     /** null = 适用；否则给出不适用的原因文案 */
     fun checkApplicability(
         definition: ProjectDefinition,
         task: TaskDefinition,
         resourceName: String?,
     ): UiText? {
-        val controllerOk = task.controllers.isEmpty() ||
-            task.controllers.any {
-                it.equals(definition.controller.type, ignoreCase = true) ||
-                    it.equals(definition.controller.name, ignoreCase = true)
-            }
-        if (!controllerOk) return UnavailableReasons.controllerMismatch()
+        if (!isControllerSupported(definition, task)) return UnavailableReasons.controllerMismatch()
         val resourceOk = task.resources.isEmpty() ||
             (resourceName != null && task.resources.any { it == resourceName })
         if (!resourceOk) return UnavailableReasons.resourceMismatch(task.resources)
@@ -228,6 +237,7 @@ object ConfigurationResolver {
                     unavailableReason = reason,
                     defaultChecked = task.defaultCheck,
                     icon = task.icon,
+                    unsupported = !isControllerSupported(definition, task),
                 )
             }
             TaskCatalogGroup(

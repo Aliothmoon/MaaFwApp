@@ -125,9 +125,9 @@ internal fun TaskRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(
-                checked = task.enabled,
+                checked = task.checkedForDisplay,
                 onCheckedChange = onToggle,
-                enabled = !locked && !task.missingDefinition,
+                enabled = !locked && task.toggleable,
             )
             MaaPiIcon(
                 path = task.icon,

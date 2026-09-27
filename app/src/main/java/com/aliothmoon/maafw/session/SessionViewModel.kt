@@ -290,6 +290,13 @@ class SessionViewModel(
         return withSecretFields(definition.passwordFields()[optionName])
     }
 
+    /** Android 上跑不了的任务不让加、不让勾；UI 已锁住，这里兜住所有入口 */
+    private fun isTaskSupported(taskName: String): Boolean {
+        val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition ?: return true
+        val task = definition.task(taskName) ?: return true
+        return ConfigurationResolver.isControllerSupported(definition, task)
+    }
+
     // resolve 只依赖 (project, config)；runner tick 触发 combine 时复用缓存
     private var resolveCacheKey: Pair<ProjectState, UserConfiguration>? = null
     private var resolveCacheValue: ResolvedProjectSession? = null
@@ -420,7 +427,7 @@ class SessionViewModel(
 
             is SessionIntent.ConfirmAddTasks -> guarded {
                 mutateConfiguration(intent.configurationId) { configuration ->
-                    val added = intent.orderedTaskNames.map { ConfiguredTask(taskName = it) }
+                    val added = intent.orderedTaskNames.filter(::isTaskSupported).map { ConfiguredTask(taskName = it) }
                     configuration.copy(tasks = configuration.tasks + added)
                 }
             }
@@ -445,7 +452,9 @@ class SessionViewModel(
             }
 
             is SessionIntent.ToggleTask -> guarded {
-                mutateTask(intent.configurationId, intent.taskInstanceId) { it.copy(enabled = intent.enabled) }
+                mutateTask(intent.configurationId, intent.taskInstanceId) {
+                    if (intent.enabled && !isTaskSupported(it.taskName)) it else it.copy(enabled = intent.enabled)
+                }
             }
 
             is SessionIntent.MoveTask -> guarded {

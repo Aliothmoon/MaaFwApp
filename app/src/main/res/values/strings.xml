@@ -372,7 +372,7 @@
     <!-- 跨层结构化语义的展示文案（domain/VM -> ui/i18n/DomainStrings） -->
     <string name="tasks_ungrouped">未分组</string>
     <string name="task_unavailable_missing">项目中已不存在该任务</string>
-    <string name="task_unavailable_controller">Android 当前不支持该任务</string>
+    <string name="task_unavailable_controller">不支持该任务</string>
     <string name="task_unavailable_resource">不支持当前资源（需要 %1$s）</string>
     <string name="msg_locked_while_running">运行期间不能修改配置</string>
     <string name="msg_project_not_loaded">项目尚未加载完成</string>

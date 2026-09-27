@@ -34,6 +34,7 @@ class ConfigurationResolverTest {
         resources: List<String> = emptyList(),
         optionNames: List<String> = emptyList(),
         groups: List<String> = emptyList(),
+        controllers: List<String> = emptyList(),
     ) = TaskDefinition(
         name = name,
         entry = "E_$name",
@@ -42,7 +43,7 @@ class ConfigurationResolverTest {
         groups = groups,
         optionNames = optionNames,
         pipelineOverride = emptyJson,
-        controllers = emptyList(),
+        controllers = controllers,
         resources = resources,
         defaultCheck = true,
     )
@@ -151,6 +152,59 @@ class ConfigurationResolverTest {
         val task = session.activeConfiguration!!.tasks.single()
         assertFalse(task.applicable)
         assertTrue(task.unavailableReason.isResource(R.string.task_unavailable_resource))
+    }
+
+    /** controller 不匹配在 Android 上不会恢复：显示未勾选且锁住，目录里也不能再加；resource 不匹配仍保留勾选意图 */
+    @Test
+    fun `controller mismatch is unsupported while resource mismatch keeps intent`() {
+        val def = definition(tasks = listOf(task("PC", controllers = listOf("Win32")), task("T2", resources = listOf("B服"))))
+        val session = ConfigurationResolver.resolve(
+            def,
+            UserConfiguration(
+                initialized = true,
+                activeResourceName = "官服",
+                configurations = listOf(
+                    RunConfiguration(
+                        id = RunConfigurationId("c1"),
+                        name = "A",
+                        tasks = listOf(ConfiguredTask("PC", instanceId = "i1"), ConfiguredTask("T2", instanceId = "i2")),
+                    ),
+                ),
+                activeConfigurationId = RunConfigurationId("c1"),
+            ),
+        )
+        val (pc, bili) = session.activeConfiguration!!.tasks
+        assertTrue(pc.unsupported)
+        assertFalse(pc.checkedForDisplay)
+        assertFalse(pc.toggleable)
+        assertTrue(pc.unavailableReason.isResource(R.string.task_unavailable_controller))
+        assertFalse(bili.unsupported)
+        assertTrue(bili.checkedForDisplay)
+        assertTrue(bili.toggleable)
+
+        val catalog = session.taskCatalog.flatMap { it.tasks }.associateBy { it.taskName }
+        assertTrue(catalog.getValue("PC").unsupported)
+        assertFalse(catalog.getValue("T2").unsupported)
+    }
+
+    @Test
+    fun `createFromTemplate leaves unsupported tasks unchecked`() {
+        val def = definition(
+            tasks = listOf(task("T1"), task("PC", controllers = listOf("Win32"))),
+            templates = listOf(
+                ConfigurationTemplate(
+                    name = "Daily",
+                    label = "日常",
+                    description = null,
+                    tasks = listOf(
+                        TemplateTask("T1", enabled = true, optionValues = emptyMap()),
+                        TemplateTask("PC", enabled = true, optionValues = emptyMap()),
+                    ),
+                ),
+            ),
+        )
+        val created = ConfigurationResolver.createFromTemplate(def, "Daily")!!
+        assertEquals(listOf("T1" to true, "PC" to false), created.tasks.map { it.taskName to it.enabled })
     }
 
     @Test

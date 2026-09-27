@@ -441,6 +441,24 @@ class SessionViewModelTest {
     }
 
     @Test
+    fun `unsupported controller tasks cannot be added or checked`() = runTest(mainDispatcher) {
+        val pcTask = definition.tasks.single().copy(name = "PC", entry = "PC", label = "PC", controllers = listOf("Win32"))
+        val project = FakeProjectRepository(
+            ProjectState.Ready(definition.copy(tasks = definition.tasks + pcTask), emptyList()),
+        )
+        val store = readyStore(tasks = listOf(ConfiguredTask("PC", enabled = false, instanceId = "pc")))
+        val (vm, _, _) = createVm(store = store, project = project)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.ToggleTask(RunConfigurationId("c1"), "pc", true))
+        vm.onIntent(SessionIntent.ConfirmAddTasks(RunConfigurationId("c1"), listOf("PC", "启动游戏")))
+        advanceUntilIdle()
+
+        val tasks = store.current.configurations.single().tasks
+        assertEquals(listOf("PC" to false, "启动游戏" to true), tasks.map { it.taskName to it.enabled })
+    }
+
+    @Test
     fun `initialize runs once when project ready and config uninitialized`() = runTest(mainDispatcher) {
         val store = InMemoryUserConfigurationStore(UserConfiguration())
         val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
