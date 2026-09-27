@@ -139,8 +139,15 @@ object ActivityUtils {
         }
         intent.addFlags(flag)
 
+        // force_stop 只为把主屏上的现有进程挪到目标屏；已在目标屏上运行时只拉到前台。
+        // 资源侧常在加载期反复 StartApp 等待进入游戏（ADB 下语义即"已运行则前台化"），
+        // 每次都杀会让目标永远停在启动阶段
         if (forceStop) {
-            ServiceManager.getActivityManager().forceStopPackage(targetPackage)
+            if (getAppDisplayId(targetPackage) == displayId) {
+                Ln.i("startApp: $targetPackage already on display $displayId, skip force-stop")
+            } else {
+                ServiceManager.getActivityManager().forceStopPackage(targetPackage)
+            }
         }
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
 
