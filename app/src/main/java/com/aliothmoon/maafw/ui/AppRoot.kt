@@ -326,8 +326,12 @@ fun AppRoot(
             onRetry = { viewModel.onIntent(SessionIntent.ReinstallPi) },
         )
 
+        // 标题取 app 标签（profile 的 app.label），同首页标题
+        val appLabel = remember(context) {
+            context.applicationInfo.loadLabel(context.packageManager).toString()
+        }
         MaaMarkdownSheet(
-            title = stringResource(R.string.welcome_title),
+            title = appLabel,
             bodies = state.welcomePrompt,
             onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
         )

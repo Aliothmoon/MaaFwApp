@@ -505,6 +505,7 @@ private fun AboutCard(state: SessionUiState) {
     val context = LocalContext.current
     val metadata = state.projectMetadata
     var sheet by remember { mutableStateOf<AboutSheet?>(null) }
+    var welcomeVisible by remember { mutableStateOf(false) }
     val appLabel = remember(context) {
         context.applicationInfo.loadLabel(context.packageManager).toString()
     }
@@ -540,6 +541,12 @@ private fun AboutCard(state: SessionUiState) {
                 MaaMarkdown(text = it, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
         }
+        if (metadata.welcome.isNotEmpty()) {
+            MaaNavigationRow(
+                label = stringResource(R.string.settings_about_welcome),
+                onClick = { welcomeVisible = true },
+            )
+        }
         metadata.contact?.let { body ->
             MaaNavigationRow(
                 label = stringResource(R.string.settings_about_contact),
@@ -570,6 +577,14 @@ private fun AboutCard(state: SessionUiState) {
             title = stringResource(it.titleRes),
             body = it.body,
             onDismiss = { sheet = null },
+        )
+    }
+    // 主动查看：总是展示当前正文，不读也不写「已看过」指纹；URL 项由 MaaMarkdown 现拉
+    if (welcomeVisible) {
+        MaaMarkdownSheet(
+            title = appLabel,
+            bodies = metadata.welcome,
+            onDismiss = { welcomeVisible = false },
         )
     }
 }

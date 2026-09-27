@@ -143,6 +143,7 @@
     <string name="settings_telemetry">Help improve this project</string>
     <string name="settings_telemetry_desc">Sends task names and run results to the project author. Screenshots, log text and anything you type are never included</string>
     <string name="settings_project">Project</string>
+    <string name="settings_about_welcome">View welcome message</string>
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
@@ -209,7 +210,6 @@
     <string name="update_install_fail_file_invalid">Package file is not usable</string>
     <string name="update_install_fail_installer_not_found">No system installer found</string>
     <string name="update_install_fail_unknown">Failed to start installation</string>
-    <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->
     <string name="notification_channel_run">Task execution</string>
