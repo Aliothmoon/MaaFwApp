@@ -1,5 +1,4 @@
 package com.aliothmoon.maafw.ui.components
-import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import android.graphics.Typeface
@@ -30,6 +29,7 @@ import androidx.core.graphics.toColorInt
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.project.DescriptionFetcher
 import com.aliothmoon.maafw.project.isRemoteUrl
 import com.aliothmoon.maafw.project.normalizeProjectPath
 import io.noties.markwon.AbstractMarkwonPlugin
@@ -57,10 +57,6 @@ import org.commonmark.node.ListBlock
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.Cache
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import timber.log.Timber
 import java.io.File
 
@@ -306,41 +302,5 @@ private class StyledSpanTagHandler(
             "mediumseagreen" to 0xFF3CB371.toInt(),
             "seagreen" to 0xFF2E8B57.toInt(),
         )
-    }
-}
-
-/** URL 形态 description 的拉取器：OkHttp + ETag 磁盘缓存 */
-class DescriptionFetcher private constructor(context: Context) {
-
-    private val client = OkHttpClient.Builder()
-        .cache(Cache(File(context.cacheDir, "pi_description_http"), CACHE_SIZE_BYTES))
-        .build()
-
-    /** 失败时回落返回原始 URL 文本 */
-    suspend fun fetch(url: String): String = withContext(MaaDispatchers.IO) {
-        try {
-            client.newCall(Request.Builder().url(url).build()).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Timber.w("Failed to fetch description: HTTP %d for %s", response.code, url)
-                    return@withContext url
-                }
-                response.body.string()
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to fetch description: %s", url)
-            url
-        }
-    }
-
-    companion object {
-        private const val CACHE_SIZE_BYTES = 5L * 1024 * 1024
-
-        @Volatile
-        private var instance: DescriptionFetcher? = null
-
-        fun get(context: Context): DescriptionFetcher =
-            instance ?: synchronized(this) {
-                instance ?: DescriptionFetcher(context.applicationContext).also { instance = it }
-            }
     }
 }

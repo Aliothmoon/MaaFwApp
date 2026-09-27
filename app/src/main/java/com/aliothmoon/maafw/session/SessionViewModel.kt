@@ -32,6 +32,8 @@ import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.project.ResolvedWelcome
+import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
@@ -62,12 +64,16 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -126,6 +132,8 @@ class SessionViewModel(
     /** 后台运行期的实时 FPS；单独转发，不并入聚合 UI 状态 */
     private val gameFpsWatcher: GameFpsWatcher,
     private val piInstall: PiInstallCoordinator,
+    /** URL 形态的 welcome 要先拉正文才知道看没看过 */
+    private val welcomeResolver: WelcomeResolver,
 ) : ViewModel() {
 
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
@@ -162,6 +170,13 @@ class SessionViewModel(
             ),
         ) { snapshot, quick -> snapshot.copy(quick = quick) }
 
+    /** 当前 PI 的公告正文与指纹；未就绪、在拉取或拉取失败时为 null */
+    private val resolvedWelcome = MutableStateFlow<ResolvedWelcome?>(null)
+
+    private val welcomePrompt: Flow<List<String>> =
+        combine(resolvedWelcome, configurationStore.data) { welcome, config ->
+            welcome?.bodies?.takeIf { welcome.fingerprint != config.welcomeFingerprint }.orEmpty()
+        }.distinctUntilChanged()
 
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
@@ -174,6 +189,7 @@ class SessionViewModel(
     }.flowOn(MaaDispatchers.Default) // resolve 属重计算，不占用主线程
         .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
         .combine(piInstall.state) { base, install -> base.copy(piInstallState = install) }
+        .combine(welcomePrompt) { base, welcome -> base.copy(welcomePrompt = welcome) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
@@ -220,6 +236,19 @@ class SessionViewModel(
         }
         viewModelScope.launch {
             focusDispatcher.resolved.collect { focus -> dispatchFocus(focus) }
+        }
+        viewModelScope.launch {
+            projectRepository.state
+                .map { project ->
+                    (project as? ProjectState.Ready)?.definition?.let { it.metadata to it.version }
+                }
+                .distinctUntilChanged()
+                .collectLatest { current ->
+                    resolvedWelcome.value = null
+                    resolvedWelcome.value = current?.let { (metadata, version) ->
+                        welcomeResolver.resolve(metadata, version)
+                    }
+                }
         }
         viewModelScope.launch {
             combine(projectRepository.state, configurationStore.data) { p, c -> p to c }
@@ -312,9 +341,6 @@ class SessionViewModel(
             projectMetadata = metadata,
             telemetryDeclared = project.definition.telemetry != null,
             telemetryLockedByVersion = isDebugProjectVersion(project.definition.version),
-            welcomePrompt = metadata.welcome
-                .takeIf { metadata.welcomeFingerprint != config.welcomeFingerprint }
-                .orEmpty(),
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
@@ -540,8 +566,7 @@ class SessionViewModel(
             }
 
             SessionIntent.DismissWelcome -> {
-                val fingerprint = (projectRepository.state.value as? ProjectState.Ready)
-                    ?.definition?.metadata?.welcomeFingerprint
+                val fingerprint = resolvedWelcome.value?.fingerprint
                 if (fingerprint != null) {
                     configurationStore.update { it.copy(welcomeFingerprint = fingerprint) }
                 }

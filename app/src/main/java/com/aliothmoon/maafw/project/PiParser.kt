@@ -27,7 +27,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import java.security.MessageDigest
 
 /** 单个 PI 分片文件（task[] / option{} / global_option[] / setting[] / preset[] / group[]）的解析结果 */
 data class PiFileContent(
@@ -256,8 +255,7 @@ object PiParser {
         val welcomeRaw = welcomeDeclarations(root["welcome"])
         return ProjectMetadata(
             welcome = welcomeRaw.mapNotNull(text::description),
-            welcomeFingerprint = welcomeRaw.takeIf { it.isNotEmpty() }
-                ?.let { welcomeFingerprint(it, root.string("version")) },
+            welcomeDeclarations = welcomeRaw,
             description = text.description(root.string("description")),
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
@@ -295,18 +293,6 @@ object PiParser {
         is JsonPrimitive -> listOfNotNull(element.contentOrNull)
         else -> emptyList()
     }.filter(String::isNotBlank)
-
-    /**
-     * 单条沿用数组支持之前的算法：看过的用户升级后不重弹，`"x"` 改写成 `["x"]` 也不算内容变化。
-     * 多条按有序原文整体算，增删、重排、改任一条都会重弹
-     */
-    private fun welcomeFingerprint(raws: List<String>, version: String?): String {
-        val declaration = raws.singleOrNull() ?: JsonArray(raws.map(::JsonPrimitive)).toString()
-        return MessageDigest.getInstance("SHA-256")
-            .digest("$declaration@${version.orEmpty()}".toByteArray())
-            .take(8)
-            .joinToString("") { "%02x".format(it) }
-    }
 
     fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {
         val root = try {

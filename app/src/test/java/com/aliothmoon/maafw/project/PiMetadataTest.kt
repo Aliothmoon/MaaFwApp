@@ -76,28 +76,20 @@ class PiMetadataTest {
 
     /** 指纹算在原始声明上，否则切一次语言就会让同一份 welcome 再弹一次 */
     @Test
-    fun `welcome 指纹不随语言变化`() {
+    fun `welcome 原始声明不随语言变化`() {
         val source = root("""{ "version": "1.2.0", "welcome": "${'$'}welcome.body" }""")
         val zh = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "欢迎")))
         val en = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "Welcome")))
 
         assertNotEquals(zh.welcome, en.welcome)
-        assertEquals(zh.welcomeFingerprint, en.welcomeFingerprint)
+        assertEquals(zh.welcomeDeclarations, en.welcomeDeclarations)
     }
 
     @Test
-    fun `PI 版本变化时指纹跟着变`() {
-        val text = MapTextResolver(emptyMap())
-        val v1 = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": "hi" }"""), text)
-        val v2 = PiParser.parseMetadata(root("""{ "version": "1.1.0", "welcome": "hi" }"""), text)
-        assertNotEquals(v1.welcomeFingerprint, v2.welcomeFingerprint)
-    }
-
-    @Test
-    fun `没有 welcome 就没有指纹`() {
+    fun `没有 welcome 就没有声明`() {
         val metadata = PiParser.parseMetadata(root("""{ "name": "x" }"""), MapTextResolver(emptyMap()))
         assertTrue(metadata.welcome.isEmpty())
-        assertNull(metadata.welcomeFingerprint)
+        assertTrue(metadata.welcomeDeclarations.isEmpty())
     }
 
     @Test
@@ -108,34 +100,14 @@ class PiMetadataTest {
         )
 
         assertEquals(listOf("公告", "announcements/update.md"), metadata.welcome)
+        assertEquals(listOf("${'$'}notice", "announcements/update.md"), metadata.welcomeDeclarations)
     }
 
     @Test
     fun `welcome 空数组视为没有`() {
         val metadata = PiParser.parseMetadata(root("""{ "welcome": [] }"""), MapTextResolver(emptyMap()))
         assertTrue(metadata.welcome.isEmpty())
-        assertNull(metadata.welcomeFingerprint)
-    }
-
-    /** 已看过单条 welcome 的用户，PI 改写成单元素数组后不该再弹一次 */
-    @Test
-    fun `单元素数组与字符串指纹相同`() {
-        val text = MapTextResolver(emptyMap())
-        val single = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": "hi" }"""), text)
-        val array = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": ["hi"] }"""), text)
-        assertEquals(single.welcomeFingerprint, array.welcomeFingerprint)
-    }
-
-    @Test
-    fun `公告增删与重排都换指纹`() {
-        val text = MapTextResolver(emptyMap())
-        fun fingerprint(welcome: String) =
-            PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": $welcome }"""), text).welcomeFingerprint
-        val base = fingerprint("""["a", "b"]""")
-        assertNotEquals(base, fingerprint("""["b", "a"]"""))
-        assertNotEquals(base, fingerprint("""["a", "b", "c"]"""))
-        assertNotEquals(base, fingerprint("""["a"]"""))
-        assertEquals(base, fingerprint("""["a", "b"]"""))
+        assertTrue(metadata.welcomeDeclarations.isEmpty())
     }
 
     @Test

@@ -42,13 +42,14 @@ data class TelemetryDefinition(
     val environment: String? = null,
 )
 
-/**
- * [welcomeFingerprint] 算在物化前的原始声明上：算在正文上的话，切一次语言换了译文就会重弹
- */
 data class ProjectMetadata(
     /** 按 PI 声明顺序排好的公告正文，已物化；空表示没有 welcome */
     val welcome: List<String> = emptyList(),
-    val welcomeFingerprint: String? = null,
+    /**
+     * 物化前的原始声明，只用来算指纹：算在译文上的话，切一次语言就会重弹。
+     * 其中 URL 项由 [com.aliothmoon.maafw.project.WelcomeResolver] 换成拉到的正文再算
+     */
+    val welcomeDeclarations: List<String> = emptyList(),
     val description: String? = null,
     val contact: String? = null,
     val license: String? = null,

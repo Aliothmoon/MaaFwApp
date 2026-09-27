@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -27,6 +28,7 @@ import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.PiPackage
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
@@ -185,6 +187,7 @@ class SessionViewModelTest {
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
+        welcomeResolver: WelcomeResolver = WelcomeResolver { null },
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val focusDispatcher = focusDispatcherFor(runner)
         val vm = SessionViewModel(
@@ -207,6 +210,7 @@ class SessionViewModelTest {
                 backgroundScope,
             ),
             piInstall = emptyPiInstall(),
+            welcomeResolver = welcomeResolver,
         )
         return Triple(vm, store, runner)
     }
@@ -239,6 +243,7 @@ class SessionViewModelTest {
                 backgroundScope,
             ),
             piInstall = emptyPiInstall(),
+            welcomeResolver = WelcomeResolver { null },
         )
     }
 
@@ -390,6 +395,49 @@ class SessionViewModelTest {
             listOf(RunLogKind.Info),
             vm.runLog.value.filter { it.isEssential }.map { it.kind },
         )
+    }
+
+    /** 回归：指纹曾算在 URL 上，远端公告改了内容也不再弹 */
+    @Test
+    fun `URL welcome prompts again once its content changes`() = runTest(mainDispatcher) {
+        val url = "https://example.com/anno.md"
+        var body = "旧公告"
+        val project = FakeProjectRepository(
+            ProjectState.Ready(
+                definition.copy(metadata = ProjectMetadata(welcome = listOf(url), welcomeDeclarations = listOf(url))),
+                emptyList(),
+            ),
+        )
+        val (vm, store, _) = createVm(project = project, welcomeResolver = WelcomeResolver { body })
+        advanceUntilIdle()
+        assertEquals(listOf("旧公告"), vm.uiState.value.welcomePrompt)
+
+        vm.onIntent(SessionIntent.DismissWelcome)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.welcomePrompt.isEmpty())
+
+        body = "新公告"
+        val (relaunched, _, _) = createVm(store = store, project = project, welcomeResolver = WelcomeResolver { body })
+        advanceUntilIdle()
+        assertEquals(listOf("新公告"), relaunched.uiState.value.welcomePrompt)
+    }
+
+    @Test
+    fun `URL welcome that fails to load does not prompt`() = runTest(mainDispatcher) {
+        val url = "https://example.com/anno.md"
+        val project = FakeProjectRepository(
+            ProjectState.Ready(
+                definition.copy(metadata = ProjectMetadata(welcome = listOf(url), welcomeDeclarations = listOf(url))),
+                emptyList(),
+            ),
+        )
+        val (vm, store, _) = createVm(project = project)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.welcomePrompt.isEmpty())
+
+        vm.onIntent(SessionIntent.DismissWelcome)
+        advanceUntilIdle()
+        assertEquals(null, store.current.welcomeFingerprint)
     }
 
     @Test
