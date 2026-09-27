@@ -608,6 +608,26 @@ class ProjectLoaderControllerTest {
         assertEquals("Adb", ready.definition.controller.type)
     }
 
+    @Test
+    fun `attach_resource_path 取 Adb 项并规范化路径`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"controller":[
+                        {"name":"PC","type":"Win32","attach_resource_path":["./resource_pc"]},
+                        {"name":"安卓","type":"Adb","attach_resource_path":["./resource_adb","resource_cloud"]}
+                    ]""",
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+            ),
+        )
+        assertEquals(
+            listOf("resource_adb", "resource_cloud"),
+            ready.definition.controller.attachResourcePaths,
+        )
+    }
+
     /** 回归：曾写死 name=Android/type=ADB，只有恰好把 controller 命名为 ADB 的 PI 才匹配得上 */
     @Test
     fun `任务按 PI 声明的 controller 名判定适用性`() {

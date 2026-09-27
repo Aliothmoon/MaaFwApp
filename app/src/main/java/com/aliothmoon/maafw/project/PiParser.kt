@@ -64,6 +64,8 @@ data class PiControllerContent(
     val displayShortSide: Int? = null,
     val displayLongSide: Int? = null,
     val displayRaw: Boolean = false,
+    /** v2.2.0 `attach_resource_path`，已规范化，相对 interface.json 目录 */
+    val attachResourcePaths: List<String> = emptyList(),
     /** 原样条目，PI_CONTROLLER 要整条 */
     val raw: JsonObject = JsonObject(emptyMap()),
 )
@@ -189,6 +191,7 @@ object PiParser {
                 displayShortSide = obj.int("display_short_side"),
                 displayLongSide = obj.int("display_long_side"),
                 displayRaw = obj.boolean("display_raw") ?: false,
+                attachResourcePaths = obj.stringList("attach_resource_path").map(::normalizeProjectPath),
                 raw = obj,
             )
         }

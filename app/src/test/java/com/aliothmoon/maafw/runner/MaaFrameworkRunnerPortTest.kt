@@ -148,6 +148,26 @@ class MaaFrameworkRunnerPortTest {
         assertFalse(service.saveOnError)
     }
 
+    /** 对齐 MaaPiCli：先 resource.path，再 controller.attach_resource_path */
+    @Test
+    fun `controller attach resource paths are loaded after resource paths`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+        val attached = plan().copy(
+            controller = ControllerDefinition(attachResourcePaths = listOf("resource_adb")),
+        )
+
+        assertEquals(RunnerCommandResult.Accepted, runner.start(attached, "e1"))
+        advanceUntilIdle()
+
+        val payload = runPlanWireJson.decodeFromString(RunPlanPayload.serializer(), service.lastRunPlanJson!!)
+        val piRoot = File(temp.root, "pi")
+        assertEquals(
+            listOf(File(piRoot, "./base").absolutePath, File(piRoot, "resource_adb").absolutePath),
+            payload.resourcePaths,
+        )
+    }
+
     /** 特权进程可能在两轮之间重启过，sink 要每轮都注册，不能只在绑定时注册一次 */
     @Test
     fun `text input sink is registered on every run`() = runTest(dispatcher) {

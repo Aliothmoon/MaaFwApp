@@ -70,6 +70,11 @@ data class ControllerDefinition(
     val displayLongSide: Int? = null,
     val displayRaw: Boolean = false,
     /**
+     * PI v2.2.0 `attach_resource_path`：在 `resource.path[]` 全部加载之后按序追加加载，
+     * 对齐 MaaPiCli 的 `Configurator::generate_runtime`
+     */
+    val attachResourcePaths: List<String> = emptyList(),
+    /**
      * PI 里这一条的原样对象，供 `PI_CONTROLLER` 整条透传（见 PiAgentEnv）
      * 投影只留外壳用得上的字段，而协议要求交给 agent 的是完整条目；空对象表示该条不是 PI 声明的
      */

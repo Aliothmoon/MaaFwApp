@@ -29,5 +29,8 @@ data class RuntimeTask(
     val label: String = taskName,
 )
 
+/** 交给 MaaResourcePostBundle 的顺序：先 `resource.path[]`，再当前 controller 的 `attach_resource_path` */
+fun RunPlan.resourceBundlePaths(): List<String> = resource.paths + controller.attachResourcePaths
+
 fun RunPlan.taskLabelMap(): Map<String, String> =
     tasks.associate { it.taskName to it.label.ifBlank { it.taskName } }

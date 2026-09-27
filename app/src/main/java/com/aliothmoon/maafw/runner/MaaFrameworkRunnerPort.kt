@@ -367,7 +367,7 @@ class MaaFrameworkRunnerPort(
         bindRunnerCallback(service, ExecutionCallback(executionId, plan.taskLabelMap()))
 
         val payload = RunPlanPayload(
-            resourcePaths = plan.resource.paths.map { File(piRoot, it).absolutePath },
+            resourcePaths = plan.resourceBundlePaths().map { File(piRoot, it).absolutePath },
             screenWidth = width,
             screenHeight = height,
             displayMode = mode.displayMode,
