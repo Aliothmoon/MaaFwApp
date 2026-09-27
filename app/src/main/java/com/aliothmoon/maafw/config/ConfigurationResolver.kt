@@ -203,7 +203,7 @@ object ConfigurationResolver {
                 it.equals(definition.controller.type, ignoreCase = true) ||
                     it.equals(definition.controller.name, ignoreCase = true)
             }
-        if (!controllerOk) return UnavailableReasons.controllerMismatch(task.controllers)
+        if (!controllerOk) return UnavailableReasons.controllerMismatch()
         val resourceOk = task.resources.isEmpty() ||
             (resourceName != null && task.resources.any { it == resourceName })
         if (!resourceOk) return UnavailableReasons.resourceMismatch(task.resources)

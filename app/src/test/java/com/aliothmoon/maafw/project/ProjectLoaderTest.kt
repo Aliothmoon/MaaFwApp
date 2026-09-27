@@ -649,7 +649,7 @@ class ProjectLoaderControllerTest {
         assertNull(ConfigurationResolver.checkApplicability(definition, definition.task("T1")!!, null))
         assertTrue(
             ConfigurationResolver.checkApplicability(definition, definition.task("T2")!!, null)
-                .isResource(R.string.task_unavailable_controller, "PC"),
+                .isResource(R.string.task_unavailable_controller),
         )
     }
 

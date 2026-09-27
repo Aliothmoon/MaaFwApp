@@ -46,8 +46,8 @@ data class ResolvedRunConfiguration(
 object UnavailableReasons {
     fun missingDefinition(): UiText = uiTextOf(R.string.task_unavailable_missing)
 
-    fun controllerMismatch(required: List<String>): UiText =
-        uiTextOf(R.string.task_unavailable_controller, required.joinToString())
+    /** 外壳只驱动 Adb 一种 controller，列出 PI 要的 controller 名对用户没有意义 */
+    fun controllerMismatch(): UiText = uiTextOf(R.string.task_unavailable_controller)
 
     fun resourceMismatch(required: List<String>): UiText =
         uiTextOf(R.string.task_unavailable_resource, required.joinToString())

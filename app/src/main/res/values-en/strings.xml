@@ -379,7 +379,7 @@
     <!-- Localized text for structured domain/VM semantics (ui/i18n/DomainStrings) -->
     <string name="tasks_ungrouped">Ungrouped</string>
     <string name="task_unavailable_missing">Task no longer exists in the project</string>
-    <string name="task_unavailable_controller">Unsupported controller (requires %1$s)</string>
+    <string name="task_unavailable_controller">Android does not support this task yet</string>
     <string name="task_unavailable_resource">Unsupported resource (requires %1$s)</string>
     <string name="msg_locked_while_running">Cannot change configuration while running</string>
     <string name="msg_project_not_loaded">Project is not loaded yet</string>
