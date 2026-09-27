@@ -87,6 +87,8 @@
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
+    <string name="home_diagnostics_expand">Show diagnostics</string>
+    <string name="home_diagnostics_collapse">Hide diagnostics</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
         <item quantity="other">Diagnostics: %1$d (%2$d errors)</item>

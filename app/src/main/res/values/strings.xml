@@ -84,6 +84,8 @@
     <string name="home_project_loading">正在加载 ProjectInterface…</string>
     <string name="home_project_load_failed">项目加载失败</string>
     <string name="home_diagnostics_summary">诊断：%1$d 条</string>
+    <string name="home_diagnostics_expand">查看诊断详情</string>
+    <string name="home_diagnostics_collapse">收起诊断详情</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="other">诊断：%1$d 条（%2$d 条错误）</item>
     </plurals>

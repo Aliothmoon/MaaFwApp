@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.ui.home
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -315,7 +316,12 @@ private fun PermissionRow(
 }
 
 @Composable
-private fun ExpandToggle(expanded: Boolean, onToggle: () -> Unit) {
+private fun ExpandToggle(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    @StringRes expandLabel: Int = R.string.permission_expand,
+    @StringRes collapseLabel: Int = R.string.permission_collapse,
+) {
     val tint = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         modifier = Modifier
@@ -326,9 +332,7 @@ private fun ExpandToggle(expanded: Boolean, onToggle: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(
-                if (expanded) R.string.permission_collapse else R.string.permission_expand,
-            ),
+            text = stringResource(if (expanded) collapseLabel else expandLabel),
             style = MaterialTheme.typography.bodySmall,
             color = tint,
         )
@@ -438,6 +442,7 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
             }
 
             is ProjectState.Ready -> {
+                var expanded by remember { mutableStateOf(false) }
                 val errors = diagnostics.count { it.severity == DiagnosticSeverity.Error }
                 Text(
                     text = diagnosticsSummaryUiText(diagnostics.size, errors).asString(),
@@ -448,6 +453,16 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
+                // 摘要只有条数，哪条出了问题得点开看；默认收起，免得几十条把首页撑长
+                ExpandToggle(
+                    expanded = expanded,
+                    onToggle = { expanded = !expanded },
+                    expandLabel = R.string.home_diagnostics_expand,
+                    collapseLabel = R.string.home_diagnostics_collapse,
+                )
+                AnimatedVisibility(visible = expanded) {
+                    MaaDiagnosticList(diagnostics, showSeverity = true)
+                }
             }
         }
     }
