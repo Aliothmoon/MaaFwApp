@@ -159,36 +159,51 @@ fun MaaCard(
                     },
                 )
 
-                title != null -> MaaLabeledControlRow(
-                    label = title,
-                    labelStyle = MaterialTheme.typography.titleMedium,
-                    leading = leading,
-                    modifier = if (canCollapse) {
+                title != null -> {
+                    val toggle = if (canCollapse) {
                         Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) { expanded = !expanded }
                     } else {
                         Modifier
-                    },
-                    trailing = {
+                    }
+                    if (canCollapse && !expanded && summary != null) {
+                        // 摘要是资源名这类外部文本，可能很长：标题按自身宽度先排，摘要只拿剩下的并截断，
+                        // 反过来标题会被挤成一列一个字
                         Row(
+                            modifier = toggle.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
                         ) {
-                            if (canCollapse && !expanded && summary != null) {
+                            leading?.invoke()
+                            Text(text = title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm, Alignment.End),
+                            ) {
                                 Text(
                                     text = summary,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
                                 )
+                                chevron()
                             }
-                            if (canCollapse) chevron()
                         }
-                    },
-                )
+                    } else {
+                        MaaLabeledControlRow(
+                            label = title,
+                            labelStyle = MaterialTheme.typography.titleMedium,
+                            leading = leading,
+                            modifier = toggle,
+                            trailing = { if (canCollapse) chevron() },
+                        )
+                    }
+                }
             }
             if (canCollapse) {
                 AnimatedVisibility(visible = expanded, enter = CardExpand, exit = CardCollapse) {
