@@ -110,11 +110,13 @@ sealed interface RunnerEvent {
      *
      * [exec] 是特权进程真正 exec 的那条路径（来自 `agent-runtime.json`），不是 PI 的 child_exec：
      * 后者按桌面端整条命令行写，设备上根本没跑那个东西，显示出来只会误导排障
+     *
+     * [name] 来自配方 `agent.runtimes[].name`，写了就优先显示
      */
-    data class AgentConnected(val index: Int, val total: Int, val exec: String) : RunnerEvent {
+    data class AgentConnected(val index: Int, val total: Int, val exec: String, val name: String? = null) : RunnerEvent {
         val label: String
-            get() = exec.substringAfterLast('/').substringAfterLast('\\')
-                .ifBlank { "agent[$index]" }
+            get() = name?.takeIf(String::isNotBlank)
+                ?: exec.substringAfterLast('/').substringAfterLast('\\').ifBlank { "agent[$index]" }
     }
 
     /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */

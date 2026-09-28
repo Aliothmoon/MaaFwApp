@@ -7,7 +7,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
-import java.util.zip.ZipFile
 
 /**
  * 由特权进程 fork/exec 拉起 agent child
@@ -89,11 +88,7 @@ class ExecAgentHost(
             ?.let { if (it.startsWith("v")) it else "v$it" }
 
     private fun readDescriptor(apkPath: String): AgentRuntimeDescriptor? = runCatching {
-        ZipFile(apkPath).use { zip ->
-            val entry = zip.getEntry("assets/${AgentRuntimeDescriptor.ASSET_PATH}") ?: return null
-            val content = zip.getInputStream(entry).use { it.readBytes().toString(Charsets.UTF_8) }
-            AgentRuntimeDescriptor.parse(content)
-        }
+        AgentRuntimeDescriptor.readFromApk(apkPath)
     }.onFailure {
         Ln.e("ExecAgentHost: bad ${AgentRuntimeDescriptor.ASSET_PATH}: ${it.message}")
     }.getOrThrow()

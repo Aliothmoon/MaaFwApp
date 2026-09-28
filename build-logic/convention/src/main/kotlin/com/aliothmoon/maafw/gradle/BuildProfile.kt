@@ -48,6 +48,8 @@ internal data class AgentRuntime(
     val executable: String,
     val args: List<String>,
     val env: Map<String, String>,
+    /** What the run log calls this agent; left out, the app shows the executable's file name */
+    val name: String?,
 )
 
 /**
@@ -154,6 +156,7 @@ private fun Map<*, *>.toAgentRuntime(): AgentRuntime {
         env = child("env")?.entries
             ?.associate { (key, value) -> key.toString() to value.scalar().orEmpty() }
             .orEmpty(),
+        name = text("name"),
     )
 }
 
@@ -166,6 +169,7 @@ internal fun List<AgentRuntime>.toDescriptorJson(): String = descriptorJson.enco
                 addJsonObject {
                     put("location", runtime.location)
                     put("executable", runtime.executable)
+                    runtime.name?.let { put("name", it) }
                     if (runtime.args.isNotEmpty()) {
                         putJsonArray("args") { runtime.args.forEach { add(it) } }
                     }

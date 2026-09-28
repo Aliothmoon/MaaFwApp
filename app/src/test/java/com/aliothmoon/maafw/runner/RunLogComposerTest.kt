@@ -166,6 +166,20 @@ class RunLogComposerTest {
         )
     }
 
+    /** 配方写了 name 就显示它，空白视同没写 */
+    @Test
+    fun `agent connect prefers the profile name over the exec basename`() {
+        val exec = "/data/app/~~x/lib/arm64/libcpp-algo.so"
+        assertEquals(
+            UiText.Resource(R.string.run_log_agent_connected, listOf("cpp-algo")),
+            compose(RunnerEvent.AgentConnected(index = 1, total = 2, exec = exec, name = "cpp-algo"))?.text,
+        )
+        assertEquals(
+            UiText.Resource(R.string.run_log_agent_connected, listOf("libcpp-algo.so")),
+            compose(RunnerEvent.AgentConnected(index = 1, total = 2, exec = exec, name = " "))?.text,
+        )
+    }
+
     /**
      * 特权进程攒批之后，洪泛滑窗必须按行计
      *

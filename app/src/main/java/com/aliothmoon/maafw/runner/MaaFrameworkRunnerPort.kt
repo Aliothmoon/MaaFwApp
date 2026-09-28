@@ -15,6 +15,7 @@ import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.project.PiInstaller
+import com.aliothmoon.maafw.remote.AgentRuntimeDescriptor
 import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -69,6 +70,17 @@ class MaaFrameworkRunnerPort(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     override val events: Flow<RunnerEventEnvelope> = _events.asSharedFlow()
+
+    /**
+     * 配方给 agent 起的显示名，按序号对应；与特权进程读的是同一个 APK 里的同一份描述
+     * 在 app 侧就地查而不经 binder 传：回调的签名一改，挺过升级的旧特权进程就会解错参数
+     */
+    private val agentNames: List<String?> by lazy {
+        runCatching { AgentRuntimeDescriptor.readFromApk(apkPath)?.runtimes?.map { it.name } }
+            .onFailure { Timber.w(it, "agent runtime descriptor unreadable, agent names fall back to executables") }
+            .getOrNull()
+            .orEmpty()
+    }
 
     init {
         // 特权进程死了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
@@ -186,7 +198,7 @@ class MaaFrameworkRunnerPort(
         }
 
         fun onAgentConnected(index: Int, total: Int, exec: String?) {
-            emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty()))
+            emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty(), agentNames.getOrNull(index)))
         }
 
         // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂

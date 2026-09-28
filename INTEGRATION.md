@@ -88,6 +88,7 @@ agent:
   runtimes:
     - location: bundle
       executable: bin/python3
+      name: py-agent
       args: [-u, agent/main.py]
       env:
         PYTHONHOME: "{bundle}/prefix"
@@ -103,6 +104,8 @@ agent:
 ```
 
 identifier 一定在最后一位，工作目录是资源解包根。`{bundle}` 和 `{nativeLibs}` 是仅有的两个占位符。
+
+`name` 可选，只用于运行日志里「agent 已连接」那行的显示；不写就显示可执行体的文件名。
 
 agent 侧：读最后一个参数当 identifier，注册自定义识别 / 动作，然后 `MaaAgentServerStartUp` → `MaaAgentServerJoin`。多个 agent 同时在线时回调名不要重复。
 
