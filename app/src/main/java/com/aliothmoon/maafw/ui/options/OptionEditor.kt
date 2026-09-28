@@ -35,6 +35,7 @@ import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
+import com.aliothmoon.maafw.ui.components.MaaFieldLabel
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 
 /**
@@ -147,7 +148,12 @@ private fun optionLabelStyle(depth: Int) = when {
 private fun optionIconSize(depth: Int): Dp =
     if (depth <= 2) MaaDesignTokens.IconSize.sm else MaaDesignTokens.IconSize.xs
 
-/** 选项树靠缩进对齐，无图标就不占位——补空槽反而让同层的行左缘错开 */
+/**
+ * 选项树靠缩进对齐，无图标就不占位——补空槽反而让同层的行左缘错开
+ *
+ * 这是「标签在上、选择在下」的那种：首层跟 [MaaFieldLabel] 同款（设置页「主题」那样），
+ * 按 bodyLarge 排会比同页的字段标签大一号；开关行不走这里，它和设置页的开关行同款
+ */
 @Composable
 private fun OptionLabelRow(option: OptionEditorState) {
     Row(
@@ -155,7 +161,11 @@ private fun OptionLabelRow(option: OptionEditorState) {
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
         MaaPiIcon(option.icon, optionIconSize(option.depth), null)
-        Text(text = option.label, style = optionLabelStyle(option.depth))
+        if (option.depth <= 1) {
+            MaaFieldLabel(option.label)
+        } else {
+            Text(text = option.label, style = optionLabelStyle(option.depth))
+        }
     }
 }
 
