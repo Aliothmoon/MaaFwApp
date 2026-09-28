@@ -333,14 +333,37 @@ class RunLogRecorderTest {
         runner.emit(RunnerEvent.Log("同一句"), "e1")
         recorder.finish(runner, "e1")
 
-        settleRunLog()
-        val before = recorder.runLog.value.all.size
         recorder.begin(planOf("a"), "e2")
         runner.emit(RunnerEvent.Log("同一句"), "e2")
         recorder.finish(runner, "e2")
         settleRunLog()
 
-        assertTrue("跨轮被去重掉了", recorder.runLog.value.all.size > before)
+        // 屏上已换成这一轮；被去重掉的话这里是空的
+        assertEquals(listOf(UiText.Verbatim("同一句")), recorder.runLog.value.all.map { it.text })
+    }
+
+    /** 屏上只留这一轮：几轮叠在一起分不清哪句是哪轮的，上一轮的在会话文件里 */
+    @Test
+    fun `a new session starts the on-screen log afresh`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("上一轮"), "e1")
+        runner.emit(RunnerEvent.Log("上一轮的话"), "e1")
+        recorder.finish(runner, "e1")
+        settleRunLog()
+        assertTrue(recorder.runLog.value.all.isNotEmpty())
+
+        recorder.begin(planOf("这一轮"), "e2")
+        settleRunLog()
+        assertEquals(RunLogSnapshot.EMPTY, recorder.runLog.value)
+
+        runner.emit(RunnerEvent.Log("这一轮的话"), "e2")
+        recorder.finish(runner, "e2")
+        settleRunLog()
+        assertEquals(listOf(UiText.Verbatim("这一轮的话")), recorder.runLog.value.all.map { it.text })
+        // 历史不动：上一轮的仍在它自己的文件里
+        assertEquals(listOf("上一轮的话"), sessionRecordsByFirstTask().getValue("上一轮").lineTexts())
     }
 
     /**

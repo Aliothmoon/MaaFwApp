@@ -131,12 +131,14 @@ class RunLogRecorder(
     /**
      * 开一轮的会话文件
      *
+     * 屏上那份跟着换成这一轮的：几轮叠在一起分不清哪句是哪轮的，历史在会话文件里。
      * 顺带 [RunLogComposer.reset]：去重与洪泛滑窗是按轮的状态，跨轮留着会让新一轮
      * 的第一条被上一轮的末条去重掉
      */
     override suspend fun begin(plan: RunPlan, executionId: String) {
+        // 先换 latestExecutionId 再清：上一轮晚到的事件从此不算当前轮，不会再上屏
         latestExecutionId = executionId
-        composer.reset()
+        clear()
         resetLiveStatus()
         val writer = store.open(clock(), plan.tasks.map { it.taskName })
         val session = Session(plan.resource.label, writer)
