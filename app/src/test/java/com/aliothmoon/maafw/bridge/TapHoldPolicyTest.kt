@@ -6,16 +6,17 @@ import org.junit.Test
 class TapHoldPolicyTest {
 
     @Test
-    fun `unknown fps falls back to the floor`() {
-        assertEquals(TapHoldPolicy.FLOOR_MS, TapHoldPolicy.minHoldMs(-1f))
-        assertEquals(TapHoldPolicy.FLOOR_MS, TapHoldPolicy.minHoldMs(0f))
-        assertEquals(TapHoldPolicy.FLOOR_MS, TapHoldPolicy.minHoldMs(Float.NaN))
+    fun `unknown fps does not pad`() {
+        assertEquals(0L, TapHoldPolicy.minHoldMs(-1f))
+        assertEquals(0L, TapHoldPolicy.minHoldMs(0f))
+        assertEquals(0L, TapHoldPolicy.minHoldMs(Float.NaN))
     }
 
     @Test
-    fun `high fps is held to the floor`() {
-        // 60 FPS 两帧只有 34ms
-        assertEquals(TapHoldPolicy.FLOOR_MS, TapHoldPolicy.minHoldMs(60f))
+    fun `30 fps and above does not pad`() {
+        assertEquals(0L, TapHoldPolicy.minHoldMs(30f))
+        assertEquals(0L, TapHoldPolicy.minHoldMs(60f))
+        assertEquals(0L, TapHoldPolicy.padMs(56, 30f))
     }
 
     /** 回归：实机 11~14 FPS 下 ~50ms 的点击偶发被吞 */
