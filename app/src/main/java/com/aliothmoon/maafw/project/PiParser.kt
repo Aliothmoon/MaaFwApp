@@ -449,7 +449,8 @@ object PiParser {
             controllers = obj.stringList("controller"),
             resources = obj.stringList("resource"),
         )
-        return when (val type = obj.string("type")) {
+        // 协议里 type 可省略，缺省即 select
+        return when (val type = obj.string("type") ?: "select") {
             "select", "switch" -> {
                 val cases = parseCases(source, name, obj, diagnostics, text)
                 val defaultCase = obj.string("default_case")?.also {
