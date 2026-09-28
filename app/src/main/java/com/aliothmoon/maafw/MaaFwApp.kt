@@ -1,8 +1,6 @@
 package com.aliothmoon.maafw
 
 import android.app.Application
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.contentcapture.ContentCaptureManager
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.di.AppCoroutineScope
 import com.aliothmoon.maafw.di.coreModule
@@ -43,12 +41,8 @@ class MaaFwApp : Application() {
     private val writer by inject<AppLogWriter>()
     private val settings by inject<AppSettingsManager>()
 
-    @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate() {
         super.onCreate()
-        // 系统内容捕获（MIUI ContentCatcher 等）开着时，Compose 每帧都要重算整棵语义树找变化；
-        // 表单页滚动时一帧能吃掉数毫秒，120Hz 下直接掉帧。本应用没有需要被内容捕获的界面
-        ContentCaptureManager.isEnabled = false
         AppPaths.init(this)
         CrashHandler().install()
         val app = this
