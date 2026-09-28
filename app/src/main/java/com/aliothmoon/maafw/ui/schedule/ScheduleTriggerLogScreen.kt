@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.ui.schedule
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,7 +38,7 @@ import com.aliothmoon.maafw.schedule.TriggerResult
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
-import com.aliothmoon.maafw.ui.components.placeholderItem
+import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import org.koin.androidx.compose.koinViewModel
 
@@ -82,18 +83,23 @@ fun ScheduleTriggerLogScreen(
             )
         },
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            if (state.triggerLog.isEmpty()) placeholderItem(R.string.schedule_log_empty)
-            // 不给 key：日志是只读快照，行没有稳定标识（同一策略可重复出现）
-            items(state.triggerLog, key = { it.stableId }) { entry ->
-                TriggerLogRow(entry, onDelete = { viewModel.onIntent(ScheduleIntent.DeleteTriggerLogEntry(entry.stableId)) })
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(MaaDesignTokens.Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                // 不给 key：日志是只读快照，行没有稳定标识（同一策略可重复出现）
+                items(state.triggerLog, key = { it.stableId }) { entry ->
+                    TriggerLogRow(entry, onDelete = { viewModel.onIntent(ScheduleIntent.DeleteTriggerLogEntry(entry.stableId)) })
+                }
             }
+            if (state.triggerLog.isEmpty()) ListPlaceholder(R.string.schedule_log_empty)
         }
     }
 }

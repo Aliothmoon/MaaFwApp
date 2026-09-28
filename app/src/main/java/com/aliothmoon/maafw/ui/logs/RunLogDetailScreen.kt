@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.ui.logs
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,7 +42,7 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.maaClickable
-import com.aliothmoon.maafw.ui.components.placeholderItem
+import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.runLogColor
 import org.koin.androidx.compose.koinViewModel
@@ -84,27 +85,32 @@ fun RunLogDetailScreen(
     ) { padding ->
         // 一次只展开一条：detail 展开就是十来行，多条同时展开这个列表没法看
         var expanded by remember { mutableIntStateOf(-1) }
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
         ) {
-            if (state.records.isEmpty()) {
-                placeholderItem(if (state.loading) R.string.common_loading else R.string.log_detail_empty)
-            }
-            // 索引当 key：同一份文件是只读快照，行序不会变
-            itemsIndexed(state.records) { index, record ->
-                when (record) {
-                    is RunSessionRecord.Header -> HeaderBlock(record)
-                    is RunSessionRecord.Footer -> FooterBlock(record)
-                    is RunSessionRecord.Line -> LineRow(
-                        line = record,
-                        expanded = expanded == index,
-                        onToggle = { expanded = if (expanded == index) -1 else index },
-                    )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+            ) {
+                // 索引当 key：同一份文件是只读快照，行序不会变
+                itemsIndexed(state.records) { index, record ->
+                    when (record) {
+                        is RunSessionRecord.Header -> HeaderBlock(record)
+                        is RunSessionRecord.Footer -> FooterBlock(record)
+                        is RunSessionRecord.Line -> LineRow(
+                            line = record,
+                            expanded = expanded == index,
+                            onToggle = { expanded = if (expanded == index) -1 else index },
+                        )
+                    }
                 }
+            }
+            if (state.records.isEmpty()) {
+                ListPlaceholder(if (state.loading) R.string.common_loading else R.string.log_detail_empty)
             }
         }
     }

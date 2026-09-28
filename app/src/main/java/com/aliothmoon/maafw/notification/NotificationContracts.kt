@@ -15,12 +15,6 @@ data class NotificationUiState(
     val settings: NotificationSettings = NotificationSettings(),
     val enabledProviders: Set<String> = emptySet(),
     val eventLevel: EventNotificationLevel = EventNotificationLevel.DEFAULT,
-    /**
-     * 盘上的推送配置读到过至少一次
-     *
-     * 之前页面拿默认值先画一遍、读到之后再把已启用的渠道逐张展开，多出一个组合一屏输入框的重帧和一串展开动画
-     */
-    val loaded: Boolean = false,
 )
 
 sealed interface NotificationIntent {

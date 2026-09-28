@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.ui.logs
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,7 +37,7 @@ import com.aliothmoon.maafw.log.AppLogIntent
 import com.aliothmoon.maafw.log.AppLogViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
-import com.aliothmoon.maafw.ui.components.placeholderItem
+import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.maaClickable
 import org.koin.androidx.compose.koinViewModel
@@ -102,18 +103,23 @@ fun AppLogScreen(
             )
         },
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            if (state.files.isEmpty()) {
-                placeholderItem(if (state.loading) R.string.common_loading else R.string.app_log_empty)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                items(state.files, key = { it.name }) { file ->
+                    AppLogFileRow(file = file, onClick = { onOpen(file.name) })
+                }
             }
-            items(state.files, key = { it.name }) { file ->
-                AppLogFileRow(file = file, onClick = { onOpen(file.name) })
+            if (state.files.isEmpty()) {
+                ListPlaceholder(if (state.loading) R.string.common_loading else R.string.app_log_empty)
             }
         }
     }

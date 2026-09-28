@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.ui.logs
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -28,7 +29,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.log.AppLogDetailViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
-import com.aliothmoon.maafw.ui.components.placeholderItem
+import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -74,24 +75,29 @@ fun AppLogDetailScreen(
         val errorColor = MaterialTheme.colorScheme.error
         val warningColor = MaaTheme.palette.warning.content
 
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
-            contentPadding = PaddingValues(vertical = MaaDesignTokens.Spacing.lg),
+                .padding(padding),
         ) {
-            if (state.lines.isEmpty()) {
-                placeholderItem(if (state.loading) R.string.common_loading else R.string.app_log_empty)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = MaaDesignTokens.Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+                contentPadding = PaddingValues(vertical = MaaDesignTokens.Spacing.lg),
+            ) {
+                // 行序固定（只读快照），索引就是稳定 key
+                itemsIndexed(state.lines) { _, line ->
+                    Text(
+                        text = line,
+                        style = lineStyle,
+                        color = appLogLineColor(line, errorColor, warningColor),
+                    )
+                }
             }
-            // 行序固定（只读快照），索引就是稳定 key
-            itemsIndexed(state.lines) { _, line ->
-                Text(
-                    text = line,
-                    style = lineStyle,
-                    color = appLogLineColor(line, errorColor, warningColor),
-                )
+            if (state.lines.isEmpty()) {
+                ListPlaceholder(if (state.loading) R.string.common_loading else R.string.app_log_empty)
             }
         }
     }

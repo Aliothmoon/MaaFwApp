@@ -45,7 +45,6 @@ import com.aliothmoon.maafw.ui.components.ITextField
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaSwitchRow
-import com.aliothmoon.maafw.ui.components.rememberAfterFirstFrame
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -96,9 +95,6 @@ fun NotificationSettingsScreen(
             )
         },
     ) { padding ->
-        // 列表先于卡片挂上：首帧只有空列表，刚进来就按下的手指也能绑到它上面。
-        // 卡片等配置读到再按最终状态一次组合，已启用渠道直接是展开的，不再先折叠再展开
-        val contentReady = state.loaded && rememberAfterFirstFrame()
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -106,7 +102,6 @@ fun NotificationSettingsScreen(
             contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            if (!contentReady) return@LazyColumn
             item(key = "internal") { InternalCard(state, viewModel::onIntent) }
             item(key = "triggers") { TriggerCard(state, viewModel::onIntent) }
             items(NOTIFICATION_PROVIDER_ORDER, key = { it }) { id ->
