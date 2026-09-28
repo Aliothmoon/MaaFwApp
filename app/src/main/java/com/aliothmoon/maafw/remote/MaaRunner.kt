@@ -436,6 +436,10 @@ class MaaRunner(private val agentHost: AgentHost) {
                 agentLib.MaaAgentClientDestroy(client)
                 return failAgents(started, "agent 连接超时：${agent.childExec}")
             }
+            // 上面的超时只给连接用。留着它会卡住每次 custom 调用：识别算过 30s 就被判超时，
+            // 而 agent 算完仍会回包，这个迟到的回包会被下一次同类请求当成自己的（框架不核对 req_id），
+            // 之后请求与回包整体错位，agent 拿着已销毁的 context 反调时特权进程直接崩
+            agentLib.MaaAgentClientSetTimeout(client, AGENT_REQUEST_TIMEOUT_MILLIS)
             Ln.i("MaaRunner: agent[$index] connected, identifier=$identifier")
             notify { onAgentConnected(index, payload.agents.size, session.executable) }
             started += ActiveAgent(client, session)
@@ -573,6 +577,12 @@ class MaaRunner(private val agentHost: AgentHost) {
 
         /** 解释器这类 child 冷启动要几秒，超时给宽一点；连不上会整批任务失败，宁可多等 */
         const val AGENT_CONNECT_TIMEOUT_MILLIS = 30_000L
+
+        /**
+         * 单次 custom 调用里 agent 一声不吭的上限。框架默认不限时，但 agent 中途被杀时 poll 会永远等下去，
+         * 停止任务也打断不了；10 分钟远超任何正常识别，寻路这类长动作一路都有控制器往返，不会被它截断
+         */
+        const val AGENT_REQUEST_TIMEOUT_MILLIS = 10 * 60_000L
 
         /**
          * 让系统分配回环端口；identifier 随即变成实际端口，原样传给 child
