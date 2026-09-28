@@ -70,6 +70,36 @@ class RunLogComposerTest {
         assertNull(callback("Resource.Loading.Succeeded", """{"path":"/b"}"""))
     }
 
+    /**
+     * 实际是每个路径一对「开始 / 成功」交替着来，连续去重拦不住
+     *
+     * 知道本轮几个路径时只讲第一个的开始、最后一个的成功；失败照讲
+     */
+    @Test
+    fun `interleaved per-path resource notifications report once for the whole load`() {
+        val threePaths = context.copy(resourceBundleCount = 3)
+        fun resource(message: String, path: String) =
+            composer.compose(RunnerEvent.Callback(message, """{"path":"$path"}"""), ++nextId, clock, threePaths)
+
+        val lines = listOf("/a", "/b", "/c").flatMap { path ->
+            listOf(
+                resource("Resource.Loading.Starting", path),
+                resource("Resource.Loading.Succeeded", path),
+            )
+        }.filterNotNull()
+        assertEquals(
+            listOf(
+                UiText.Resource(R.string.run_log_resource_loading, listOf("官服")),
+                UiText.Resource(R.string.run_log_resource_loaded, listOf("官服")),
+            ),
+            lines.map { it.text },
+        )
+
+        composer.reset()
+        assertEquals(RunLogKind.Info, resource("Resource.Loading.Starting", "/a")?.kind)
+        assertEquals(RunLogKind.Error, resource("Resource.Loading.Failed", "/a")?.kind)
+    }
+
     /** 与 MXU 一致：节点消息一秒几十条、只有事件名谁也看不懂，全份在 maa.log */
     @Test
     fun `node messages are dropped`() {

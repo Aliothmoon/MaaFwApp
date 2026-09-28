@@ -29,11 +29,17 @@ class RunLogComposer {
     private val agentTimestamps = ArrayDeque<Long>()
     private var agentFlooded = false
 
+    /** 本轮已开始 / 已成功加载的资源路径数，见 [RunLogContext.resourceBundleCount] */
+    private var resourceStarted = 0
+    private var resourceSucceeded = 0
+
     fun reset() {
         lastKind = null
         lastText = null
         agentTimestamps.clear()
         agentFlooded = false
+        resourceStarted = 0
+        resourceSucceeded = 0
     }
 
     /** 返回 null 表示这条不展示（认不出的回调、被去重掉的，或洪泛期的 agent 输出） */
@@ -123,15 +129,26 @@ class RunLogComposer {
                 }
             }
 
-            RESOURCE_STARTING -> Composed(
-                RunLogKind.Info,
-                uiTextOf(R.string.run_log_resource_loading, context.resourceLabel(details)),
-            )
+            // 每个路径各发一对「开始 / 成功」，交替着来，连续去重拦不住；
+            // 知道本轮几个路径就只讲第一个的开始、最后一个的成功（MXU 按 res_id 的 isFirst/isLast）
+            RESOURCE_STARTING -> {
+                resourceStarted++
+                if (context.resourceBundleCount != null && resourceStarted > 1) return null
+                Composed(
+                    RunLogKind.Info,
+                    uiTextOf(R.string.run_log_resource_loading, context.resourceLabel(details)),
+                )
+            }
 
-            RESOURCE_SUCCEEDED -> Composed(
-                RunLogKind.Success,
-                uiTextOf(R.string.run_log_resource_loaded, context.resourceLabel(details)),
-            )
+            RESOURCE_SUCCEEDED -> {
+                resourceSucceeded++
+                val total = context.resourceBundleCount
+                if (total != null && resourceSucceeded < total) return null
+                Composed(
+                    RunLogKind.Success,
+                    uiTextOf(R.string.run_log_resource_loaded, context.resourceLabel(details)),
+                )
+            }
 
             RESOURCE_FAILED -> Composed(
                 RunLogKind.Error,
@@ -196,6 +213,8 @@ class RunLogComposer {
 data class RunLogContext(
     val currentTaskName: String? = null,
     val resourceLabel: String? = null,
+    /** 本轮交给 MaaResourcePostBundle 的路径数（resource.path 加 controller 的 attach）；null = 不知道，退回连续去重 */
+    val resourceBundleCount: Int? = null,
 ) {
     /** 拿不到当前任务名就退回 PI 的 entry：宁可显示内部名，也不显示空 */
     fun taskLabel(details: JsonObject?): String =

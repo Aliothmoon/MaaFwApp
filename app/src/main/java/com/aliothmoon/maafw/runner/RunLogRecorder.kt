@@ -67,6 +67,7 @@ class RunLogRecorder(
     private class Session(
         /** 开会话时从 [RunPlan] 冻下来——运行中用户改了资源不该影响这一轮的正文 */
         val resourceLabel: String?,
+        val resourceBundleCount: Int,
         val writer: RunSessionWriter?,
     ) {
         val pending = ConcurrentLinkedQueue<RunSessionRecord.Line>()
@@ -141,7 +142,7 @@ class RunLogRecorder(
         clear()
         resetLiveStatus()
         val writer = store.open(clock(), plan.tasks.map { it.taskName })
-        val session = Session(plan.resource.label, writer)
+        val session = Session(plan.resource.label, plan.resourceBundlePaths().size, writer)
         sessions[executionId] = session
         if (writer == null) return
         session.flushLoop = scope.launch(MaaDispatchers.IO) {
@@ -236,6 +237,7 @@ class RunLogRecorder(
             context = RunLogContext(
                 currentTaskName = envelope.taskLabel,
                 resourceLabel = session?.resourceLabel,
+                resourceBundleCount = session?.resourceBundleCount,
             ),
         ) ?: return
         publish(entry, session, current, updateLiveStatus = event !is RunnerEvent.Progress)
