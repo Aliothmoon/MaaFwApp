@@ -82,6 +82,32 @@ class RunLogComposerTest {
         assertEquals("""{"name":"NodeA"}""", entry?.detail)
     }
 
+    /** StartApp 拉不起目标应用时，泛化的节点失败对用户没有行动价值 */
+    @Test
+    fun `a failed StartApp action is reported as app not started`() {
+        val entry = callback("Node.Action.Failed", """{"action":"StartApp","name":"启动游戏"}""")
+        assertEquals(RunLogKind.Error, entry?.kind)
+        assertEquals(UiText.Resource(R.string.run_log_app_not_started), entry?.text)
+        assertEquals("""{"action":"StartApp","name":"启动游戏"}""", entry?.detail)
+    }
+
+    @Test
+    fun `a nested StartApp action detail is reported as app not started`() {
+        val entry = callback(
+            "Node.Action.Failed",
+            """{"action_details":{"action":"StartApp"},"name":"start_up"}""",
+        )
+        assertEquals(RunLogKind.Error, entry?.kind)
+        assertEquals(UiText.Resource(R.string.run_log_app_not_started), entry?.text)
+    }
+
+    @Test
+    fun `other failed node actions stay raw`() {
+        val entry = callback("Node.Action.Failed", """{"action":"Click","name":"NodeA"}""")
+        assertEquals(RunLogKind.Verbose, entry?.kind)
+        assertEquals(UiText.Verbatim("Node.Action.Failed"), entry?.text)
+    }
+
     @Test
     fun `unknown messages are kept raw rather than dropped`() {
         assertEquals(RunLogKind.Verbose, callback("Something.Brand.New")?.kind)
