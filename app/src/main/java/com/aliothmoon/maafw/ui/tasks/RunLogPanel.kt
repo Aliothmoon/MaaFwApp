@@ -1,5 +1,11 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,17 +16,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -39,6 +50,9 @@ import com.aliothmoon.maafw.ui.components.ansiAnnotated
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.rememberAnsiColorResolver
 import com.aliothmoon.maafw.ui.components.runLogColor
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -127,39 +141,93 @@ internal fun RunLogPanel(
         // 一次只展开一条：details_json 展开就是十来行，多条同时展开这个列表没法看了
         var expandedId by remember { mutableStateOf<Long?>(null) }
         val listState = rememberLazyListState()
-        val pinnedToBottom by remember {
-            derivedStateOf {
-                val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-                last == null || last.index >= listState.layoutInfo.totalItemsCount - 2
+        val scope = rememberCoroutineScope()
+        val lastItemIndex = visible.lastIndex + if (omittedAt >= 0) 1 else 0
+
+        // 跟随底部是一个独立状态，只随用户的滚动改变：
+        // 不能每来一批新行再看「最后一行在不在屏上」——一批攒了好几行时，它们一进来最后一行就在屏外了，
+        // 跟随就此断掉。手指按下即停跟，滚动（含惯性）停下时落在底部才恢复
+        var following by rememberSaveable { mutableStateOf(true) }
+        LaunchedEffect(listState) {
+            listState.interactionSource.interactions.collect {
+                if (it is DragInteraction.Start) following = false
             }
         }
-        // 只在用户本来就贴着底时才跟；否则他往上翻着看，新行一来就被拽回去；
+        LaunchedEffect(listState) {
+            // 跳过首个值：那是进场时的静止态，不是用户滚完了；进场回底由切档那条负责
+            snapshotFlow { listState.isScrollInProgress }
+                .drop(1)
+                .filter { !it }
+                .collect { following = !listState.canScrollForward }
+        }
         // 不用 animateScrollToItem：高频事件下动画会排队打架
-        val lastItemIndex = visible.lastIndex + if (omittedAt >= 0) 1 else 0
         LaunchedEffect(visible.lastOrNull()?.id) {
-            if (pinnedToBottom) listState.scrollToItem(lastItemIndex)
+            if (following) listState.scrollToItem(lastItemIndex)
+        }
+        // 切档是换了一份列表，停在旧档的位置没有意义，直接回到底部接着跟
+        LaunchedEffect(essentialOnly) {
+            following = true
+            listState.scrollToItem(lastItemIndex)
         }
         val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+        Box(modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+            ) {
+                val row: @Composable (RunLogEntry) -> Unit = { entry ->
+                    RunLogRow(
+                        entry = entry,
+                        time = formatter.format(Date(entry.atMillis)),
+                        expanded = expandedId == entry.id,
+                        onToggle = { expandedId = if (expandedId == entry.id) null else entry.id },
+                    )
+                }
+                if (omittedAt < 0) {
+                    items(visible, key = { it.id }) { row(it) }
+                } else {
+                    items(visible.subList(0, omittedAt), key = { it.id }) { row(it) }
+                    item(key = OMITTED_ROW_KEY) { RawOmittedRow(snapshot.omittedRaw) }
+                    items(visible.subList(omittedAt, visible.size), key = { it.id }) { row(it) }
+                }
+            }
+            // 往上翻着看时给一个回到底部的入口；点了就接着跟
+            ScrollToBottomButton(
+                visible = !following && listState.canScrollForward,
+                onClick = {
+                    following = true
+                    scope.launch { listState.scrollToItem(lastItemIndex) }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(MaaDesignTokens.Spacing.sm),
+            )
+        }
+    }
+}
+
+/**
+ * 单拎出来：写在 Box 里时外层 Column 的 ColumnScope.AnimatedVisibility 会被隐式选中，
+ * 那是给 Column 子项用的，在 Box 里调不了
+ */
+@Composable
+private fun ScrollToBottomButton(visible: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + scaleIn(),
+        exit = fadeOut() + scaleOut(),
+        modifier = modifier,
+    ) {
+        SmallFloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         ) {
-            val row: @Composable (RunLogEntry) -> Unit = { entry ->
-                RunLogRow(
-                    entry = entry,
-                    time = formatter.format(Date(entry.atMillis)),
-                    expanded = expandedId == entry.id,
-                    onToggle = { expandedId = if (expandedId == entry.id) null else entry.id },
-                )
-            }
-            if (omittedAt < 0) {
-                items(visible, key = { it.id }) { row(it) }
-            } else {
-                items(visible.subList(0, omittedAt), key = { it.id }) { row(it) }
-                item(key = OMITTED_ROW_KEY) { RawOmittedRow(snapshot.omittedRaw) }
-                items(visible.subList(omittedAt, visible.size), key = { it.id }) { row(it) }
-            }
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = stringResource(R.string.run_log_scroll_to_bottom),
+            )
         }
     }
 }
