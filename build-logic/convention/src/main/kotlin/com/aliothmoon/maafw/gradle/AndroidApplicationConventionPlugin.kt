@@ -73,6 +73,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     "MAFW_MIRRORCHYAN_RID",
                     "\"" + profile.mirrorchyanRid.orEmpty() + "\"",
                 )
+                buildConfigField("String[]", "MAFW_PI_LOG_INCLUDE", profile.piLogInclude.toJavaStringArray())
 
                 // Placeholders rather than resValue: with no profile the value stays a resource
                 // reference and the checked-in label and icon keep working untouched

@@ -25,6 +25,12 @@ private val DEFAULT_PI_INCLUDE = listOf(
     "LICENSE",
 )
 
+/**
+ * Where agents keep their own logs, relative to the PI root they run in; debug/ is the MaaFramework habit
+ * (its own logger and MaaPiCli write there), so a PI that follows it needs no logs section at all
+ */
+private val DEFAULT_PI_LOG_INCLUDE = listOf("debug/**/*.log")
+
 /** Where an executable lands; the two values are what AgentRuntimeLocation deserializes */
 private val AGENT_LOCATIONS = setOf("nativeLibs", "bundle")
 
@@ -67,6 +73,8 @@ internal data class BuildProfile(
     val appIcon: File?,
     /** Wins over the PI's own mirrorchyan_rid: the packager knows where this build is published */
     val mirrorchyanRid: String?,
+    /** Globs relative to the unpacked PI that a log export picks up, for what the agents write themselves */
+    val piLogInclude: List<String>,
 )
 
 /** Nothing configured at all: the package ships without a PI, see the soft failure on syncPiAssets */
@@ -81,6 +89,7 @@ private val NO_PROFILE = BuildProfile(
     appLabel = null,
     appIcon = null,
     mirrorchyanRid = null,
+    piLogInclude = DEFAULT_PI_LOG_INCLUDE,
 )
 
 /**
@@ -105,6 +114,7 @@ private fun File.readProfile(): BuildProfile {
     val agent = root.child("agent")
     val app = root.child("app")
     val update = root.child("update")
+    val logs = root.child("logs")
 
     val agentSourceDir = agent?.text("sourceDir")?.let { base.resolvePath(it).absolutePath }
     val agentRuntimes = agent?.children("runtimes")?.map { it.toAgentRuntime() }.orEmpty()
@@ -128,6 +138,7 @@ private fun File.readProfile(): BuildProfile {
         appLabel = app?.text("label"),
         appIcon = app?.text("icon")?.let { base.resolvePath(it) },
         mirrorchyanRid = update?.text("mirrorchyanRid")?.requireMirrorchyanRid(),
+        piLogInclude = logs?.textList("include")?.map { it.requireLogPattern() } ?: DEFAULT_PI_LOG_INCLUDE,
     )
 }
 
@@ -192,6 +203,24 @@ private fun String.requireMirrorchyanRid(): String {
     }
     return this
 }
+
+/**
+ * Relative to the PI root and never climbing out of it: the export walks the device's private storage,
+ * and each pattern ends up in a BuildConfig string literal
+ */
+private fun String.requireLogPattern(): String {
+    require(!startsWith("/") && !contains(':') && split('/').none { it == ".." }) {
+        "logs.include must stay inside the PI root: $this"
+    }
+    require(none { it == '"' || it.code == 92 || it.isISOControl() }) {
+        "logs.include must not contain quotes, backslashes or control characters: $this"
+    }
+    return this
+}
+
+/** Java source for a String[] BuildConfig field */
+internal fun List<String>.toJavaStringArray(): String =
+    joinToString(prefix = "new String[]{", postfix = "}") { "\"$it\"" }
 
 private fun Map<*, *>.child(key: String): Map<*, *>? = this[key] as? Map<*, *>
 

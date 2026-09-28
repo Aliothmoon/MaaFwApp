@@ -33,6 +33,8 @@ class LogExportService(
     /** 要收的几棵目录；zip 里的路径相对 [baseDir] */
     private val baseDir: () -> File,
     private val roots: () -> List<File>,
+    /** agent 自己写在 PI 根下的日志 */
+    private val piLogs: () -> LogExportCollector.PiLogs? = { null },
     /** 调试模式下额外附一份 `getprop`：ROM 差异是排障时最先要问的 */
     private val debugMode: () -> Boolean,
     /** 设备快照文本；采集在 [DeviceInfoCollector] */
@@ -46,7 +48,7 @@ class LogExportService(
 
     /** 返回 null = 打包失败；没有日志时也保留设备信息快照 */
     suspend fun exportZip(): File? = withContext(MaaDispatchers.IO) {
-        val files = LogExportCollector.collect(roots(), System.currentTimeMillis())
+        val files = LogExportCollector.collect(roots(), System.currentTimeMillis(), piLogs())
         if (files.isEmpty()) {
             Timber.w("no log files to export, packing device info only")
         }

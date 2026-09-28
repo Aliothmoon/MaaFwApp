@@ -45,6 +45,11 @@ agent:
         PYTHONHOME: "{bundle}/prefix"
         LD_LIBRARY_PATH: "{bundle}/prefix/lib:{nativeLibs}"
 
+# 导出日志时额外带上 agent 写在资源解包根下的日志；缺省 [debug/**/*.log]，写 [] 不收
+logs:
+  include:
+    - debug/**/*.log
+
 # Mirror酱 的项目 id；写了就压过 PI 的 mirrorchyan_rid，不写仍取 PI 声明的那个
 update:
   mirrorchyanRid: YourPI

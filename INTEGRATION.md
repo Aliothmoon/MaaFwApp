@@ -106,6 +106,14 @@ identifier 一定在最后一位，工作目录是资源解包根。`{bundle}` �
 
 agent 侧：读最后一个参数当 identifier，注册自定义识别 / 动作，然后 `MaaAgentServerStartUp` → `MaaAgentServerJoin`。多个 agent 同时在线时回调名不要重复。
 
+agent 自己的日志按 MaaFramework 的习惯写在工作目录的 `debug/` 下即可：用户在 App 里导出日志时，会把资源解包根下匹配配方 `logs.include` 的文件一起打进包（zip 里在 `pi/` 前缀下），只收近 7 天。缺省 `[debug/**/*.log]`，写到别处的在配方里改，写 `[]` 不收：
+
+```yaml
+logs:
+  include:            # 相对资源解包根，与 include 同一套 glob
+    - debug/**/*.log
+```
+
 ### Python
 
 用仓库脚本组运行时，不要自己拼一套 CPython。内核从 [MaaAgentCoreAndroid](https://github.com/Aliothmoon/MaaAgentCoreAndroid) 下载，本地只叠资源项目的依赖，不需要 NDK：
