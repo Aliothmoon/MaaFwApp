@@ -154,6 +154,10 @@ object DiagnosticMessages {
             fallback ?: uiTextOf(R.string.diagnostic_none),
         )
 
+    /** fallback 永远有：没有 Adb 项时也有一个内置默认 */
+    fun controllerSelectionMissing(selected: String, fallback: String): UiText =
+        uiTextOf(R.string.diagnostic_controller_selection_missing, selected, fallback)
+
     fun activeConfigurationMissing(): UiText =
         uiTextOf(R.string.diagnostic_active_configuration_missing)
 

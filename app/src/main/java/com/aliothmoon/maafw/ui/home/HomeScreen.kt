@@ -126,6 +126,7 @@ fun HomeScreen(
         ) {
             OverviewCard(state, update, onSettingsIntent)
             ResourceCard(state, onIntent)
+            ControllerCard(state, onIntent)
             RunModeCard(state, onIntent)
             PermissionCard(state, onIntent)
             ServiceActionButtons(state, onIntent)
@@ -570,6 +571,29 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
         ) {
             Text(stringResource(R.string.settings_overlay_show))
         }
+    }
+}
+
+/**
+ * controller 选择：PI 声明了不止一个 Adb controller 才出（如本地客户端与云游戏各一个），
+ * 形态与 [ResourceCard] 一致
+ */
+@Composable
+private fun ControllerCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    val environment = state.environment ?: return
+    if (environment.controllerCandidates.size < 2) return
+    MaaCard(
+        title = stringResource(R.string.settings_controller),
+        collapsible = true,
+        initiallyExpanded = false,
+        summary = environment.controller.label,
+    ) {
+        MaaSingleChoiceFlow(
+            options = environment.controllerCandidates.map { it.name to it.label },
+            selected = environment.controller.name,
+            enabled = !state.configurationLocked,
+            onSelect = { onIntent(SessionIntent.SelectController(it)) },
+        )
     }
 }
 

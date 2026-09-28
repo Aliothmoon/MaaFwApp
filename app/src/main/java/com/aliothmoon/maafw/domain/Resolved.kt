@@ -15,14 +15,24 @@ data class ResolvedProjectSession(
     val settingSections: List<OptionSectionState> = emptyList(),
     /** 当前选中 resource 的 `option[]`；换资源换这份，值按 resource name 分桶 */
     val resourceOptions: List<OptionEditorState> = emptyList(),
+    /** 当前选中 controller 的 `option[]`；同上，按 controller name 分桶 */
+    val controllerOptions: List<OptionEditorState> = emptyList(),
     val environment: ResolvedEnvironment,
     val diagnostics: List<Diagnostic>,
 )
 
 data class ResolvedEnvironment(
-    val controllerName: String,
+    val controller: ResolvedController,
     val resource: ResolvedResource?,
     val resourceCandidates: List<ResolvedResource>,
+    /** PI 里全部 Adb controller；只有一个时 UI 不出选择 */
+    val controllerCandidates: List<ResolvedController> = listOf(controller),
+)
+
+/** 匹配用内部名；UI 展示 label */
+data class ResolvedController(
+    val name: String,
+    val label: String,
 )
 
 /** 匹配用内部名；UI 展示 label */
@@ -46,8 +56,12 @@ data class ResolvedRunConfiguration(
 object UnavailableReasons {
     fun missingDefinition(): UiText = uiTextOf(R.string.task_unavailable_missing)
 
-    /** 外壳只驱动 Adb 一种 controller，列出 PI 要的 controller 名对用户没有意义 */
+    /** 没有一个 Adb controller 能跑：Android 上永远跑不了，列出 PI 要的 controller 名对用户没有意义 */
     fun controllerMismatch(): UiText = uiTextOf(R.string.task_unavailable_controller)
+
+    /** 换一个 Adb controller 就能跑；[required] 是那些 controller 的展示名 */
+    fun controllerSwitchRequired(required: List<String>): UiText =
+        uiTextOf(R.string.task_unavailable_controller_switch, required.joinToString())
 
     fun resourceMismatch(required: List<String>): UiText =
         uiTextOf(R.string.task_unavailable_resource, required.joinToString())
@@ -65,8 +79,8 @@ data class ResolvedConfiguredTask(
     val options: List<OptionEditorState>,
     val icon: String? = null,
     /**
-     * controller 不匹配：外壳只有 Adb 一种 controller，这种不适用不会随环境恢复，
-     * 所以不像 resource 不匹配那样保留勾选意图，而是显示为未勾选并锁住勾选框
+     * 没有一个 Adb controller 能跑：这种不适用不会随环境恢复，
+     * 所以不像 resource 不匹配（或换个 controller 就能跑）那样保留勾选意图，而是显示为未勾选并锁住勾选框
      */
     val unsupported: Boolean = false,
 ) {

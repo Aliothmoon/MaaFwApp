@@ -6,7 +6,11 @@ import kotlinx.serialization.json.JsonObject
 data class ProjectDefinition(
     val name: String,
     val version: String?,
-    val controller: ControllerDefinition,
+    /**
+     * PI 里全部 `type=Adb` 的 controller，按声明顺序，首项是缺省
+     * 一个都没有时是一个内置默认，所以永远不为空
+     */
+    val controllers: List<ControllerDefinition> = listOf(ControllerDefinition()),
     val resources: List<ResourceDefinition>,
     val tasks: List<TaskDefinition>,
     val groups: List<TaskGroupDefinition>,
@@ -35,6 +39,10 @@ data class ProjectDefinition(
     val skippedOptionNames: Set<String> = emptySet(),
 ) {
     fun task(taskName: String): TaskDefinition? = taskIndex[taskName]
+
+    /** 用户选的那个；没选或对不上（PI 更新后删了它）回落首项 */
+    fun controller(name: String?): ControllerDefinition =
+        controllers.firstOrNull { it.name == name } ?: controllers.first()
 
     private val taskIndex: Map<String, TaskDefinition> by lazy { tasks.associateBy { it.name } }
 }
@@ -71,6 +79,8 @@ data class ProjectMetadata(
 data class ControllerDefinition(
     val name: String = "Android",
     val type: String = "ADB",
+    /** $i18n 已物化；匹配/持久化仍用 [name] */
+    val label: String = name,
     /** 三者互斥，都缺省时由 Runner 按默认分辨率兜底 */
     val displayShortSide: Int? = null,
     val displayLongSide: Int? = null,
@@ -80,6 +90,8 @@ data class ControllerDefinition(
      * 对齐 MaaPiCli 的 `Configurator::generate_runtime`
      */
     val attachResourcePaths: List<String> = emptyList(),
+    /** PI v2.3.0 `controller[].option`：当前选中这个时参与每个任务的 override */
+    val optionNames: List<String> = emptyList(),
     /**
      * PI 里这一条的原样对象，供 `PI_CONTROLLER` 整条透传（见 PiAgentEnv）
      * 投影只留外壳用得上的字段，而协议要求交给 agent 的是完整条目；空对象表示该条不是 PI 声明的
@@ -118,7 +130,10 @@ data class TaskDefinition(
     val resources: List<String>,
     val defaultCheck: Boolean,
     val icon: String? = null,
-)
+) {
+    /** 协议里 task 的 `controller[]` 引用的是 controller 名；不按 type 比，否则同为 Adb 的几项就分不开了 */
+    fun runsOn(controller: ControllerDefinition): Boolean = controllers.isEmpty() || controller.name in controllers
+}
 
 /** PI v2.4.0 顶层 group[]；label 缺省回落 name */
 data class TaskGroupDefinition(

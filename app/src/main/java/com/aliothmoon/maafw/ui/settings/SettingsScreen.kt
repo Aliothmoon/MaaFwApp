@@ -134,6 +134,7 @@ fun SettingsScreen(
             UpdateCard(settingsState, onSettingsIntent)
             TaskSettingCards(state, onIntent)
             ResourceOptionCard(state, onIntent)
+            ControllerOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
             ScheduleCard(state, onIntent)
             RunDurationCard(settingsState, onSettingsIntent)
@@ -161,6 +162,22 @@ private fun ResourceOptionCard(state: SessionUiState, onIntent: (SessionIntent) 
             locked = state.configurationLocked,
             onSetOption = { name, value ->
                 onIntent(SessionIntent.SetResourceOption(resourceName, name, value))
+            },
+        )
+    }
+}
+
+/** 同 [ResourceOptionCard]：`controller.option` 对所有运行配置生效，值按 controller name 分桶 */
+@Composable
+private fun ControllerOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+    if (state.controllerOptions.isEmpty()) return
+    val controllerName = state.environment?.controller?.name ?: return
+    MaaCard(title = stringResource(R.string.settings_section_controller_option), collapsible = true) {
+        OptionEditorList(
+            options = state.controllerOptions,
+            locked = state.configurationLocked,
+            onSetOption = { name, value ->
+                onIntent(SessionIntent.SetControllerOption(controllerName, name, value))
             },
         )
     }

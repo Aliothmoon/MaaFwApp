@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.config
 
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.DiagnosticMessages
@@ -13,6 +14,7 @@ import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
+import com.aliothmoon.maafw.domain.ResolvedController
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.domain.ResolvedResource
@@ -55,17 +57,28 @@ object ConfigurationResolver {
             else -> resourceNames.firstOrNull()
         }
 
+        val controller = definition.controller(config.activeControllerName)
+        if (config.activeControllerName != null && controller.name != config.activeControllerName) {
+            diagnostics += warning(
+                "controller",
+                DiagnosticMessages.controllerSelectionMissing(
+                    selected = config.activeControllerName,
+                    fallback = controller.label,
+                ),
+            )
+        }
+
         val environment = ResolvedEnvironment(
-            controllerName = definition.controller.name,
+            controller = ResolvedController(controller.name, controller.label),
             resource = definition.resources.firstOrNull { it.name == resourceName }
                 ?.let { ResolvedResource(it.name, it.label, it.icon) },
             resourceCandidates = definition.resources.map {
                 ResolvedResource(it.name, it.label, it.icon)
             },
+            controllerCandidates = definition.controllers.map { ResolvedController(it.name, it.label) },
         )
-
         val configurationList = config.configurations.map { runConfiguration ->
-            resolveConfiguration(definition, runConfiguration, resourceName, config, diagnostics)
+            resolveConfiguration(definition, runConfiguration, controller, resourceName, config, diagnostics)
         }
         val activeConfiguration = configurationList.firstOrNull { it.isActive }
         if (config.activeConfigurationId != null && activeConfiguration == null) {
@@ -76,18 +89,27 @@ object ConfigurationResolver {
             definition = definition,
             optionNames = definition.globalOptionNames,
             values = config.globalOptionValues,
+            controller = controller,
             resourceName = resourceName,
         )
         return ResolvedProjectSession(
             configurationList = configurationList,
             activeConfiguration = activeConfiguration,
-            taskCatalog = buildTaskCatalog(definition, resourceName),
+            taskCatalog = buildTaskCatalog(definition, controller, resourceName),
             globalOptions = globalOptions,
             settingSections = buildSettingSections(definition, globalOptions),
             resourceOptions = buildOptionEditors(
                 definition = definition,
                 optionNames = definition.resources.firstOrNull { it.name == resourceName }?.optionNames.orEmpty(),
                 values = resourceName?.let { config.resourceOptionValues[it] }.orEmpty(),
+                controller = controller,
+                resourceName = resourceName,
+            ),
+            controllerOptions = buildOptionEditors(
+                definition = definition,
+                optionNames = controller.optionNames,
+                values = config.controllerOptionValues[controller.name].orEmpty(),
+                controller = controller,
                 resourceName = resourceName,
             ),
             environment = environment,
@@ -139,6 +161,7 @@ object ConfigurationResolver {
     private fun resolveConfiguration(
         definition: ProjectDefinition,
         runConfiguration: RunConfiguration,
+        controller: ControllerDefinition,
         resourceName: String?,
         config: UserConfiguration,
         diagnostics: MutableList<Diagnostic>,
@@ -165,7 +188,7 @@ object ConfigurationResolver {
                     options = emptyList(),
                 )
             } else {
-                val applicability = checkApplicability(definition, taskDefinition, resourceName)
+                val applicability = checkApplicability(definition, taskDefinition, controller, resourceName)
                 ResolvedConfiguredTask(
                     instanceId = configured.instanceId,
                     taskName = configured.taskName,
@@ -181,6 +204,7 @@ object ConfigurationResolver {
                             definition = definition,
                             optionNames = taskDefinition.optionNames,
                             values = configured.optionValues,
+                            controller = controller,
                             resourceName = resourceName,
                         )
                     } else {
@@ -198,21 +222,25 @@ object ConfigurationResolver {
         )
     }
 
-    /** task 的 `controller[]` 是否含外壳这唯一的 Adb 项；不含就是 Android 上永远跑不了 */
+    /** 外壳能驱动的 Adb controller 里有没有一个能跑它；一个都没有就是 Android 上永远跑不了 */
     fun isControllerSupported(definition: ProjectDefinition, task: TaskDefinition): Boolean =
-        task.controllers.isEmpty() ||
-            task.controllers.any {
-                it.equals(definition.controller.type, ignoreCase = true) ||
-                    it.equals(definition.controller.name, ignoreCase = true)
-            }
+        definition.controllers.any(task::runsOn)
 
     /** null = 适用；否则给出不适用的原因文案 */
     fun checkApplicability(
         definition: ProjectDefinition,
         task: TaskDefinition,
+        controller: ControllerDefinition,
         resourceName: String?,
     ): UiText? {
-        if (!isControllerSupported(definition, task)) return UnavailableReasons.controllerMismatch()
+        if (!task.runsOn(controller)) {
+            val candidates = definition.controllers.filter(task::runsOn)
+            return if (candidates.isEmpty()) {
+                UnavailableReasons.controllerMismatch()
+            } else {
+                UnavailableReasons.controllerSwitchRequired(candidates.map { it.label })
+            }
+        }
         val resourceOk = task.resources.isEmpty() ||
             (resourceName != null && task.resources.any { it == resourceName })
         if (!resourceOk) return UnavailableReasons.resourceMismatch(task.resources)
@@ -221,6 +249,7 @@ object ConfigurationResolver {
 
     private fun buildTaskCatalog(
         definition: ProjectDefinition,
+        controller: ControllerDefinition,
         resourceName: String?,
     ): List<TaskCatalogGroup> {
         return definition.groups.map { group ->
@@ -228,7 +257,7 @@ object ConfigurationResolver {
                 if (group.isUngrouped) task.groups.isEmpty()
                 else group.name in task.groups
             }.map { task ->
-                val reason = checkApplicability(definition, task, resourceName)
+                val reason = checkApplicability(definition, task, controller, resourceName)
                 TaskCatalogItem(
                     taskName = task.name,
                     label = task.label,
@@ -255,6 +284,7 @@ object ConfigurationResolver {
         definition: ProjectDefinition,
         optionNames: List<String>,
         values: Map<String, OptionValue>,
+        controller: ControllerDefinition,
         resourceName: String?,
         depth: Int = 0,
         visited: Set<String> = emptySet(),
@@ -263,10 +293,10 @@ object ConfigurationResolver {
         return optionNames.mapNotNull { name ->
             if (name in visited) return@mapNotNull null
             val option = definition.options[name] ?: return@mapNotNull null
-            if (!option.applicability.matches(definition.controller.name, resourceName)) {
+            if (!option.applicability.matches(controller.name, resourceName)) {
                 return@mapNotNull null
             }
-            buildOptionEditor(definition, option, values, resourceName, depth, visited + name)
+            buildOptionEditor(definition, option, values, controller, resourceName, depth, visited + name)
         }
     }
 
@@ -274,6 +304,7 @@ object ConfigurationResolver {
         definition: ProjectDefinition,
         option: OptionDefinition,
         values: Map<String, OptionValue>,
+        controller: ControllerDefinition,
         resourceName: String?,
         depth: Int,
         visited: Set<String>,
@@ -291,7 +322,7 @@ object ConfigurationResolver {
                     kind = if (option is OptionDefinition.Select) OptionKind.Select else OptionKind.Switch,
                     depth = depth,
                     value = value,
-                    cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, resourceName, depth, visited),
+                    cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, controller, resourceName, depth, visited),
                     inputs = emptyList(),
                     icon = option.icon,
                 )
@@ -307,7 +338,7 @@ object ConfigurationResolver {
                     kind = OptionKind.Checkbox,
                     depth = depth,
                     value = value,
-                    cases = buildCaseStates(definition, option.cases, selected.toSet(), values, resourceName, depth, visited),
+                    cases = buildCaseStates(definition, option.cases, selected.toSet(), values, controller, resourceName, depth, visited),
                     inputs = emptyList(),
                     icon = option.icon,
                     minCount = option.minCount,
@@ -370,6 +401,7 @@ object ConfigurationResolver {
         cases: List<OptionCaseDefinition>,
         selected: Set<String>,
         values: Map<String, OptionValue>,
+        controller: ControllerDefinition,
         resourceName: String?,
         depth: Int,
         visited: Set<String>,
@@ -382,7 +414,7 @@ object ConfigurationResolver {
             icon = case.icon,
             active = active,
             children = if (active) {
-                buildOptionEditors(definition, case.childOptionNames, values, resourceName, depth + 1, visited)
+                buildOptionEditors(definition, case.childOptionNames, values, controller, resourceName, depth + 1, visited)
             } else {
                 emptyList()
             },

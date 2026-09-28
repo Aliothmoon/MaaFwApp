@@ -114,6 +114,7 @@
     <!-- Settings screen -->
     <string name="settings_section_global_option">Task settings</string>
     <string name="settings_section_resource_option">Resource settings</string>
+    <string name="settings_section_controller_option">Controller settings</string>
     <string name="settings_section_display">Display</string>
     <string name="settings_section_schedule">Scheduled tasks</string>
     <string name="settings_section_duration_limit">Run duration limit</string>
@@ -137,6 +138,7 @@
     <string name="settings_run_mode_foreground">Foreground mode</string>
     <string name="settings_resource">Server</string>
     <string name="settings_no_resources">The project provides no selectable servers</string>
+    <string name="settings_controller">Controller</string>
     <string name="settings_reload_project">Reload project</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
@@ -382,6 +384,7 @@
     <string name="tasks_ungrouped">Ungrouped</string>
     <string name="task_unavailable_missing">Task no longer exists in the project</string>
     <string name="task_unavailable_controller">Not supported</string>
+    <string name="task_unavailable_controller_switch">Requires the %1$s controller</string>
     <string name="task_unavailable_resource">Unsupported resource (requires %1$s)</string>
     <string name="msg_locked_while_running">Cannot change configuration while running</string>
     <string name="msg_project_not_loaded">Project is not loaded yet</string>
@@ -584,6 +587,7 @@
     <string name="diagnostic_directory_enumeration_failed">Failed to enumerate %1$s directory: %2$s</string>
     <string name="diagnostic_no_available_resource">No resource is available</string>
     <string name="diagnostic_resource_selection_missing">Resource "%1$s" no longer exists; falling back to %2$s</string>
+    <string name="diagnostic_controller_selection_missing">Controller "%1$s" no longer exists; falling back to %2$s</string>
     <string name="diagnostic_none">none</string>
     <string name="diagnostic_active_configuration_missing">activeConfigurationId points to a missing configuration</string>
     <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>

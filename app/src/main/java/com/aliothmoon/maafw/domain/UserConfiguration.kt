@@ -15,6 +15,8 @@ data class UserConfiguration(
     val initialized: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.System,
     val activeResourceName: String? = null,
+    /** null = PI 声明的第一个 Adb controller；只有 PI 声明了不止一个时用户才会去选 */
+    val activeControllerName: String? = null,
     val globalOptionValues: Map<String, OptionValue> = emptyMap(),
     val controllerOptionValues: Map<String, Map<String, OptionValue>> = emptyMap(),
     val resourceOptionValues: Map<String, Map<String, OptionValue>> = emptyMap(),

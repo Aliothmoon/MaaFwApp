@@ -46,6 +46,8 @@ data class SessionUiState(
     val settingSections: List<OptionSectionState> = emptyList(),
     /** 空 = 当前 resource 没有 option[]，设置页不出「资源设置」 */
     val resourceOptions: List<OptionEditorState> = emptyList(),
+    /** 空 = 当前 controller 没有 option[]，设置页不出「控制器设置」 */
+    val controllerOptions: List<OptionEditorState> = emptyList(),
     val projectMetadata: ProjectMetadata = ProjectMetadata(),
     /** PI 声明了 telemetry；没声明时设置页不出这一行 */
     val telemetryDeclared: Boolean = false,
@@ -237,7 +239,15 @@ sealed interface SessionIntent {
         val value: OptionValue,
     ) : SessionIntent
 
+    /** 同上，按 controller name 分桶 */
+    data class SetControllerOption(
+        val controllerName: String,
+        val optionName: String,
+        val value: OptionValue,
+    ) : SessionIntent
+
     data class SelectResource(val resourceName: String) : SessionIntent
+    data class SelectController(val controllerName: String) : SessionIntent
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent
     data class SetThemeStyle(val style: ThemeStyle) : SessionIntent
 

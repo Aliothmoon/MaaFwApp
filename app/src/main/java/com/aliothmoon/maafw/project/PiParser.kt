@@ -55,18 +55,22 @@ data class PiResourceContent(
 )
 
 /**
- * controller 声明的原样投影；挑哪一个由 loader 按平台决定
+ * controller 声明的原样投影；loader 只留 Android 能驱动的 Adb 项
  * [name] 是 task 的 controller[] 实际引用的标识，不能用 type 代替
  */
 data class PiControllerContent(
     val name: String,
     val type: String,
+    /** 未物化的原文，`$key` 由 loader 查表 */
+    val label: String? = null,
     /** 三者互斥；都缺省时由外壳按默认分辨率兜底 */
     val displayShortSide: Int? = null,
     val displayLongSide: Int? = null,
     val displayRaw: Boolean = false,
     /** v2.2.0 `attach_resource_path`，已规范化，相对 interface.json 目录 */
     val attachResourcePaths: List<String> = emptyList(),
+    /** v2.3.0 `option` */
+    val optionNames: List<String> = emptyList(),
     /** 原样条目，PI_CONTROLLER 要整条 */
     val raw: JsonObject = JsonObject(emptyMap()),
 )
@@ -189,10 +193,12 @@ object PiParser {
             PiControllerContent(
                 name = name,
                 type = type,
+                label = obj.string("label"),
                 displayShortSide = obj.int("display_short_side"),
                 displayLongSide = obj.int("display_long_side"),
                 displayRaw = obj.boolean("display_raw") ?: false,
                 attachResourcePaths = obj.stringList("attach_resource_path").map(::normalizeProjectPath),
+                optionNames = obj.stringList("option"),
                 raw = obj,
             )
         }
@@ -444,7 +450,6 @@ object PiParser {
         val label = text.label(obj.string("label")) ?: name
         val description = text.description(obj.string("description"))
         val icon = obj.iconPath()
-        // controller 名在 Android 上只可能是 PI 声明的那一个 Adb 项
         val applicability = OptionApplicability(
             controllers = obj.stringList("controller"),
             resources = obj.stringList("resource"),

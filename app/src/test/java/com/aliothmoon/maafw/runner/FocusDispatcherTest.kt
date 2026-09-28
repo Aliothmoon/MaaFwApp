@@ -28,7 +28,7 @@ class FocusDispatcherTest {
     private val definition = ProjectDefinition(
         name = "demo",
         version = "1",
-        controller = ControllerDefinition(),
+        controllers = listOf(ControllerDefinition()),
         resources = listOf(ResourceDefinition("base", listOf("./base"))),
         tasks = emptyList(),
         groups = listOf(TaskGroupDefinition(name = "ungrouped", isUngrouped = true)),

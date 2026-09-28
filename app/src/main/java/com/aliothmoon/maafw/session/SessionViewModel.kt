@@ -354,6 +354,7 @@ class SessionViewModel(
             globalOptions = session.globalOptions,
             settingSections = session.settingSections,
             resourceOptions = session.resourceOptions,
+            controllerOptions = session.controllerOptions,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
             previewResolution = settings.resolutionPreference.resolution,
@@ -496,8 +497,26 @@ class SessionViewModel(
                 }
             }
 
+            is SessionIntent.SetControllerOption -> guarded {
+                val known = (projectRepository.state.value as? ProjectState.Ready)
+                    ?.definition?.controllers?.any { it.name == intent.controllerName } == true
+                if (!known) return@guarded
+                val value = intent.value.secured(intent.optionName)
+                configurationStore.update { config ->
+                    val current = config.controllerOptionValues[intent.controllerName].orEmpty()
+                    config.copy(
+                        controllerOptionValues = config.controllerOptionValues +
+                            (intent.controllerName to (current + (intent.optionName to value))),
+                    )
+                }
+            }
+
             is SessionIntent.SelectResource -> guarded {
                 configurationStore.update { it.copy(activeResourceName = intent.resourceName) }
+            }
+
+            is SessionIntent.SelectController -> guarded {
+                configurationStore.update { it.copy(activeControllerName = intent.controllerName) }
             }
 
             // 展示偏好不锁配置、不改变 Definition/RunPlan

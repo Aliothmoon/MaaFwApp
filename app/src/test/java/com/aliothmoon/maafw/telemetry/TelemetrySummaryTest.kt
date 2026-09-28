@@ -32,7 +32,7 @@ private fun field(name: String, type: PipelineType, default: String = "") = Inpu
 private fun definition(vararg options: OptionDefinition) = ProjectDefinition(
     name = "p",
     version = "1.0.0",
-    controller = ControllerDefinition(),
+    controllers = listOf(ControllerDefinition()),
     resources = emptyList(),
     tasks = emptyList(),
     groups = emptyList(),

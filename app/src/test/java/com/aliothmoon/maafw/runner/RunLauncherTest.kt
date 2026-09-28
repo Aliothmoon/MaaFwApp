@@ -41,7 +41,7 @@ class RunLauncherTest {
     private val definition = ProjectDefinition(
         name = "demo",
         version = "1",
-        controller = ControllerDefinition(),
+        controllers = listOf(ControllerDefinition()),
         resources = listOf(ResourceDefinition("官服", listOf("./base"))),
         tasks = listOf(
             TaskDefinition(

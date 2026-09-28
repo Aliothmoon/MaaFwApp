@@ -108,6 +108,7 @@
     <!-- 设置页；分组对齐 MaaMeow 的 settings_section_* -->
     <string name="settings_section_global_option">任务设置</string>
     <string name="settings_section_resource_option">资源设置</string>
+    <string name="settings_section_controller_option">控制器设置</string>
     <string name="settings_section_display">显示设置</string>
     <string name="settings_section_schedule">定时任务设置</string>
     <string name="settings_section_duration_limit">运行时长上限</string>
@@ -131,6 +132,7 @@
     <string name="settings_run_mode_foreground">前台模式</string>
     <string name="settings_resource">服务器</string>
     <string name="settings_no_resources">项目未提供可选服务器</string>
+    <string name="settings_controller">控制器</string>
     <string name="settings_reload_project">重新加载项目</string>
     <string name="settings_about">关于</string>
     <string name="settings_version">版本</string>
@@ -375,6 +377,7 @@
     <string name="tasks_ungrouped">未分组</string>
     <string name="task_unavailable_missing">项目中已不存在该任务</string>
     <string name="task_unavailable_controller">不支持该任务</string>
+    <string name="task_unavailable_controller_switch">需切换控制器到 %1$s</string>
     <string name="task_unavailable_resource">不支持当前资源（需要 %1$s）</string>
     <string name="msg_locked_while_running">运行期间不能修改配置</string>
     <string name="msg_project_not_loaded">项目尚未加载完成</string>
@@ -574,6 +577,7 @@
     <string name="diagnostic_directory_enumeration_failed">无法枚举 %1$s 目录：%2$s</string>
     <string name="diagnostic_no_available_resource">没有可用的 resource</string>
     <string name="diagnostic_resource_selection_missing">resource "%1$s" 已不存在，回退到 %2$s</string>
+    <string name="diagnostic_controller_selection_missing">controller "%1$s" 已不存在，回退到 %2$s</string>
     <string name="diagnostic_none">无</string>
     <string name="diagnostic_active_configuration_missing">activeConfigurationId 指向不存在的配置</string>
     <string name="diagnostic_configured_task_missing">任务 "%1$s" 已不在项目中</string>

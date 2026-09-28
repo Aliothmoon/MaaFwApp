@@ -112,6 +112,7 @@ class ProjectLoader(
             state.tasks,
             state.globalOptionNames,
             pi.resources,
+            pi.controllers.filter(::isAdb),
             state.options,
             state.skippedOptionNames,
             diagnostics,
@@ -141,7 +142,7 @@ class ProjectLoader(
         val definition = ProjectDefinition(
             name = pi.name ?: source.projectName,
             version = pi.version,
-            controller = resolveController(pi, diagnostics),
+            controllers = resolveControllers(pi, text, state.options, diagnostics),
             resources = pi.resources
                 .map {
                     ResourceDefinition(
@@ -192,31 +193,39 @@ class ProjectLoader(
     }
 
     /**
-     * Android 外壳只驱动 Adb controller，从 PI 声明里取该项的真实 name
+     * Android 外壳只驱动 Adb controller；PI 可以声明好几个（本地客户端、云游戏各一个），全留下由用户选
      * task 的 controller[] 引用的是 controller 名，写死名字会让换一个 PI 后全部任务被判不适用
      * 未声明 Adb 说明该 PI 不面向 Android：记 warning 并回落默认，不阻断加载
      */
-    private fun resolveController(
+    private fun resolveControllers(
         pi: PiInterfaceContent,
+        text: PiTextResolver,
+        options: Map<String, OptionDefinition>,
         diagnostics: MutableList<Diagnostic>,
-    ): ControllerDefinition {
-        val adb = pi.controllers
-            .firstOrNull { it.type.equals(ADB_CONTROLLER_TYPE, ignoreCase = true) }
-
-        if (adb == null) {
+    ): List<ControllerDefinition> {
+        val adb = pi.controllers.filter(::isAdb)
+        if (adb.isEmpty()) {
             diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.noAdbController())
-            return ControllerDefinition()
+            return listOf(ControllerDefinition())
         }
-        return ControllerDefinition(
-            name = adb.name,
-            type = adb.type,
-            displayShortSide = adb.displayShortSide,
-            displayLongSide = adb.displayLongSide,
-            displayRaw = adb.displayRaw,
-            attachResourcePaths = adb.attachResourcePaths,
-            raw = adb.raw,
-        )
+        return adb.map {
+            ControllerDefinition(
+                name = it.name,
+                type = it.type,
+                label = text.label(it.label) ?: it.name,
+                displayShortSide = it.displayShortSide,
+                displayLongSide = it.displayLongSide,
+                displayRaw = it.displayRaw,
+                attachResourcePaths = it.attachResourcePaths,
+                // 引用不存在的项已在 validateOptionReferences 报 Error
+                optionNames = it.optionNames.filter { name -> name in options },
+                raw = it.raw,
+            )
+        }
     }
+
+    private fun isAdb(controller: PiControllerContent): Boolean =
+        controller.type.equals(ADB_CONTROLLER_TYPE, ignoreCase = true)
 
     /** 分片内容合并进累计状态：task/option 重名 → error，preset/group 重名 → warning，一律先定义优先 */
     private fun mergeContent(
@@ -418,6 +427,7 @@ class ProjectLoader(
         tasks: List<TaskDefinition>,
         globalOptionNames: List<String>,
         resources: List<PiResourceContent>,
+        controllers: List<PiControllerContent>,
         options: Map<String, OptionDefinition>,
         skipped: Set<String>,
         diagnostics: MutableList<Diagnostic>,
@@ -437,6 +447,16 @@ class ProjectLoader(
                 if (missing(ref)) {
                     diagnostics += error(
                         "resource:${resource.name}",
+                        DiagnosticMessages.missingReference("option", ref),
+                    )
+                }
+            }
+        }
+        for (controller in controllers) {
+            for (ref in controller.optionNames) {
+                if (missing(ref)) {
+                    diagnostics += error(
+                        "controller:${controller.name}",
                         DiagnosticMessages.missingReference("option", ref),
                     )
                 }
