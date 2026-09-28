@@ -36,7 +36,7 @@ class RunLogComposer {
         agentFlooded = false
     }
 
-    /** 返回 null 表示这条不展示（被去重掉，或洪泛期的 agent 输出） */
+    /** 返回 null 表示这条不展示（认不出的回调、被去重掉的，或洪泛期的 agent 输出） */
     fun compose(event: RunnerEvent, id: Long, atMillis: Long, context: RunLogContext): RunLogEntry? {
         val composed = when (event) {
             RunnerEvent.ExecutionFinished -> return null
@@ -65,7 +65,7 @@ class RunLogComposer {
                 detail = event.raw,
             )
 
-            is RunnerEvent.Callback -> callbackEntry(event, context)
+            is RunnerEvent.Callback -> callbackEntry(event, context) ?: return null
         }
 
         // 资源多路径逐条发同样的通知，合成后文案一模一样；连着重复只留第一条
@@ -103,20 +103,19 @@ class RunLogComposer {
     }
 
     /**
-     * 认得出的合成人话，认不出的降级为原始转储
+     * 认得出的合成人话，认不出的丢掉（与 MXU 一致）
      *
-     * MXU 把认不出的直接丢掉；这里留成 [RunLogKind.Verbose]，「全部」档可见——
-     * 排障时对得上官方文档与源码的原文比什么都值钱
+     * `Node.*` 与点击、截图一秒几十条，只有事件名谁也看不懂；排障要的原文与 details
+     * MaaFramework 自己的 maa.log 里都有全份，这里再抄一遍只会把人要看的行埋掉
      */
-    private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed {
+    private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed? {
         // 落到 else 的 Node.* 是识别期最密的一档，它不看 details；compose 单协程，不必上锁
         val details by lazy(LazyThreadSafetyMode.NONE) { parseDetails(event.details) }
-        val verbose = Composed(RunLogKind.Verbose, uiTextFromFramework(event.message), event.details)
 
         return when (event.message) {
             CONTROLLER_STARTING, CONTROLLER_SUCCEEDED, CONTROLLER_FAILED -> {
                 // 只讲连接；点击与截图是每帧都来的动作，讲出来就是刷屏
-                if (!details.isConnectAction()) return verbose
+                if (!details.isConnectAction()) return null
                 when (event.message) {
                     CONTROLLER_STARTING -> Composed(RunLogKind.Info, uiTextOf(R.string.run_log_connecting))
                     CONTROLLER_SUCCEEDED -> Composed(RunLogKind.Success, uiTextOf(R.string.run_log_connected))
@@ -156,7 +155,7 @@ class RunLogComposer {
                 event.details,
             )
 
-            else -> verbose
+            else -> null
         }
     }
 

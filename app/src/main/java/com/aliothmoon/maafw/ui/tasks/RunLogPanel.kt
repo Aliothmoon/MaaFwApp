@@ -42,8 +42,6 @@ import com.aliothmoon.maafw.ui.components.runLogColor
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,8 +52,8 @@ import java.util.Locale
  * 内嵌而非弹层：看日志时多半同时要看任务进度与那颗启停按钮，全屏弹层把两者都挡了
  * 开关在配置行右侧，本组件不自带关闭钮
  *
- * 「进度」档是 `RunLogComposer` 合成过的人话；「全部」档另外露出没被合成的原始回调，
- * 那些保持等宽、可展开看原样 details_json——排障时对得上官方文档与源码的原文比什么都值钱
+ * 「进度」档是 `RunLogComposer` 合成过的人话；「全部」档另外露出 agent 的 stdout / stderr。
+ * 带 details_json 的行（失败类）可展开看原样；认不出的回调合成器已经丢掉，全份在 maa.log
  */
 @Composable
 internal fun RunLogPanel(
@@ -190,7 +188,7 @@ private fun RunLogRow(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
-    val parsed = rememberParsedDetail(entry)
+    val pretty = rememberPrettyDetail(entry)
     val body = entry.text.asString()
     // agent 按「输出到终端」配色，转义符只有它这两类会有；其余 kind 不必白跑一趟解析
     val ansiColor = rememberAnsiColorResolver()
@@ -226,25 +224,12 @@ private fun RunLogRow(
             Text(
                 text = rendered,
                 style = MaterialTheme.typography.labelSmall,
-                // 合成过的是人话，按正文排版；原始转储保持等宽，对得上官方文档
-                fontFamily = if (entry.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
                 // ANSI 指定的颜色写在 span 上，压过这里的整行色；没指定的段落仍按 kind 走
                 color = runLogColor(entry.kind),
             )
-            // 原始转储旁只露一个主语（节点名 / 任务 entry / 动作名），其余留给折叠区；
-            // 合成过的正文里主语已经在了，再露一次是重复
-            if (entry.kind == RunLogKind.Verbose) {
-                parsed.subject?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
             if (expanded) {
                 Text(
-                    text = parsed.pretty ?: entry.detail.orEmpty(),
+                    text = pretty ?: entry.detail.orEmpty(),
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -255,9 +240,6 @@ private fun RunLogRow(
     }
 }
 
-/** [subject] 摘出来平铺，[pretty] 只在展开时用 */
-private data class ParsedDetail(val subject: String?, val pretty: String?)
-
 /**
  * 解析推迟到渲染这一刻
  *
@@ -265,17 +247,12 @@ private data class ParsedDetail(val subject: String?, val pretty: String?)
  * 会把主线程压死；LazyColumn 只组合可见行，配 remember 后一条最多解一次
  */
 @Composable
-private fun rememberParsedDetail(entry: RunLogEntry): ParsedDetail = remember(entry.id) {
-    val detail = entry.detail ?: return@remember ParsedDetail(null, null)
+private fun rememberPrettyDetail(entry: RunLogEntry): String? = remember(entry.id) {
+    val detail = entry.detail ?: return@remember null
     val root = runCatching { LOG_JSON.parseToJsonElement(detail) }.getOrNull() as? JsonObject
-        ?: return@remember ParsedDetail(null, null)
-    val subject = SUBJECT_KEYS.firstNotNullOfOrNull { (root[it] as? JsonPrimitive)?.contentOrNull }
-    val pretty = runCatching { PRETTY_JSON.encodeToString(JsonElement.serializer(), root) }.getOrNull()
-    ParsedDetail(subject?.takeIf { it.isNotBlank() }, pretty)
+        ?: return@remember null
+    runCatching { PRETTY_JSON.encodeToString(JsonElement.serializer(), root) }.getOrNull()
 }
-
-/** 按可辨识度排序取第一个命中的：节点名 > 任务 entry > 控制器动作 > 资源路径 */
-private val SUBJECT_KEYS = listOf("name", "entry", "action", "path")
 
 private val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
 private val PRETTY_JSON = Json { prettyPrint = true }

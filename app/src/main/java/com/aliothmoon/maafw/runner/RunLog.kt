@@ -25,9 +25,6 @@ data class RunLogEntry(
 /**
  * 日志分级，取自桌面端 MXU 的 `LogType`（info / success / warning / error / agent / focus）
  *
- * [Verbose] 是本项目多出来的一档：MXU 把认不出的回调直接丢掉，我们降级留着，
- * 「全部」档可见。排障时对得上官方文档与源码的原文比什么都值钱
- *
  * 按名字进会话日志文件。外壳自产行走 [RunNote]，由 [RunLogRecorder] 映到 Info/Warning/Error
  */
 @Serializable
@@ -46,14 +43,18 @@ enum class RunLogKind {
     /** PI 声明的消息模板，正文按 Markdown 渲染（见 [FocusMessage]） */
     Focus,
 
-    /** 没被合成成人话的原始回调 */
+    /**
+     * 没被合成成人话的原始回调；现在与 MXU 一样直接丢掉，不再产出
+     *
+     * 只为读得动旧版本写下的会话文件而留：kind 按名字落盘，删了旧文件整行解不出来
+     */
     Verbose,
 }
 
 /**
  * 屏上每一档各留多少：超过就丢这一档最老的。一次长跑能积上万条，全留住会吃光内存也拖慢列表
  *
- * 进度行与原始行分开限额：识别期原始回调一秒几十条，共用一个窗口会把更早的进度行挤掉
+ * 进度行与原始行（agent 输出）分开限额：agent 刷起屏来一秒几十行，共用一个窗口会把更早的进度行挤掉
  */
 const val RUN_LOG_CAPACITY = 500
 
@@ -78,7 +79,7 @@ data class RunLogSnapshot(
 /**
  * 「进度」档留下的：这一轮跑到哪了
  *
- * agent 的两条流都不在内——它和 `Node.*` 原始转储同级，是排障信息。agent 崩了照样看得见，
+ * agent 的两条流都不在内，是排障信息。agent 崩了照样看得见，
  * 那会以 `Tasker.Task.Failed` 的形式出现在进度档，再切「全部」看 stderr 上的现场
  */
 val RunLogEntry.isEssential: Boolean

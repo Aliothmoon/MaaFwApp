@@ -41,6 +41,8 @@ class RunLogRecorder(
     /** 只有调试模式才把 details_json 一起落盘：它占掉文件的绝大部分体积 */
     private val includeDetails: () -> Boolean,
     private val scope: CoroutineScope,
+    /** 条目时间戳与 agent 洪泛滑窗都按它算；测试要能把 agent 行错开，否则一串就踩中洪泛阈值 */
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : RunJournal {
 
     private val _runLog = MutableStateFlow(RunLogSnapshot.EMPTY)
@@ -83,7 +85,7 @@ class RunLogRecorder(
     /**
      * 屏上那份的环形缓冲，进度行与原始行各一个、各自限额；[note] 与合成协程两边都写，靠 [uiLock] 串起来
      *
-     * 分开是因为原始回调一秒几十条，共用一个窗口时更早的进度行会被它们挤出去
+     * 分开是因为 agent 输出能一秒几十行，共用一个窗口时更早的进度行会被它们挤出去
      *
      * 不逐条改 [_runLog]：那要按条复制整份列表，识别期一秒几十条就是在刷垃圾
      */
@@ -136,7 +138,7 @@ class RunLogRecorder(
         latestExecutionId = executionId
         composer.reset()
         resetLiveStatus()
-        val writer = store.open(System.currentTimeMillis(), plan.tasks.map { it.taskName })
+        val writer = store.open(clock(), plan.tasks.map { it.taskName })
         val session = Session(plan.resource.label, writer)
         sessions[executionId] = session
         if (writer == null) return
@@ -165,7 +167,7 @@ class RunLogRecorder(
                 while (true) add(session.pending.poll() ?: break)
                 add(
                     RunSessionRecord.Footer(
-                        endedAt = System.currentTimeMillis(),
+                        endedAt = clock(),
                         outcome = reason.toSessionOutcome(),
                     ),
                 )
@@ -183,7 +185,7 @@ class RunLogRecorder(
         publish(
             RunLogEntry(
                 id = nextId.incrementAndGet(),
-                atMillis = System.currentTimeMillis(),
+                atMillis = clock(),
                 kind = level.asRunLogKind(),
                 text = text,
             ),
@@ -228,7 +230,7 @@ class RunLogRecorder(
         val entry = composer.compose(
             event = event,
             id = nextId.incrementAndGet(),
-            atMillis = System.currentTimeMillis(),
+            atMillis = clock(),
             context = RunLogContext(
                 currentTaskName = envelope.taskLabel,
                 resourceLabel = session?.resourceLabel,

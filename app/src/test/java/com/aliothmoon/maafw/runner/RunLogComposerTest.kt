@@ -57,10 +57,7 @@ class RunLogComposerTest {
             callback("Controller.Action.Succeeded", """{"action":"Connect"}""")?.kind,
         )
         // 截图每帧都来，讲出来就是刷屏
-        assertEquals(
-            RunLogKind.Verbose,
-            callback("Controller.Action.Succeeded", """{"action":"Screencap"}""")?.kind,
-        )
+        assertNull(callback("Controller.Action.Succeeded", """{"action":"Screencap"}"""))
     }
 
     /** 资源多路径逐条发同样的通知，合成后连着重复只留第一条 */
@@ -73,18 +70,23 @@ class RunLogComposerTest {
         assertNull(callback("Resource.Loading.Succeeded", """{"path":"/b"}"""))
     }
 
-    /** MXU 把节点消息直接丢掉；这里降级留着，「全部」档可见 */
+    /** 与 MXU 一致：节点消息一秒几十条、只有事件名谁也看不懂，全份在 maa.log */
     @Test
-    fun `node messages stay raw and keep their details`() {
-        val entry = callback("Node.Recognition.Failed", """{"name":"NodeA"}""")
-        assertEquals(RunLogKind.Verbose, entry?.kind)
-        assertEquals(UiText.Verbatim("Node.Recognition.Failed"), entry?.text)
-        assertEquals("""{"name":"NodeA"}""", entry?.detail)
+    fun `node messages are dropped`() {
+        assertNull(callback("Node.Recognition.Failed", """{"name":"NodeA"}"""))
     }
 
     @Test
-    fun `unknown messages are kept raw rather than dropped`() {
-        assertEquals(RunLogKind.Verbose, callback("Something.Brand.New")?.kind)
+    fun `unknown messages are dropped`() {
+        assertNull(callback("Something.Brand.New"))
+    }
+
+    /** 丢掉的回调不参与去重：夹在两条相同合成行之间也不会让后一条露出来 */
+    @Test
+    fun `dropped callbacks do not break dedup`() {
+        assertEquals(RunLogKind.Info, callback("Resource.Loading.Starting", """{"path":"/a"}""")?.kind)
+        assertNull(callback("Node.Action.Starting", """{"name":"A"}"""))
+        assertNull(callback("Resource.Loading.Starting", """{"path":"/b"}"""))
     }
 
     /**

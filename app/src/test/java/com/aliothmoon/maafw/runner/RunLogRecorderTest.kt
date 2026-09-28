@@ -64,9 +64,25 @@ class RunLogRecorderTest {
         renderText = { text -> (text as? com.aliothmoon.maafw.i18n.UiText.Verbatim)?.value ?: "<res>" },
         includeDetails = { includeDetails },
         scope = backgroundScope,
+        clock = { now ?: System.currentTimeMillis() },
     )
 
     private var includeDetails = false
+
+    /** 默认跟真实时钟走（会话文件名按开始时间取）；只有要错开 agent 行的用例才接管，见 [emitAgentLines] */
+    private var now: Long? = null
+
+    /**
+     * 每行隔开一秒投一条 agent 输出，躲开合成器的洪泛滑窗（2s 内 15 行）
+     *
+     * 认不出的回调合成器直接丢掉，能进原始档的只剩 agent 输出，要攒满一窗只能这样喂
+     */
+    private fun emitAgentLines(runner: RecordingEventRunnerPort, count: Int, prefix: String = "agent") {
+        repeat(count) {
+            now = (now ?: System.currentTimeMillis()) + 1_000
+            runner.emit(RunnerEvent.AgentOutput("$prefix $it", fromStderr = false))
+        }
+    }
 
     /**
      * 屏上那份是攒批发布的，读 `runLog.value` 之前先把那一拍走完
@@ -181,7 +197,7 @@ class RunLogRecorderTest {
     }
 
     @Test
-    fun `verbose callbacks do not become lastUserFacing`() = runTest(dispatcher) {
+    fun `raw callbacks do not become lastUserFacing`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
@@ -264,22 +280,43 @@ class RunLogRecorderTest {
         )
     }
 
-    /** details_json 占掉文件的绝大部分体积，只有调试模式才值得带 */
+    /** 认不出的回调调试模式也不留，屏上与文件都没有：maa.log 里连 details 都有全份 */
     @Test
-    fun `raw details only reach the file in debug mode`() = runTest(dispatcher) {
+    fun `raw callbacks are neither shown nor written`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
         recorder.begin(planOf("a"), ID)
+        runner.emit(RunnerEvent.Log("开始"))
         runner.emit(RunnerEvent.Callback("Node.Action.Failed", """{"name":"A"}"""))
         includeDetails = true
         // 换个事件名：合成器按 kind + 正文去重，同名的第二条本来就到不了落盘这步
         runner.emit(RunnerEvent.Callback("Node.Recognition.Failed", """{"name":"B"}"""))
         recorder.finish(runner)
 
+        assertEquals(listOf("开始"), sessionRecords().lineTexts())
+
+        settleRunLog()
+        assertEquals(listOf(UiText.Verbatim("开始")), recorder.runLog.value.all.map { it.text })
+    }
+
+    /** 合成过的行照常落盘；details_json 占掉文件的绝大部分体积，只有调试模式才带 */
+    @Test
+    fun `composed details only reach the file in debug mode`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("a"), ID)
+        runner.emit(RunnerEvent.Callback("Tasker.Task.Failed", """{"entry":"A"}"""))
+        includeDetails = true
+        // 换一种合成行：同 kind 同正文的第二条会被合成器去重掉
+        runner.emit(RunnerEvent.Callback("Resource.Loading.Failed", """{"path":"B"}"""))
+        recorder.finish(runner)
+
         val lines = sessionRecords().filterIsInstance<RunSessionRecord.Line>()
+        assertEquals(listOf(RunLogKind.Error, RunLogKind.Error), lines.map { it.kind })
         assertNull(lines[0].detail)
-        assertEquals("""{"name":"B"}""", lines[1].detail)
+        assertEquals("""{"path":"B"}""", lines[1].detail)
     }
 
     /**
@@ -329,15 +366,15 @@ class RunLogRecorderTest {
         assertTrue("逐条发布了，共 ${sizes.size} 次", sizes.size <= 3)
     }
 
-    /** 回归：进度行与原始行曾共用一个窗口，识别期原始回调一刷，「进度」档更早的行就被挤没了 */
+    /** 回归：进度行与原始行曾共用一个窗口，原始行一刷，「进度」档更早的行就被挤没了 */
     @Test
-    fun `a raw callback flood does not evict progress lines`() = runTest(dispatcher) {
+    fun `a raw line flood does not evict progress lines`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
         repeat(10) { runner.emit(RunnerEvent.Log("progress $it")) }
         // 文本各不相同：合成器会去掉连续重复的行
-        repeat(RUN_LOG_CAPACITY + 100) { runner.emit(RunnerEvent.Callback("Raw.Callback.$it", "{}")) }
+        emitAgentLines(runner, RUN_LOG_CAPACITY + 100)
         settleRunLog()
 
         val snapshot = recorder.runLog.value
@@ -345,7 +382,7 @@ class RunLogRecorderTest {
         // 「全部」档：进度行一条不丢，原始行只留最新的一窗
         assertEquals(10 + RUN_LOG_CAPACITY, snapshot.all.size)
         assertEquals(snapshot.progress, snapshot.all.filter { it.isEssential })
-        assertEquals(UiText.Verbatim("Raw.Callback.100"), snapshot.all.first { !it.isEssential }.text)
+        assertEquals(UiText.Verbatim("agent 100"), snapshot.all.first { !it.isEssential }.text)
         assertEquals(snapshot.all.sortedBy { it.id }, snapshot.all)
         // 省略提示插在最老一条保留下来的原始行前面
         assertEquals(100L, snapshot.omittedRaw)
@@ -374,15 +411,15 @@ class RunLogRecorderTest {
         val recorder = recorder(runner)
 
         runner.emit(RunnerEvent.Log("progress"))
-        repeat(RUN_LOG_CAPACITY + 1) { runner.emit(RunnerEvent.Callback("Raw.Callback.$it", "{}")) }
+        emitAgentLines(runner, RUN_LOG_CAPACITY + 1)
         settleRunLog()
         recorder.clear()
-        runner.emit(RunnerEvent.Callback("Raw.After", "{}"))
+        emitAgentLines(runner, 1, prefix = "after")
         settleRunLog()
 
         val snapshot = recorder.runLog.value
         assertTrue(snapshot.progress.isEmpty())
-        assertEquals(listOf(UiText.Verbatim("Raw.After")), snapshot.all.map { it.text })
+        assertEquals(listOf(UiText.Verbatim("after 0")), snapshot.all.map { it.text })
         assertEquals(0L, snapshot.omittedRaw)
     }
 

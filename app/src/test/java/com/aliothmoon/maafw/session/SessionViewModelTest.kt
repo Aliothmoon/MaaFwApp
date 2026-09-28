@@ -329,13 +329,11 @@ class SessionViewModelTest {
         advanceTimeBy(100)
         advanceUntilIdle()
 
+        // 认不出的节点回调被合成器丢掉
         assertEquals(
-            listOf(RunLogKind.Success, RunLogKind.Verbose, RunLogKind.Error),
+            listOf(RunLogKind.Success, RunLogKind.Error),
             vm.runLog.value.all.map { it.kind },
         )
-        // 认不出的那条保留原文与 details，「全部」档才有东西可看
-        assertEquals(UiText.Verbatim("Node.Action.Failed"), vm.runLog.value.all[1].text)
-        assertEquals("""{"name":"NodeA"}""", vm.runLog.value.all[1].detail)
     }
 
     /**
