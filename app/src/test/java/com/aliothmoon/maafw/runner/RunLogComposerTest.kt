@@ -46,6 +46,21 @@ class RunLogComposerTest {
         assertEquals(UiText.Resource(R.string.run_log_task_starting, listOf("Start")), entry?.text)
     }
 
+    /** 进度行的任务名走 PI 本地化后的展示名，不露内部 name */
+    @Test
+    fun `progress uses the localized task label`() {
+        val labeled = RunLogComposer().compose(
+            RunnerEvent.Progress("VisitFriends", 1, 12),
+            1,
+            0,
+            RunLogContext(currentTaskName = "🤝拜访好友"),
+        )
+        assertEquals(UiText.Verbatim("🤝拜访好友 1/12"), labeled?.text)
+        // 拿不到展示名时退回内部名，宁可显示内部名也不显示空
+        val bare = RunLogComposer().compose(RunnerEvent.Progress("VisitFriends", 1, 12), 1, 0, RunLogContext())
+        assertEquals(UiText.Verbatim("VisitFriends 1/12"), bare?.text)
+    }
+
     /** 停止标记是框架自己投的空任务，不能套上当前任务名多出一对「开始 / 完成」 */
     @Test
     fun `the framework stop mark task is not reported`() {

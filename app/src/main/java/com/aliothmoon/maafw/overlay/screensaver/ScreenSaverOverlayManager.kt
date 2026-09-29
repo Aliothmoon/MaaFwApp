@@ -143,7 +143,7 @@ class ScreenSaverOverlayManager(
         logJob = scope.launch {
             runnerPort.events.collect { envelope ->
                 if (envelope.event !is RunnerEvent.ExecutionFinished) {
-                    latestLog.value = envelope.event.toLogText()
+                    latestLog.value = envelope.event.toLogText(envelope.taskLabel)
                 }
             }
         }

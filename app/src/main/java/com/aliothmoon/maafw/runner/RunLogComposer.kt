@@ -49,9 +49,14 @@ class RunLogComposer {
 
             is RunnerEvent.Log -> Composed(RunLogKind.Info, uiTextFromFramework(event.message))
 
+            // 任务名用信封里冻结的展示名（PI 的 label，已按 $i18n 物化），不用内部 name；
+            // 「名字 n/m」不随语言变，展示名本身就是 PI 本地化过的
             is RunnerEvent.Progress -> Composed(
                 RunLogKind.Info,
-                uiTextFromFramework("${event.taskName} ${event.completed}/${event.total}"),
+                uiTextFromProject(
+                    "${context.currentTaskName?.takeIf(String::isNotBlank) ?: event.taskName} " +
+                        "${event.completed}/${event.total}",
+                ),
             )
 
             // 正文已由调用方补完（$i18n 查表、{image}、文件路径），这里只负责装进条目：

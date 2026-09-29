@@ -88,11 +88,15 @@ val RunLogEntry.isEssential: Boolean
 private val NON_ESSENTIAL_KINDS =
     setOf(RunLogKind.Verbose, RunLogKind.Agent, RunLogKind.AgentError)
 
-/** 屏保那一行只要一句话，带上 details_json 就糊了 */
-fun RunnerEvent.toLogText(): String = when (this) {
+/**
+ * 屏保那一行只要一句话，带上 details_json 就糊了
+ *
+ * [taskLabel] 是信封里冻结的展示名（PI 本地化过）；进度行用它，拿不到才退回内部 name
+ */
+fun RunnerEvent.toLogText(taskLabel: String? = null): String = when (this) {
     RunnerEvent.ExecutionFinished -> ""
     is RunnerEvent.Log -> message
-    is RunnerEvent.Progress -> "$taskName $completed/$total"
+    is RunnerEvent.Progress -> "${taskLabel?.takeIf(String::isNotBlank) ?: taskName} $completed/$total"
     is RunnerEvent.Focus -> focus.content
     is RunnerEvent.AgentOutput -> line
     is RunnerEvent.AgentConnected -> label
