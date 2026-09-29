@@ -1,9 +1,7 @@
 package com.aliothmoon.maafw.theme
 
-import androidx.compose.foundation.IndicationNodeFactory
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -14,11 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.ContentDrawScope
-import androidx.compose.ui.node.DelegatableNode
-import androidx.compose.ui.node.DrawModifierNode
+import com.aliothmoon.maafw.ui.components.MaaPressIndication
 
 // 暖石色（stone）中性系，对齐早期原型 UI 观感
 private val LightBackground = Color(0xFFFAF9F6)
@@ -303,21 +298,6 @@ private fun paletteOf(style: ThemeStyle, dark: Boolean): MaaPalette = when (styl
     ThemeStyle.SEMI_DESIGN -> if (dark) SemiDarkMaaPalette else SemiLightMaaPalette
 }
 
-private object NoIndication : IndicationNodeFactory {
-    private class NoIndicationNode : Modifier.Node(), DrawModifierNode {
-        override fun ContentDrawScope.draw() {
-            drawContent()
-        }
-    }
-
-    override fun create(interactionSource: InteractionSource): DelegatableNode {
-        return NoIndicationNode()
-    }
-
-    override fun hashCode(): Int = -1
-    override fun equals(other: Any?): Boolean = other === this
-}
-
 @Composable
 fun MaaFwTheme(
     themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
@@ -329,8 +309,6 @@ fun MaaFwTheme(
     val palette = paletteOf(themeStyle, darkTheme)
 
     CompositionLocalProvider(
-        // maaClickable 自带按压缩放反馈；foundation 层 plain clickable 不再叠加涟漪
-        LocalIndication provides NoIndication,
         LocalMaaPalette provides palette,
         LocalMaaStyleTokens provides styleTokens,
         LocalThemeStyle provides themeStyle,
@@ -339,7 +317,11 @@ fun MaaFwTheme(
             colorScheme = colorScheme,
             typography = Typography,
             shapes = shapesOf(styleTokens),
-            content = content
-        )
+        ) {
+            // 必须放在 MaterialTheme 里面：它会把 LocalIndication 换成 ripple()，放外层等于没设。
+            // foundation 层 clickable / selectable / toggleable 由此统一用 MaaPressIndication，
+            // 不再借原生 ripple 的宿主视图池（按下反馈会串到别的组件上，见 MaaPressIndication）
+            CompositionLocalProvider(LocalIndication provides MaaPressIndication(), content = content)
+        }
     }
 }

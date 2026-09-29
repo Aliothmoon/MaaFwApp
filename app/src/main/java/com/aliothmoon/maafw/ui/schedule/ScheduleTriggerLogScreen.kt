@@ -41,6 +41,7 @@ import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import org.koin.androidx.compose.koinViewModel
+import com.aliothmoon.maafw.ui.components.MaaIconButton
 
 /**
  * 触发日志页（二级页面）：只读，按时间倒序
@@ -130,7 +131,7 @@ private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit) {
                         else -> MaaTheme.palette.warning
                     },
                 )
-                IconButton(onClick = onDelete) {
+                MaaIconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Outlined.DeleteOutline,
                         contentDescription = stringResource(R.string.common_delete),

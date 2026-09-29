@@ -43,6 +43,7 @@ import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.maaClickable
 import org.koin.androidx.compose.koinViewModel
+import com.aliothmoon.maafw.ui.components.MaaIconButton
 
 /**
  * 历史运行日志的文件列表（二级页面）
@@ -166,7 +167,7 @@ private fun ArchiveRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onDelete) {
+            MaaIconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Outlined.DeleteOutline,
                     contentDescription = stringResource(R.string.common_delete),

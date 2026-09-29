@@ -101,6 +101,9 @@ object MaaDesignTokens {
 
         /** 行首的主图标底 */
         val md: Dp = 32.dp
+
+        /** 行内图标按钮的可视区，与 M3 IconButton 一致 */
+        val lg: Dp = 40.dp
     }
 
     /**

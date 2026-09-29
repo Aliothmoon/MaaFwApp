@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.components.MaaCheckbox
 
 /** 悬浮窗行：inner 圆角、8/6 内边，不是任务页那张内容卡 */
 @Composable
@@ -166,7 +167,7 @@ internal fun OverlayCheckbox(
     enabled: Boolean = true,
 ) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-        Checkbox(
+        MaaCheckbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
@@ -187,7 +188,7 @@ internal fun OverlayIconHit(
     Box(
         modifier = modifier
             .size(MaaDesignTokens.Overlay.iconHit)
-            .maaClickable(enabled = enabled, onClick = onClick),
+            .maaClickable(enabled = enabled, shape = CircleShape, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

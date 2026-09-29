@@ -164,7 +164,7 @@ private fun ScheduleRowCard(
     MaaCardSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(onClick = onClick),
+            .maaClickable(shape = MaterialTheme.shapes.medium, onClick = onClick),
     ) {
         Row(
             modifier = Modifier.padding(MaaDesignTokens.Card.innerPadding),

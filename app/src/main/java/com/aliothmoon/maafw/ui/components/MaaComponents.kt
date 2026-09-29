@@ -494,7 +494,7 @@ fun MaaSelectableCard(
     MaaCardSurface(
         modifier = modifier
             .fillMaxWidth()
-            .maaClickable(enabled = enabled, onClick = onClick)
+            .maaClickable(enabled = enabled, shape = MaterialTheme.shapes.medium, onClick = onClick)
             .alpha(if (enabled) 1f else MaaDesignTokens.Alpha.disabled),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
