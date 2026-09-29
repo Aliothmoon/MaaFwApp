@@ -195,6 +195,9 @@ public final class InputControlUtils {
             logPlanFailure(step, kind, x, y, contact, displayId);
             return false;
         }
+        if (step.getNoop()) {
+            return true;
+        }
         return injectStep(step, displayId);
     }
 

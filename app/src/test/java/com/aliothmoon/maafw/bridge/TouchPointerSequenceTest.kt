@@ -134,14 +134,25 @@ class TouchPointerSequenceTest {
     }
 
     @Test
-    fun `move or up without that contact is rejected`() {
-        val move = TouchPointerSequence.plan(Kind.Move, listOf(p(0)), 1, 0f, 0f)
+    fun `up without that contact is rejected`() {
         val up = TouchPointerSequence.plan(Kind.Up, listOf(p(0)), 1, 0f, 0f)
 
-        assertFalse(move.ok)
-        assertEquals(FailureReason.MissingContact, move.failureReason)
         assertFalse(up.ok)
         assertEquals(FailureReason.MissingContact, up.failureReason)
+    }
+
+    /** PC 的「挪开鼠标」在 PI 里是不按下的 TouchMove：触屏上无事可做，但不能判失败 */
+    @Test
+    fun `move without that contact is a no-op`() {
+        val move = TouchPointerSequence.plan(Kind.Move, listOf(p(0)), 1, 0f, 0f)
+        val hover = TouchPointerSequence.plan(Kind.Move, emptyList(), 0, 1256f, 692f)
+
+        assertTrue(move.ok)
+        assertTrue(move.noop)
+        assertTrue(hover.ok)
+        assertTrue(hover.noop)
+        // 已按下的手指照常移动
+        assertFalse(TouchPointerSequence.plan(Kind.Move, listOf(p(0)), 0, 5f, 5f).noop)
     }
 
     @Test
