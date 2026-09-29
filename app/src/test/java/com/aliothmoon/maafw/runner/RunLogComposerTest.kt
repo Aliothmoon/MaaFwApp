@@ -46,6 +46,15 @@ class RunLogComposerTest {
         assertEquals(UiText.Resource(R.string.run_log_task_starting, listOf("Start")), entry?.text)
     }
 
+    /** 停止标记是框架自己投的空任务，不能套上当前任务名多出一对「开始 / 完成」 */
+    @Test
+    fun `the framework stop mark task is not reported`() {
+        assertEquals(RunLogKind.Success, callback("Tasker.Task.Succeeded", """{"entry":"AutoCollectSchedule"}""")?.kind)
+        assertNull(callback("Tasker.Task.Starting", """{"entry":"MaaTaskerPostStop"}"""))
+        assertNull(callback("Tasker.Task.Succeeded", """{"entry":"MaaTaskerPostStop"}"""))
+        assertNull(callback("Tasker.Task.Failed", """{"entry":"MaaTaskerPostStop"}"""))
+    }
+
     @Test
     fun `only the connect action is spelled out`() {
         assertEquals(

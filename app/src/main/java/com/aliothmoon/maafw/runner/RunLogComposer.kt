@@ -118,6 +118,10 @@ class RunLogComposer {
         // 落到 else 的 Node.* 是识别期最密的一档，它不看 details；compose 单协程，不必上锁
         val details by lazy(LazyThreadSafetyMode.NONE) { parseDetails(event.details) }
 
+        // 停止时框架投递的空任务（Tasker::post_stop），不是用户的任务；
+        // 它的开始 / 完成会套上当前任务名，在末尾多出一对「开始 / 完成」
+        if (event.message in TASK_MESSAGES && details.string("entry") == STOP_MARK_ENTRY) return null
+
         return when (event.message) {
             CONTROLLER_STARTING, CONTROLLER_SUCCEEDED, CONTROLLER_FAILED -> {
                 // 只讲连接；点击与截图是每帧都来的动作，讲出来就是刷屏
@@ -195,6 +199,10 @@ class RunLogComposer {
         const val TASK_STARTING = "Tasker.Task.Starting"
         const val TASK_SUCCEEDED = "Tasker.Task.Succeeded"
         const val TASK_FAILED = "Tasker.Task.Failed"
+
+        /** MaaFramework `Tasker.cpp` 里 post_stop 的 kStopEntry */
+        const val STOP_MARK_ENTRY = "MaaTaskerPostStop"
+        val TASK_MESSAGES = setOf(TASK_STARTING, TASK_SUCCEEDED, TASK_FAILED)
 
         const val AGENT_FLOOD_WINDOW_MS = 2_000L
         const val AGENT_FLOOD_THRESHOLD = 15
