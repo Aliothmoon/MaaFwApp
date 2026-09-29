@@ -16,13 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,16 +34,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.ansiAnnotated
@@ -114,12 +118,12 @@ internal fun RunLogPanel(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onExport) {
-                Text(stringResource(R.string.run_log_export))
-            }
-            TextButton(onClick = onClear, enabled = snapshot.all.isNotEmpty()) {
-                Text(stringResource(R.string.run_log_clear))
-            }
+            LogToolbarAction(stringResource(R.string.run_log_export), enabled = true, onClick = onExport)
+            LogToolbarAction(
+                stringResource(R.string.run_log_clear),
+                enabled = snapshot.all.isNotEmpty(),
+                onClick = onClear,
+            )
         }
 
         if (visible.isEmpty()) {
@@ -324,3 +328,23 @@ private fun rememberPrettyDetail(entry: RunLogEntry): String? = remember(entry.i
 
 private val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
 private val PRETTY_JSON = Json { prettyPrint = true }
+
+/**
+ * 工具栏右侧的「导出 / 清空」：文字样式与内边距照抄 [MaaChoiceChip]，整行高度就等于筛选胶囊
+ *
+ * 换成 M3 TextButton 会被 40dp 最小高度与 48dp 触控区撑高，胶囊居中后上方多出一截，
+ * 和任务列表顶上的间距对不齐
+ */
+@Composable
+private fun LogToolbarAction(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .clip(RoundedCornerShape(MaaTheme.style.radii.button))
+            .alpha(if (enabled) 1f else 0.5f)
+            .maaClickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = MaaDesignTokens.Spacing.md, vertical = MaaDesignTokens.Spacing.sm),
+    )
+}
