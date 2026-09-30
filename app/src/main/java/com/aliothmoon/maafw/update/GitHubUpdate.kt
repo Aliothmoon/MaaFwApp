@@ -83,15 +83,15 @@ internal class GitHubReleasesApi(
             .maxByOrNull { it.second }
 
     /**
-     * 先挑按本机 ABI 拆的变体（标记按优先级排），没拆到再回退 universal
-     * （不带任何 ABI 标记的单个 apk）；两者都没有或 universal 歧义返回 null，
-     * 交由上层报 NO_MATCHING_ASSET
+     * 单 ABI 包先挑同 ABI 的变体（标记按优先级排），没拆到再回退 universal；
+     * universal 包只挑 universal（不带任何 ABI 标记的单个 apk），不换成单 ABI 包。
+     * 都没有或 universal 歧义返回 null，交由上层报 NO_MATCHING_ASSET
      */
     fun selectAsset(assets: List<Asset>, abi: AndroidAbi): Asset? {
         val apkAssets = assets.filter(Asset::isApk)
         apkAssets
             .mapNotNull { asset ->
-                ABI_MARKERS.getValue(abi).indexOfFirst { asset.name.matchesAlias(it) }
+                ABI_MARKERS[abi].orEmpty().indexOfFirst { asset.name.matchesAlias(it) }
                     .takeIf { it >= 0 }
                     ?.let { it to asset }
             }
@@ -159,7 +159,7 @@ internal class GitHubReleasesApi(
         val REPOSITORY_PATTERN = Regex("""^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$""")
         val DIGEST_PATTERN = Regex("""^sha256:[0-9a-fA-F]{64}$""")
 
-        /** 本机 ABI 的候选标记，序即优先级（arm64-v8a 优先于裸 arm64） */
+        /** 各 ABI 的候选标记，序即优先级（arm64-v8a 优先于裸 arm64）；UNIVERSAL 没有标记 */
         val ABI_MARKERS: Map<AndroidAbi, List<String>> = mapOf(
             AndroidAbi.ARM64 to listOf("arm64-v8a", "arm64", "aarch64"),
             AndroidAbi.X86_64 to listOf("x86_64", "x64", "amd64"),

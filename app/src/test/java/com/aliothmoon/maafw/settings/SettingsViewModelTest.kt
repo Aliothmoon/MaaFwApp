@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.SystemApkInstaller
+import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.DownloadedUpdate
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
 import com.aliothmoon.maafw.update.ResolvedUpdate
@@ -506,7 +507,7 @@ class SettingsViewModelTest {
                 coEvery { install(any()) } returns SystemApkInstaller.Result.Started
             },
             currentVersion = "1.0.0",
-            supportedAbis = listOf("arm64-v8a"),
+            abi = AndroidAbi.ARM64,
         )
     }
 }

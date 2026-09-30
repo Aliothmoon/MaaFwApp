@@ -6,6 +6,10 @@ import java.util.Locale
 /** Profile paths resolve against the profile directory and keep its ".." segments */
 private fun String.normalizedPath(): String = File(this).toPath().normalize().toString()
 
+/** The package kind the updater will stick to, with the ABIs behind a universal one */
+private fun List<String>.packageText(): String =
+    packageAbi(this).let { if (size > 1) "$it (${joinToString()})" else it }
+
 /** Sizes in the build log read in MB, the scale the package and its parts actually sit at */
 internal fun Long.toSizeText(): String = String.format(Locale.ROOT, "%.1f MB", this / (1024.0 * 1024.0))
 
@@ -33,7 +37,7 @@ internal fun buildSummary(
             add("agent" to (profile.agentSourceDir?.let { "${it.normalizedPath()}  $runtimes" } ?: "none"))
         }
         add("MaaFramework" to frameworkVersion.ifEmpty { "unknown, scripts/setup_maa_framework.py has not run" })
-        add("ABI" to "debug ${debugAbis.joinToString()}  release ${releaseAbis.joinToString()}")
+        add("ABI" to "debug ${debugAbis.packageText()}  release ${releaseAbis.packageText()}")
         add("signing" to if (releaseSigned) "release keystore configured" else "no keystore, release stays unsigned")
     }
     val width = rows.maxOf { it.first.length }

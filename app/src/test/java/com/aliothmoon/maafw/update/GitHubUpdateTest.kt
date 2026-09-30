@@ -274,6 +274,48 @@ class GitHubUpdateTest {
     }
 
     @Test
+    fun `universal package stays on universal when abi variants exist`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
+                200,
+                releases(
+                    release(
+                        "v1.5.0",
+                        assets = assets(
+                            asset("app-arm64-v8a.apk", "https://example.com/arm64"),
+                            asset("app-x86_64.apk", "https://example.com/x86_64"),
+                            asset("app-universal.apk", "https://example.com/universal"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            "https://example.com/app-universal.apk",
+            (client(gateway).resolve(resolveRequest(abi = AndroidAbi.UNIVERSAL)) as UpdateResolveResult.Resolved)
+                .update.downloadUrl,
+        )
+    }
+
+    @Test
+    fun `universal package without universal asset has no matching asset`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
+                200,
+                releases(
+                    release("v1.5.0", assets = assets(asset("app-arm64-v8a.apk", "https://example.com/arm64"))),
+                ),
+            ),
+        )
+
+        assertEquals(
+            UpdateResolveResult.Failed(UpdateSource.GITHUB, UpdateCheckFailure.NO_MATCHING_ASSET),
+            client(gateway).resolve(resolveRequest(abi = AndroidAbi.UNIVERSAL)),
+        )
+    }
+
+    @Test
     fun `resolve without apk asset has no matching asset`() = runBlocking {
         val gateway = RecordingHttpClientHelper(
             FakeHttpResponse(

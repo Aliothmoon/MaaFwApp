@@ -27,6 +27,12 @@ private val APP_ID_PATTERN = Regex("""[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*""")
  */
 internal const val BENCHMARK_APP_ID_SUFFIX = ".benchmark"
 
+/** What the app's updater matches release assets against, see AndroidAbi.fromPackageAbi */
+internal const val UNIVERSAL_PACKAGE_ABI = "universal"
+
+/** One ABI names its own package; several make a universal one */
+internal fun packageAbi(abis: List<String>): String = abis.singleOrNull() ?: UNIVERSAL_PACKAGE_ABI
+
 /** Resource name the profile icon lands under, kept apart from the checked-in ic_launcher */
 private const val PROFILE_ICON_NAME = "ic_profile_launcher"
 
@@ -67,6 +73,8 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     "\"" + (pinnedVersionName ?: gitParentVersionName()) + "\"",
                 )
                 buildConfigField("String", "MAFW_APP_VERSION", "\"" + gitOwnVersionName() + "\"")
+                // The benchmark build types start from here; debug and release set their own below
+                buildConfigField("String", "MAFW_PACKAGE_ABI", "\"$UNIVERSAL_PACKAGE_ABI\"")
                 buildConfigField("String", "MAFW_FRAMEWORK_VERSION", "\"" + maaFrameworkVersion() + "\"")
                 buildConfigField(
                     "String",
@@ -163,11 +171,13 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     ndk {
                         abiFilters += debugAbis
                     }
+                    buildConfigField("String", "MAFW_PACKAGE_ABI", "\"${packageAbi(debugAbis)}\"")
                 }
                 getByName("release") {
                     ndk {
                         abiFilters += releaseAbis
                     }
+                    buildConfigField("String", "MAFW_PACKAGE_ABI", "\"${packageAbi(releaseAbis)}\"")
                     // Resource shrinking stays off: it is a separate lever with its own
                     // failure mode, and nothing here has measured it yet
                     isMinifyEnabled = true

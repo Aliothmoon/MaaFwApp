@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.settings
 
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.BuildConfig
@@ -56,10 +55,10 @@ class SettingsViewModel(
     private val updateDownloader: OkHttpUpdateDownloader,
     private val apkInstaller: SystemApkInstaller,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
-    supportedAbis: List<String> = Build.SUPPORTED_ABIS.orEmpty().toList(),
+    /** 按安装包自己的 ABI 更新，不按设备：装 universal 的不会被换成单 ABI 包 */
+    private val abi: AndroidAbi = AndroidAbi.fromPackageAbi(BuildConfig.MAFW_PACKAGE_ABI),
 ) : ViewModel() {
 
-    private val abi = supportedAbis.firstNotNullOfOrNull(::androidAbi) ?: AndroidAbi.ANY
     private val updateOperation = MutableStateFlow(UpdatePanelState())
 
     /** 只在 CAS 抢到 downloading 位后登记，取消不会误伤没抢到位的空跑协程 */
@@ -352,14 +351,6 @@ class SettingsViewModel(
 
     private fun projectMetadata(): ProjectMetadata? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition?.metadata
-
-    private fun androidAbi(raw: String): AndroidAbi? = when (raw) {
-        "arm64-v8a", "aarch64" -> AndroidAbi.ARM64
-        "x86_64", "x64" -> AndroidAbi.X86_64
-        "armeabi-v7a", "armeabi" -> AndroidAbi.ARM
-        "x86", "i386" -> AndroidAbi.X86
-        else -> null
-    }
 
     private companion object {
         const val CDK_CHECK_DEBOUNCE_MS = 1_000L
