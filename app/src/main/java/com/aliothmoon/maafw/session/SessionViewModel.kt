@@ -101,7 +101,7 @@ private data class EnvSnapshot(
 private data class QuickSnapshot(
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
-    val telemetryEnabled: Boolean = false,
+    val telemetryEnabled: Boolean = true,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */

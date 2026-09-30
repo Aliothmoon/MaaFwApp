@@ -51,6 +51,10 @@ data class ActiveExecution(
     val taskResults: List<TaskResult>,
     /** 本轮冻住的 name → 展示名；缺的回落 [currentTaskName] */
     val taskLabels: Map<String, String> = emptyMap(),
+    /** 本轮按执行顺序冻住的 interface 任务名；[taskLabels] 是 Map，同名任务会被合并，遥测要的是原序原数 */
+    val taskNames: List<String> = emptyList(),
+    val controllerName: String? = null,
+    val controllerType: String? = null,
 ) {
     val currentTaskLabel: String?
         get() = currentTaskName?.let { taskLabels[it]?.takeIf(String::isNotBlank) ?: it }

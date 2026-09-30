@@ -67,6 +67,9 @@ class StubRunnerPort(
             totalTaskCount = plan.tasks.size,
             taskResults = emptyList(),
             taskLabels = plan.taskLabelMap(),
+            taskNames = plan.tasks.map { it.taskName },
+            controllerName = plan.controller.name,
+            controllerType = plan.controller.type,
         )
         _state.update { it.copy(phase = RunnerPhase.Preparing, activeExecution = execution) }
         scope.launch { execute(plan, context) }

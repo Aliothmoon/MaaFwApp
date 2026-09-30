@@ -53,7 +53,7 @@ data class SessionUiState(
     val telemetryDeclared: Boolean = false,
     /** PI 版本是开发态：设置页不展示开关；上报仍由 TelemetryController 拦截 */
     val telemetryLockedByVersion: Boolean = false,
-    val telemetryEnabled: Boolean = false,
+    val telemetryEnabled: Boolean = true,
     /** 非空 = 这份 welcome 还没给用户看过 */
     val welcomePrompt: List<String> = emptyList(),
     val environment: ResolvedEnvironment? = null,
