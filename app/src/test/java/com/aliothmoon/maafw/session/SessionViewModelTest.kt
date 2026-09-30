@@ -35,7 +35,7 @@ import com.aliothmoon.maafw.runner.RecordingPreviewPort
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.DiscardingRunJournal
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunLogRecorder
@@ -674,19 +674,19 @@ class SessionViewModelTest {
 
     /** 虚拟屏尺寸改由用户选之后，这条是它进 UiState 的唯一通路 */
     @Test
-    fun `preview resolution follows the resolution preference`() = runTest(mainDispatcher) {
+    fun `preview resolution follows the resolution preset`() = runTest(mainDispatcher) {
         val settings = FakeAppSettingsGateway()
         val (vm, _, _) = createVm(settings = settings)
         // stateIn(WhileSubscribed) 需要活跃收集器才会投影
         backgroundScope.launch { vm.uiState.collect {} }
         advanceUntilIdle()
 
-        assertEquals(ResolutionPreference.P720.resolution, vm.uiState.value.previewResolution)
+        assertEquals(ResolutionPresets.builtIn[0].resolution, vm.uiState.value.previewResolution)
 
-        settings.resolutionPreference.value = ResolutionPreference.P1080
+        settings.resolutionPreset.value = ResolutionPresets.builtIn[1]
         advanceUntilIdle()
 
-        assertEquals(ResolutionPreference.P1080.resolution, vm.uiState.value.previewResolution)
+        assertEquals(ResolutionPresets.builtIn[1].resolution, vm.uiState.value.previewResolution)
     }
 
     @Test

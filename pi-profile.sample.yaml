@@ -56,6 +56,19 @@ logs:
 update:
   mirrorchyanRid: YourPI
 
+# 后台模式虚拟屏的分辨率预设；整段可省略 = 内置 720P@240dpi、1080P@280dpi
+# 写了就整体替换内置两档，第一项是默认；只收横屏（width > height），dpi 在 120～640
+display:
+  presets:
+    # label 可选，缺省为「短边P」
+    - label: 720P
+      width: 1280
+      height: 720
+      dpi: 240
+    - width: 1920
+      height: 1080
+      dpi: 280
+
 # 整段可省略 = 用本仓库自己的包名与图标
 app:
   # 包名后缀，拼成 com.aliothmoon.maafw.yourpi；只收小写包段

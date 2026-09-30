@@ -56,7 +56,7 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.asString
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
@@ -477,14 +477,22 @@ private fun OtherCard(
         )
         Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
         MaaFieldLabel(stringResource(R.string.settings_resolution))
+        // 预设来自打包配方，label 语言无关；具体尺寸与 dpi 写在下面一行
         MaaSingleChoiceFlow(
-            options = listOf(
-                ResolutionPreference.P720 to stringResource(R.string.settings_resolution_720p),
-                ResolutionPreference.P1080 to stringResource(R.string.settings_resolution_1080p),
-            ),
-            selected = state.resolutionPreference,
+            options = ResolutionPresets.available.map { it to it.label },
+            selected = state.resolutionPreset,
             enabled = !locked,
-            onSelect = { onIntent(SessionIntent.SetResolutionPreference(it)) },
+            onSelect = { onIntent(SessionIntent.SetResolutionPreset(it)) },
+        )
+        Text(
+            text = stringResource(
+                R.string.settings_resolution_detail,
+                state.resolutionPreset.resolution.width,
+                state.resolutionPreset.resolution.height,
+                state.resolutionPreset.dpi,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (PipController.isSupported(LocalContext.current)) {
             Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))

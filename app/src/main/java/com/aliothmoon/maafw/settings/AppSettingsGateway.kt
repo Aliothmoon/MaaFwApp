@@ -2,7 +2,7 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
@@ -33,8 +33,8 @@ interface AppSettingsGateway {
     val touchPreviewEnabled: StateFlow<Boolean>
     suspend fun setTouchPreviewEnabled(enabled: Boolean)
 
-    val resolutionPreference: StateFlow<ResolutionPreference>
-    suspend fun setResolutionPreference(preference: ResolutionPreference)
+    val resolutionPreset: StateFlow<ResolutionPreset>
+    suspend fun setResolutionPreset(preset: ResolutionPreset)
 
     val debugMode: StateFlow<Boolean>
     suspend fun setDebugMode(enabled: Boolean)

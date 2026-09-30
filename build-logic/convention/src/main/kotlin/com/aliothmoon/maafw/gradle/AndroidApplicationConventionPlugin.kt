@@ -74,6 +74,12 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     "\"" + profile.mirrorchyanRid.orEmpty() + "\"",
                 )
                 buildConfigField("String[]", "MAFW_PI_LOG_INCLUDE", profile.piLogInclude.toJavaStringArray())
+                // Empty array = the app's built-in presets
+                buildConfigField(
+                    "String[]",
+                    "MAFW_RESOLUTION_PRESETS",
+                    profile.resolutionPresets.map { it.encode() }.toJavaStringArray(),
+                )
 
                 // Placeholders rather than resValue: with no profile the value stays a resource
                 // reference and the checked-in label and icon keep working untouched

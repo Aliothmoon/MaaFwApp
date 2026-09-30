@@ -91,7 +91,12 @@ open class FakePrivilegedService : RemoteService {
         return true
     }
     override fun setVirtualDisplayMode(mode: Int): Boolean = true
-    override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) = Unit
+    /** 最近一次建屏参数 (width, height, dpi) */
+    var lastVirtualDisplayResolution: Triple<Int, Int, Int>? = null
+
+    override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) {
+        lastVirtualDisplayResolution = Triple(width, height, dpi)
+    }
     override fun startVirtualDisplay(): Int = 1
     override fun stopVirtualDisplay() = Unit
     override fun isAppOnVirtualDisplay(packageName: String?): Boolean = true

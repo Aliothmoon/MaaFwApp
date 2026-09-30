@@ -27,7 +27,8 @@ import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.PiInstallState
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.DisplayResolution
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
@@ -71,7 +72,7 @@ data class SessionUiState(
     /** 定时任务的亮屏解锁；逐条规则的收尾选项在 ScheduleStrategy 上，不在这 */
     val wakeUnlockEnabled: Boolean = false,
     val wakeCredential: String = "",
-    val resolutionPreference: ResolutionPreference = ResolutionPreference.P720,
+    val resolutionPreset: ResolutionPreset = ResolutionPresets.default,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
      * 前台模式即设备屏幕尺寸。项目未就绪时为 null
@@ -284,7 +285,7 @@ sealed interface SessionIntent {
 
 
     /** 虚拟屏分辨率偏好：720P / 1080P */
-    data class SetResolutionPreference(val preference: ResolutionPreference) : SessionIntent
+    data class SetResolutionPreset(val preset: ResolutionPreset) : SessionIntent
 
     /**
      * 开启前台模式的控制层

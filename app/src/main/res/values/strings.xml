@@ -592,8 +592,7 @@
     <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
     <string name="schedule_default_name">定时任务 %1$d</string>
     <string name="settings_resolution">后台模式分辨率</string>
-    <string name="settings_resolution_720p">720P</string>
-    <string name="settings_resolution_1080p">1080P</string>
+    <string name="settings_resolution_detail">%1$d×%2$d · %3$d dpi</string>
     <string name="settings_debug_mode">调试模式</string>
     <string name="settings_debug_mode_desc">启用后错误日志记录全部过程，MaaFramework 详细日志从下一轮运行起</string>
     <string name="settings_save_on_error">保存调试图像</string>

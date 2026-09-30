@@ -50,7 +50,7 @@ import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.uiTextFormatted
 import com.aliothmoon.maafw.i18n.uiTextFromProject
@@ -82,7 +82,7 @@ private data class SettingsSnapshot(
     val runMode: RunMode,
     val overlayControlMode: OverlayControlMode,
     val screenSaverEnabled: Boolean,
-    val resolutionPreference: ResolutionPreference,
+    val resolutionPreset: ResolutionPreset,
     val debugMode: Boolean,
     val saveOnError: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
@@ -149,7 +149,7 @@ class SessionViewModel(
         appSettings.runMode,
         appSettings.overlayControlMode,
         appSettings.screenSaverEnabled,
-        appSettings.resolutionPreference,
+        appSettings.resolutionPreset,
         appSettings.debugMode,
     ) { runMode, overlayMode, screenSaver, resolution, debug ->
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
@@ -333,7 +333,7 @@ class SessionViewModel(
             telemetryEnabled = settings.quick.telemetryEnabled,
             wakeUnlockEnabled = settings.env.wakeUnlockEnabled,
             wakeCredential = settings.env.wakeCredential,
-            resolutionPreference = settings.resolutionPreference,
+            resolutionPreset = settings.resolutionPreset,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
@@ -355,7 +355,7 @@ class SessionViewModel(
             controllerOptions = session.controllerOptions,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
-            previewResolution = settings.resolutionPreference.resolution,
+            previewResolution = settings.resolutionPreset.resolution,
         )
     }
 
@@ -553,8 +553,8 @@ class SessionViewModel(
                 appSettings.setOverlayControlMode(intent.mode)
             }
 
-            is SessionIntent.SetResolutionPreference -> guarded {
-                appSettings.setResolutionPreference(intent.preference)
+            is SessionIntent.SetResolutionPreset -> guarded {
+                appSettings.setResolutionPreset(intent.preset)
             }
 
             // 以下几项都不走 guarded：改的是环境动作，与运行配置无关，

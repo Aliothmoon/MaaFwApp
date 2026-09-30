@@ -95,6 +95,7 @@ class MaaFrameworkRunnerPortTest {
         service: FakePrivilegedService = FakePrivilegedService(),
         servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(service),
         saveOnError: () -> Boolean = { true },
+        resolutionPreset: () -> ResolutionPreset = { ResolutionPresets.builtIn.first() },
     ): Pair<MaaFrameworkRunnerPort, FakePrivilegedServicePort> {
         val installer = mockk<PiInstaller>()
         every { installer.installedDir() } returns temp.newFolder("pi")
@@ -103,7 +104,7 @@ class MaaFrameworkRunnerPortTest {
             apkPath = "/apk",
             nativeLibraryDir = "/lib",
             runMode = { RunMode.BACKGROUND },
-            resolutionPreference = { ResolutionPreference.P720 },
+            resolutionPreset = resolutionPreset,
             debugMode = { false },
             saveOnError = saveOnError,
             scope = scope.backgroundScope,
@@ -146,6 +147,19 @@ class MaaFrameworkRunnerPortTest {
         advanceUntilIdle()
 
         assertFalse(service.saveOnError)
+    }
+
+    /** dpi 跟着预设走，不再是写死的常量 */
+    @Test
+    fun `background run builds the virtual display from the selected preset`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val preset = ResolutionPresets.builtIn[1]
+        val (runner, _) = port(this, service, resolutionPreset = { preset })
+
+        assertEquals(RunnerCommandResult.Accepted, runner.start(plan(), "e1"))
+        advanceUntilIdle()
+
+        assertEquals(Triple(1920, 1080, 280), service.lastVirtualDisplayResolution)
     }
 
     /** 对齐 MaaPiCli：先 resource.path，再 controller.attach_resource_path */

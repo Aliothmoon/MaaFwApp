@@ -58,9 +58,14 @@ data class AppSettings(
     @PrefKey(default = "true")
     val touchPreviewEnabled: String = "true",
 
-    /** [com.aliothmoon.maafw.runner.ResolutionPreference] 的 name */
-    @PrefKey(default = "P720")
-    val resolutionPreference: String = "P720",
+    /**
+     * 后台模式虚拟屏选的 [com.aliothmoon.maafw.runner.ResolutionPreset.id]；空 = 预设列表的第一项
+     *
+     * 取代旧的 `resolutionPreference`（存 720P/1080P 枚举名），换了键不做迁移：
+     * 旧值只是两档里选了哪档，丢了也只是回到默认档
+     */
+    @PrefKey(default = "")
+    val resolutionPreset: String = "",
 
     /** 调试模式：开启后给特权进程传 isDebug，记录 MaaFramework 详细日志 */
     @PrefKey(default = "false")

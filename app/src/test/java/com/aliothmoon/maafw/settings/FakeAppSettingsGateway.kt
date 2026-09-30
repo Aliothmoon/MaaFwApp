@@ -2,7 +2,8 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.update.UpdateChannel
@@ -57,10 +58,10 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         touchPreviewEnabled.value = enabled
     }
 
-    override val resolutionPreference = MutableStateFlow(ResolutionPreference.P720)
+    override val resolutionPreset = MutableStateFlow(ResolutionPresets.builtIn.first())
 
-    override suspend fun setResolutionPreference(preference: ResolutionPreference) {
-        resolutionPreference.value = preference
+    override suspend fun setResolutionPreset(preset: ResolutionPreset) {
+        resolutionPreset.value = preset
     }
 
     override val debugMode = MutableStateFlow(false)

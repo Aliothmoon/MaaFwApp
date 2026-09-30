@@ -10,7 +10,8 @@ import com.aliothmoon.maafw.domain.EventNotificationLevel
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.update.UpdateChannel
@@ -86,8 +87,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         MutableStateFlow(parseEventNotificationLevel(defaults.eventNotificationLevel))
     val eventNotificationLevel: StateFlow<EventNotificationLevel> = _eventNotificationLevel.asStateFlow()
 
-    private val _resolutionPreference = MutableStateFlow(parseResolutionPreference(defaults.resolutionPreference))
-    override val resolutionPreference: StateFlow<ResolutionPreference> = _resolutionPreference.asStateFlow()
+    private val _resolutionPreset = MutableStateFlow(ResolutionPresets.resolve(defaults.resolutionPreset))
+    override val resolutionPreset: StateFlow<ResolutionPreset> = _resolutionPreset.asStateFlow()
 
     private val _debugMode = MutableStateFlow(defaults.debugMode.toBoolean())
     override val debugMode: StateFlow<Boolean> = _debugMode.asStateFlow()
@@ -147,7 +148,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _screenSaverEnabled.value = s.screenSaverEnabled.toBoolean()
                 _closeAppAfterTask.value = s.closeAppAfterTask.toBoolean()
                 _touchPreviewEnabled.value = s.touchPreviewEnabled.toBoolean()
-                _resolutionPreference.value = parseResolutionPreference(s.resolutionPreference)
+                _resolutionPreset.value = ResolutionPresets.resolve(s.resolutionPreset)
                 _debugMode.value = s.debugMode.toBoolean()
                 _saveOnError.value = s.saveOnError.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
@@ -205,8 +206,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[touchPreviewEnabled] = enabled.toString() }
     }
 
-    override suspend fun setResolutionPreference(preference: ResolutionPreference): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[resolutionPreference] = preference.name }
+    override suspend fun setResolutionPreset(preset: ResolutionPreset): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[resolutionPreset] = preset.id }
     }
 
     override suspend fun setDebugMode(enabled: Boolean): Unit = with(AppSettingsSchema) {
@@ -280,9 +281,6 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseOverlayMode(raw: String): OverlayControlMode =
         runCatching { OverlayControlMode.valueOf(raw) }.getOrDefault(OverlayControlMode.FLOAT_BALL)
-
-    private fun parseResolutionPreference(raw: String): ResolutionPreference =
-        runCatching { ResolutionPreference.valueOf(raw) }.getOrDefault(ResolutionPreference.P720)
 
     private fun parseThemeStyle(raw: String): ThemeStyle =
         runCatching { ThemeStyle.valueOf(raw) }.getOrDefault(ThemeStyle.DEFAULT)

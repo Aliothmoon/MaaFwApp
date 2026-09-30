@@ -602,8 +602,7 @@
     <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
     <string name="schedule_default_name">Schedule %1$d</string>
     <string name="settings_resolution">Background mode resolution</string>
-    <string name="settings_resolution_720p">720P</string>
-    <string name="settings_resolution_1080p">1080P</string>
+    <string name="settings_resolution_detail">%1$d×%2$d · %3$d dpi</string>
     <string name="settings_debug_mode">Debug mode</string>
     <string name="settings_debug_mode_desc">Records everything in the error log; detailed MaaFramework logs start on the next run</string>
     <string name="settings_save_on_error">Save debug screenshots</string>
