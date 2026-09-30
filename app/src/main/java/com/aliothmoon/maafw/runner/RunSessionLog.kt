@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.i18n.UiText
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -49,7 +50,12 @@ sealed interface RunSessionRecord {
 
     @Serializable
     @SerialName("footer")
-    data class Footer(val endedAt: Long, val outcome: RunSessionOutcome) : RunSessionRecord
+    data class Footer(
+        val endedAt: Long,
+        val outcome: RunSessionOutcome,
+        /** 整轮失败或未受理轮次的原因，写入那一刻的语言被冻进文件 */
+        val reason: String? = null,
+    ) : RunSessionRecord
 }
 
 /** 收尾时写进 Footer 的结局；[NOT_RUN] 表示没投出去就结束了 */
@@ -70,6 +76,12 @@ fun RunEndReason.toSessionOutcome(): RunSessionOutcome = when (this) {
         is ExecutionResult.Cancelled -> RunSessionOutcome.CANCELLED
         is ExecutionResult.Failed -> RunSessionOutcome.FAILED
     }
+}
+
+/** 写进 Footer 的那句原因；整轮失败或带原因的未受理轮次才有 */
+fun RunEndReason.toSessionFailureReason(): UiText? = when (this) {
+    is RunEndReason.NotRun -> reason
+    is RunEndReason.Ran -> (result as? ExecutionResult.Failed)?.reason
 }
 
 /**

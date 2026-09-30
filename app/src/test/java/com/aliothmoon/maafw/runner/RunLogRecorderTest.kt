@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
@@ -291,17 +292,48 @@ class RunLogRecorderTest {
 
     /** 没投出去也要留一份：「昨晚为什么没跑」是查这份日志的头号问题 */
     @Test
-    fun `a round that never dispatched still gets a footer`() = runTest(dispatcher) {
+    fun `a rejected round records why in the footer`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
         val recorder = recorder(runner)
 
         recorder.begin(planOf("清体力"), ID)
-        recorder.end(ID, RunEndReason.NotRun(NotRunCause.Rejected))
-
-        assertEquals(
-            RunSessionOutcome.NOT_RUN,
-            (sessionRecords().last() as RunSessionRecord.Footer).outcome,
+        recorder.end(
+            ID,
+            RunEndReason.NotRun(NotRunCause.Rejected, uiTextFromFramework("service rejected")),
         )
+
+        val footer = sessionRecords().last() as RunSessionRecord.Footer
+        assertEquals(RunSessionOutcome.NOT_RUN, footer.outcome)
+        assertEquals("service rejected", footer.reason)
+    }
+
+    /** 整轮失败的原因必须落进 Footer */
+    @Test
+    fun `a failed round records why in the footer`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("清体力"), ID)
+        recorder.end(
+            ID,
+            RunEndReason.Ran(ExecutionResult.Failed(uiTextFromFramework("本包未带 agent 运行时"))),
+        )
+
+        val footer = sessionRecords().last() as RunSessionRecord.Footer
+        assertEquals(RunSessionOutcome.FAILED, footer.outcome)
+        assertEquals("本包未带 agent 运行时", footer.reason)
+    }
+
+    /** 只有整轮失败才有单点原因；完成那几档不该凭空多出一行 */
+    @Test
+    fun `only a failed round carries a reason`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("清体力"), ID)
+        recorder.finish(runner)
+
+        assertNull((sessionRecords().last() as RunSessionRecord.Footer).reason)
     }
 
     /** 认不出的回调调试模式也不留，屏上与文件都没有：maa.log 里连 details 都有全份 */

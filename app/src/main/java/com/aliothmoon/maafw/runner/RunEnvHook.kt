@@ -77,7 +77,10 @@ interface RunEnvHook {
 /** 收尾理由；投递之后的结局直接复用 [ExecutionResult]，不另造一套平行分类 */
 sealed interface RunEndReason {
     /** 没投出去就结束，撤销栈里只有 [Anchor.BeforeDispatch] 那批 */
-    data class NotRun(val cause: NotRunCause) : RunEndReason
+    data class NotRun(
+        val cause: NotRunCause,
+        val reason: UiText? = null,
+    ) : RunEndReason
 
     /** 投出去了；手动 Stop 落在 [ExecutionResult.Cancelled] */
     data class Ran(val result: ExecutionResult) : RunEndReason

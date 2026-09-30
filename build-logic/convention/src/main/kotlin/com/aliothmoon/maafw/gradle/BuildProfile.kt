@@ -32,7 +32,15 @@ private val DEFAULT_PI_INCLUDE = listOf(
 private val DEFAULT_PI_LOG_INCLUDE = listOf("debug/**/*.log")
 
 /** Where an executable lands; the two values are what AgentRuntimeLocation deserializes */
-private val AGENT_LOCATIONS = setOf("nativeLibs", "bundle")
+private val AGENT_LOCATIONS = setOf("nativeLibs", AGENT_LOCATION_BUNDLE)
+
+/**
+ * The one location that reads an archive back at run time
+ *
+ * ExecAgentHost only goes through AgentInstaller for this value, so it is also what decides
+ * whether bundle.zip and the fingerprint have to be in the package at all
+ */
+internal const val AGENT_LOCATION_BUNDLE = "bundle"
 
 /** Densities outside this band either blur the game's UI or shrink it past what recognition was tuned for */
 private val PRESET_DPI_RANGE = 120..640

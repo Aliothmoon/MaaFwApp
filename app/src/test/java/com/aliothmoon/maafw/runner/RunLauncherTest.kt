@@ -347,7 +347,9 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Rejected)
         assertEquals(listOf("engage:env", "release:env"), log)
-        assertEquals(RunEndReason.NotRun(NotRunCause.Rejected), hook.releaseReason)
+        val release = hook.releaseReason as RunEndReason.NotRun
+        assertEquals(NotRunCause.Rejected, release.cause)
+        assertEquals(UiText.Verbatim("Busy"), release.reason)
     }
 
     @Test
@@ -369,7 +371,9 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertEquals(listOf("engage:ok", "release:ok"), log)
-        assertEquals(RunEndReason.NotRun(NotRunCause.HookFailed), ok.releaseReason)
+        val release = ok.releaseReason as RunEndReason.NotRun
+        assertEquals(NotRunCause.HookFailed, release.cause)
+        assertTrue(release.reason.isResource(R.string.msg_hook_failed, "bad"))
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
     }
 
@@ -409,7 +413,9 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.run_countdown_cancelled))
-        assertEquals(RunEndReason.NotRun(NotRunCause.Cancelled), recorder.releaseReason)
+        val release = recorder.releaseReason as RunEndReason.NotRun
+        assertEquals(NotRunCause.Cancelled, release.cause)
+        assertTrue(release.reason.isResource(R.string.run_countdown_cancelled))
         assertEquals(
             listOf(
                 RunStep("env", HookOutcome.ENGAGED),

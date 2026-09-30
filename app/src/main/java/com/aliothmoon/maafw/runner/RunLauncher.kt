@@ -157,7 +157,7 @@ class RunLauncher(
             when (val command = runnerPort.start(plan, ctx.executionId)) {
                 RunnerCommandResult.Accepted -> Unit
                 is RunnerCommandResult.Rejected -> {
-                    finalize(engaged, RunEndReason.NotRun(NotRunCause.Rejected))
+                    finalize(engaged, RunEndReason.NotRun(NotRunCause.Rejected, command.reason))
                     return RunLaunchResult.Rejected(command.reason)
                 }
             }
@@ -265,7 +265,7 @@ class RunLauncher(
             steps?.record(RunStep(hook.id, outcome))
             if (release != null) engaged.addLast(release)
             if (result is EngageResult.Failed && hook.gating) {
-                return Halt(result.reason, RunEndReason.NotRun(result.notRun))
+                return Halt(result.reason, RunEndReason.NotRun(result.notRun, result.reason))
             }
         }
         return null

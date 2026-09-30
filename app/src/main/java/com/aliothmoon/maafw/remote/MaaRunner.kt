@@ -226,6 +226,7 @@ class MaaRunner(private val agentHost: AgentHost) {
             }
             val prepared = prepare(lib, payload)
             if (prepared != null) {
+                Ln.e("MaaRunner: prepare failed: $prepared")
                 reason = prepared
                 if (isStopRequested()) {
                     outcome = RunOutcome.CANCELLED
