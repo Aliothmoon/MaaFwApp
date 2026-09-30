@@ -128,6 +128,7 @@ internal fun TaskRow(
                 checked = task.checkedForDisplay,
                 onCheckedChange = onToggle,
                 enabled = !locked && task.toggleable,
+                warning = task.checkedButSkipped,
             )
             MaaPiIcon(
                 path = task.icon,

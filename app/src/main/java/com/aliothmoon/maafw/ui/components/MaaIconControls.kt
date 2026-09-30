@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -14,6 +15,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
+import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
  * 列表里成排出现的图标按钮
@@ -54,8 +57,13 @@ fun MaaCheckbox(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /**
+     * 勾着但不会生效（如任务这一轮会被跳过）：不画勾选框，同一位置换成警示色的 i，
+     * 只作提示、不可点；执行时本来就会过滤掉它
+     */
+    warning: Boolean = false,
 ) {
-    val toggle = if (onCheckedChange != null) {
+    val toggle = if (onCheckedChange != null && !warning) {
         Modifier.toggleable(
             value = checked,
             enabled = enabled,
@@ -73,6 +81,15 @@ fun MaaCheckbox(
             .then(toggle),
         contentAlignment = Alignment.Center,
     ) {
-        Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+        if (warning) {
+            Icon(
+                imageVector = MaaIcons.InfoFilled,
+                contentDescription = null,
+                tint = MaaTheme.palette.warning.content,
+                modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+            )
+        } else {
+            Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+        }
     }
 }

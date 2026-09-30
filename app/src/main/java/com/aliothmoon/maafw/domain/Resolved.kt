@@ -79,8 +79,8 @@ data class ResolvedConfiguredTask(
     val options: List<OptionEditorState>,
     val icon: String? = null,
     /**
-     * 没有一个 Adb controller 能跑：这种不适用不会随环境恢复，
-     * 所以不像 resource 不匹配（或换个 controller 就能跑）那样保留勾选意图，而是显示为未勾选并锁住勾选框
+     * 没有一个 Adb controller 能跑：这种不适用不会随环境恢复，所以勾选框锁住；
+     * 旧版本里已经勾上的（任务后来不再支持 Android）按 [checkedButSkipped] 提示
      */
     val unsupported: Boolean = false,
 ) {
@@ -88,8 +88,14 @@ data class ResolvedConfiguredTask(
     val effectiveEnabled: Boolean get() = enabled && applicable && !missingDefinition
     val hasOptions: Boolean get() = options.isNotEmpty()
 
+    /**
+     * 勾着但这一轮不会跑：当前 controller / resource 不适用，或 Android 上没有 controller 能跑
+     * 勾选框换成不可点的警示色 i，免得用户以为它会执行
+     */
+    val checkedButSkipped: Boolean get() = enabled && !applicable && !missingDefinition
+
     /** 勾选框的显示值与可点性 */
-    val checkedForDisplay: Boolean get() = enabled && !unsupported
+    val checkedForDisplay: Boolean get() = enabled
     val toggleable: Boolean get() = !missingDefinition && !unsupported
 }
 

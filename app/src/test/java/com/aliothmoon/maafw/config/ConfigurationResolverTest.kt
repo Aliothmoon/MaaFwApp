@@ -156,7 +156,10 @@ class ConfigurationResolverTest {
         assertTrue(task.unavailableReason.isResource(R.string.task_unavailable_resource))
     }
 
-    /** controller 不匹配在 Android 上不会恢复：显示未勾选且锁住，目录里也不能再加；resource 不匹配仍保留勾选意图 */
+    /**
+     * controller 不匹配在 Android 上不会恢复：勾选框锁住、已勾的按警示显示，目录里也不能再加；
+     * resource 不匹配同样保留勾选意图并警示
+     */
     @Test
     fun `controller mismatch is unsupported while resource mismatch keeps intent`() {
         val def = definition(tasks = listOf(task("PC", controllers = listOf("Win32")), task("T2", resources = listOf("B服"))))
@@ -177,11 +180,13 @@ class ConfigurationResolverTest {
         )
         val (pc, bili) = session.activeConfiguration!!.tasks
         assertTrue(pc.unsupported)
-        assertFalse(pc.checkedForDisplay)
+        assertTrue(pc.checkedForDisplay)
+        assertTrue(pc.checkedButSkipped)
         assertFalse(pc.toggleable)
         assertTrue(pc.unavailableReason.isResource(R.string.task_unavailable_controller))
         assertFalse(bili.unsupported)
         assertTrue(bili.checkedForDisplay)
+        assertTrue(bili.checkedButSkipped)
         assertTrue(bili.toggleable)
 
         val catalog = session.taskCatalog.flatMap { it.tasks }.associateBy { it.taskName }

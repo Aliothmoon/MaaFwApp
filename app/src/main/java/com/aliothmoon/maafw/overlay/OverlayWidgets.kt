@@ -165,12 +165,14 @@ internal fun OverlayCheckbox(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    warning: Boolean = false,
 ) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         MaaCheckbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
+            warning = warning,
             modifier = modifier.size(MaaDesignTokens.Overlay.checkbox),
         )
     }

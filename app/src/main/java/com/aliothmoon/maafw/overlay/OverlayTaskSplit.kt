@@ -263,6 +263,7 @@ private fun OverlayCompactTaskList(
                             onIntent(SessionIntent.ToggleTask(active.id, task.instanceId, enabled))
                         },
                         enabled = !locked && task.toggleable,
+                        warning = task.checkedButSkipped,
                     )
                     Text(
                         text = task.label,
