@@ -33,6 +33,10 @@ import com.aliothmoon.maafw.ui.components.MaaEmptyState
  * 任务编辑内层：配置行、任务列表、sheet。外壳（预览 / 启停 / 悬浮窗 chrome）各自另排
  *
  * [showLogToggle] 为 true 时日志就地替换列表（任务页）；悬浮窗用 tab 承载日志，关掉这一颗
+ *
+ * 日志面板开合态由调用方持有（[logOpen] + [onToggleLog]）：开始运行要顺带弹起日志，
+ * 需要启停条与日志开关共享同一状态，所以不在这里自持。[showLogToggle] 为 false 时
+ * [effectiveLogOpen] 恒为 false，[onToggleLog] 传空 lambda 即可。
  */
 @Composable
 internal fun TaskWorkspace(
@@ -41,6 +45,8 @@ internal fun TaskWorkspace(
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     showLogToggle: Boolean,
+    logOpen: Boolean,
+    onToggleLog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val locked = state.configurationLocked
@@ -49,8 +55,7 @@ internal fun TaskWorkspace(
     var showAddTasks by rememberSaveable { mutableStateOf(false) }
     var editingTaskInstanceId by rememberSaveable { mutableStateOf<String?>(null) }
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
-    var showRunLog by rememberSaveable { mutableStateOf(false) }
-    val logOpen = showLogToggle && showRunLog
+    val effectiveLogOpen = showLogToggle && logOpen
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -59,16 +64,16 @@ internal fun TaskWorkspace(
         ConfigurationSelectorRow(
             active = active,
             locked = locked,
-            logOpen = logOpen,
+            logOpen = effectiveLogOpen,
             onSelectConfig = { showConfigSheet = true },
             onAddTasks = { showAddTasks = true },
-            onToggleLog = { showRunLog = !showRunLog },
+            onToggleLog = onToggleLog,
             showLogToggle = showLogToggle,
         )
 
         if (showLogToggle) {
             AnimatedContent(
-                targetState = logOpen,
+                targetState = effectiveLogOpen,
                 transitionSpec = {
                     val opening = targetState
                     val enter = fadeIn(
@@ -110,8 +115,8 @@ internal fun TaskWorkspace(
         }
     }
 
-    if (logOpen) {
-        BackHandler { showRunLog = false }
+    if (effectiveLogOpen) {
+        BackHandler { onToggleLog() }
     }
 
     if (showAddTasks && active != null) {
