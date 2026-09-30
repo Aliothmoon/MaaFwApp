@@ -34,8 +34,8 @@ import java.util.UUID
  * 这一段时都不初始化。**只上报可枚举的东西**：事件名、节点名、任务名、选项的 case 名；
  * 自由文本输入只报填没填（[TelemetrySummary]），focus 正文一概不带
  *
- * 一轮运行 = 一条 `run` 事务，每个任务 = 一条 `run.task` 子 Span。data / tag 对齐 MXU，
- * 事务名、op 与子 Span op 都用本外壳自己的名字，避免和 MXU 的查询混在一起
+ * 一轮运行 = 一条 `maafwapp.task_run` 事务（op `maafwapp.run`），每个任务 = 一条
+ * `maafwapp.task` 子 Span。结构和 MXU 的 `mxu.task_run` / `mxu.run` / `mxu.task` 对应，前缀换成外壳自己的
  */
 class TelemetryController(
     private val context: Context,
@@ -228,8 +228,8 @@ class TelemetryController(
 
     private companion object {
         const val CLIENT_NAME = "MaaFwApp"
-        const val RUN_NAME = "run"
-        const val RUN_OP = "task.run"
-        const val TASK_OP = "run.task"
+        const val RUN_NAME = "maafwapp.task_run"
+        const val RUN_OP = "maafwapp.run"
+        const val TASK_OP = "maafwapp.task"
     }
 }
