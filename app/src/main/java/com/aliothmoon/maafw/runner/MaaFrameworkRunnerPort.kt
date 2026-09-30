@@ -189,6 +189,9 @@ class MaaFrameworkRunnerPort(
         @Volatile
         private var taskLabel: String? = null
 
+        @Volatile
+        private var taskIndex: Int = -1
+
         fun onEvent(message: String?, detailsJson: String?) {
             emit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
@@ -205,6 +208,7 @@ class MaaFrameworkRunnerPort(
         fun onTaskStarted(taskName: String?, index: Int, total: Int) {
             val name = taskName.orEmpty()
             taskLabel = taskLabels[name]?.takeIf(String::isNotBlank) ?: name
+            taskIndex = index
             updateOwn { it.copy(currentTaskName = name, totalTaskCount = total) }
             emit(RunnerEvent.Progress(name, index, total))
         }
@@ -215,6 +219,7 @@ class MaaFrameworkRunnerPort(
                 val results = execution.taskResults + result
                 execution.copy(completedTaskCount = results.size, taskResults = results)
             }
+            emit(RunnerEvent.TaskFinished(result.taskName, taskIndex, success))
         }
 
         fun onFinished(outcome: Int, reason: String?) {
@@ -262,9 +267,7 @@ class MaaFrameworkRunnerPort(
                 totalTaskCount = plan.tasks.size,
                 taskResults = emptyList(),
                 taskLabels = plan.taskLabelMap(),
-                taskNames = plan.tasks.map { it.taskName },
-                controllerName = plan.controller.name,
-                controllerType = plan.controller.type,
+                plan = plan,
             ),
             latestResult = null,
         )
@@ -440,7 +443,7 @@ class MaaFrameworkRunnerPort(
      */
     private fun toRunnerEvent(message: String, detailsJson: String): RunnerEvent {
         if (message.isEmpty()) return RunnerEvent.MalformedCallback(detailsJson)
-        FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it) }
+        FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it, detailsJson) }
         return RunnerEvent.Callback(message, detailsJson)
     }
 

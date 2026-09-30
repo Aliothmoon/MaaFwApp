@@ -67,9 +67,7 @@ class StubRunnerPort(
             totalTaskCount = plan.tasks.size,
             taskResults = emptyList(),
             taskLabels = plan.taskLabelMap(),
-            taskNames = plan.tasks.map { it.taskName },
-            controllerName = plan.controller.name,
-            controllerType = plan.controller.type,
+            plan = plan,
         )
         _state.update { it.copy(phase = RunnerPhase.Preparing, activeExecution = execution) }
         scope.launch { execute(plan, context) }
@@ -122,6 +120,7 @@ class StubRunnerPort(
                 is StubTaskOutcome.Failure -> TaskResult(task.taskName, success = false, message = outcome.message)
             }
             results += result
+            emit(context, RunnerEvent.TaskFinished(task.taskName, index, result.success))
             emit(
                 context,
                 RunnerEvent.Log(if (result.success) "任务完成: ${task.taskName}" else "任务失败: ${task.taskName}"),

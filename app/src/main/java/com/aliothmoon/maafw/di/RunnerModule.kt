@@ -86,7 +86,6 @@ val runnerModule = module {
             context = androidContext(),
             projectRepository = get(),
             settings = get(),
-            focusDispatcher = get(),
             runnerPort = get(),
             scope = get(named<AppCoroutineScope>()),
         )

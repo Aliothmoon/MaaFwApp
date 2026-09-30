@@ -139,7 +139,7 @@
     <string name="settings_version_of">%1$s 版本</string>
     <string name="settings_framework">MaaFramework</string>
     <string name="settings_telemetry">帮助改进本项目</string>
-    <string name="settings_telemetry_desc">向项目作者发送任务名与运行结果，不含截图、日志正文与你填写的内容</string>
+    <string name="settings_telemetry_desc">匿名发送崩溃与任务统计，帮助发现常见问题</string>
     <string name="settings_project">项目</string>
     <string name="settings_about_welcome">查看欢迎信息</string>
     <string name="settings_about_contact">联系方式</string>

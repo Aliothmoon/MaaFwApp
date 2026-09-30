@@ -6,42 +6,34 @@ import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.ExecutionResult
-import com.aliothmoon.maafw.runner.FocusDispatcher
+import com.aliothmoon.maafw.runner.RunPlan
 import com.aliothmoon.maafw.runner.RunnerEvent
-import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
-import com.aliothmoon.maafw.runner.RunnerState
-import com.aliothmoon.maafw.runner.TaskResult
 import com.aliothmoon.maafw.settings.AppSettingsManager
-import io.sentry.ISpan
-import io.sentry.ITransaction
 import io.sentry.Sentry
-import io.sentry.SentryLevel
-import io.sentry.SpanStatus
 import io.sentry.android.core.SentryAndroid
 import io.sentry.protocol.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
-import java.util.UUID
 
 /**
- * PI v2.9.0 `telemetry.sentry` 的落地
+ * PI v2.9.0 `telemetry.sentry` 的落地，事件模型与字段对齐 MXU `commands/telemetry.rs`
  *
  * DSN 只来自 PI，外壳没有自己的上报去处；用户开关关着、PI 版本是开发态、或 PI 压根没声明
- * 这一段时都不初始化。**只上报可枚举的东西**：事件名、节点名、任务名、选项的 case 名；
- * 自由文本输入只报填没填（[TelemetrySummary]），focus 正文一概不带
+ * 这一段时都不初始化。开关缺省为开，与 MXU `helpImproveSoftware ?? true` 一致
  *
- * 一轮运行 = 一条 `maafwapp.task_run` 事务（op `maafwapp.run`），每个任务 = 一条
- * `maafwapp.task` 子 Span。结构和 MXU 的 `mxu.task_run` / `mxu.run` / `mxu.task` 对应，前缀换成外壳自己的
+ * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
+ * 任务与节点的结果（[RunTracer]）；focus 正文、截图、日志正文一概不带
  */
 class TelemetryController(
     private val context: Context,
     private val projectRepository: ProjectRepository,
     private val settings: AppSettingsManager,
-    private val focusDispatcher: FocusDispatcher,
     private val runnerPort: RunnerPort,
     private val scope: CoroutineScope,
 ) {
@@ -49,29 +41,12 @@ class TelemetryController(
     private data class ActiveTelemetry(
         val definition: TelemetryDefinition,
         val appName: String,
-        val appVersion: String?,
+        val appVersion: String,
     )
-
-    /**
-     * 一轮的追踪状态
-     *
-     * [seenBusy] / [ended] 防的是 StateFlow 合并：收集方可能拿着开跑前那个 Idle 迟到，
-     * 也可能整轮都没看到忙碌态就直接看到终局 Idle，两个信号任一到了才认 Idle 为本轮终局
-     */
-    private class RunTrace(
-        val executionId: String,
-        val runId: String,
-        val transaction: ITransaction,
-    ) {
-        val taskSpans = mutableMapOf<Int, ISpan>()
-        var finishedCount = 0
-        var seenBusy = false
-        var ended = false
-    }
 
     private val lock = Any()
     private var active: ActiveTelemetry? = null
-    private var run: RunTrace? = null
+    private val tracer = RunTracer(startTransaction = { name, op -> Sentry.startTransaction(name, op) })
 
     fun setup() {
         scope.launch {
@@ -86,44 +61,54 @@ class TelemetryController(
                     !enabled -> null
                     definition == null || telemetry == null -> null
                     isDebugProjectVersion(definition.version) -> null
-                    else -> ActiveTelemetry(telemetry, definition.name, definition.version)
+                    else -> ActiveTelemetry(telemetry, definition.name, definition.version ?: DEFAULT_APP_VERSION)
                 }
             }.distinctUntilChanged().collect(::apply)
         }
         scope.launch {
-            focusDispatcher.traced.collect { focus ->
-                if (active == null) return@collect
-                Sentry.captureMessage(focus.message, SentryLevel.INFO)
-            }
-        }
-        scope.launch {
             runnerPort.events.collect { envelope ->
+                val executionId = envelope.executionId
                 when (val event = envelope.event) {
-                    is RunnerEvent.Progress -> onTaskStarted(envelope.executionId, event)
-                    RunnerEvent.ExecutionFinished -> onExecutionFinished(envelope.executionId)
-                    else -> Unit
+                    RunnerEvent.ExecutionFinished -> {
+                        val result = awaitResult(executionId)
+                        synchronized(lock) { tracer.onExecutionFinished(executionId, result) }
+                    }
+
+                    else -> synchronized(lock) {
+                        if (active?.definition?.tracing == true) tracer.onEvent(executionId, event) { planOf(executionId) }
+                    }
                 }
             }
         }
-        scope.launch {
-            runnerPort.state.collect(::onRunnerState)
-        }
     }
 
-    private fun apply(telemetry: ActiveTelemetry?) = synchronized(lock) {
-        run = null
-        if (telemetry == null) {
+    /**
+     * 终局 marker 先于 phase 收回 Idle 发出，结局要等 state 翻过这一轮再取；
+     * 等到的若已是下一轮（activeExecution 非空），这一轮的结局就被盖掉了，返回 null
+     */
+    private suspend fun awaitResult(executionId: String): ExecutionResult? =
+        withTimeoutOrNull(RESULT_WAIT_MS) {
+            runnerPort.state.first { it.activeExecution?.executionId != executionId }
+        }?.takeIf { it.activeExecution == null }?.latestResult
+
+    private fun planOf(executionId: String): RunPlan? =
+        runnerPort.state.value.activeExecution?.takeIf { it.executionId == executionId }?.plan
+
+    private fun apply(telemetry: ActiveTelemetry?) {
+        synchronized(lock) {
+            tracer.reset()
             if (active != null) {
+                // 先正常结束 Session，否则它会被判为 abnormal，拉低 crash-free 率
+                Sentry.endSession()
                 Sentry.close()
                 active = null
             }
-            return
+            // Sentry 换不了 DSN，重来一次要先关；同一份声明重复应用由 distinctUntilChanged 挡在上面
+            if (telemetry == null) return
+            runCatching { init(telemetry) }
+                .onFailure { Timber.w(it, "Failed to init telemetry") }
+                .onSuccess { active = telemetry }
         }
-        // Sentry 换不了 DSN，重来一次要先关；同一份声明重复应用由 distinctUntilChanged 挡在上面
-        if (active != null) Sentry.close()
-        runCatching { init(telemetry) }
-            .onFailure { Timber.w(it, "Failed to init telemetry") }
-            .onSuccess { active = telemetry }
     }
 
     private fun init(telemetry: ActiveTelemetry) {
@@ -131,11 +116,13 @@ class TelemetryController(
         SentryAndroid.init(context) { options ->
             options.dsn = definition.dsn
             options.environment = definition.environment
-            options.release = BuildConfig.VERSION_NAME
-            options.tracesSampleRate = if (definition.tracing) definition.tracesSampleRate else 0.0
-            // 自动采集面全部关掉，只留本类显式发出的那几种事件
+            // 与 MXU 的 `MXU@<mxuVersion>+<appName>@<appVersion>` 同形
+            options.release = "$CLIENT_NAME@${BuildConfig.VERSION_NAME}+${telemetry.appName}@${telemetry.appVersion}"
+            options.tracesSampleRate = if (definition.tracing) definition.tracesSampleRate.coerceIn(0.0, 1.0) else 0.0
             options.isSendDefaultPii = false
-            options.isEnableAutoSessionTracking = false
+            // Session（Release Health）与 MXU 一样开着，日活与 crash-free 率靠它
+            options.isEnableAutoSessionTracking = true
+            // 其余自动采集面全部关掉，只留本类显式发出的事件
             options.isAnrEnabled = false
             options.isAttachScreenshot = false
             options.isAttachViewHierarchy = false
@@ -145,97 +132,20 @@ class TelemetryController(
             options.isEnableAutoActivityLifecycleTracing = false
         }
         Sentry.setUser(User().apply { id = TelemetryUserId.get(context) })
-        Sentry.setTag("client", CLIENT_NAME)
         Sentry.setTag("app.name", telemetry.appName)
-        telemetry.appVersion?.takeIf(String::isNotBlank)?.let { Sentry.setTag("app.version", it) }
+        Sentry.setTag("app.version", telemetry.appVersion)
+        Sentry.setTag("maafwapp.version", BuildConfig.VERSION_NAME)
         val hardware = TelemetryHardware.collect(context)
         Sentry.configureScope { it.setContexts("hardware", hardware) }
     }
 
-    /** 事务开在首个任务真正开跑时，不在 Preparing：准备阶段失败不算一轮，与 MXU 在 post_task 前才开一致 */
-    private fun onTaskStarted(executionId: String, progress: RunnerEvent.Progress) = synchronized(lock) {
-        val definition = active?.definition ?: return
-        if (!definition.tracing) return
-        val trace = run?.takeIf { it.executionId == executionId } ?: startRun(executionId)
-        trace.taskSpans[progress.completed] = trace.transaction.startChild(TASK_OP, progress.taskName).apply {
-            setData("run_id", trace.runId)
-            setData("task", progress.taskName)
-        }
-    }
-
-    private fun onExecutionFinished(executionId: String) = synchronized(lock) {
-        val trace = run?.takeIf { it.executionId == executionId } ?: return
-        trace.ended = true
-        val state = runnerPort.state.value
-        if (state.phase == RunnerPhase.Idle) finishRun(trace, state.latestResult)
-    }
-
-    private fun onRunnerState(state: RunnerState) = synchronized(lock) {
-        val trace = run ?: return
-        val execution = state.activeExecution
-        if (execution?.executionId == trace.executionId) {
-            trace.seenBusy = true
-            finishTasks(trace, execution.taskResults)
-        }
-        if (state.phase == RunnerPhase.Idle && (trace.seenBusy || trace.ended)) {
-            finishRun(trace, state.latestResult)
-        }
-    }
-
-    private fun startRun(executionId: String): RunTrace {
-        // 上一轮没等到终局（进程内对账丢了事件），按取消收掉，别让它挂到新一轮上
-        run?.let { finishRun(it, null) }
-
-        val execution = runnerPort.state.value.activeExecution?.takeIf { it.executionId == executionId }
-        val runId = UUID.randomUUID().toString()
-        val taskNames = execution?.taskNames.orEmpty()
-        val transaction = Sentry.startTransaction(RUN_NAME, RUN_OP).apply {
-            setData("run_id", runId)
-            setTag("run.id", runId)
-            setData("task_count", execution?.totalTaskCount ?: taskNames.size)
-            if (taskNames.isNotEmpty()) setData("tasks", taskNames.joinToString(","))
-            execution?.controllerName?.takeIf(String::isNotBlank)?.let {
-                setData("controller.name", it)
-                setTag("controller.name", it)
-            }
-            execution?.controllerType?.takeIf(String::isNotBlank)?.let {
-                setData("controller.type", it)
-                setTag("controller.type", it)
-            }
-        }
-        return RunTrace(executionId, runId, transaction).also { run = it }
-    }
-
-    /** 结果按完成顺序追加，第 i 条恰好对应下标 i 开的那个任务 */
-    private fun finishTasks(trace: RunTrace, results: List<TaskResult>) {
-        for (index in trace.finishedCount until results.size) {
-            trace.taskSpans.remove(index)?.let { span ->
-                val status = taskSpanStatus(results[index].success)
-                span.setData("result", resultLabel(status))
-                span.finish(status)
-            }
-        }
-        trace.finishedCount = maxOf(trace.finishedCount, results.size)
-    }
-
-    private fun finishRun(trace: RunTrace, result: ExecutionResult?) {
-        finishTasks(trace, result?.taskResults.orEmpty())
-        trace.taskSpans.values.forEach { span ->
-            span.setData("result", resultLabel(SpanStatus.CANCELLED))
-            span.finish(SpanStatus.CANCELLED)
-        }
-        trace.taskSpans.clear()
-
-        val status = runSpanStatus(result)
-        trace.transaction.setData("result", resultLabel(status))
-        trace.transaction.finish(status)
-        if (run === trace) run = null
-    }
-
     private companion object {
         const val CLIENT_NAME = "MaaFwApp"
-        const val RUN_NAME = "maafwapp.task_run"
-        const val RUN_OP = "maafwapp.run"
-        const val TASK_OP = "maafwapp.task"
+
+        /** 与 MXU 缺省 `interface.version` 时的取值一致 */
+        const val DEFAULT_APP_VERSION = "0.0.0"
+
+        /** onFinished 里发 marker 与写 Idle 是同一线程前后脚，等这么久只防意外 */
+        const val RESULT_WAIT_MS = 2_000L
     }
 }

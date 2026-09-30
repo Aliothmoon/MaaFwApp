@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.validateInputCandidate
+import com.aliothmoon.maafw.telemetry.TelemetrySummary
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -136,6 +137,7 @@ object RunPlanBuilder {
                 entry = task.entry,
                 pipelineOverrides = patches,
                 label = task.label.ifBlank { task.name },
+                telemetryOptions = TelemetrySummary.summarize(definition, task.optionNames, configured.optionValues),
             )
         }
 
