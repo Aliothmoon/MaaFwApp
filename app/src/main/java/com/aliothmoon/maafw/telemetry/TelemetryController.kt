@@ -5,16 +5,12 @@ import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.ExecutionResult
-import com.aliothmoon.maafw.runner.FocusDispatcher
-import com.aliothmoon.maafw.runner.RunnerPhase
+import com.aliothmoon.maafw.runner.RunPlan
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.settings.AppSettingsManager
-import io.sentry.ITransaction
 import io.sentry.Sentry
-import io.sentry.SentryLevel
-import io.sentry.SpanStatus
 import io.sentry.android.core.SentryAndroid
+import io.sentry.protocol.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -22,79 +18,98 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * PI v2.9.0 `telemetry.sentry` 的落地
+ * PI v2.9.0 `telemetry.sentry` 的落地，事件模型与字段对齐 MXU `commands/telemetry.rs`
  *
- * DSN 只来自 PI，外壳没有自己的上报去处；用户开关关着、PI 版本是开发态、或 PI 压根没声明
- * 这一段时都不初始化。**只上报可枚举的东西**：事件名、节点名、任务名、选项的 case 名；
- * 自由文本输入只报填没填（[TelemetrySummary]），focus 正文一概不带
+ * DSN 只来自 PI，外壳没有自己的上报去处；用户开关关着、外壳是 debug 构建、或 PI 压根没声明
+ * 这一段时都不初始化。开关缺省为开，与 MXU `helpImproveSoftware ?? true` 一致
+ *
+ * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
+ * 任务与节点的结果（[RunTracer]）；focus 正文、截图、日志正文一概不带
  */
 class TelemetryController(
     private val context: Context,
     private val projectRepository: ProjectRepository,
     private val settings: AppSettingsManager,
-    private val focusDispatcher: FocusDispatcher,
     private val runnerPort: RunnerPort,
     private val scope: CoroutineScope,
 ) {
 
-    private var active: TelemetryDefinition? = null
-    private var runTransaction: ITransaction? = null
+    private data class ActiveTelemetry(
+        val definition: TelemetryDefinition,
+        val appName: String,
+        val appVersion: String,
+    )
+
+    private val lock = Any()
+    private var active: ActiveTelemetry? = null
+    private val tracer = RunTracer(startTransaction = { name, op -> Sentry.startTransaction(name, op) })
+
+    /** 取值不随 DSN 变，重新初始化不必再查一遍 ActivityManager */
+    private val hardware by lazy { TelemetryHardware.collect(context) }
 
     fun setup() {
         scope.launch {
+            // 开关关着也记：用户反馈问题时可凭这行在 Sentry 后台按 user.id 定位
+            Timber.i("[telemetry] 匿名设备 ID (Sentry user.id) = %s", TelemetryUserId.get(context))
+        }
+        scope.launch {
             combine(projectRepository.state, settings.telemetryEnabled) { project, enabled ->
                 val definition = (project as? ProjectState.Ready)?.definition
+                val telemetry = definition?.telemetry
                 when {
-                    !enabled -> null
-                    definition == null -> null
-                    isDebugProjectVersion(definition.version) -> null
-                    else -> definition.telemetry
+                    isTelemetryBlockedByBuild || !enabled -> null
+                    definition == null || telemetry == null -> null
+                    else -> ActiveTelemetry(telemetry, definition.name, definition.version ?: DEFAULT_APP_VERSION)
                 }
             }.distinctUntilChanged().collect(::apply)
         }
         scope.launch {
-            focusDispatcher.traced.collect { focus ->
-                if (active == null) return@collect
-                Sentry.captureMessage(focus.message, SentryLevel.INFO)
-            }
-        }
-        scope.launch {
-            runnerPort.state.collect { state ->
-                val definition = active ?: return@collect
-                if (!definition.tracing) return@collect
-                when (state.phase) {
-                    RunnerPhase.Preparing -> startRunTransaction(state.activeExecution?.totalTaskCount)
-                    RunnerPhase.Idle -> finishRunTransaction(state.latestResult)
-                    else -> Unit
+            runnerPort.events.collect { envelope ->
+                synchronized(lock) {
+                    if (active?.definition?.tracing == true) tracer.onEvent(envelope.executionId, envelope.event)
                 }
             }
         }
     }
 
-    private fun apply(definition: TelemetryDefinition?) {
-        if (definition == null) {
-            if (active != null) {
-                Sentry.close()
-                active = null
-            }
-            return
+    /** 由 [TelemetryHook] 在投递前调用 */
+    fun begin(executionId: String, plan: RunPlan) = synchronized(lock) { tracer.begin(executionId, plan) }
+
+    fun forget(executionId: String) = synchronized(lock) { tracer.forget(executionId) }
+
+    /**
+     * 锁只护 [active] 与追踪状态的切换；Sentry 的收尾与初始化（flush、读设备 ID）放在锁外，
+     * 不让事件收集方跟着等。本方法只由上面那条 collect 串行调用，不会并发
+     */
+    private fun apply(telemetry: ActiveTelemetry?) {
+        val previous = synchronized(lock) {
+            tracer.reset()
+            active.also { active = null }
+        }
+        if (previous != null) {
+            // 先正常结束 Session，否则它会被判为 abnormal，拉低 crash-free 率
+            Sentry.endSession()
+            Sentry.close()
         }
         // Sentry 换不了 DSN，重来一次要先关；同一份声明重复应用由 distinctUntilChanged 挡在上面
-        if (active != null) Sentry.close()
-        runCatching { init(definition) }
+        if (telemetry == null) return
+        runCatching { init(telemetry) }
             .onFailure { Timber.w(it, "Failed to init telemetry") }
-            .onSuccess { active = definition }
+            .onSuccess { synchronized(lock) { active = telemetry } }
     }
 
-    private fun init(definition: TelemetryDefinition) {
+    private fun init(telemetry: ActiveTelemetry) {
+        val definition = telemetry.definition
         SentryAndroid.init(context) { options ->
             options.dsn = definition.dsn
             options.environment = definition.environment
-            options.release = BuildConfig.VERSION_NAME
-            options.tracesSampleRate = if (definition.tracing) definition.tracesSampleRate else 0.0
-            // 自动采集面全部关掉，只留本类显式发出的那几种事件
+            // 与 MXU 的 `MXU@<mxuVersion>+<appName>@<appVersion>` 同形
+            options.release = "$CLIENT_NAME@${BuildConfig.VERSION_NAME}+${telemetry.appName}@${telemetry.appVersion}"
+            options.tracesSampleRate = if (definition.tracing) definition.tracesSampleRate.coerceIn(0.0, 1.0) else 0.0
             options.isSendDefaultPii = false
-            options.isEnableAutoSessionTracking = false
+            // Session（Release Health）与 MXU 一样开着，日活与 crash-free 率靠它
+            options.isEnableAutoSessionTracking = true
+            // 其余自动采集面全部关掉，只留本类显式发出的事件
             options.isAnrEnabled = false
             options.isAttachScreenshot = false
             options.isAttachViewHierarchy = false
@@ -103,26 +118,17 @@ class TelemetryController(
             options.isEnableActivityLifecycleBreadcrumbs = false
             options.isEnableAutoActivityLifecycleTracing = false
         }
+        Sentry.setUser(User().apply { id = TelemetryUserId.get(context) })
+        Sentry.setTag("app.name", telemetry.appName)
+        Sentry.setTag("app.version", telemetry.appVersion)
+        Sentry.setTag("maafwapp.version", BuildConfig.VERSION_NAME)
+        Sentry.configureScope { it.setContexts("hardware", hardware) }
     }
 
-    private fun startRunTransaction(taskCount: Int?) {
-        if (runTransaction != null) return
-        runTransaction = Sentry.startTransaction("run", "task.run").apply {
-            taskCount?.let { setData("task_count", it) }
-        }
-    }
+    private companion object {
+        const val CLIENT_NAME = "MaaFwApp"
 
-    private fun finishRunTransaction(result: ExecutionResult?) {
-        val transaction = runTransaction ?: return
-        runTransaction = null
-        transaction.finish(
-            when (result) {
-                is ExecutionResult.Completed -> SpanStatus.OK
-                is ExecutionResult.CompletedWithFailures -> SpanStatus.UNKNOWN_ERROR
-                is ExecutionResult.Cancelled -> SpanStatus.CANCELLED
-                is ExecutionResult.Failed -> SpanStatus.INTERNAL_ERROR
-                null -> SpanStatus.OK
-            },
-        )
+        /** 与 MXU 缺省 `interface.version` 时的取值一致 */
+        const val DEFAULT_APP_VERSION = "0.0.0"
     }
 }

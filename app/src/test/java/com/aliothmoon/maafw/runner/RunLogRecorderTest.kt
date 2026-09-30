@@ -109,7 +109,7 @@ class RunLogRecorderTest {
     private fun List<RunSessionRecord>.lineTexts() = filterIsInstance<RunSessionRecord.Line>().map { it.text }
 
     private suspend fun RunLogRecorder.finish(runner: RecordingEventRunnerPort, executionId: String = ID) {
-        runner.emit(RunnerEvent.ExecutionFinished, executionId)
+        runner.emit(RunnerEvent.ExecutionFinished(ExecutionResult.Completed(emptyList())), executionId)
         end(executionId, RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
     }
 
@@ -454,7 +454,7 @@ class RunLogRecorderTest {
         recorder.begin(planOf("a"), ID)
         val ending = async { recorder.end(ID, RunEndReason.Ran(ExecutionResult.Completed(emptyList()))) }
         runner.emit(RunnerEvent.Log("收尾前才消费到的一行"))
-        runner.emit(RunnerEvent.ExecutionFinished)
+        runner.emit(RunnerEvent.ExecutionFinished(ExecutionResult.Completed(emptyList())))
         ending.await()
 
         val records = sessionRecords()
@@ -472,7 +472,7 @@ class RunLogRecorderTest {
         recorder.begin(planOf("这一轮"), "e2")
         runner.emit(RunnerEvent.Log("上一轮的尾巴"), "e1")
         assertNull(recorder.lastUserFacing.value)
-        runner.emit(RunnerEvent.ExecutionFinished, "e1")
+        runner.emit(RunnerEvent.ExecutionFinished(ExecutionResult.Completed(emptyList())), "e1")
         endingFirst.await()
         runner.emit(RunnerEvent.Log("这一轮的第一句"), "e2")
         recorder.finish(runner, "e2")

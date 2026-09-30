@@ -109,14 +109,9 @@ data class AppSettings(
     @PrefKey(default = "${RunDurationLimit.DEFAULT_MINUTES}")
     val runDurationLimitMinutes: String = RunDurationLimit.DEFAULT_MINUTES.toString(),
 
-    /**
-     * PI 声明了 `telemetry.sentry` 时才有意义；默认关
-     *
-     * 与 MXU 的默认开相反：DSN 是 PI 作者的，外壳这一侧没有隐私说明的位置，
-     * 上报与否交给用户先点头
-     */
-    @PrefKey(default = "false")
-    val telemetryEnabled: String = "false",
+    /** PI 声明了 `telemetry.sentry` 时才有意义；默认开，与 MXU 一致，用户可随时关闭 */
+    @PrefKey(default = "true")
+    val telemetryEnabled: String = "true",
 
     /** 启动时自动检查更新；只控启动自检，设置页手动检查不受它影响 */
     @PrefKey(default = "true")

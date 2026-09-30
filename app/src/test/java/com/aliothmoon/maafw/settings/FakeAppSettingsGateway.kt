@@ -105,7 +105,7 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         runDurationLimitMinutes.value = RunDurationLimit.normalize(minutes)
     }
 
-    override val telemetryEnabled = MutableStateFlow(false)
+    override val telemetryEnabled = MutableStateFlow(true)
 
     override suspend fun setTelemetryEnabled(enabled: Boolean) {
         telemetryEnabled.value = enabled

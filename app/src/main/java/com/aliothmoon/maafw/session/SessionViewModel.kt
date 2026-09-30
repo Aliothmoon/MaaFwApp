@@ -57,7 +57,6 @@ import com.aliothmoon.maafw.i18n.uiTextFromProject
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.settings.AppSettingsGateway
-import com.aliothmoon.maafw.telemetry.isDebugProjectVersion
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.AppLocales
 import kotlinx.coroutines.channels.BufferOverflow
@@ -101,7 +100,7 @@ private data class EnvSnapshot(
 private data class QuickSnapshot(
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
-    val telemetryEnabled: Boolean = false,
+    val telemetryEnabled: Boolean = true,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -347,7 +346,6 @@ class SessionViewModel(
         return base.copy(
             projectMetadata = metadata,
             telemetryDeclared = project.definition.telemetry != null,
-            telemetryLockedByVersion = isDebugProjectVersion(project.definition.version),
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,

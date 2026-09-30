@@ -147,7 +147,8 @@ class MaaFrameworkRunnerPort(
         }
         if (previous.phase.isBusy) {
             previous.activeExecution?.let {
-                _events.tryEmit(RunnerEventEnvelope(it.executionId, it.currentTaskLabel, RunnerEvent.ExecutionFinished))
+                val result = ExecutionResult.Failed(resultReason, it.taskResults)
+                _events.tryEmit(RunnerEventEnvelope(it.executionId, it.currentTaskLabel, RunnerEvent.ExecutionFinished(result)))
             }
             Timber.w(logMessage)
         }
@@ -189,6 +190,9 @@ class MaaFrameworkRunnerPort(
         @Volatile
         private var taskLabel: String? = null
 
+        @Volatile
+        private var taskIndex: Int = -1
+
         fun onEvent(message: String?, detailsJson: String?) {
             emit(toRunnerEvent(message.orEmpty(), detailsJson.orEmpty()))
         }
@@ -205,6 +209,7 @@ class MaaFrameworkRunnerPort(
         fun onTaskStarted(taskName: String?, index: Int, total: Int) {
             val name = taskName.orEmpty()
             taskLabel = taskLabels[name]?.takeIf(String::isNotBlank) ?: name
+            taskIndex = index
             updateOwn { it.copy(currentTaskName = name, totalTaskCount = total) }
             emit(RunnerEvent.Progress(name, index, total))
         }
@@ -215,22 +220,23 @@ class MaaFrameworkRunnerPort(
                 val results = execution.taskResults + result
                 execution.copy(completedTaskCount = results.size, taskResults = results)
             }
+            emit(RunnerEvent.TaskFinished(taskIndex, success))
         }
 
         fun onFinished(outcome: Int, reason: String?) {
             // 已被对账或死亡通知收回的那轮，终局 marker 在 abortRun 里发过了
-            if (_state.value.activeExecution?.executionId != executionId) return
-            emit(RunnerEvent.ExecutionFinished)
+            val execution = _state.value.activeExecution?.takeIf { it.executionId == executionId } ?: return
+            // 同一 Stub 的回调按序到达，此刻 taskResults 已是全量，marker 与 state 用同一份结局
+            val results = execution.taskResults
+            val result = when (outcome) {
+                RunOutcome.COMPLETED -> ExecutionResult.Completed(results)
+                RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
+                RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
+                else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
+            }
+            emit(RunnerEvent.ExecutionFinished(result))
             _state.update { current ->
-                val execution = current.activeExecution
-                if (execution?.executionId != executionId) return@update current
-                val results = execution.taskResults
-                val result = when (outcome) {
-                    RunOutcome.COMPLETED -> ExecutionResult.Completed(results)
-                    RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
-                    RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
-                    else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
-                }
+                if (current.activeExecution?.executionId != executionId) return@update current
                 RunnerState(phase = RunnerPhase.Idle, latestResult = result)
             }
         }
@@ -437,7 +443,7 @@ class MaaFrameworkRunnerPort(
      */
     private fun toRunnerEvent(message: String, detailsJson: String): RunnerEvent {
         if (message.isEmpty()) return RunnerEvent.MalformedCallback(detailsJson)
-        FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it) }
+        FocusParser.parse(message, detailsJson)?.let { return RunnerEvent.Focus(it, detailsJson) }
         return RunnerEvent.Callback(message, detailsJson)
     }
 

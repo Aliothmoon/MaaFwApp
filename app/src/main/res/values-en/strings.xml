@@ -145,7 +145,8 @@
     <string name="settings_version_of">%1$s version</string>
     <string name="settings_framework">MaaFramework</string>
     <string name="settings_telemetry">Help improve this project</string>
-    <string name="settings_telemetry_desc">Sends task names and run results to the project author. Screenshots, log text and anything you type are never included</string>
+    <string name="settings_telemetry_blocked_desc">Anonymous data reporting is disabled in debug builds</string>
+    <string name="settings_telemetry_desc">Anonymously send crash reports and task statistics to help find common issues</string>
     <string name="settings_project">Project</string>
     <string name="settings_about_welcome">View welcome message</string>
     <string name="settings_about_contact">Contact</string>

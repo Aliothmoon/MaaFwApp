@@ -12,6 +12,7 @@ import com.aliothmoon.maafw.runner.GameFpsHook
 import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.RemoteGameFpsReader
 import com.aliothmoon.maafw.telemetry.TelemetryController
+import com.aliothmoon.maafw.telemetry.TelemetryHook
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
@@ -86,7 +87,6 @@ val runnerModule = module {
             context = androidContext(),
             projectRepository = get(),
             settings = get(),
-            focusDispatcher = get(),
             runnerPort = get(),
             scope = get(named<AppCoroutineScope>()),
         )
@@ -139,6 +139,7 @@ val runnerModule = module {
             prechecks = listOf(ForegroundModePrecheck),
             hooks = listOf(
                 SessionLogHook(get()),
+                TelemetryHook(get()),
                 NotificationHook(get()),
                 AutoSleepHook(get()),
                 WakeUnlockHook(get(), get<AppSettingsManager>()),
