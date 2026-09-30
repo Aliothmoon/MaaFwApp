@@ -5,9 +5,7 @@ import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.RunPlan
-import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import io.sentry.Sentry
@@ -16,9 +14,7 @@ import io.sentry.protocol.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 /**
@@ -48,6 +44,9 @@ class TelemetryController(
     private var active: ActiveTelemetry? = null
     private val tracer = RunTracer(startTransaction = { name, op -> Sentry.startTransaction(name, op) })
 
+    /** 取值不随 DSN 变，重新初始化不必再查一遍 ActivityManager */
+    private val hardware by lazy { TelemetryHardware.collect(context) }
+
     fun setup() {
         scope.launch {
             // 开关关着也记：用户反馈问题时可凭这行在 Sentry 后台按 user.id 定位
@@ -67,48 +66,37 @@ class TelemetryController(
         }
         scope.launch {
             runnerPort.events.collect { envelope ->
-                val executionId = envelope.executionId
-                when (val event = envelope.event) {
-                    RunnerEvent.ExecutionFinished -> {
-                        val result = awaitResult(executionId)
-                        synchronized(lock) { tracer.onExecutionFinished(executionId, result) }
-                    }
-
-                    else -> synchronized(lock) {
-                        if (active?.definition?.tracing == true) tracer.onEvent(executionId, event) { planOf(executionId) }
-                    }
+                synchronized(lock) {
+                    if (active?.definition?.tracing == true) tracer.onEvent(envelope.executionId, envelope.event)
                 }
             }
         }
     }
 
+    /** 由 [TelemetryHook] 在投递前调用 */
+    fun begin(executionId: String, plan: RunPlan) = synchronized(lock) { tracer.begin(executionId, plan) }
+
+    fun forget(executionId: String) = synchronized(lock) { tracer.forget(executionId) }
+
     /**
-     * 终局 marker 先于 phase 收回 Idle 发出，结局要等 state 翻过这一轮再取；
-     * 等到的若已是下一轮（activeExecution 非空），这一轮的结局就被盖掉了，返回 null
+     * 锁只护 [active] 与追踪状态的切换；Sentry 的收尾与初始化（flush、读设备 ID）放在锁外，
+     * 不让事件收集方跟着等。本方法只由上面那条 collect 串行调用，不会并发
      */
-    private suspend fun awaitResult(executionId: String): ExecutionResult? =
-        withTimeoutOrNull(RESULT_WAIT_MS) {
-            runnerPort.state.first { it.activeExecution?.executionId != executionId }
-        }?.takeIf { it.activeExecution == null }?.latestResult
-
-    private fun planOf(executionId: String): RunPlan? =
-        runnerPort.state.value.activeExecution?.takeIf { it.executionId == executionId }?.plan
-
     private fun apply(telemetry: ActiveTelemetry?) {
-        synchronized(lock) {
+        val previous = synchronized(lock) {
             tracer.reset()
-            if (active != null) {
-                // 先正常结束 Session，否则它会被判为 abnormal，拉低 crash-free 率
-                Sentry.endSession()
-                Sentry.close()
-                active = null
-            }
-            // Sentry 换不了 DSN，重来一次要先关；同一份声明重复应用由 distinctUntilChanged 挡在上面
-            if (telemetry == null) return
-            runCatching { init(telemetry) }
-                .onFailure { Timber.w(it, "Failed to init telemetry") }
-                .onSuccess { active = telemetry }
+            active.also { active = null }
         }
+        if (previous != null) {
+            // 先正常结束 Session，否则它会被判为 abnormal，拉低 crash-free 率
+            Sentry.endSession()
+            Sentry.close()
+        }
+        // Sentry 换不了 DSN，重来一次要先关；同一份声明重复应用由 distinctUntilChanged 挡在上面
+        if (telemetry == null) return
+        runCatching { init(telemetry) }
+            .onFailure { Timber.w(it, "Failed to init telemetry") }
+            .onSuccess { synchronized(lock) { active = telemetry } }
     }
 
     private fun init(telemetry: ActiveTelemetry) {
@@ -135,7 +123,6 @@ class TelemetryController(
         Sentry.setTag("app.name", telemetry.appName)
         Sentry.setTag("app.version", telemetry.appVersion)
         Sentry.setTag("maafwapp.version", BuildConfig.VERSION_NAME)
-        val hardware = TelemetryHardware.collect(context)
         Sentry.configureScope { it.setContexts("hardware", hardware) }
     }
 
@@ -144,8 +131,5 @@ class TelemetryController(
 
         /** 与 MXU 缺省 `interface.version` 时的取值一致 */
         const val DEFAULT_APP_VERSION = "0.0.0"
-
-        /** onFinished 里发 marker 与写 Idle 是同一线程前后脚，等这么久只防意外 */
-        const val RESULT_WAIT_MS = 2_000L
     }
 }

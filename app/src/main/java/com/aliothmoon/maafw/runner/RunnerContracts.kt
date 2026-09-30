@@ -51,8 +51,6 @@ data class ActiveExecution(
     val taskResults: List<TaskResult>,
     /** 本轮冻住的 name → 展示名；缺的回落 [currentTaskName] */
     val taskLabels: Map<String, String> = emptyMap(),
-    /** 本轮冻住的计划；遥测按 [RunnerEvent.Progress] 的下标取任务详情，[taskLabels] 同名会合并，不够用 */
-    val plan: RunPlan? = null,
 ) {
     val currentTaskLabel: String?
         get() = currentTaskName?.let { taskLabels[it]?.takeIf(String::isNotBlank) ?: it }
@@ -75,8 +73,16 @@ sealed interface ExecutionResult {
 
 /** 旁路观测（日志/进度）；不参与状态机判定 */
 sealed interface RunnerEvent {
-    /** 一轮的最后一个事件；会话日志等它被消费到再关文件，本身不成行 */
-    data object ExecutionFinished : RunnerEvent
+    /** 只给观察者对账用的节点，本身不成行；日志、屏保这类展示面一律跳过 */
+    sealed interface Marker : RunnerEvent
+
+    /**
+     * 一轮的最后一个事件，带着这一轮的结局；会话日志等它被消费到再关文件
+     *
+     * 结局随事件走而不是让消费方回头看 state：marker 先于 phase 收回 Idle 发出，
+     * 回头看的那一刻 state 可能还没翻过来，也可能已经是下一轮
+     */
+    data class ExecutionFinished(val result: ExecutionResult) : Marker
 
     /** 外壳自产的一句话，不是 MaaFramework 的原话 */
     data class Log(val message: String) : RunnerEvent
@@ -84,12 +90,12 @@ sealed interface RunnerEvent {
     data class Progress(val taskName: String, val completed: Int, val total: Int) : RunnerEvent
 
     /**
-     * 一个任务跑完，[index] 与开跑时那条 [Progress.completed] 相同；本身不成行
+     * 一个任务跑完，[index] 与开跑时那条 [Progress.completed] 相同
      *
      * 与 [Progress]、[ExecutionFinished] 同走这一条有序流：遥测按它收任务 Span，
      * 看 state 里的 taskResults 会与事件乱序，看框架的 `Tasker.Task.*` 又可能晚于整轮终局
      */
-    data class TaskFinished(val taskName: String, val index: Int, val success: Boolean) : RunnerEvent
+    data class TaskFinished(val index: Int, val success: Boolean) : Marker
 
     /**
      * MaaFramework 的一条原样通知

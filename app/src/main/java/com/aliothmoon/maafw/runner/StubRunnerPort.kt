@@ -67,7 +67,6 @@ class StubRunnerPort(
             totalTaskCount = plan.tasks.size,
             taskResults = emptyList(),
             taskLabels = plan.taskLabelMap(),
-            plan = plan,
         )
         _state.update { it.copy(phase = RunnerPhase.Preparing, activeExecution = execution) }
         scope.launch { execute(plan, context) }
@@ -120,7 +119,7 @@ class StubRunnerPort(
                 is StubTaskOutcome.Failure -> TaskResult(task.taskName, success = false, message = outcome.message)
             }
             results += result
-            emit(context, RunnerEvent.TaskFinished(task.taskName, index, result.success))
+            emit(context, RunnerEvent.TaskFinished(index, result.success))
             emit(
                 context,
                 RunnerEvent.Log(if (result.success) "任务完成: ${task.taskName}" else "任务失败: ${task.taskName}"),
@@ -146,7 +145,7 @@ class StubRunnerPort(
     private fun finish(context: ExecutionContext, result: ExecutionResult) {
         currentContext = null
         emit(context, RunnerEvent.Log("本轮执行结束: ${result::class.simpleName}"))
-        emit(context, RunnerEvent.ExecutionFinished)
+        emit(context, RunnerEvent.ExecutionFinished(result))
         _state.update { RunnerState(phase = RunnerPhase.Idle, activeExecution = null, latestResult = result) }
     }
 

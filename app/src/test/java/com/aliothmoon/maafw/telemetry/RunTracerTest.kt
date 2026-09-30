@@ -57,7 +57,14 @@ class RunTracerTest {
         ),
     )
 
-    private fun emit(event: RunnerEvent, executionId: String = "e1") = tracer.onEvent(executionId, event) { plan }
+    init {
+        tracer.begin("e1", plan)
+    }
+
+    private fun emit(event: RunnerEvent, executionId: String = "e1") = tracer.onEvent(executionId, event)
+
+    private fun finish(result: ExecutionResult, executionId: String = "e1") =
+        emit(RunnerEvent.ExecutionFinished(result), executionId)
 
     private fun callback(message: String, details: String) = emit(RunnerEvent.Callback(message, details))
 
@@ -67,10 +74,10 @@ class RunTracerTest {
     fun `一轮对应一条事务，每个任务一条子 Span`() {
         emit(RunnerEvent.Progress("启动游戏", 0, 2))
         callback(MaaMsg.TASKER_TASK_STARTING, """{"task_id":7,"entry":"Start"}""")
-        emit(RunnerEvent.TaskFinished("启动游戏", 0, success = true))
+        emit(RunnerEvent.TaskFinished(0, success = true))
         emit(RunnerEvent.Progress("领取奖励", 1, 2))
-        emit(RunnerEvent.TaskFinished("领取奖励", 1, success = false))
-        tracer.onExecutionFinished("e1", ExecutionResult.CompletedWithFailures(emptyList()))
+        emit(RunnerEvent.TaskFinished(1, success = false))
+        finish(ExecutionResult.CompletedWithFailures(emptyList()))
 
         assertEquals(RunTracer.RUN_OP, transaction.op)
         assertEquals(RunTracer.RUN_NAME, transaction.description)
@@ -93,20 +100,23 @@ class RunTracerTest {
     @Test
     fun `取消时进行中的任务记为取消`() {
         emit(RunnerEvent.Progress("启动游戏", 0, 2))
-        tracer.onExecutionFinished("e1", ExecutionResult.Cancelled(emptyList()))
+        finish(ExecutionResult.Cancelled(emptyList()))
 
         assertEquals(SpanStatus.CANCELLED, transaction.children.single().status)
         assertEquals(SpanStatus.CANCELLED, transaction.status)
         assertEquals("cancelled", transaction.data["result"])
     }
 
+    /** 计划没登记（遥测中途打开）也照样出事务，只是缺任务清单与选项 */
     @Test
-    fun `结局被下一轮盖掉时按任务成败定`() {
-        emit(RunnerEvent.Progress("启动游戏", 0, 1))
-        emit(RunnerEvent.TaskFinished("启动游戏", 0, success = false))
-        tracer.onExecutionFinished("e1", result = null)
+    fun `没有计划时照样记事务`() {
+        emit(RunnerEvent.Progress("启动游戏", 0, 1), executionId = "e2")
+        emit(RunnerEvent.TaskFinished(0, success = true), executionId = "e2")
+        finish(ExecutionResult.Completed(emptyList()), executionId = "e2")
 
-        assertEquals(SpanStatus.INTERNAL_ERROR, transaction.status)
+        assertNull(transaction.data["task_count"])
+        assertEquals(SpanStatus.OK, transaction.children.single().status)
+        assertEquals(SpanStatus.OK, transaction.status)
     }
 
     /** 没有 focus 模板的失败节点按协议默认上报，识别阶段失败、带步骤耗时 */
@@ -157,8 +167,8 @@ class RunTracerTest {
     @Test
     fun `别的轮次的事件不落到当前事务上`() {
         emit(RunnerEvent.Progress("启动游戏", 0, 1))
-        emit(RunnerEvent.TaskFinished("启动游戏", 0, success = false), executionId = "stale")
-        tracer.onExecutionFinished("stale", ExecutionResult.Completed(emptyList()))
+        emit(RunnerEvent.TaskFinished(0, success = false), executionId = "stale")
+        finish(ExecutionResult.Completed(emptyList()), executionId = "stale")
 
         assertNull(transaction.status)
         assertNull(transaction.children.single().status)

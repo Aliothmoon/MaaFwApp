@@ -5,11 +5,11 @@ import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.RunPlan
 import com.aliothmoon.maafw.runner.RunnerEvent
 import io.sentry.ISpan
+import com.aliothmoon.maafw.util.long
+import com.aliothmoon.maafw.util.parseJsonObject
+import com.aliothmoon.maafw.util.string
 import io.sentry.SpanStatus
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.longOrNull
 
 /**
  * 把 Runner 的事件流翻成 Sentry 的一轮 Transaction、每任务一条 Span、每个上报节点一条 Span
@@ -18,7 +18,8 @@ import kotlinx.serialization.json.longOrNull
  * `maafwapp.task_run`（op `maafwapp.run`）/ `maafwapp.task` / `maafwapp.node`
  *
  * **只吃 `RunnerPort.events` 这一条有序流**：任务的开与结、节点回调、整轮终局在里面先后分明。
- * 事务开在首个任务真正开跑时，准备阶段失败不算一轮，与 MXU 在 post_task 前才开一致
+ * 事务开在首个任务真正开跑时，准备阶段失败不算一轮，与 MXU 在 post_task 前才开一致；
+ * 本轮的计划由 [TelemetryHook] 在投递前经 [begin] 交进来
  *
  * 不是线程安全的，调用方负责串行
  */
@@ -34,7 +35,6 @@ internal class RunTracer(
 
     private class RunTrace(val executionId: String, val transaction: ISpan, val plan: RunPlan?) {
         var task: TaskTrace? = null
-        var hasFailed = false
 
         /** 各 task_id 当前 pipeline 步骤的起点（节点 id 与时刻），算节点上卡了多久 */
         val lastSteps = mutableMapOf<Long, Pair<Long, Long>>()
@@ -42,21 +42,26 @@ internal class RunTracer(
 
     private var run: RunTrace? = null
 
-    /** [plan] 只在本轮第一条事件开事务时取一次 */
-    fun onEvent(executionId: String, event: RunnerEvent, plan: () -> RunPlan?) {
+    /** 投递前登记、首个任务开跑时取走；没跑起来的那轮由 [forget] 清掉 */
+    private val plans = mutableMapOf<String, RunPlan>()
+
+    fun begin(executionId: String, plan: RunPlan) {
+        plans[executionId] = plan
+    }
+
+    fun forget(executionId: String) {
+        plans.remove(executionId)
+    }
+
+    fun onEvent(executionId: String, event: RunnerEvent) {
         when (event) {
-            is RunnerEvent.Progress -> onTaskStarted(executionId, event, plan)
+            is RunnerEvent.Progress -> onTaskStarted(executionId, event)
             is RunnerEvent.TaskFinished -> onTaskFinished(executionId, event)
+            is RunnerEvent.ExecutionFinished -> onExecutionFinished(executionId, event.result)
             is RunnerEvent.Callback -> onCallback(executionId, event.message, event.details, trace = null)
             is RunnerEvent.Focus -> onCallback(executionId, event.focus.message, event.details, event.focus.trace)
             else -> Unit
         }
-    }
-
-    /** [result] 拿不到（下一轮已经开了）时按任务成败定，与 MXU 自然跑完那条路一致 */
-    fun onExecutionFinished(executionId: String, result: ExecutionResult?) {
-        val trace = run?.takeIf { it.executionId == executionId } ?: return
-        finish(trace, runSpanStatus(result, trace.hasFailed))
     }
 
     /** 遥测关掉或换了 DSN：客户端已经关了，进行中的这轮直接丢掉，不再往旧客户端上结 */
@@ -64,8 +69,14 @@ internal class RunTracer(
         run = null
     }
 
-    private fun onTaskStarted(executionId: String, progress: RunnerEvent.Progress, plan: () -> RunPlan?) {
-        val trace = run?.takeIf { it.executionId == executionId } ?: startRun(executionId, plan())
+    private fun onExecutionFinished(executionId: String, result: ExecutionResult) {
+        plans.remove(executionId)
+        val trace = run?.takeIf { it.executionId == executionId } ?: return
+        finish(trace, runSpanStatus(result))
+    }
+
+    private fun onTaskStarted(executionId: String, progress: RunnerEvent.Progress) {
+        val trace = run?.takeIf { it.executionId == executionId } ?: startRun(executionId, plans.remove(executionId))
         // 上一个任务的终局丢了，按取消收掉，别让它把节点吞到新任务之前
         trace.task?.let { finishTask(it, SpanStatus.CANCELLED) }
 
@@ -80,11 +91,10 @@ internal class RunTracer(
 
     private fun onTaskFinished(executionId: String, finished: RunnerEvent.TaskFinished) {
         val trace = run?.takeIf { it.executionId == executionId } ?: return
-        if (!finished.success) trace.hasFailed = true
         val task = trace.task?.takeIf { it.index == finished.index } ?: return
         trace.task = null
         task.taskId?.let(trace.lastSteps::remove)
-        finishTask(task, taskSpanStatus(finished.success))
+        finishTask(task, if (finished.success) SpanStatus.OK else SpanStatus.INTERNAL_ERROR)
     }
 
     /**
@@ -102,7 +112,7 @@ internal class RunTracer(
 
         val run = run?.takeIf { it.executionId == executionId } ?: return
         val task = run.task ?: return
-        val detail = runCatching { json.parseToJsonElement(details) as? JsonObject }.getOrNull() ?: return
+        val detail = parseJsonObject(details) ?: return
         val taskId = detail.long("task_id") ?: return
         val nodeId = detail.long("node_id")
 
@@ -210,10 +220,19 @@ internal class RunTracer(
         task.span.finish(status)
     }
 
-    private fun JsonObject.long(key: String): Long? = (this[key] as? JsonPrimitive)?.longOrNull
+    /** 整轮结局到 Span 状态，对齐 MXU `finish_run`：取消记 CANCELLED，其余有任务失败即 INTERNAL_ERROR */
+    private fun runSpanStatus(result: ExecutionResult): SpanStatus = when (result) {
+        is ExecutionResult.Completed -> SpanStatus.OK
+        is ExecutionResult.CompletedWithFailures, is ExecutionResult.Failed -> SpanStatus.INTERNAL_ERROR
+        is ExecutionResult.Cancelled -> SpanStatus.CANCELLED
+    }
 
-    private fun JsonObject.string(key: String): String? =
-        (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf(String::isNotEmpty)
+    /** Span 上 `result` 的文案，与 MXU `result_label` 一致 */
+    private fun resultLabel(status: SpanStatus): String = when (status) {
+        SpanStatus.OK -> "success"
+        SpanStatus.CANCELLED -> "cancelled"
+        else -> "failure"
+    }
 
     companion object {
         const val RUN_NAME = "maafwapp.task_run"
@@ -226,7 +245,5 @@ internal class RunTracer(
 
         private const val NODE_PREFIX = "Node."
         private const val PIPELINE_NODE_PREFIX = "Node.PipelineNode."
-
-        private val json = Json { ignoreUnknownKeys = true }
     }
 }

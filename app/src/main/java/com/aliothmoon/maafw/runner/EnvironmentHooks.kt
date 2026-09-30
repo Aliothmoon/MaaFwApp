@@ -49,6 +49,9 @@ internal object HookOrder {
     /** 排在所有环境动作之前，收尾时因此最后关：文件开着的窗口覆盖住整轮 */
     const val SESSION_LOG = -10
 
+    /** 只登记本轮计划给遥测，与会话日志同为投递前的观察者 */
+    const val TELEMETRY = -8
+
     /** 紧随会话日志：收尾时排在所有环境动作之后，播报的是环境都撤干净之后的结局 */
     const val NOTIFICATION = -5
     const val AUTO_SLEEP = 0

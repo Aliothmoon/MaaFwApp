@@ -94,7 +94,7 @@ private val NON_ESSENTIAL_KINDS =
  * [taskLabel] 是信封里冻结的展示名（PI 本地化过）；进度行用它，拿不到才退回内部 name
  */
 fun RunnerEvent.toLogText(taskLabel: String? = null): String = when (this) {
-    RunnerEvent.ExecutionFinished, is RunnerEvent.TaskFinished -> ""
+    is RunnerEvent.Marker -> ""
     is RunnerEvent.Log -> message
     is RunnerEvent.Progress -> "${taskLabel?.takeIf(String::isNotBlank) ?: taskName} $completed/$total"
     is RunnerEvent.Focus -> focus.content
