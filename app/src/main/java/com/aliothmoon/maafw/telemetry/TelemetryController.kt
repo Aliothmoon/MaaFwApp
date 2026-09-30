@@ -20,7 +20,7 @@ import timber.log.Timber
 /**
  * PI v2.9.0 `telemetry.sentry` 的落地，事件模型与字段对齐 MXU `commands/telemetry.rs`
  *
- * DSN 只来自 PI，外壳没有自己的上报去处；用户开关关着、PI 版本是开发态、或 PI 压根没声明
+ * DSN 只来自 PI，外壳没有自己的上报去处；用户开关关着、外壳是 debug 构建、或 PI 压根没声明
  * 这一段时都不初始化。开关缺省为开，与 MXU `helpImproveSoftware ?? true` 一致
  *
  * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
@@ -57,9 +57,8 @@ class TelemetryController(
                 val definition = (project as? ProjectState.Ready)?.definition
                 val telemetry = definition?.telemetry
                 when {
-                    !enabled -> null
+                    isTelemetryBlockedByBuild || !enabled -> null
                     definition == null || telemetry == null -> null
-                    isDebugProjectVersion(definition.version) -> null
                     else -> ActiveTelemetry(telemetry, definition.name, definition.version ?: DEFAULT_APP_VERSION)
                 }
             }.distinctUntilChanged().collect(::apply)

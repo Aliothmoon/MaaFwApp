@@ -62,6 +62,7 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.settings.UpdatePanelState
+import com.aliothmoon.maafw.telemetry.isTelemetryBlockedByBuild
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
@@ -498,16 +499,18 @@ private fun OtherCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        // 开发版 PI 一律不上报（TelemetryController 也照此拦），留个点不动的开关只会让人以为坏了
-        if (state.telemetryDeclared && !state.telemetryLockedByVersion) {
+        // debug 构建不上报（TelemetryController 也照此拦）：同 MXU，开关照出但置灰关着，并说明原因
+        if (state.telemetryDeclared) {
+            val blocked = isTelemetryBlockedByBuild
             Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
             MaaSwitchRow(
                 label = stringResource(R.string.settings_telemetry),
-                checked = state.telemetryEnabled,
+                checked = state.telemetryEnabled && !blocked,
                 onCheckedChange = { onIntent(SessionIntent.SetTelemetryEnabled(it)) },
+                enabled = !blocked,
             )
             Text(
-                text = stringResource(R.string.settings_telemetry_desc),
+                text = stringResource(if (blocked) R.string.settings_telemetry_blocked_desc else R.string.settings_telemetry_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
