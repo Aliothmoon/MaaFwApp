@@ -75,6 +75,10 @@ class TelemetryController(
 
     fun setup() {
         scope.launch {
+            // 开关关着也记：用户反馈问题时可凭这行在 Sentry 后台按 user.id 定位
+            Timber.i("[telemetry] 匿名设备 ID (Sentry user.id) = %s", TelemetryUserId.get(context))
+        }
+        scope.launch {
             combine(projectRepository.state, settings.telemetryEnabled) { project, enabled ->
                 val definition = (project as? ProjectState.Ready)?.definition
                 val telemetry = definition?.telemetry
@@ -144,6 +148,8 @@ class TelemetryController(
         Sentry.setTag("client", CLIENT_NAME)
         Sentry.setTag("app.name", telemetry.appName)
         telemetry.appVersion?.takeIf(String::isNotBlank)?.let { Sentry.setTag("app.version", it) }
+        val hardware = TelemetryHardware.collect(context)
+        Sentry.configureScope { it.setContexts("hardware", hardware) }
     }
 
     /** 事务开在首个任务真正开跑时，不在 Preparing：准备阶段失败不算一轮，与 MXU 在 post_task 前才开一致 */
