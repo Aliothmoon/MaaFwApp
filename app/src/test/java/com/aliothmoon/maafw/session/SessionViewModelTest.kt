@@ -78,6 +78,7 @@ import kotlin.io.path.createTempDirectory
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -463,6 +464,53 @@ class SessionViewModelTest {
         advanceUntilIdle()
         assertTrue(store.current.initialized)
         assertEquals("官服", store.current.activeResourceName)
+    }
+
+    @Test
+    fun `stale resource selection is cleared and noticed only until the next launch`() = runTest(mainDispatcher) {
+        val store = InMemoryUserConfigurationStore(
+            UserConfiguration(initialized = true, activeResourceName = "universal"),
+        )
+        val (vm, _, _) = createVm(store = store)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertNull(store.current.activeResourceName)
+        assertEquals("官服", vm.uiState.value.environment?.resource?.name)
+        assertEquals(
+            1,
+            vm.uiState.value.sessionDiagnostics.count {
+                it.message.isResource(R.string.diagnostic_resource_selection_missing)
+            },
+        )
+
+        // 同一份 store 换一个 VM = 下次启动：存的已经是 null，提示也没带过来
+        val (reopened, _, _) = createVm(store = store)
+        backgroundScope.launch { reopened.uiState.collect {} }
+        advanceUntilIdle()
+        assertTrue(reopened.uiState.value.sessionDiagnostics.isEmpty())
+    }
+
+    @Test
+    fun `selecting a resource drops the stale resource notice`() = runTest(mainDispatcher) {
+        val store = InMemoryUserConfigurationStore(
+            UserConfiguration(initialized = true, activeResourceName = "universal"),
+        )
+        val project = FakeProjectRepository(
+            ProjectState.Ready(
+                definition.copy(resources = definition.resources + ResourceDefinition("B 服", listOf("./bili"))),
+                emptyList(),
+            ),
+        )
+        val (vm, _, _) = createVm(store = store, project = project)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+        assertEquals(1, vm.uiState.value.sessionDiagnostics.size)
+
+        vm.onIntent(SessionIntent.SelectResource("B 服"))
+        advanceUntilIdle()
+        assertEquals("B 服", store.current.activeResourceName)
+        assertTrue(vm.uiState.value.sessionDiagnostics.isEmpty())
     }
 
     @Test

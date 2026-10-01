@@ -38,24 +38,10 @@ object ConfigurationResolver {
     fun resolve(definition: ProjectDefinition, config: UserConfiguration): ResolvedProjectSession {
         val diagnostics = mutableListOf<Diagnostic>()
 
-        val resourceNames = definition.resources.map { it.name }
-        val resourceName = when {
-            config.activeResourceName != null && config.activeResourceName in resourceNames ->
-                config.activeResourceName
-
-            config.activeResourceName != null -> {
-                diagnostics += warning(
-                    "resource",
-                    DiagnosticMessages.resourceSelectionMissing(
-                        selected = config.activeResourceName,
-                        fallback = resourceNames.firstOrNull(),
-                    ),
-                )
-                resourceNames.firstOrNull()
-            }
-
-            else -> resourceNames.firstOrNull()
-        }
+        val staleResource = staleResourceSelection(definition, config)
+        if (staleResource != null) diagnostics += staleResource
+        val resourceName = config.activeResourceName.takeIf { staleResource == null }
+            ?: definition.resources.firstOrNull()?.name
 
         val controller = definition.controller(config.activeControllerName)
         if (config.activeControllerName != null && controller.name != config.activeControllerName) {
@@ -115,6 +101,19 @@ object ConfigurationResolver {
             environment = environment,
             diagnostics = diagnostics,
         )
+    }
+
+    /**
+     * 存的 resource 名在当前 PI 里已不存在时的那条警告，没失效为 null
+     *
+     * resolve 与 SessionViewModel 的写回共用这一处：写回之后 resolve 不再报，
+     * 本进程内的提示靠 VM 留的这份副本，两边文案不能各写各的
+     */
+    fun staleResourceSelection(definition: ProjectDefinition, config: UserConfiguration): Diagnostic? {
+        val selected = config.activeResourceName ?: return null
+        val names = definition.resources.map { it.name }
+        if (selected in names) return null
+        return warning("resource", DiagnosticMessages.resourceSelectionMissing(selected, names.firstOrNull()))
     }
 
     /** 每个 preset 一份配置；无 preset 则空列表 */

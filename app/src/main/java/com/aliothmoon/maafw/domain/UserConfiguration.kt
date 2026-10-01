@@ -14,6 +14,7 @@ enum class ThemeMode { System, Light, Dark }
 data class UserConfiguration(
     val initialized: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.System,
+    /** null = PI 声明的第一个 resource；存的名字在 PI 里消失后由 SessionViewModel 写回 null */
     val activeResourceName: String? = null,
     /** null = PI 声明的第一个 Adb controller；只有 PI 声明了不止一个时用户才会去选 */
     val activeControllerName: String? = null,
