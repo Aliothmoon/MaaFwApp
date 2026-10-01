@@ -50,6 +50,7 @@ import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.focusPlainText
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.theme.ThemeStyle
@@ -299,9 +300,10 @@ class SessionViewModel(
      * 拿不到 VM。三档各收各的，同一条 focus 因此可能同时走三条路，这是协议本来的语义
      */
     private fun dispatchFocus(focus: FocusMessage) {
-        if (FocusChannel.Toast in focus.channels) {
-            emitEffect(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
-        }
+        if (FocusChannel.Toast !in focus.channels) return
+        // snackbar 是纯文本面；只有一张图的模板剥完记号什么都不剩，不弹空条
+        val text = focusPlainText(focus.content).ifEmpty { return }
+        emitEffect(SessionEffect.ShowMessage(uiTextFromProject(text)))
     }
 
     /** 写入口当场补 password 标记：等加载时的迁移去补的话，这一笔会先以明文落一次盘 */

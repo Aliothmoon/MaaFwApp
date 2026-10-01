@@ -22,6 +22,7 @@ import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.focusPlainText
 import com.aliothmoon.maafw.runner.isBusy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -142,17 +143,21 @@ class RunForegroundService : Service() {
      *
      * 收的是 [FocusDispatcher] 补完之后的正文，不是原始事件——`$key`、文件路径、
      * `{name}` 这些形态得先补完，否则推给用户的是没处理过的模板
+     *
+     * 通知正文是纯文本面，Markdown 与 HTML 记号要先剥掉
      */
     private suspend fun observeFocusNotifications() {
         focusDispatcher.resolved.collect { focus ->
             if (FocusChannel.Notification !in focus.channels) return@collect
+            // 只有一张图的模板剥完记号什么都不剩，不发空通知
+            val text = focusPlainText(focus.content).ifEmpty { return@collect }
             ensureFocusChannel()
             val notification = NotificationCompat.Builder(this, FOCUS_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(getString(R.string.notification_focus_title))
-                .setContentText(focus.content)
+                .setContentText(text)
                 // 模板正文可以很长，折叠成一行就没意义了
-                .setStyle(NotificationCompat.BigTextStyle().bigText(focus.content))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setContentIntent(contentIntent())
                 .setAutoCancel(true)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)

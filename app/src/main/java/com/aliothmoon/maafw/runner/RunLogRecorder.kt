@@ -220,7 +220,7 @@ class RunLogRecorder(
                 }
             }
             is RunnerEvent.Focus -> {
-                event.focus.content.lineSequence()
+                focusPlainText(event.focus.content).lineSequence()
                     .firstOrNull { it.isNotBlank() }
                     ?.trim()
                     ?.let {
@@ -251,7 +251,9 @@ class RunLogRecorder(
     ) {
         if (current) {
             if (entry.isEssential) {
-                renderText(entry.text).lineSequence()
+                // 这一句进通知栏，只有 focus 的正文带记号；落盘那份留原文，历史页照样渲染
+                val rendered = renderText(entry.text)
+                (if (entry.kind == RunLogKind.Focus) focusPlainText(rendered) else rendered).lineSequence()
                     .firstOrNull { it.isNotBlank() }
                     ?.trim()
                     ?.let {

@@ -163,6 +163,30 @@ class RunLogRecorderTest {
         assertEquals("刷到第3关", recorder.liveUpdateStatus.value)
     }
 
+    /** 状态句进的是通知栏，那里不渲染 Markdown 与 HTML；屏上那份留原文交给 MaaMarkdown */
+    @Test
+    fun `focus markup is stripped from the notification status but kept in the log`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+        val content = """<span style="color: red">体力不足</span>，**已停止**"""
+
+        runner.emit(
+            RunnerEvent.Focus(
+                FocusMessage(
+                    message = "Node.PipelineNode.Succeeded",
+                    content = content,
+                    channels = setOf(FocusChannel.Log),
+                    trace = false,
+                ),
+            ),
+        )
+        settleRunLog()
+
+        assertEquals("体力不足，已停止", recorder.liveUpdateStatus.value)
+        assertEquals("体力不足，已停止", recorder.lastUserFacing.value)
+        assertEquals(UiText.Verbatim(content), recorder.runLog.value.progress.single().text)
+    }
+
     @Test
     fun `a new PI task clears the pipeline node status`() = runTest(dispatcher) {
         val runner = RecordingEventRunnerPort()
