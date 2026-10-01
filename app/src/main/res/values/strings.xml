@@ -614,7 +614,7 @@
     <string name="pi_reinstall_title">重新解压资源</string>
     <string name="pi_reinstall_desc">从安装包重新解压项目资源</string>
     <string name="dialog_reinstall_pi_title">重新解压项目资源</string>
-    <string name="dialog_reinstall_pi_message">确定要重新解压项目资源吗？\n\n这将删除设备上已解压的项目资源并重新解压，请勿在此期间退出应用。运行配置与日志不受影响。</string>
+    <string name="dialog_reinstall_pi_message">确定要重新解压项目资源吗？\n\n这将删除设备上已解压的项目资源并重新解压，请勿在此期间退出应用。Agent 写在资源目录下的记录与日志会一并清除，运行配置与应用日志不受影响。</string>
 
     <!-- 前台模式：主屏分辨率与操作面板 -->
     <string name="foreground_resolution_title">屏幕分辨率</string>

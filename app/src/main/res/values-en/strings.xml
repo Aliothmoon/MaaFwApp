@@ -625,7 +625,7 @@
     <string name="pi_reinstall_title">Extract resources again</string>
     <string name="pi_reinstall_desc">Extract the project resources again from the APK</string>
     <string name="dialog_reinstall_pi_title">Extract project resources again</string>
-    <string name="dialog_reinstall_pi_message">Extract the project resources again?\n\nThe copy on this device will be deleted and extracted again. Please do not leave the app while this runs. Run configurations and logs are unaffected.</string>
+    <string name="dialog_reinstall_pi_message">Extract the project resources again?\n\nThe copy on this device will be deleted and extracted again. Please do not leave the app while this runs. Records and logs the agents wrote into the resource directory are cleared too; run configurations and app logs are unaffected.</string>
 
     <!-- Foreground mode: primary display size and control panel -->
     <string name="foreground_resolution_title">Screen resolution</string>

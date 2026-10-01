@@ -117,6 +117,8 @@ logs:
     - debug/**/*.log
 ```
 
+agent 写在工作目录下的文件跨 App 更新保留，前提是它不落在包带来的根级条目里：更新只整体替换新包根目录下有的条目（`resource/`、`tasks/`、`agent/` 这些），其余不动。所以记录、缓存放 `debug/`、`config/` 这类包里没有的目录，别写进 `agent/`。匹配 `logs.include` 的日志在更新时会清掉 7 天前的；用户在设置里手动「重新解压资源」则连同这些文件一起清空。
+
 ### Python
 
 用仓库脚本组运行时，不要自己拼一套 CPython。内核从 [MaaAgentCoreAndroid](https://github.com/Aliothmoon/MaaAgentCoreAndroid) 下载，本地只叠资源项目的依赖，不需要 NDK：

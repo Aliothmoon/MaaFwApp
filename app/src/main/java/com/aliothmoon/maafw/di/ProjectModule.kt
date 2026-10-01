@@ -20,6 +20,7 @@ val projectModule = module {
         PiInstaller(
             pkg = AssetPiPackage(androidContext()),
             versionCode = BuildConfig.VERSION_CODE,
+            logInclude = BuildConfig.MAFW_PI_LOG_INCLUDE.toList(),
         )
     }
     single { PiInstallCoordinator(get()) }
