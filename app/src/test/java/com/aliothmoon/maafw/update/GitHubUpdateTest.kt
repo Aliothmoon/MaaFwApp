@@ -77,6 +77,27 @@ class GitHubUpdateTest {
     }
 
     @Test
+    fun `check drops the download section from release notes`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
+                200,
+                releases(
+                    release(
+                        "v1.5.0",
+                        body = """<!-- downloads:start -->\r\n\r\n| Arch | Android |\r\n| --- | --- |\r\n\r\n""" +
+                            """<!-- downloads:end -->\r\n\r\n## 1.5.0\r\n\r\n- Fixed things""",
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            "## 1.5.0\r\n\r\n- Fixed things",
+            (client(gateway).check(checkRequest()) as UpdateCheckResult.UpdateAvailable).info.releaseNotes,
+        )
+    }
+
+    @Test
     fun `check request is anonymous`() = runBlocking {
         val gateway = RecordingHttpClientHelper(
             FakeHttpResponse(200, releases(release("v1.1.0", assets = assets(asset("app.apk"))))),
@@ -354,12 +375,13 @@ class GitHubUpdateTest {
         tag: String,
         prerelease: Boolean = false,
         assets: String = "[]",
+        body: String = "Release ${tag.substringAfter('v').substringBefore('-')}",
     ): String = """
         {
           "tag_name": "$tag",
           "prerelease": $prerelease,
           "html_url": "https://github.com/maaxyz/example/releases/tag/$tag",
-          "body": "Release ${tag.substringAfter('v').substringBefore('-')}",
+          "body": "$body",
           "assets": $assets
         }
     """.trimIndent()

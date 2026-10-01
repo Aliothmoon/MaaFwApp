@@ -108,7 +108,7 @@ internal class GitHubReleasesApi(
         return Release(
             tag = tag,
             htmlUrl = raw.string("html_url"),
-            body = raw.string("body"),
+            body = raw.string("body")?.replace(DOWNLOAD_SECTION_PATTERN, ""),
             assets = (raw["assets"] as? JsonArray)
                 ?.filterIsInstance<JsonObject>()
                 ?.mapNotNull(::asset)
@@ -158,6 +158,12 @@ internal class GitHubReleasesApi(
         )
         val REPOSITORY_PATTERN = Regex("""^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$""")
         val DIGEST_PATTERN = Regex("""^sha256:[0-9a-fA-F]{64}$""")
+
+        /** Release 正文里用这对标记包住的下载区块只给 GitHub 页面看，更新说明里不带 */
+        val DOWNLOAD_SECTION_PATTERN = Regex(
+            """<!-- downloads:start -->.*?<!-- downloads:end -->\s*""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
 
         /** 各 ABI 的候选标记，序即优先级（arm64-v8a 优先于裸 arm64）；UNIVERSAL 没有标记 */
         val ABI_MARKERS: Map<AndroidAbi, List<String>> = mapOf(
