@@ -21,19 +21,42 @@ import kotlinx.serialization.json.JsonObject
  * 事务开在首个任务真正开跑时，准备阶段失败不算一轮，与 MXU 在 post_task 前才开一致；
  * 本轮的计划由 [TelemetryHook] 在投递前经 [begin] 交进来
  *
+ * 外层任务终态失败时另经 [onTaskFailure] 交出一份 [TaskFailure]：Span 只进 Trace，
+ * 不进 Issues，要聚类、分派、告警得靠那条 Error Event
+ *
  * 不是线程安全的，调用方负责串行
  */
 internal class RunTracer(
     private val startTransaction: (name: String, op: String) -> ISpan,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val onTaskFailure: (TaskFailure) -> Unit = {},
 ) {
 
-    private class TaskTrace(val index: Int, val name: String, val span: ISpan) {
+    private class TaskTrace(
+        val index: Int,
+        val name: String,
+        val span: ISpan,
+        val startedAt: Long,
+        val options: Map<String, String>,
+    ) {
         var taskId: Long? = null
         var tracedNodes = 0
+
+        /** 直接观测到的失败节点数，不受 [tracedNodes] 的 Span 预算限制 */
+        var failedNodes = 0
+
+        /** 第一个失败节点，事件按它分组；最后一个留作终态上下文 */
+        var rootFailure: FailureSignal? = null
+        var terminalFailure: FailureSignal? = null
     }
 
-    private class RunTrace(val executionId: String, val transaction: ISpan, val plan: RunPlan?) {
+    private class RunTrace(
+        val executionId: String,
+        val transaction: ISpan,
+        val plan: RunPlan?,
+        /** 事务与本轮每条失败事件共用的 tag */
+        val tags: Map<String, String>,
+    ) {
         var task: TaskTrace? = null
 
         /** 各 task_id 当前 pipeline 步骤的起点（节点 id 与时刻），算节点上卡了多久 */
@@ -82,11 +105,13 @@ internal class RunTracer(
 
         val runtimeTask = trace.plan?.tasks?.getOrNull(progress.completed)
             ?.takeIf { it.taskName == progress.taskName }
+        val options = runtimeTask?.telemetryOptions.orEmpty()
         val span = trace.transaction.startChild(TASK_OP, progress.taskName).apply {
+            setData("run_id", trace.executionId)
             setData("task", progress.taskName)
-            runtimeTask?.telemetryOptions?.forEach { (key, value) -> setData("option.$key", value) }
+            options.forEach { (key, value) -> setData("option.$key", value) }
         }
-        trace.task = TaskTrace(progress.completed, progress.taskName, span)
+        trace.task = TaskTrace(progress.completed, progress.taskName, span, clock(), options)
     }
 
     private fun onTaskFinished(executionId: String, finished: RunnerEvent.TaskFinished) {
@@ -95,7 +120,24 @@ internal class RunTracer(
         trace.task = null
         task.taskId?.let(trace.lastSteps::remove)
         finishTask(task, if (finished.success) SpanStatus.OK else SpanStatus.INTERNAL_ERROR)
+        if (!finished.success) onTaskFailure(failureOf(trace, task))
     }
+
+    /** 只有终态失败才出事件，被取消或终局丢了的任务不算，与 MXU `on_task_finished` 一致 */
+    private fun failureOf(trace: RunTrace, task: TaskTrace) = TaskFailure(
+        runId = trace.executionId,
+        task = task.name,
+        taskId = task.taskId,
+        startedAtMs = task.startedAt,
+        durationMs = clock() - task.startedAt,
+        failedNodes = task.failedNodes,
+        root = task.rootFailure,
+        // 只有一个失败节点时两者是同一个，不重复写
+        terminal = task.terminalFailure.takeIf { it != task.rootFailure },
+        options = task.options,
+        tags = trace.tags,
+        span = task.span,
+    )
 
     /**
      * 节点级回调：按 PI v2.9.1 的 `focus.trace` 决定是否挂成任务 Span 的子 Span
@@ -168,6 +210,14 @@ internal class RunTracer(
             null
         }
 
+        // 失败摘要不占 Span 预算：Span 满了，根因与终态照样留着
+        if (stage != null) {
+            val signal = FailureSignal(node, stage, taskId, nodeId, durationMs)
+            task.failedNodes++
+            if (task.rootFailure == null) task.rootFailure = signal
+            task.terminalFailure = signal
+        }
+
         task.tracedNodes++
         if (task.tracedNodes > MAX_TRACED_NODES_PER_TASK) return
 
@@ -190,20 +240,24 @@ internal class RunTracer(
         // 上一轮没等到终局（对账收回时丢了事件），按取消收掉，别让它挂到新一轮上
         run?.let { finish(it, SpanStatus.CANCELLED) }
 
+        // controller 既写 data（事件详情可见）又打 tag（可搜索 / 分组）
+        val controller = plan?.controller
+            ?.let { listOf("controller.name" to it.name, "controller.type" to it.type) }
+            .orEmpty()
+            .filter { (_, value) -> value.isNotBlank() }
+        // 本轮的关联 ID 直接用 executionId，对应 MXU 每轮现生成的 run_id
+        val tags = mapOf("run.id" to executionId) + controller
+
         val transaction = startTransaction(RUN_NAME, RUN_OP).apply {
+            setData("run_id", executionId)
             if (plan != null) {
                 setData("task_count", plan.tasks.size)
                 if (plan.tasks.isNotEmpty()) setData("tasks", plan.tasks.joinToString(",") { it.taskName })
-                // controller 既写 data（事件详情可见）又打 tag（可搜索 / 分组）
-                listOf("controller.name" to plan.controller.name, "controller.type" to plan.controller.type)
-                    .filter { (_, value) -> value.isNotBlank() }
-                    .forEach { (key, value) ->
-                        setData(key, value)
-                        setTag(key, value)
-                    }
             }
+            controller.forEach { (key, value) -> setData(key, value) }
+            tags.forEach { (key, value) -> setTag(key, value) }
         }
-        return RunTrace(executionId, transaction, plan).also { run = it }
+        return RunTrace(executionId, transaction, plan, tags).also { run = it }
     }
 
     /** 未收尾的任务（取消时还在跑的那个）一并按取消结掉，与 MXU `finish_run` 一致 */

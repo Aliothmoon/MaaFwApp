@@ -39,10 +39,12 @@ private class SpanRecord(val op: String, val description: String?) {
 class RunTracerTest {
 
     private val transactions = mutableListOf<SpanRecord>()
+    private val failures = mutableListOf<TaskFailure>()
     private var now = 1_000L
     private val tracer = RunTracer(
         startTransaction = { name, op -> SpanRecord(op, name).also(transactions::add).span },
         clock = { now },
+        onTaskFailure = failures::add,
     )
 
     private val plan = RunPlan(
@@ -84,6 +86,8 @@ class RunTracerTest {
         assertEquals(2, transaction.data["task_count"])
         assertEquals("启动游戏,领取奖励", transaction.data["tasks"])
         assertEquals("ADB", transaction.tags["controller.type"])
+        assertEquals("e1", transaction.tags["run.id"])
+        assertEquals("e1", transaction.data["run_id"])
         assertEquals(SpanStatus.INTERNAL_ERROR, transaction.status)
         assertEquals("failure", transaction.data["result"])
 
@@ -162,6 +166,68 @@ class RunTracerTest {
         assertEquals("Collect", node.description)
         assertEquals(SpanStatus.OK, node.status)
         assertNull(node.data["stage"])
+    }
+
+    /** 分组看第一个失败节点，最后一个留作终态；嵌套 run_task 的子 pipeline 也算在外层任务头上 */
+    @Test
+    fun `任务终态失败时交出失败摘要`() {
+        emit(RunnerEvent.Progress("启动游戏", 0, 2))
+        callback(MaaMsg.TASKER_TASK_STARTING, """{"task_id":7,"entry":"Start"}""")
+        callback(MaaMsg.NODE_PIPELINE_NODE_STARTING, """{"task_id":9,"node_id":3,"name":"FindStart"}""")
+        now += 250
+        callback(MaaMsg.NODE_PIPELINE_NODE_FAILED, """{"task_id":9,"node_id":3,"name":"FindStart"}""")
+        callback(
+            MaaMsg.NODE_PIPELINE_NODE_FAILED,
+            """{"task_id":7,"node_id":5,"name":"Loop","node_details":{"name":"Summary"}}""",
+        )
+        now += 50
+        emit(RunnerEvent.TaskFinished(0, success = false))
+
+        val failure = failures.single()
+        assertEquals("e1", failure.runId)
+        assertEquals("启动游戏", failure.task)
+        assertEquals(7L, failure.taskId)
+        assertEquals(1_000L, failure.startedAtMs)
+        assertEquals(300L, failure.durationMs)
+        assertEquals(2, failure.failedNodes)
+        assertEquals(FailureSignal("FindStart", "recognition", 9, 3, 250), failure.root)
+        assertEquals(FailureSignal("Summary", "action", 7, 5, null), failure.terminal)
+        assertEquals(mapOf("server" to "cn"), failure.options)
+        assertEquals(mapOf("run.id" to "e1", "controller.name" to "Android", "controller.type" to "ADB"), failure.tags)
+        assertEquals(transaction.children.single().span, failure.span)
+    }
+
+    @Test
+    fun `只有一个失败节点时不重复记终态`() {
+        emit(RunnerEvent.Progress("启动游戏", 0, 1))
+        callback(MaaMsg.NODE_PIPELINE_NODE_FAILED, """{"task_id":7,"node_id":3,"name":"FindStart"}""")
+        emit(RunnerEvent.TaskFinished(0, success = false))
+
+        assertEquals("FindStart", failures.single().root?.node)
+        assertNull(failures.single().terminal)
+    }
+
+    /** focus 关掉 trace 的失败节点不算观测到，任务照样出事件，只是没有节点可指 */
+    @Test
+    fun `没观测到失败节点的任务也出失败摘要`() {
+        emit(RunnerEvent.Progress("启动游戏", 0, 1))
+        emit(focus(MaaMsg.NODE_PIPELINE_NODE_FAILED, trace = false, details = """{"task_id":7,"node_id":4,"name":"Quiet"}"""))
+        emit(RunnerEvent.TaskFinished(0, success = false))
+
+        assertEquals(0, failures.single().failedNodes)
+        assertNull(failures.single().root)
+    }
+
+    @Test
+    fun `成功或被取消的任务不出失败摘要`() {
+        emit(RunnerEvent.Progress("启动游戏", 0, 2))
+        callback(MaaMsg.NODE_PIPELINE_NODE_FAILED, """{"task_id":7,"node_id":3,"name":"Retry"}""")
+        emit(RunnerEvent.TaskFinished(0, success = true))
+        emit(RunnerEvent.Progress("领取奖励", 1, 2))
+        callback(MaaMsg.NODE_PIPELINE_NODE_FAILED, """{"task_id":8,"node_id":3,"name":"FindReward"}""")
+        finish(ExecutionResult.Cancelled(emptyList()))
+
+        assertTrue(failures.isEmpty())
     }
 
     @Test

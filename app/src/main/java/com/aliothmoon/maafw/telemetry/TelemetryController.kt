@@ -24,7 +24,7 @@ import timber.log.Timber
  * 开关缺省为开，与 MXU `helpImproveSoftware ?? true` 一致；debug 构建同样上报，靠 `maafwapp.build_type` 区分
  *
  * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
- * 任务与节点的结果（[RunTracer]）；focus 正文、截图、日志正文一概不带
+ * 任务与节点的结果（[RunTracer]）、任务终态失败的事件（[TaskFailure]）；focus 正文、截图、日志正文一概不带
  */
 class TelemetryController(
     private val context: Context,
@@ -38,11 +38,15 @@ class TelemetryController(
         val definition: TelemetryDefinition,
         val appName: String,
         val appVersion: String,
+        val environment: String,
     )
 
     private val lock = Any()
     private var active: ActiveTelemetry? = null
-    private val tracer = RunTracer(startTransaction = { name, op -> Sentry.startTransaction(name, op) })
+    private val tracer = RunTracer(
+        startTransaction = { name, op -> Sentry.startTransaction(name, op) },
+        onTaskFailure = ::captureFailure,
+    )
 
     /** 取值不随 DSN 变，重新初始化不必再查一遍 ActivityManager */
     private val hardware by lazy { TelemetryHardware.collect(context) }
@@ -53,23 +57,44 @@ class TelemetryController(
             Timber.i("[telemetry] 匿名设备 ID (Sentry user.id) = %s", TelemetryUserId.get(context))
         }
         scope.launch {
-            combine(projectRepository.state, settings.telemetryEnabled) { project, enabled ->
+            combine(
+                projectRepository.state,
+                settings.loaded,
+                settings.telemetryEnabled,
+                settings.updateChannel,
+            ) { project, loaded, enabled, channel ->
                 val definition = (project as? ProjectState.Ready)?.definition
                 val telemetry = definition?.telemetry
                 when {
-                    !enabled -> null
+                    // 读盘前开关与频道都还是默认值，照着初始化会绕过用户的关闭，environment 也会记成默认频道
+                    !loaded || !enabled -> null
                     definition == null || telemetry == null -> null
-                    else -> ActiveTelemetry(telemetry, definition.name, definition.version ?: DEFAULT_APP_VERSION)
+                    else -> ActiveTelemetry(
+                        definition = telemetry,
+                        appName = definition.name,
+                        appVersion = telemetryAppVersion(definition.version, BuildConfig.MAFW_PROJECT_VERSION),
+                        // PI 没写就用更新频道，与 MXU 一致：桌面端按 stable / beta 分的看板才看得到这边
+                        environment = telemetry.environment ?: channel.name.lowercase(),
+                    )
                 }
             }.distinctUntilChanged().collect(::apply)
         }
         scope.launch {
             runnerPort.events.collect { envelope ->
                 synchronized(lock) {
-                    if (active?.definition?.tracing == true) tracer.onEvent(envelope.executionId, envelope.event)
+                    // 不看 tracing：它关着时采样率是 0，事务不发，失败事件照发，与 MXU 一致
+                    if (active != null) tracer.onEvent(envelope.executionId, envelope.event)
                 }
             }
         }
+    }
+
+    /** 由 [tracer] 在上面那把锁里回调，[active] 此刻就是这轮所属的那份 */
+    private fun captureFailure(failure: TaskFailure) {
+        val appName = active?.appName ?: return
+        val eventId = Sentry.captureEvent(failure.toSentryEvent(appName))
+        // 与设备 ID 那行同理：凭它能从用户的日志直接找到 Sentry 里的这条事件
+        Timber.i("[telemetry] task failure event_id=%s run_id=%s task=%s", eventId, failure.runId, failure.task)
     }
 
     /** 由 [TelemetryHook] 在投递前调用 */
@@ -102,9 +127,10 @@ class TelemetryController(
         val definition = telemetry.definition
         SentryAndroid.init(context) { options ->
             options.dsn = definition.dsn
-            options.environment = definition.environment
-            // 与 MXU 的 `MXU@<mxuVersion>+<appName>@<appVersion>` 同形
-            options.release = "$CLIENT_NAME@${BuildConfig.VERSION_NAME}+${telemetry.appName}@${telemetry.appVersion}"
+            options.environment = telemetry.environment
+            // 与 MXU 的 `MXU@<mxuVersion>+<appName>@<appVersion>` 同形。前半截是外壳自己的版本：
+            // 整包构建时 VERSION_NAME 跟的是外层项目，写它就成了项目版本报两遍
+            options.release = "$CLIENT_NAME@${BuildConfig.MAFW_APP_VERSION}+${telemetry.appName}@${telemetry.appVersion}"
             options.tracesSampleRate = if (definition.tracing) definition.tracesSampleRate.coerceIn(0.0, 1.0) else 0.0
             options.isSendDefaultPii = false
             // Session（Release Health）与 MXU 一样开着，日活与 crash-free 率靠它
@@ -121,15 +147,30 @@ class TelemetryController(
         Sentry.setUser(User().apply { id = TelemetryUserId.get(context) })
         Sentry.setTag("app.name", telemetry.appName)
         Sentry.setTag("app.version", telemetry.appVersion)
-        Sentry.setTag("maafwapp.version", BuildConfig.VERSION_NAME)
+        Sentry.setTag("maafwapp.version", BuildConfig.MAFW_APP_VERSION)
         Sentry.setTag("maafwapp.build_type", BuildConfig.BUILD_TYPE)
         Sentry.configureScope { it.setContexts("hardware", hardware) }
     }
 
     private companion object {
         const val CLIENT_NAME = "MaaFwApp"
-
-        /** 与 MXU 缺省 `interface.version` 时的取值一致 */
-        const val DEFAULT_APP_VERSION = "0.0.0"
     }
 }
+
+/**
+ * 上报用的项目版本：整包构建时取构建期定下的 [buildVersion]。PI 里的 `version` 在源码树里只是占位，
+ * 桌面包靠 CI 改写成 tag，APK 没有这一步；没有外层项目可取版本时才用 PI 自己写的
+ *
+ * PI 的写法带 `v` 就补上：桌面端报的是 `v2.30.1` 这样的原样 tag，前缀对不齐就没法按版本对照。
+ * 没有 tag 的仓库版本名退化成短哈希，那不是版本号，原样用
+ */
+internal fun telemetryAppVersion(piVersion: String?, buildVersion: String): String = when {
+    buildVersion.isBlank() -> piVersion?.takeIf(String::isNotBlank) ?: DEFAULT_APP_VERSION
+    piVersion?.startsWith("v", ignoreCase = true) == true && NUMERIC_VERSION.containsMatchIn(buildVersion) -> "v$buildVersion"
+    else -> buildVersion
+}
+
+private val NUMERIC_VERSION = Regex("""^\d+\.\d+""")
+
+/** 与 MXU 缺省 `interface.version` 时的取值一致 */
+private const val DEFAULT_APP_VERSION = "0.0.0"
