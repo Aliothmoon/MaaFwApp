@@ -291,6 +291,8 @@ object PiParser {
             dsn = dsn,
             tracing = sentry.boolean("tracing") ?: true,
             tracesSampleRate = sentry.string("traces_sample_rate")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 1.0,
+            failureAttachmentsSampleRate =
+                sentry.string("failure_attachments_sample_rate")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 1.0,
             environment = sentry.string("environment")?.takeIf(String::isNotBlank),
         )
     }

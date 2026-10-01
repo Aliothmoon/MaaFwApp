@@ -128,6 +128,7 @@ class PiMetadataTest {
                       "dsn": "https://key@example.com/1",
                       "tracing": false,
                       "traces_sample_rate": 0.25,
+                      "failure_attachments_sample_rate": 0.5,
                       "environment": "beta"
                     }
                   }
@@ -138,6 +139,7 @@ class PiMetadataTest {
         assertEquals("https://key@example.com/1", full.dsn)
         assertEquals(false, full.tracing)
         assertEquals(0.25, full.tracesSampleRate, 0.0)
+        assertEquals(0.5, full.failureAttachmentsSampleRate, 0.0)
         assertEquals("beta", full.environment)
 
         val defaults = PiParser.parseTelemetry(
@@ -145,6 +147,7 @@ class PiMetadataTest {
         )!!
         assertTrue(defaults.tracing)
         assertEquals(1.0, defaults.tracesSampleRate, 0.0)
+        assertEquals(1.0, defaults.failureAttachmentsSampleRate, 0.0)
         assertNull(defaults.environment)
     }
 

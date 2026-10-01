@@ -2,20 +2,29 @@ package com.aliothmoon.maafw.telemetry
 
 import android.content.Context
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunPlan
+import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import io.sentry.Attachment
+import io.sentry.Hint
 import io.sentry.Sentry
+import io.sentry.SentryAttributes
+import io.sentry.SentryOptions
 import io.sentry.android.core.SentryAndroid
+import io.sentry.logger.SentryLogParameters
 import io.sentry.protocol.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.io.File
 
 /**
  * PI v2.9.0 `telemetry.sentry` 的落地，事件模型与字段对齐 MXU `commands/telemetry.rs`
@@ -24,7 +33,9 @@ import timber.log.Timber
  * 开关缺省为开，与 MXU `helpImproveSoftware ?? true` 一致；debug 构建同样上报，靠 `maafwapp.build_type` 区分
  *
  * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
- * 任务与节点的结果（[RunTracer]）、任务终态失败的事件（[TaskFailure]）；focus 正文、截图、日志正文一概不带
+ * 任务与节点的结果（[RunTracer]）、任务终态失败的事件（[TaskFailure]）。
+ * 任务失败时另带这个任务期间新写的日志尾巴与 `on_error/` 出错截图（[TaskEvidence]），
+ * 日志里的 PI password 先换成掩码；任务没失败就不碰日志和截图，focus 正文任何时候都不带
  */
 class TelemetryController(
     private val context: Context,
@@ -32,6 +43,8 @@ class TelemetryController(
     private val settings: AppSettingsManager,
     private val runnerPort: RunnerPort,
     private val scope: CoroutineScope,
+    /** 当前保存着的 PI password 明文，失败日志上传前打码用 */
+    private val secrets: suspend () -> Collection<String>,
 ) {
 
     private data class ActiveTelemetry(
@@ -46,6 +59,18 @@ class TelemetryController(
     private val tracer = RunTracer(
         startTransaction = { name, op -> Sentry.startTransaction(name, op) },
         onTaskFailure = ::captureFailure,
+    )
+    private val reporter = TaskFailureReporter(
+        scope = scope,
+        sources = {
+            EvidenceSource.of(
+                logDir = AppPaths.LOG_DIR,
+                piRoot = File(AppPaths.ROOT, AppFiles.PI_DIR),
+                piLogInclude = BuildConfig.MAFW_PI_LOG_INCLUDE.toList(),
+            )
+        },
+        secrets = secrets,
+        send = ::sendFailure,
     )
 
     /** 取值不随 DSN 变，重新初始化不必再查一遍 ActivityManager */
@@ -83,7 +108,10 @@ class TelemetryController(
             runnerPort.events.collect { envelope ->
                 synchronized(lock) {
                     // 不看 tracing：它关着时采样率是 0，事务不发，失败事件照发，与 MXU 一致
-                    if (active != null) tracer.onEvent(envelope.executionId, envelope.event)
+                    if (active != null) {
+                        if (envelope.event is RunnerEvent.Progress) reporter.onTaskStarted()
+                        tracer.onEvent(envelope.executionId, envelope.event)
+                    }
                 }
             }
         }
@@ -91,8 +119,34 @@ class TelemetryController(
 
     /** 由 [tracer] 在上面那把锁里回调，[active] 此刻就是这轮所属的那份 */
     private fun captureFailure(failure: TaskFailure) {
-        val appName = active?.appName ?: return
-        val eventId = Sentry.captureEvent(failure.toSentryEvent(appName))
+        val telemetry = active ?: return
+        reporter.report(failure, telemetry.appName, telemetry.definition.failureAttachmentsSampleRate)
+    }
+
+    /** 由 [reporter] 在后台取完证之后调用，不在锁里 */
+    private fun sendFailure(report: FailureReport) {
+        val failure = report.failure
+        val event = failure.toSentryEvent(report.appName).apply { setEvidence(report.logs, report.attachment) }
+        report.logs?.let { logs ->
+            val context = event.diagnosticLogContext(failure)
+            logs.entries.asSequence().flatMap { it.toRecords(context) }.forEach { record ->
+                // 不传 args：日志正文里的 % 不能被当成格式串
+                Sentry.logger().log(
+                    record.level,
+                    SentryLogParameters.create(SentryAttributes.fromMap(record.attributes)),
+                    record.body,
+                )
+            }
+        }
+        val attachment = report.attachment as? AttachmentOutcome.Attached
+        val eventId = if (attachment == null) {
+            Sentry.captureEvent(event)
+        } else {
+            Sentry.captureEvent(
+                event,
+                Hint.withAttachment(Attachment(attachment.bytes, attachment.filename, ZIP_CONTENT_TYPE)),
+            )
+        }
         // 与设备 ID 那行同理：凭它能从用户的日志直接找到 Sentry 里的这条事件
         Timber.i("[telemetry] task failure event_id=%s run_id=%s task=%s", eventId, failure.runId, failure.task)
     }
@@ -109,6 +163,7 @@ class TelemetryController(
     private fun apply(telemetry: ActiveTelemetry?) {
         val previous = synchronized(lock) {
             tracer.reset()
+            reporter.cancelAll()
             active.also { active = null }
         }
         if (previous != null) {
@@ -133,6 +188,9 @@ class TelemetryController(
             options.release = "$CLIENT_NAME@${BuildConfig.MAFW_APP_VERSION}+${telemetry.appName}@${telemetry.appVersion}"
             options.tracesSampleRate = if (definition.tracing) definition.tracesSampleRate.coerceIn(0.0, 1.0) else 0.0
             options.isSendDefaultPii = false
+            // 只有任务失败的那份日志尾巴走 Sentry Logs，外壳平时的日志不往这里写
+            options.logs.isEnabled = true
+            options.logs.beforeSend = SentryOptions.Logs.BeforeSendLogCallback { it.apply { bindDiagnosticTrace() } }
             // Session（Release Health）与 MXU 一样开着，日活与 crash-free 率靠它
             options.isEnableAutoSessionTracking = true
             // 其余自动采集面全部关掉，只留本类显式发出的事件
@@ -154,6 +212,7 @@ class TelemetryController(
 
     private companion object {
         const val CLIENT_NAME = "MaaFwApp"
+        const val ZIP_CONTENT_TYPE = "application/zip"
     }
 }
 

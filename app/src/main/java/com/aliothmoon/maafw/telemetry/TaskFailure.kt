@@ -40,8 +40,7 @@ internal data class TaskFailure(
  * 字段逐项对齐 MXU `capture_failure_event`，名字前缀换成外壳自己的：标题同形，
  * 两个客户端的同一个失败节点在 Issues 里各成一组、靠标题就能对上
  *
- * `app.*` 与 `maafwapp.*` 的 tag 由全局 scope 带上，这里不重复写；
- * 截图与日志正文不带，MXU 那套 `attachment.*` / `logs.*` 也就没有
+ * `app.*` 与 `maafwapp.*` 的 tag 由全局 scope 带上，这里不重复写；证据的去向另由 [setEvidence] 记
  */
 internal fun TaskFailure.toSentryEvent(appName: String): SentryEvent {
     val node = root?.node ?: UNOBSERVED_NODE
@@ -69,6 +68,53 @@ internal fun TaskFailure.toSentryEvent(appName: String): SentryEvent {
         // 事务的 Span 数满了之后任务 Span 是 no-op，它的 trace id 是全零，写上去反而指错地方
         span.spanContext.takeIf { it.traceId != SentryId.EMPTY_ID }?.let(event.contexts::setTrace)
     }
+}
+
+/**
+ * 证据带没带上、为什么没带，写进 `logs.*` 与 `attachment.*`，键与取值同 MXU：
+ * 日志正文走 Sentry Logs、截图是附件，事件自己身上只留这份摘要
+ */
+internal fun SentryEvent.setEvidence(logs: DiagnosticLogs?, attachment: AttachmentOutcome) {
+    if (logs == null) {
+        setExtra("logs.status", "not_available")
+    } else {
+        setExtra("logs.status", if (logs.entries.isEmpty()) "no_evidence" else "captured")
+        setExtra("logs.count", logs.entries.size)
+        setExtra("logs.selected_raw_bytes", logs.selectedRawBytes)
+        setExtra("logs.truncated", logs.truncated)
+        if (logs.warnings.isNotEmpty()) setExtra("logs.warnings", logs.warnings.joinToString(","))
+    }
+    when (attachment) {
+        AttachmentOutcome.NotSelected -> setExtra("attachment.status", "not_selected")
+        is AttachmentOutcome.Attached -> {
+            setExtra("attachment.status", "attached")
+            setExtra("attachment.image_count", attachment.imageCount)
+            setExtra("attachment.selected_raw_bytes", attachment.selectedRawBytes)
+            setExtra("attachment.bundle_bytes", attachment.bytes.size)
+            setExtra("attachment.selection", "new_on_error_screenshots")
+        }
+        is AttachmentOutcome.Omitted -> {
+            setExtra("attachment.status", attachment.status)
+            setExtra("attachment.detail", attachment.detail)
+            attachment.selectedRawBytes?.let { setExtra("attachment.selected_raw_bytes", it) }
+            attachment.bundleBytes?.let { setExtra("attachment.bundle_bytes", it) }
+        }
+    }
+}
+
+/** 这条事件名下的日志记录要带的关联信息；事件 ID 在构造时就定了，发之前即可引用 */
+internal fun SentryEvent.diagnosticLogContext(failure: TaskFailure): DiagnosticLogContext {
+    val trace = contexts.trace
+    return DiagnosticLogContext(
+        eventId = eventId.toString(),
+        runId = failure.runId,
+        taskId = failure.taskId,
+        task = failure.task,
+        failureNode = failure.root?.node ?: UNOBSERVED_NODE,
+        failureStage = failure.root?.stage ?: UNOBSERVED_STAGE,
+        traceId = trace?.traceId?.toString(),
+        spanId = trace?.spanId?.toString(),
+    )
 }
 
 private fun SentryEvent.setSignal(prefix: String, signal: FailureSignal) {

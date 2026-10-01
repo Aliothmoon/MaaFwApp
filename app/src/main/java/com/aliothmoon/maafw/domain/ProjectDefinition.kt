@@ -52,6 +52,8 @@ data class TelemetryDefinition(
     val dsn: String,
     val tracing: Boolean = true,
     val tracesSampleRate: Double = 1.0,
+    /** 失败事件带出错截图的比例；事件本身与日志不受它影响 */
+    val failureAttachmentsSampleRate: Double = 1.0,
     val environment: String? = null,
 )
 

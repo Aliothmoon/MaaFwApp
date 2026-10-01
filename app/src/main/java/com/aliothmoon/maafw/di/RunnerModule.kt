@@ -1,6 +1,8 @@
 package com.aliothmoon.maafw.di
 
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.config.passwordPlaintexts
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.runner.AutoSleepHook
@@ -36,6 +38,7 @@ import com.aliothmoon.maafw.runner.WatchdogNoticeHook
 import com.aliothmoon.maafw.service.AccessibilityTextInputSink
 import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -83,12 +86,14 @@ val runnerModule = module {
     }
 
     single {
+        val configurationStore = get<UserConfigurationStore>()
         TelemetryController(
             context = androidContext(),
             projectRepository = get(),
             settings = get(),
             runnerPort = get(),
             scope = get(named<AppCoroutineScope>()),
+            secrets = { configurationStore.data.first().passwordPlaintexts() },
         )
     }
 
