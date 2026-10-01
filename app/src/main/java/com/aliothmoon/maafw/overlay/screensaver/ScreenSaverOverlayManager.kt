@@ -14,7 +14,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
-import com.aliothmoon.maafw.runner.RunnerEvent
+import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.isBusy
@@ -39,6 +39,7 @@ import timber.log.Timber
 class ScreenSaverOverlayManager(
     private val context: Context,
     private val runnerPort: RunnerPort,
+    private val focusDispatcher: FocusDispatcher,
     private val appSettings: AppSettingsGateway,
 ) {
 
@@ -138,13 +139,18 @@ class ScreenSaverOverlayManager(
             .onFailure { Timber.e(it, "Failed to remove screen saver") }
     }
 
+    /**
+     * 读 [FocusDispatcher.recording] 而不是 `runnerPort.events`：后者的 focus 还是没补完的模板，
+     * `$key`、文件路径、`{name}` 都原样挂着
+     */
     private fun startLogRelay() {
         logJob?.cancel()
         logJob = scope.launch {
-            runnerPort.events.collect { envelope ->
-                if (envelope.event !is RunnerEvent.Marker) {
-                    latestLog.value = envelope.event.toLogText(envelope.taskLabel)
-                }
+            focusDispatcher.recording.collect { envelope ->
+                // 空串不盖掉上一句：Marker 没有正文，只有一张图的 focus 剥完记号也是空
+                envelope.event.toLogText(envelope.taskLabel)
+                    .takeIf(String::isNotBlank)
+                    ?.let { latestLog.value = it }
             }
         }
     }

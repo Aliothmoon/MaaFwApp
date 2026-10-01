@@ -92,12 +92,14 @@ private val NON_ESSENTIAL_KINDS =
  * 屏保那一行只要一句话，带上 details_json 就糊了
  *
  * [taskLabel] 是信封里冻结的展示名（PI 本地化过）；进度行用它，拿不到才退回内部 name
+ *
+ * 那一行是纯文本面，focus 的 Markdown 与 HTML 记号要剥掉
  */
 fun RunnerEvent.toLogText(taskLabel: String? = null): String = when (this) {
     is RunnerEvent.Marker -> ""
     is RunnerEvent.Log -> message
     is RunnerEvent.Progress -> "${taskLabel?.takeIf(String::isNotBlank) ?: taskName} $completed/$total"
-    is RunnerEvent.Focus -> focus.content
+    is RunnerEvent.Focus -> focusPlainText(focus.content)
     is RunnerEvent.AgentOutput -> line
     is RunnerEvent.AgentConnected -> label
     is RunnerEvent.MalformedCallback -> MALFORMED_LABEL
