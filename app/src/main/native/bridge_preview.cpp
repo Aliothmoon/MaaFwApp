@@ -1,5 +1,7 @@
 #include "bridge_preview.h"
 
+#include "bridge_frame_buffer.h"
+
 #include <android/hardware_buffer.h>
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
@@ -64,6 +66,7 @@ static std::condition_variable g_renderCv;
 static std::atomic<bool> g_renderThreadRunning{false};
 static ANativeWindow *g_pendingWindow = nullptr;
 static bool g_pendingDetach = false;
+static bool g_pendingBlank = false;
 
 static GLuint LoadShader(GLenum type, const char *source) {
     GLuint shader = glCreateShader(type);
@@ -225,6 +228,19 @@ static void DestroyEgl() {
     g_eglState = EGLState{};
 }
 
+static bool MakeSurfaceCurrent(const char *caller) {
+    if (eglMakeCurrent(g_eglState.display, g_eglState.surface, g_eglState.surface,
+                       g_eglState.context) == EGL_FALSE) {
+        LOGE("%s: eglMakeCurrent failed, error=0x%x", caller, eglGetError());
+        return false;
+    }
+    return true;
+}
+
+static void ReleaseCurrent() {
+    eglMakeCurrent(g_eglState.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+}
+
 static void RenderPreview(AHardwareBuffer *hb) {
     if (g_eglState.surface == EGL_NO_SURFACE || !g_eglState.program || !hb) {
         return;
@@ -234,9 +250,7 @@ static void RenderPreview(AHardwareBuffer *hb) {
         return;
     }
 
-    if (eglMakeCurrent(g_eglState.display, g_eglState.surface, g_eglState.surface,
-                       g_eglState.context) == EGL_FALSE) {
-        LOGE("RenderPreview: eglMakeCurrent failed, error=0x%x", eglGetError());
+    if (!MakeSurfaceCurrent("RenderPreview")) {
         return;
     }
 
@@ -246,7 +260,7 @@ static void RenderPreview(AHardwareBuffer *hb) {
                                           EGL_NATIVE_BUFFER_ANDROID, clientBuffer, attrs);
     if (image == EGL_NO_IMAGE_KHR) {
         LOGE("RenderPreview: eglCreateImageKHR failed");
-        eglMakeCurrent(g_eglState.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        ReleaseCurrent();
         return;
     }
 
@@ -269,7 +283,18 @@ static void RenderPreview(AHardwareBuffer *hb) {
     eglSwapBuffers(g_eglState.display, g_eglState.surface);
 
     eglDestroyImageKHR(g_eglState.display, image);
-    eglMakeCurrent(g_eglState.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    ReleaseCurrent();
+}
+
+static void RenderBlank() {
+    if (g_eglState.surface == EGL_NO_SURFACE || !MakeSurfaceCurrent("RenderBlank")) {
+        return;
+    }
+
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+    eglSwapBuffers(g_eglState.display, g_eglState.surface);
+    ReleaseCurrent();
 }
 
 static void RenderLoop() {
@@ -279,11 +304,13 @@ static void RenderLoop() {
         AImage *image = nullptr;
         ANativeWindow *nextWindow = nullptr;
         bool detach = false;
+        bool blank = false;
         {
             std::unique_lock<std::mutex> lock(g_renderMutex);
             g_renderCv.wait(lock, [] {
                 return !g_renderThreadRunning.load(std::memory_order_acquire) ||
-                       !g_renderQueue.empty() || g_pendingWindow != nullptr || g_pendingDetach;
+                       !g_renderQueue.empty() || g_pendingWindow != nullptr || g_pendingDetach ||
+                       g_pendingBlank;
             });
 
             if (!g_renderThreadRunning.load(std::memory_order_acquire)) {
@@ -294,6 +321,8 @@ static void RenderLoop() {
             g_pendingDetach = false;
             nextWindow = g_pendingWindow;
             g_pendingWindow = nullptr;
+            blank = g_pendingBlank;
+            g_pendingBlank = false;
 
             if (!g_renderQueue.empty()) {
                 image = g_renderQueue.front();
@@ -317,6 +346,10 @@ static void RenderLoop() {
             }
         }
 
+        // 同一拍里还取到了图，那是清屏请求之后才入队的新帧，画在黑屏之后
+        if (blank) {
+            RenderBlank();
+        }
         if (image) {
             AHardwareBuffer *hb = nullptr;
             if (AImage_getHardwareBuffer(image, &hb) == AMEDIA_OK && hb) {
@@ -429,4 +462,22 @@ bool DispatchPreview(AImage *image) {
 void DrainPreviewQueue() {
     std::lock_guard<std::mutex> lock(g_renderMutex);
     DrainPreviewQueueLocked();
+}
+
+void BlankPreview(int64_t expectedFrameCount) {
+    if (!g_hasPreview.load(std::memory_order_acquire)) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_renderMutex);
+        // 采集线程先写帧缓冲（帧计数 +1）再往这里入队：计数变了就是来过真帧，
+        // 它要么已在队里要么正等这把锁，再清队列画黑屏会把它盖掉
+        if (GetFrameCount() != expectedFrameCount) {
+            return;
+        }
+        // 还排着的图画的是同一份残影，留着会在黑屏之后又画回来
+        DrainPreviewQueueLocked();
+        g_pendingBlank = true;
+    }
+    g_renderCv.notify_one();
 }

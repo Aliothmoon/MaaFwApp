@@ -66,8 +66,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun destroy() {
         if (!destroyed.compareAndSet(false, true)) return
         Ln.i("$TAG: destroy()")
-        AppWatchdog.stopWatching()
-        StaleFrameGuard.stop()
+        stopDisplayWatchers()
         InputControlUtils.setTouchCallback(null)
         TextInputDispatcher.sink = null
         runner.destroy()
@@ -108,16 +107,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
             Ln.i("$TAG: stopTargetApp skipped, watchdog never acquired a target")
             return false
         }
-        return runCatching {
-            ServiceManager.getActivityManager().forceStopPackage(target).also { stopped ->
-                if (stopped) {
-                    Ln.i("$TAG: force-stopped $target")
-                    StaleFrameGuard.onAppKilled(VirtualDisplayManager.getDisplayId())
-                }
-            }
-        }.getOrElse {
-            Ln.w("$TAG: stopTargetApp failed: ${'$'}it")
-            false
+        return ActivityUtils.forceStop(target, VirtualDisplayManager.getDisplayId()).also { stopped ->
+            if (stopped) Ln.i("$TAG: force-stopped $target")
         }
     }
 
@@ -196,8 +187,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     override fun stopVirtualDisplay() {
-        AppWatchdog.stopWatching()
-        StaleFrameGuard.stop()
+        stopDisplayWatchers()
         GameFpsMonitor.stop()
         when (virtualDisplayMode.get()) {
             DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
@@ -293,18 +283,23 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun startRun(runPlanJson: String?): Boolean {
         if (runPlanJson.isNullOrBlank()) return false
+        StaleFrameGuard.blankIfVacant()
         val started = runner.start(runPlanJson)
         if (started) {
             AppWatchdog.startWatching()
-            StaleFrameGuard.start()
+            StaleFrameGuard.start(runner::isRunning)
         }
         return started
     }
 
     override fun stopRun(): Boolean {
+        stopDisplayWatchers()
+        return runner.stop()
+    }
+
+    private fun stopDisplayWatchers() {
         AppWatchdog.stopWatching()
         StaleFrameGuard.stop()
-        return runner.stop()
     }
 
     override fun isRunning(): Boolean = runner.isRunning()

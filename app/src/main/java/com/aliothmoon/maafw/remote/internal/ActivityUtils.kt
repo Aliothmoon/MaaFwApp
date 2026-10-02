@@ -96,14 +96,29 @@ object ActivityUtils {
     private fun componentOf(spec: String): ComponentName? =
         spec.takeIf { it.contains('/') }?.let { ComponentName.unflattenFromString(it) }
 
+    /** API < Q 读不出任务在哪块屏上，只能拿「上次是我们把它拉到这块屏上的」当它占着屏的依据 */
+    @Volatile
+    private var lastLaunched: Pair<String, Int>? = null
+
+    /**
+     * 强杀 [packageName]（可以是 component 全名）；它占着 [displayId] 时等画面停稳并把帧缓冲换成黑帧
+     *
+     * 杀的不是屏上那个应用就不碰帧缓冲：屏上是别人的静止画面，换黑了不会自己回来
+     */
     @JvmStatic
-    fun stopApp(packageName: String): Boolean {
+    fun forceStop(packageName: String, displayId: Int): Boolean {
         val targetPackage = packageNameOf(packageName)
-        return runCatching {
+        val occupiesDisplay = when (val current = getAppDisplayId(targetPackage)) {
+            null -> lastLaunched == (targetPackage to displayId)
+            else -> current == displayId
+        }
+        val stopped = runCatching {
             ServiceManager.getActivityManager().forceStopPackage(targetPackage)
         }.onFailure {
-            Ln.w("stopApp: failed to force-stop $targetPackage", it)
+            Ln.w("forceStop: failed to force-stop $targetPackage", it)
         }.getOrDefault(false)
+        if (stopped && occupiesDisplay) StaleFrameGuard.blankAfterKill(displayId, targetPackage)
+        return stopped
     }
 
     @JvmStatic
@@ -145,21 +160,16 @@ object ActivityUtils {
         if (forceStop) {
             if (getAppDisplayId(targetPackage) == displayId) {
                 Ln.i("startApp: $targetPackage already on display $displayId, skip force-stop")
-            } else if (ServiceManager.getActivityManager().forceStopPackage(targetPackage)) {
-                StaleFrameGuard.onAppKilled(displayId)
+            } else {
+                forceStop(targetPackage, displayId)
             }
         }
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
 
-        return startActivity(intent, displayId)
+        return startActivity(intent, displayId).also { started ->
+            if (started) lastLaunched = targetPackage to displayId
+        }
     }
-
-    /**
-     * 返回运行在 [displayId] 上的最顶层 app 包名；没有任务或 API 不支持时返回 null。
-     * 看门狗用它从虚拟屏反推目标 app，无需外部告知包名。
-     */
-    fun getTopPackageOnDisplay(displayId: Int): String? =
-        (probeDisplay(displayId) as? DisplayOccupancy.Occupied)?.topPackage
 
     sealed interface DisplayOccupancy {
         data class Occupied(val topPackage: String?) : DisplayOccupancy
@@ -169,7 +179,7 @@ object ActivityUtils {
 
     /**
      * [displayId] 上有没有任务。API 不支持、任务表为空、有任务读不出 displayId 都算 [DisplayOccupancy.Unknown]：
-     * [StaleFrameGuard] 拿 Empty 当「画面已经没人画了」去作废帧缓冲，把判不出当成空了，
+     * [StaleFrameGuard] 拿 Empty 当「画面已经没人画了」去换黑帧，把判不出当成空了，
      * 一张不再重绘的静止界面就会一直黑下去
      */
     fun probeDisplay(displayId: Int): DisplayOccupancy {

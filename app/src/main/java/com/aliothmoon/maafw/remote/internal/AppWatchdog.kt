@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * 盯虚拟屏上的目标 app：从 [VirtualDisplayManager] 的 displayId 反推顶层包名作为目标，
  * 离屏则用 [ActivityUtils.repinAppToDisplay] 拉回；状态经 RemoteService.watchdogState() 暴露给 app。
  *
- * 与 MaaMeow 的差异：目标包不是外部告知，而是 getTopPackageOnDisplay 自取；
+ * 与 MaaMeow 的差异：目标包不是外部告知，而是 [ActivityUtils.probeDisplay] 自取；
  * 判活与 onDisplay 合成一步（屏上有 app 即活）。全程 runCatching 宽松，不抛不误伤
  */
 object AppWatchdog {
@@ -81,7 +81,7 @@ object AppWatchdog {
             _state.value = STATE_IDLE
             return
         }
-        val top = runCatching { ActivityUtils.getTopPackageOnDisplay(displayId) }.getOrNull()
+        val top = (ActivityUtils.probeDisplay(displayId) as? ActivityUtils.DisplayOccupancy.Occupied)?.topPackage
         if (top != null) {
             if (targetPackage == null) Ln.i("AppWatchdog: target acquired: $top")
             targetPackage = top
@@ -101,7 +101,7 @@ object AppWatchdog {
 
         // 屏上空了先问进程还在不在：被杀和"窗口跑到主屏去了"是两回事，
         // 拿后者的文案去讲前者，用户会照着去改前台模式而问题根本不在那
-        when (ProcessLiveness.of(pkg)) {
+        when (ProcessLiveness.probe(pkg)) {
             ProcessLiveness.DEAD -> {
                 if (!diedNotified) {
                     diedNotified = true

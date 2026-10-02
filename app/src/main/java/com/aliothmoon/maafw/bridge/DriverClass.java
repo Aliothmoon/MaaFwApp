@@ -7,7 +7,6 @@ import android.os.SystemClock;
 import com.aliothmoon.maafw.remote.internal.ActivityUtils;
 import com.aliothmoon.maafw.remote.internal.GameFpsMonitor;
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager;
-import com.aliothmoon.maafw.remote.internal.StaleFrameGuard;
 import com.aliothmoon.maafw.third.FakeContext;
 import com.aliothmoon.maafw.third.Ln;
 
@@ -69,11 +68,7 @@ public final class DriverClass {
 
     public static boolean stopApp(String packageName, int displayId) {
         Ln.i(TAG + String.format(Locale.US, ": stopApp %s displayId=%d", packageName, displayId));
-        boolean stopped = ActivityUtils.stopApp(packageName);
-        if (stopped) {
-            StaleFrameGuard.onAppKilled(displayId);
-        }
-        return stopped;
+        return ActivityUtils.forceStop(packageName, displayId);
     }
 
     private static void logTargetAppInfo(String rawSpec, int displayId, boolean forceStop) {

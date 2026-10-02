@@ -1,29 +1,32 @@
 package com.aliothmoon.maafw.remote.internal
 
 /**
- * 帧停了以后，要连续几拍确认画面的主人不在了才算残影；纯逻辑，便于单测
+ * 帧停了以后，要连续几次确认画面的主人不在了才算残影；纯逻辑，便于单测
  */
-class StaleFrameDetector(private val confirmTicks: Int = 2) {
+class StaleFrameDetector {
 
-    enum class Observation { GONE, PRESENT, UNKNOWN }
+    /** 判不出也算 [STILL_THERE] */
+    enum class Observation { GONE, STILL_THERE }
 
     private var lastCount = -1L
     private var goneStreak = 0
 
     /**
-     * 帧计数与上一拍相同返回 true。比的是「不等」而不是「变大」：
-     * 虚拟屏重建会把计数清零，那也是有新画面要来
+     * 每拍调一次，返回 true 表示该换黑帧了。帧计数变了就不调 [observe]——比的是「不等」而不是「变大」，
+     * 虚拟屏重建会把计数清零，那也是有新画面要来。[observe] 返回 null 表示这一拍没查，不算数也不清零
      */
-    fun stalled(frameCount: Long): Boolean {
-        if (frameCount == lastCount) return true
-        lastCount = frameCount
-        goneStreak = 0
-        return false
+    fun onTick(frameCount: Long, observe: () -> Observation?): Boolean {
+        if (frameCount != lastCount) {
+            lastCount = frameCount
+            goneStreak = 0
+            return false
+        }
+        val observation = observe() ?: return false
+        goneStreak = if (observation == Observation.GONE) minOf(goneStreak + 1, CONFIRMATIONS) else 0
+        return goneStreak >= CONFIRMATIONS
     }
 
-    /** 只在 [stalled] 为 true 的那一拍调；判不出不算半次确认，和 PRESENT 一样清零 */
-    fun confirm(observation: Observation): Boolean {
-        goneStreak = if (observation == Observation.GONE) minOf(goneStreak + 1, confirmTicks) else 0
-        return goneStreak >= confirmTicks
+    private companion object {
+        const val CONFIRMATIONS = 2
     }
 }
