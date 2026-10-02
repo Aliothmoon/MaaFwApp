@@ -481,6 +481,9 @@
     <string name="run_log_connecting">正在连接设备…</string>
     <string name="run_log_connected">设备连接成功</string>
     <string name="run_log_agent_connected">Agent 已连接: %1$s</string>
+    <string name="run_log_agent_exited_signal">Agent 异常退出: %1$s（%2$s）</string>
+    <string name="run_log_agent_exited_code">Agent 异常退出: %1$s（退出码 %2$d）</string>
+    <string name="run_log_agent_crash_report">%1$s，崩溃现场已存到 log/crash/%2$s</string>
     <string name="run_log_connect_failed">设备连接失败</string>
     <string name="run_log_resource_loading">正在加载资源: %1$s</string>
     <string name="run_log_resource_loaded">资源加载成功: %1$s</string>

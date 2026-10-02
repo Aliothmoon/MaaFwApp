@@ -79,8 +79,8 @@ data class RunLogSnapshot(
 /**
  * 「进度」档留下的：这一轮跑到哪了
  *
- * agent 的两条流都不在内，是排障信息。agent 崩了照样看得见，
- * 那会以 `Tasker.Task.Failed` 的形式出现在进度档，再切「全部」看 stderr 上的现场
+ * agent 的两条流都不在内，是排障信息。agent 崩了照样看得见：
+ * [RunnerEvent.AgentExited] 那句进这一档，再切「全部」看 stderr 上的现场
  */
 val RunLogEntry.isEssential: Boolean
     get() = kind !in NON_ESSENTIAL_KINDS
@@ -102,6 +102,8 @@ fun RunnerEvent.toLogText(taskLabel: String? = null): String = when (this) {
     is RunnerEvent.Focus -> focusPlainText(focus.content)
     is RunnerEvent.AgentOutput -> line
     is RunnerEvent.AgentConnected -> label
+    // 这里出的是裸 String，没有本地化入口；留空让屏保保持上一句，这句在运行日志里看
+    is RunnerEvent.AgentExited -> ""
     is RunnerEvent.MalformedCallback -> MALFORMED_LABEL
     is RunnerEvent.Callback -> message
 }

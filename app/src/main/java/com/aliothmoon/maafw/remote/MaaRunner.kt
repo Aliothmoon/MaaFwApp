@@ -101,6 +101,11 @@ class MaaRunner(private val agentHost: AgentHost) {
         notify { onAgentOutput(line, fromStderr) }
     }
 
+    /** 由 [AgentHost] 等 child 退出的那条线程调用；不在这里重拉，下一轮 [prepareAgents] 见它死了自会整批重来 */
+    fun onAgentExited(exit: AgentExit) {
+        notify { onAgentExited(exit.index, exit.executable, exit.exitCode, exit.crashReport) }
+    }
+
     /**
      * 把 controller 手里那张缓存帧落到 [path]，供 focus 模板的 `{image}` 用
      *
@@ -496,6 +501,7 @@ class MaaRunner(private val agentHost: AgentHost) {
 
     private fun releaseAgent(agent: ActiveAgent) {
         val agentLib = MaaAgentClientLoader.library
+        agent.session.expectExit()
         // Disconnect 要等 child 回 ShutDown。child 已经没了就不发：ZMQ 未必察觉对端断开，会按请求超时等满，
         // 这期间下一轮起不来、destroy 也退不掉。还活着却不回的，超时后交给 close 去杀
         if (agent.session.isAlive()) {

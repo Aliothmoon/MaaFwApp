@@ -234,6 +234,56 @@ class RunLogComposerTest {
         )
     }
 
+    /** 被信号杀死的显示信号名，自己退出的显示退出码；都进关键档 */
+    @Test
+    fun `agent exit is an essential error line`() {
+        val exec = "/data/app/~~x/lib/arm64/libcpp-algo.so"
+        val signaled = compose(RunnerEvent.AgentExited(index = 1, exec = exec, exitCode = 139, name = "cpp-algo"))
+        assertEquals(RunLogKind.Error, signaled?.kind)
+        assertEquals(true, signaled?.isEssential)
+        assertEquals(
+            UiText.Resource(R.string.run_log_agent_exited_signal, listOf("cpp-algo", "SIGSEGV")),
+            signaled?.text,
+        )
+        assertEquals(
+            UiText.Resource(R.string.run_log_agent_exited_code, listOf("libcpp-algo.so", 1)),
+            compose(RunnerEvent.AgentExited(index = 1, exec = exec, exitCode = 1))?.text,
+        )
+    }
+
+    @Test
+    fun `agent exit names the saved crash report`() {
+        val entry = compose(
+            RunnerEvent.AgentExited(
+                index = 0,
+                exec = "/x/libgo-service.so",
+                exitCode = 134,
+                crashReport = "agent_20261002_222045_24507.txt",
+            ),
+        )
+        assertEquals(
+            UiText.Resource(
+                R.string.run_log_agent_crash_report,
+                listOf(
+                    UiText.Resource(R.string.run_log_agent_exited_signal, listOf("libgo-service.so", "SIGABRT")),
+                    "agent_20261002_222045_24507.txt",
+                ),
+            ),
+            entry?.text,
+        )
+    }
+
+    /** traceback 一大段刚把滑窗打满，紧跟着的「已退出」不能被一起吞掉 */
+    @Test
+    fun `agent exit is shown even while agent output is flooding`() {
+        repeat(AGENT_THRESHOLD) { compose(agentLine("trace $it", fromStderr = true), 0) }
+        assertNull(compose(agentLine("more", fromStderr = true), 0))
+        assertEquals(
+            RunLogKind.Error,
+            compose(RunnerEvent.AgentExited(index = 0, exec = "/x/libgo-service.so", exitCode = 134), 0)?.kind,
+        )
+    }
+
     /**
      * 特权进程攒批之后，洪泛滑窗必须按行计
      *

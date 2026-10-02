@@ -25,7 +25,23 @@ interface AgentSession : AutoCloseable {
     val executable: String
 
     fun isAlive(): Boolean
+
+    /** 接下来的退出是我们要它退的（Disconnect 握手），不按意外退出上报；[close] 自带这一步 */
+    fun expectExit()
 }
+
+/**
+ * child 没被要求退出却退了
+ *
+ * [exitCode] 是 `Process.waitFor` 的原值，被信号杀死时为 128 + 信号号；
+ * [crashReport] 是落在 `log/crash/` 下的现场文件名，没捞到为 null
+ */
+data class AgentExit(
+    val index: Int,
+    val executable: String,
+    val exitCode: Int,
+    val crashReport: String? = null,
+)
 
 interface AgentHost {
     /** @throws AgentLaunchException 运行时缺失、序号越界、或 exec 失败 */

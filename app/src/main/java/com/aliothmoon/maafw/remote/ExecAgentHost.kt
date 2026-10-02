@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.remote
 
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
+import com.aliothmoon.maafw.runner.AgentExitCode
 import com.aliothmoon.maafw.third.Ln
 import java.io.File
 import java.util.concurrent.Executors
@@ -25,6 +26,10 @@ import java.util.concurrent.TimeUnit
 class ExecAgentHost(
     /** child 的每一行输出与它来自哪条流；默认丢弃，只有接了运行日志的调用点才传 */
     private val onOutput: (line: String, fromStderr: Boolean) -> Unit = { _, _ -> },
+    /** child 没被要求退出却退了；它的两条流读完之后才调，现场的最后几行排在这之前 */
+    private val onExit: (AgentExit) -> Unit = {},
+    /** 现场文件的落点；日志目录到 `setup` 才知道，所以现取 */
+    private val crashDir: () -> File? = { null },
 ) : AgentHost {
 
     override fun launch(request: AgentLaunchRequest): AgentSession {
@@ -79,7 +84,17 @@ class ExecAgentHost(
         Ln.i("ExecAgentHost: launching $command (cwd=${request.workingDir})")
         val process = runCatching { builder.start() }
             .getOrElse { throw AgentLaunchException("agent 启动失败：${it.message}", it) }
-        return ProcessAgentSession(executable.absolutePath, process, onOutput)
+        val exec = executable.absolutePath
+        return ProcessAgentSession(exec, process, onOutput) { pid, exitCode ->
+            onExit(AgentExit(request.index, exec, exitCode, saveCrashReport(exec, pid, exitCode)))
+        }
+    }
+
+    private fun saveCrashReport(executable: String, pid: Int?, exitCode: Int): String? {
+        val signal = AgentExitCode.signalOf(exitCode) ?: return null
+        if (pid == null || !AgentExitCode.leavesCrashDump(signal)) return null
+        val dir = crashDir() ?: return null
+        return AgentCrashReport.save(dir, executable, pid, exitCode)
     }
 
     /** 对齐 MXU：统一补 `v` 前缀，MaaVersion() 本身带不带都有可能 */
@@ -118,11 +133,17 @@ private fun String.stripAnsiEscapes(): String =
  * logcat 那份留着不撤：[onOutput] 要过 binder，app 进程不在时那头没人接，而 child 起不来
  * 的现场恰恰常发生在那种时候
  */
-private class ProcessAgentSession(
+internal class ProcessAgentSession(
     override val executable: String,
     private val process: Process,
     onOutput: (line: String, fromStderr: Boolean) -> Unit,
+    onUnexpectedExit: (pid: Int?, exitCode: Int) -> Unit,
 ) : AgentSession {
+
+    private val pid = process.pidOrNull()
+
+    @Volatile
+    private var exitExpected = false
 
     /** 单线程够用：定时冲洗只是把攒下的串交出去 */
     private val flusher = Executors.newSingleThreadScheduledExecutor { r ->
@@ -161,9 +182,33 @@ private class ProcessAgentSession(
         }
     }
 
+    /**
+     * 没人等 child 退出的话，它崩了要到下一次 custom 调用超时才露头，退出码也就此丢了
+     *
+     * 排在 [pumps] 之后建：上报前要等两条流读到 EOF，「已退出」那句才不会抢在 traceback 前面
+     */
+    init {
+        Thread({
+            val exitCode = runCatching { process.waitFor() }.getOrElse { return@Thread }
+            if (exitExpected) return@Thread
+            Ln.e("ExecAgentHost: agent exited unexpectedly, exec=$executable pid=$pid exitCode=$exitCode")
+            pumps.forEach { pump -> runCatching { pump.join(PUMP_DRAIN_TIMEOUT_MILLIS) } }
+            runCatching { onUnexpectedExit(pid, exitCode) }
+                .onFailure { Ln.w("ExecAgentHost: agent exit dispatch failed: ${it.message}") }
+        }, "agent-exit-watch").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
     override fun isAlive(): Boolean = process.isAlive
 
+    override fun expectExit() {
+        exitExpected = true
+    }
+
     override fun close() {
+        exitExpected = true
         process.destroy()
         // agent 不响应 SIGTERM 时兜底：留着不管会占住 socket，下一轮 connect 撞上旧实例
         if (!process.waitFor(TERMINATE_TIMEOUT_MILLIS, java.util.concurrent.TimeUnit.MILLISECONDS)) {
@@ -176,8 +221,21 @@ private class ProcessAgentSession(
 
     private companion object {
         const val TERMINATE_TIMEOUT_MILLIS = 2_000L
+
+        /** child 已经没了，管道里剩的读完就是 EOF；孙进程还攥着管道时不能一直等 */
+        const val PUMP_DRAIN_TIMEOUT_MILLIS = 1_000L
     }
 }
+
+/**
+ * `java.lang.Process` 在 Android 上不公开 pid。特权进程由 app_process 拉起、不受 hidden API 限制，
+ * 直接读实现类的字段；读不到再从 `toString()` 的 `pid=` 里抠
+ */
+private fun Process.pidOrNull(): Int? =
+    runCatching { javaClass.getDeclaredField("pid").apply { isAccessible = true }.getInt(this) }.getOrNull()
+        ?: PID_IN_TO_STRING.find(toString())?.groupValues?.get(1)?.toIntOrNull()
+
+private val PID_IN_TO_STRING = Regex("pid=(\\d+)")
 
 /**
  * 把同一瞬间涌出来的若干行攒成一次回调

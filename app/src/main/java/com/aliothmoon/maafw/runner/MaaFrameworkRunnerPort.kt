@@ -170,6 +170,9 @@ class MaaFrameworkRunnerPort(
                 override fun onAgentConnected(index: Int, total: Int, exec: String?) =
                     callback.onAgentConnected(index, total, exec)
 
+                override fun onAgentExited(index: Int, exec: String?, exitCode: Int, crashReport: String?) =
+                    callback.onAgentExited(index, exec, exitCode, crashReport)
+
                 override fun onTaskStarted(taskName: String?, index: Int, total: Int) =
                     callback.onTaskStarted(taskName, index, total)
 
@@ -203,6 +206,10 @@ class MaaFrameworkRunnerPort(
 
         fun onAgentConnected(index: Int, total: Int, exec: String?) {
             emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty(), agentNames.getOrNull(index)))
+        }
+
+        fun onAgentExited(index: Int, exec: String?, exitCode: Int, crashReport: String?) {
+            emit(RunnerEvent.AgentExited(index, exec.orEmpty(), exitCode, crashReport, agentNames.getOrNull(index)))
         }
 
         // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂

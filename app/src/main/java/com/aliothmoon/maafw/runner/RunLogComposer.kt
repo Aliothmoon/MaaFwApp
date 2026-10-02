@@ -70,6 +70,8 @@ class RunLogComposer {
                 uiTextOf(R.string.run_log_agent_connected, event.label),
             )
 
+            is RunnerEvent.AgentExited -> Composed(RunLogKind.Error, agentExitedText(event))
+
             is RunnerEvent.MalformedCallback -> Composed(
                 RunLogKind.Error,
                 uiTextFromFramework(MALFORMED_LABEL),
@@ -111,6 +113,18 @@ class RunLogComposer {
         }
         val kind = if (event.fromStderr) RunLogKind.AgentError else RunLogKind.Agent
         return Composed(kind, uiTextFromProject(event.line))
+    }
+
+    /** 不过洪泛滑窗：这句紧跟在 traceback 那一大段后面，正是滑窗闭嘴的时候 */
+    private fun agentExitedText(event: RunnerEvent.AgentExited): UiText {
+        val signal = event.signal
+        val exited = if (signal != null) {
+            uiTextOf(R.string.run_log_agent_exited_signal, event.label, AgentExitCode.signalName(signal))
+        } else {
+            uiTextOf(R.string.run_log_agent_exited_code, event.label, event.exitCode)
+        }
+        val report = event.crashReport?.takeIf(String::isNotBlank) ?: return exited
+        return uiTextOf(R.string.run_log_agent_crash_report, exited, report)
     }
 
     /**

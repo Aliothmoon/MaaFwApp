@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.bridge.InputControlUtils
 import com.aliothmoon.maafw.bridge.NativeBridgeLib
 import com.aliothmoon.maafw.bridge.TextInputDispatcher
+import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
@@ -48,10 +49,15 @@ class RemoteServiceImpl : RemoteService.Stub() {
     // host 的 lambda 到真正有输出时才读 runner，那会儿它早已建好
     private val runner: MaaRunner by lazy { MaaRunner(agentHost) }
     private val agentHost: ExecAgentHost by lazy {
-        ExecAgentHost { line, fromStderr ->
-            runner.onAgentLine(line, fromStderr)
-        }
+        ExecAgentHost(
+            onOutput = { line, fromStderr -> runner.onAgentLine(line, fromStderr) },
+            onExit = { runner.onAgentExited(it) },
+            crashDir = { logDir?.let { File(it, AppFiles.CRASH_DIR) } },
+        )
     }
+
+    @Volatile
+    private var logDir: String? = null
 
     init {
         RemoteBootTrace.mark("CTOR_START")
@@ -130,6 +136,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         runCatching(StaleAgentReaper::reapOnce).onFailure { Ln.w("$TAG: reap stale agents failed: ${it.message}") }
         // 特权进程是 shell/root 身份，app 建的目录未必可写，这里自己建一遍
         if (!logDir.isNullOrBlank() && ensureWritableDir(logDir)) {
+            this.logDir = logDir
             runner.applyGlobalOptions(logDir, isDebug)
         } else {
             Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")

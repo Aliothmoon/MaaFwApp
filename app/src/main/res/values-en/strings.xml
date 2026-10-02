@@ -490,6 +490,9 @@
     <string name="run_log_connecting">Connecting to device…</string>
     <string name="run_log_connected">Device connected</string>
     <string name="run_log_agent_connected">Agent connected: %1$s</string>
+    <string name="run_log_agent_exited_signal">Agent exited unexpectedly: %1$s (%2$s)</string>
+    <string name="run_log_agent_exited_code">Agent exited unexpectedly: %1$s (exit code %2$d)</string>
+    <string name="run_log_agent_crash_report">%1$s; crash report saved to log/crash/%2$s</string>
     <string name="run_log_connect_failed">Device connection failed</string>
     <string name="run_log_resource_loading">Loading resource: %1$s</string>
     <string name="run_log_resource_loaded">Resource loaded: %1$s</string>
