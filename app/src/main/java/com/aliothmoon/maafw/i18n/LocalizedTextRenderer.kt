@@ -18,8 +18,15 @@ class LocalizedTextRenderer(private val base: Context) {
     private val lock = Any()
     private var cachedTag: String? = null
     private var cached: Context? = null
+    private val english: Context by lazy {
+        val config = Configuration(base.resources.configuration)
+        config.setLocales(LocaleList.forLanguageTags("en"))
+        base.createConfigurationContext(config)
+    }
 
     fun render(text: UiText): String = text.resolve(localizedContext())
+
+    fun renderLog(text: UiText): String = text.resolve(english)
 
     private fun localizedContext(): Context = synchronized(lock) {
         val tag = AppLocales.currentTag()

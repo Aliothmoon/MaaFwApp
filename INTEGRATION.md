@@ -70,7 +70,7 @@ app:
 
 资源的 `interface.json` 里声明了 `agent` 才需要这一节。没声明就把配方里的 `agent:` 整段删掉。
 
-声明了却没带运行时，开始任务时会明确失败，不会默默跳过。
+声明了 bundle 形态却没带对应 ABI 的运行时时，构建会直接失败，不会打出装上后才无法启动的包。
 
 载荷（`agent/main.py` 等）跟资源走，靠 `include` 进包。解释器或编译好的 ELF 走配方的 `agent.sourceDir`。怎么启动写在 `agent.runtimes`，条数必须和 PI 的 `agent[]` 相同、按顺序一一对应。
 
@@ -182,7 +182,7 @@ build.releaseAbi=arm64-v8a
 | 能安装，一点开始就加载 native 失败 | 没跑 `setup_maa_framework.py`，或 ABI 不对 |
 | 构建直接报 `agent.sourceDir` / `runtimes` | 两个必须一起写；没有 agent 就把整段删掉 |
 | `runtimes` 条数对不上 | 必须和 PI 的 `agent[]` 按序一一对应 |
-| 开始任务提示未带 agent 运行时 | PI 声明了 agent，配方没配 |
+| 构建提示 bundle agent 缺少 runtime 或 ABI | 配方声明了 `location: bundle`，但 `agent.sourceDir` 缺 `<abi>/bundle/**`，或 `agent.abi` 声明了未提供的 ABI |
 | 图标不显示 | 文件没进 `include`，或不是 png / webp |
 | 换了资源重装，设备还是旧内容 | 只换资源、没改本仓库时版本号不变，清应用数据或再交一次提交 |
 

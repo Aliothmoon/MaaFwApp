@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.gradle
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.PathSensitivity
@@ -10,6 +11,7 @@ import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.register
 import java.io.File
 import java.security.MessageDigest
+import java.util.zip.ZipFile
 
 /**
  * The chain that packs the external agent runtime; apply after maafw.android.application
@@ -28,14 +30,22 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
             val agentAssetsDir = layout.buildDirectory.dir("generated/agentAssets")
             val agentJniLibsDir = layout.buildDirectory.dir("generated/agentJniLibs")
 
+            // Only BUNDLE entries read bundle.zip and the fingerprint at run time.
+            val declaresBundleRuntime =
+                profile.agentRuntimes.any { it.location == AGENT_LOCATION_BUNDLE }
+
             val emptyAgentSource = layout.buildDirectory.dir("generated/agentEmptySource")
                 .get().asFile.apply { mkdirs() }
 
             val packAgentBundles = tasks.register<Zip>("packAgentBundles") {
                 group = "build"
-                description = "Pack the configured agent bundles per ABI into assets/agent"
-                destinationDirectory.set(agentAssetsDir.map { it.dir("agent") })
+                description = "Pack the configured agent bundles per ABI"
+                destinationDirectory.set(layout.buildDirectory.dir("generated/agentBundle"))
                 archiveFileName.set("bundle.zip")
+                inputs.property("bundleRuntimeDeclared", declaresBundleRuntime)
+                inputs.property("agentAbiPatterns", agentAbiPatterns)
+                onlyIf { declaresBundleRuntime }
+                from(emptyAgentSource)
                 if (agentSourceDir != null) {
                     agentAbiPatterns.forEach { abi ->
                         from(agentSourceDir) {
@@ -45,6 +55,26 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
                             eachFile { path = path.replaceFirst("/bundle/", "/") }
                             includeEmptyDirs = false
                         }
+                    }
+                }
+                doLast {
+                    val sourceDir = requireNotNull(agentSourceDir)
+                    val missingAbis = agentAbiPatterns.filter { abi ->
+                        fileTree(sourceDir).matching { include("$abi/bundle/**") }.files.isEmpty()
+                    }
+                    val archive = archiveFile.get().asFile
+                    val packedAbis = ZipFile(archive).use { zip ->
+                        zip.entries().asSequence()
+                            .filterNot { it.isDirectory }
+                            .map { it.name.substringBefore('/') }
+                            .toSet()
+                    }
+                    if (missingAbis.isNotEmpty() || packedAbis.isEmpty()) {
+                        throw GradleException(
+                            "the profile declares a bundle agent runtime but $sourceDir has no " +
+                                "<abi>/bundle/** content for ${missingAbis.joinToString()} " +
+                                "(agent.abi: $agentAbiPatterns; packed ABIs: $packedAbis)",
+                        )
                     }
                 }
             }
@@ -67,24 +97,9 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
                 }
             }
 
-            val syncAgentAssets = tasks.register<Sync>("syncAgentAssets") {
-                group = "build"
-                description = "Lay the generated agent runtime descriptor into assets/agent"
-                dependsOn(packAgentBundles)
-                // The index file has to live outside this level: Sync wipes whatever in the target
-                // does not come from the source
-                into(agentAssetsDir.map { it.dir("agent") })
-                // packAgentBundles writes bundle.zip into the same directory, Sync must not treat it as leftover
-                preserve { include("bundle.zip") }
-                // Always a real source, even when empty: with no source at all Sync reports NO-SOURCE
-                // and skips, so a descriptor left by an earlier profile would stay in the generated
-                // directory and leak into later packages
-                from(writeAgentDescriptor)
-            }
-
             val syncAgentJniLibs = tasks.register<Sync>("syncAgentJniLibs") {
                 group = "build"
-                description = "Sync the configured single-file executables into jniLibs"
+                description = "Sync the configured single-file executables into nativeLibraryDir"
                 into(agentJniLibsDir)
                 if (agentSourceDir != null) {
                     from(agentSourceDir) {
@@ -104,20 +119,29 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
                 }
             }
 
+            val agentIndexDir = layout.buildDirectory.dir("generated/agentIndex")
             val writeAgentIndex = tasks.register("writeAgentIndex") {
                 group = "build"
-                description = "Hash the agent runtime archive into assets/agent.fingerprint"
-                dependsOn(syncAgentAssets)
-                val bundleZip = agentAssetsDir.map { it.file("agent/bundle.zip") }
-                val fingerprintFile = agentAssetsDir.map { it.file("agent.fingerprint") }
-                // inputs.files rather than inputs.file: with no agent configured the archive may not
-                // exist and inputs.file would fail validation outright
-                inputs.files(bundleZip).withPathSensitivity(PathSensitivity.RELATIVE)
-                outputs.file(fingerprintFile)
+                description = "Hash the packed agent bundle"
+                dependsOn(packAgentBundles)
+                val bundleZip = layout.buildDirectory.file("generated/agentBundle/bundle.zip")
+                inputs.file(bundleZip).withPathSensitivity(PathSensitivity.RELATIVE)
+                inputs.property("bundleRuntimeDeclared", declaresBundleRuntime)
+                outputs.dir(agentIndexDir)
+                onlyIf { declaresBundleRuntime }
                 doLast {
-                    fingerprintFile.get().asFile.parentFile.mkdirs()
+                    val archive = bundleZip.get().asFile
+                    if (!archive.isFile) {
+                        throw GradleException(
+                            "the profile declares a bundle agent runtime but ${archive.absolutePath} " +
+                                "was not produced; see packAgentBundles",
+                        )
+                    }
+                    val dir = agentIndexDir.get().asFile
+                    dir.deleteRecursively()
+                    dir.mkdirs()
                     val digest = MessageDigest.getInstance("SHA-256")
-                    bundleZip.get().asFile.takeIf { it.isFile }?.inputStream()?.use { stream ->
+                    archive.inputStream().use { stream ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
                             val read = stream.read(buffer)
@@ -125,13 +149,25 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
                             digest.update(buffer, 0, read)
                         }
                     }
-                    fingerprintFile.get().asFile.writeText(
-                        digest.digest().joinToString("") { "%02x".format(it) })
+                    File(dir, "agent.fingerprint").writeText(
+                        digest.digest().joinToString("") { "%02x".format(it) },
+                    )
+                }
+            }
+
+            val syncAgentAssets = tasks.register<Sync>("syncAgentAssets") {
+                group = "build"
+                description = "Lay the generated agent runtime files into assets"
+                into(agentAssetsDir)
+                from(writeAgentDescriptor) { into("agent") }
+                if (declaresBundleRuntime) {
+                    from(packAgentBundles) { into("agent") }
+                    from(writeAgentIndex)
                 }
             }
 
             tasks.named("preBuild") {
-                dependsOn(writeAgentIndex, syncAgentJniLibs)
+                dependsOn(syncAgentAssets, syncAgentJniLibs)
             }
 
             extensions.configure<ApplicationAndroidComponentsExtension> {

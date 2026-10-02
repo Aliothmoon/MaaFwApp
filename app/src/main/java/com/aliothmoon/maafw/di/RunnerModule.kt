@@ -104,6 +104,7 @@ val runnerModule = module {
             focusDispatcher = get(),
             store = get(),
             renderText = get<LocalizedTextRenderer>()::render,
+            renderLogText = get<LocalizedTextRenderer>()::renderLog,
             includeDetails = get<AppSettingsManager>().debugMode::value,
             scope = get(named<AppCoroutineScope>()),
         )
