@@ -145,8 +145,8 @@ object ActivityUtils {
         if (forceStop) {
             if (getAppDisplayId(targetPackage) == displayId) {
                 Ln.i("startApp: $targetPackage already on display $displayId, skip force-stop")
-            } else {
-                ServiceManager.getActivityManager().forceStopPackage(targetPackage)
+            } else if (ServiceManager.getActivityManager().forceStopPackage(targetPackage)) {
+                StaleFrameGuard.onAppKilled(displayId)
             }
         }
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
@@ -158,15 +158,36 @@ object ActivityUtils {
      * 返回运行在 [displayId] 上的最顶层 app 包名；没有任务或 API 不支持时返回 null。
      * 看门狗用它从虚拟屏反推目标 app，无需外部告知包名。
      */
-    fun getTopPackageOnDisplay(displayId: Int): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
-        if (taskDisplayIdField == null) return null
+    fun getTopPackageOnDisplay(displayId: Int): String? =
+        (probeDisplay(displayId) as? DisplayOccupancy.Occupied)?.topPackage
+
+    sealed interface DisplayOccupancy {
+        data class Occupied(val topPackage: String?) : DisplayOccupancy
+        data object Empty : DisplayOccupancy
+        data object Unknown : DisplayOccupancy
+    }
+
+    /**
+     * [displayId] 上有没有任务。API 不支持、任务表为空、有任务读不出 displayId 都算 [DisplayOccupancy.Unknown]：
+     * [StaleFrameGuard] 拿 Empty 当「画面已经没人画了」去作废帧缓冲，把判不出当成空了，
+     * 一张不再重绘的静止界面就会一直黑下去
+     */
+    fun probeDisplay(displayId: Int): DisplayOccupancy {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return DisplayOccupancy.Unknown
+        if (taskDisplayIdField == null) return DisplayOccupancy.Unknown
         return runCatching {
-            val am = FakeContext.get().getSystemService(ActivityManager::class.java) ?: return null
+            val am = FakeContext.get().getSystemService(ActivityManager::class.java)
+                ?: return DisplayOccupancy.Unknown
             @Suppress("DEPRECATION")
-            am.getRunningTasks(100).firstOrNull { task -> getTaskDisplayId(task) == displayId }
-                ?.topActivity?.packageName
-        }.onFailure { Ln.w("getTopPackageOnDisplay: failed", it) }.getOrNull()
+            val tasks = am.getRunningTasks(100)
+            val displayIds = tasks.map(::getTaskDisplayId)
+            val index = displayIds.indexOf(displayId)
+            when {
+                index >= 0 -> DisplayOccupancy.Occupied(tasks[index].topActivity?.packageName)
+                tasks.isEmpty() || displayIds.any { it < 0 } -> DisplayOccupancy.Unknown
+                else -> DisplayOccupancy.Empty
+            }
+        }.onFailure { Ln.w("probeDisplay: failed", it) }.getOrDefault(DisplayOccupancy.Unknown)
     }
 
     /**

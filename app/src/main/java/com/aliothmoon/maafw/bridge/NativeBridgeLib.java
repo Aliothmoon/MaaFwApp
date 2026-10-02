@@ -39,4 +39,10 @@ public class NativeBridgeLib {
     @FastNative
     public static native long getFrameCount();
 
+    /**
+     * 把帧缓冲换成黑帧，换了才返回 true；已经是黑帧、或 expectedFrameCount 之后又来过新帧时不动
+     * 不计入 {@link #getFrameCount()}
+     */
+    public static native boolean invalidateFrame(long expectedFrameCount);
+
 }

@@ -3,8 +3,10 @@
 #include <android/bitmap.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <thread>
 
 #if defined(__ARM_NEON)
@@ -21,6 +23,9 @@ static std::atomic<int> g_reader_counts[FRAME_BUFFER_COUNT] = {0, 0, 0};
 static std::atomic<FrameBuffer *> g_read_buffer{nullptr};
 static std::atomic<int64_t> g_frame_count{0};
 static std::atomic<bool> g_frame_buffers_initialized{false};
+// 写者有两个：采集线程与 InvalidateFrame。CommitWriteBuffer 先放开状态再发布，两步之间
+// 另一个写者能把这块刚写好的缓冲抢去改写，所以写者之间串行；读者不拿这把锁
+static std::mutex g_write_mutex;
 
 static void ProcessFrameDataV2(
         const uint8_t *__restrict src,
@@ -131,6 +136,23 @@ static FrameBuffer *AcquireWriteBuffer() {
     return nullptr;
 }
 
+static constexpr int WRITE_BUFFER_ATTEMPTS = 20;
+static constexpr auto WRITE_BUFFER_RETRY_INTERVAL = std::chrono::microseconds(500);
+
+// 两块非当前缓冲都被读者占着时等一等：应用退出前的最后一帧丢了就没有下一帧来补
+static FrameBuffer *AcquireWriteBufferPatiently() {
+    for (int attempt = 0; attempt < WRITE_BUFFER_ATTEMPTS; ++attempt) {
+        if (FrameBuffer *buf = AcquireWriteBuffer()) {
+            return buf;
+        }
+        if (!g_frame_buffers_initialized.load(std::memory_order_acquire)) {
+            return nullptr;
+        }
+        std::this_thread::sleep_for(WRITE_BUFFER_RETRY_INTERVAL);
+    }
+    return nullptr;
+}
+
 static const FrameBuffer *LockCurrentFrame() {
     if (!g_frame_buffers_initialized.load(std::memory_order_acquire)) {
         return nullptr;
@@ -184,7 +206,13 @@ static void UnlockFrame(const FrameBuffer *frame) {
     }
 }
 
+// 0 被 LockCurrentFrame 当成无效帧，黑帧要能被读到就得另取一个值
 static constexpr int64_t SEEDED_FRAME_COUNT = -1;
+
+static void FillBlankFrame(FrameBuffer *buf) {
+    memset(buf->bgr_data, 0, buf->bgr_size);
+    buf->frame_count = SEEDED_FRAME_COUNT;
+}
 
 void InitFrameBuffers(int width, int height) {
     if (g_frame_buffers_initialized.load(std::memory_order_acquire)) {
@@ -218,8 +246,7 @@ void InitFrameBuffers(int width, int height) {
 
 
     FrameBuffer &seed = g_buffers[0];
-    memset(seed.bgr_data, 0, seed.bgr_size);
-    seed.frame_count = SEEDED_FRAME_COUNT;
+    FillBlankFrame(&seed);
     g_read_buffer.store(&seed, std::memory_order_release);
     g_frame_count.store(0, std::memory_order_release);
     g_frame_buffers_initialized.store(true, std::memory_order_release);
@@ -250,7 +277,8 @@ bool WriteHardwareBufferToFrame(AHardwareBuffer *buffer) {
         return false;
     }
 
-    FrameBuffer *target = AcquireWriteBuffer();
+    std::lock_guard<std::mutex> lock(g_write_mutex);
+    FrameBuffer *target = AcquireWriteBufferPatiently();
     if (!target) {
         return false;
     }
@@ -275,6 +303,38 @@ bool WriteHardwareBufferToFrame(AHardwareBuffer *buffer) {
 
 int64_t GetFrameCount() {
     return g_frame_count.load(std::memory_order_acquire);
+}
+
+bool InvalidateFrame(int64_t expectedFrameCount) {
+    if (!g_frame_buffers_initialized.load(std::memory_order_acquire)) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(g_write_mutex);
+    // 调用方下结论之后来过真帧：那一帧才是屏上现在的样子，盖成黑帧它又不再重绘就一直黑下去
+    if (expectedFrameCount >= 0 &&
+        g_frame_count.load(std::memory_order_acquire) != expectedFrameCount) {
+        return false;
+    }
+
+    const FrameBuffer *current = LockCurrentFrame();
+    if (!current) {
+        return false;
+    }
+    const bool alreadyBlank = current->frame_count == SEEDED_FRAME_COUNT;
+    UnlockFrame(current);
+    if (alreadyBlank) {
+        return false;
+    }
+
+    FrameBuffer *blank = AcquireWriteBufferPatiently();
+    if (!blank) {
+        return false;
+    }
+    // 不动 g_frame_count：awaitFirstFrame 与帧率估算都拿它当「来过真帧」
+    FillBlankFrame(blank);
+    CommitWriteBuffer(blank);
+    return true;
 }
 
 BRIDGE_API FrameInfo GetLockedPixels() {

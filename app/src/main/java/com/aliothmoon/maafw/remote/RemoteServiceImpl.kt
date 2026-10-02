@@ -18,6 +18,7 @@ import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.remote.internal.ScreenManager
+import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
@@ -66,6 +67,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         if (!destroyed.compareAndSet(false, true)) return
         Ln.i("$TAG: destroy()")
         AppWatchdog.stopWatching()
+        StaleFrameGuard.stop()
         InputControlUtils.setTouchCallback(null)
         TextInputDispatcher.sink = null
         runner.destroy()
@@ -110,6 +112,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
             ServiceManager.getActivityManager().forceStopPackage(target).also { stopped ->
                 if (stopped) {
                     Ln.i("$TAG: force-stopped $target")
+                    StaleFrameGuard.onAppKilled(VirtualDisplayManager.getDisplayId())
                 }
             }
         }.getOrElse {
@@ -194,6 +197,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun stopVirtualDisplay() {
         AppWatchdog.stopWatching()
+        StaleFrameGuard.stop()
         GameFpsMonitor.stop()
         when (virtualDisplayMode.get()) {
             DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
@@ -290,12 +294,16 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun startRun(runPlanJson: String?): Boolean {
         if (runPlanJson.isNullOrBlank()) return false
         val started = runner.start(runPlanJson)
-        if (started) AppWatchdog.startWatching()
+        if (started) {
+            AppWatchdog.startWatching()
+            StaleFrameGuard.start()
+        }
         return started
     }
 
     override fun stopRun(): Boolean {
         AppWatchdog.stopWatching()
+        StaleFrameGuard.stop()
         return runner.stop()
     }
 
