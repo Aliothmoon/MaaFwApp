@@ -25,6 +25,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -211,8 +212,16 @@ class MaaRunner(private val agentHost: AgentHost) {
     }
 
     fun destroy() {
+        // 跑着的那轮先叫停，worker 才腾得出手来拆
+        stop()
+        // 拆 native 排到 worker 上：handle 只归它管，而且它一退 child 就被 PDEATHSIG 收走，得拆完再停
+        runCatching {
+            worker.submit { releaseNative() }.get(DESTROY_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+        }.onFailure {
+            // 那一轮停不下来就不拆了：进程随后就退，child 跟着 PDEATHSIG 走
+            Ln.w("MaaRunner: native release skipped on destroy: $it")
+        }
         worker.shutdownNow()
-        releaseNative()
     }
 
     private fun runPlan(payload: RunPlanPayload) {
@@ -326,8 +335,6 @@ class MaaRunner(private val agentHost: AgentHost) {
             }
             resource = res
             loadedResourcePaths = payload.resourcePaths
-            // 资源换了，绑定关系也得重来
-            releaseTasker(lib)
         }
 
         prepareAgents(lib, payload)?.let { return it }
@@ -352,7 +359,6 @@ class MaaRunner(private val agentHost: AgentHost) {
             }
             controller = ctrl
             boundDisplayId = displayId
-            releaseTasker(lib)
         }
 
         val needsTasker = synchronized(lifecycleLock) { tasker == null }
@@ -382,6 +388,7 @@ class MaaRunner(private val agentHost: AgentHost) {
      */
     private fun prepareAgents(lib: MaaFrameworkLibrary, payload: RunPlanPayload): String? {
         if (payload.agents.isEmpty()) {
+            if (agents.isNotEmpty()) releaseTasker(lib)
             releaseAgents()
             return null
         }
@@ -396,6 +403,8 @@ class MaaRunner(private val agentHost: AgentHost) {
             return null
         }
 
+        // agent 注册的 custom 节点挂在 resource 上，绑定关系要重来；上一轮的任务可能还在调 agent，先等它退
+        releaseTasker(lib)
         releaseAgents()
 
         val workingDir = projectRoot ?: return "PI 根未就绪，agent 无法确定工作目录"
@@ -447,8 +456,6 @@ class MaaRunner(private val agentHost: AgentHost) {
 
         agents = started
         loadedAgents = payload.agents
-        // agent 注册的 custom 节点挂在 resource 上，绑定关系要重来
-        releaseTasker(lib)
         return null
     }
 
@@ -489,7 +496,14 @@ class MaaRunner(private val agentHost: AgentHost) {
 
     private fun releaseAgent(agent: ActiveAgent) {
         val agentLib = MaaAgentClientLoader.library
-        runCatching { agentLib?.MaaAgentClientDisconnect(agent.client) }
+        // Disconnect 要等 child 回 ShutDown。child 已经没了就不发：ZMQ 未必察觉对端断开，会按请求超时等满，
+        // 这期间下一轮起不来、destroy 也退不掉。还活着却不回的，超时后交给 close 去杀
+        if (agent.session.isAlive()) {
+            runCatching {
+                agentLib?.MaaAgentClientSetTimeout(agent.client, AGENT_SHUTDOWN_TIMEOUT_MILLIS)
+                agentLib?.MaaAgentClientDisconnect(agent.client)
+            }
+        }
         runCatching { agent.session.close() }
         runCatching { agentLib?.MaaAgentClientDestroy(agent.client) }
     }
@@ -538,18 +552,28 @@ class MaaRunner(private val agentHost: AgentHost) {
             val current = tasker
             tasker = null
             current
-        }
-        handle?.let(lib::MaaTaskerDestroy)
+        } ?: return
+        // 销毁前必须等任务线程真的退出：框架析构 Tasker 时先拆缓存再 join 线程，还在跑的任务会踩到已析构的锁
+        // 不能靠 MaaTaskerWait：PostStop 一发，在跑的任务就被标成已结束，Wait 立刻返回
+        lib.MaaTaskerPostStop(handle)
+        while (lib.MaaTaskerRunning(handle).toInt() != 0) Thread.sleep(TASKER_STOP_POLL_MILLIS)
+        lib.MaaTaskerDestroy(handle)
     }
 
+    /** Tasker 手里是 controller 的裸指针，停止时还要用，必须先于它拆 */
     private fun releaseController(lib: MaaFrameworkLibrary) {
+        releaseTasker(lib)
         controller?.let(lib::MaaControllerDestroy)
         controller = null
         boundDisplayId = null
     }
 
-    /** agent client 绑在 resource 上，销毁 resource 前必须先把 client 与 child 收掉 */
+    /**
+     * agent client 绑在 resource 上，销毁 resource 前必须先把 client 与 child 收掉；
+     * Tasker 同样握着 resource 的裸指针，排在最前
+     */
     private fun releaseResource(lib: MaaFrameworkLibrary) {
+        releaseTasker(lib)
         releaseAgents()
         resource?.let(lib::MaaResourceDestroy)
         resource = null
@@ -583,6 +607,14 @@ class MaaRunner(private val agentHost: AgentHost) {
          * 停止任务也打断不了；10 分钟远超任何正常识别，寻路这类长动作一路都有控制器往返，不会被它截断
          */
         const val AGENT_REQUEST_TIMEOUT_MILLIS = 10 * 60_000L
+
+        /** 断开握手的上限；Tasker 已先拆掉，child 只是在等请求，正常立刻就回 */
+        const val AGENT_SHUTDOWN_TIMEOUT_MILLIS = 5_000L
+
+        const val TASKER_STOP_POLL_MILLIS = 20L
+
+        /** destroy 等在跑的那一轮停下并拆完 native 的上限；正常停止只要几秒，超了多半是 agent 卡死 */
+        const val DESTROY_TIMEOUT_MILLIS = 15_000L
 
         /**
          * 让系统分配回环端口；identifier 随即变成实际端口，原样传给 child
