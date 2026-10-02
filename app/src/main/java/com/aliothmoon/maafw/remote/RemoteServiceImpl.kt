@@ -378,10 +378,28 @@ class RemoteServiceImpl : RemoteService.Stub() {
         step("power") { PowerController.destroy() }
         step("primary display") { PrimaryDisplayManager.stop() }
         step("virtual display") { VirtualDisplayManager.stop() }
+        step("preview") { shutdownPreview() }
     }
 
     private inline fun step(name: String, action: () -> Unit) {
         runCatching(action).onFailure { Ln.e("$TAG: cleanup $name failed: ${it.message}") }
+    }
+
+    /**
+     * 退出前断开预览 Surface：SurfaceView 的缓冲队列认不出 producer 进程死了，不断开的话
+     * 这块 Surface 会一直算在本进程头上，下一个特权进程 `eglCreateWindowSurface` 报 already connected
+     *
+     * 排在最后且限时：渲染线程可能正卡在 swap 上，等不到就走，不能拖住前面那几项和进程退出
+     */
+    private fun shutdownPreview() {
+        if (!NativeBridgeLib.LOADED) return
+        val worker = Thread { NativeBridgeLib.shutdownPreview() }.apply {
+            name = "preview-shutdown"
+            isDaemon = true
+            start()
+        }
+        worker.join(PREVIEW_SHUTDOWN_TIMEOUT_MS)
+        if (worker.isAlive) Ln.w("$TAG: preview shutdown still running after ${PREVIEW_SHUTDOWN_TIMEOUT_MS}ms, leaving it")
     }
 
     /**
@@ -413,5 +431,6 @@ class RemoteServiceImpl : RemoteService.Stub() {
     private companion object {
         const val TAG = "RemoteService"
         const val HEARTBEAT_INTERVAL_MS = 5_000L
+        const val PREVIEW_SHUTDOWN_TIMEOUT_MS = 1_000L
     }
 }

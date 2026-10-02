@@ -214,6 +214,9 @@ class SessionViewModel(
      */
     val previewMarkers: StateFlow<List<PreviewTouchMarker>> = previewPort.markers
 
+    /** 预览面按它重建，见 [PreviewPort.surfaceEpoch] */
+    val previewSurfaceEpoch: StateFlow<Int> = previewPort.surfaceEpoch
+
     /** FPS 每秒更新，独立成流避免整棵 UI 树跟着重组 */
     val gameFps: StateFlow<Float?> = gameFpsWatcher.fps
 

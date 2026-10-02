@@ -190,6 +190,7 @@ fun AppRoot(
     // 往下传取值函数，读推迟到真正显示它们的叶子
     val previewMarkersState = viewModel.previewMarkers.collectAsStateWithLifecycle()
     val gameFpsState = viewModel.gameFps.collectAsStateWithLifecycle()
+    val previewSurfaceEpochState = viewModel.previewSurfaceEpoch.collectAsStateWithLifecycle()
     val runLogState = viewModel.runLog.collectAsStateWithLifecycle()
 
     // 语言重载唯一触发点：App/系统切语言都经 Activity 重建后到此
@@ -218,6 +219,7 @@ fun AppRoot(
             resolution = resolution,
             markers = { previewMarkersState.value },
             fps = { gameFpsState.value },
+            surfaceEpoch = { previewSurfaceEpochState.value },
             // 不等 setFixedSize 那一轮：搬一次家要 50ms+ 才对上尺寸，期间遮罩会盖住刚回来的画面
             onSurfaceCreated = { previewSurfaceReady = true },
             onSurfaceAvailable = {

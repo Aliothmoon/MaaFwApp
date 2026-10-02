@@ -19,6 +19,11 @@ static void nativeSetPreviewSurface(JNIEnv *env, jclass clazz, jobject jSurface)
     SetPreviewSurface(env, jSurface);
 }
 
+static void nativeShutdownPreview(JNIEnv *env, jclass clazz) {
+    (void) clazz;
+    ShutdownPreview(env);
+}
+
 static jobject nativeSetupNativeCapturer(JNIEnv *env, jclass clazz, jint width, jint height) {
     (void) clazz;
     return SetupNativeCapturer(env, width, height);
@@ -52,6 +57,7 @@ static JNINativeMethod gMethods[] = {
         {"setupNativeCapturer",   "(II)Landroid/view/Surface;",  reinterpret_cast<void *>(nativeSetupNativeCapturer)},
         {"releaseNativeCapturer", "()V",                         reinterpret_cast<void *>(nativeReleaseNativeCapturer)},
         {"setPreviewSurface",     "(Ljava/lang/Object;)V",       reinterpret_cast<void *>(nativeSetPreviewSurface)},
+        {"shutdownPreview",       "()V",                         reinterpret_cast<void *>(nativeShutdownPreview)},
         {"getFrameBufferBitmap",  "()Landroid/graphics/Bitmap;", reinterpret_cast<void *>(nativeGetFrameBufferBitmap)},
         {"getFrameCount",         "()J",                         reinterpret_cast<void *>(nativeGetFrameCount)},
         {"blankFrame",            "(J)Z",                        reinterpret_cast<void *>(nativeBlankFrame)},

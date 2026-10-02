@@ -31,6 +31,9 @@ public class NativeBridgeLib {
     @FastNative
     public static native void setPreviewSurface(Object surface);
 
+    /** 停渲染线程并断开预览 Surface，会阻塞到线程退出；进程退出前调，否则这块 Surface 下一个特权进程接不上 */
+    public static native void shutdownPreview();
+
     /**
      * 测试用
      */

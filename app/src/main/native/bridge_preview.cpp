@@ -359,6 +359,8 @@ static void RenderLoop() {
         }
     }
 
+    // 收摊：不画黑的话 SurfaceView 上会一直留着最后一帧，看着像还在跑
+    RenderBlank();
     DetachWindow();
     if (window) {
         ANativeWindow_release(window);
@@ -412,10 +414,26 @@ void SetPreviewSurface(JNIEnv *env, jobject jSurface) {
 }
 
 void ShutdownPreview(JNIEnv *env) {
-    SetPreviewSurface(env, nullptr);
-
+    // 不走 SetPreviewSurface(nullptr)：它会让渲染线程先拆窗口，收摊那一帧黑屏就没处画了
     std::lock_guard<std::mutex> lock(g_previewMutex);
-    if (g_renderThreadRunning.exchange(false, std::memory_order_acq_rel)) {
+    g_hasPreview.store(false, std::memory_order_release);
+    if (g_previewSurfaceObj && env) {
+        env->DeleteGlobalRef(g_previewSurfaceObj);
+        g_previewSurfaceObj = nullptr;
+    }
+    bool wasRunning;
+    {
+        // 停止标志在锁里改：渲染线程在同一把锁下判条件，锁外改会卡进它「判完还没睡下」的缝里丢通知
+        std::lock_guard<std::mutex> queueLock(g_renderMutex);
+        DrainPreviewQueueLocked();
+        if (g_pendingWindow) {
+            ANativeWindow_release(g_pendingWindow);
+            g_pendingWindow = nullptr;
+        }
+        wasRunning = g_renderThreadRunning.exchange(false, std::memory_order_acq_rel);
+    }
+
+    if (wasRunning) {
         g_renderCv.notify_all();
         if (g_renderThread.joinable()) {
             g_renderThread.join();
