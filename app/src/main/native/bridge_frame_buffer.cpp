@@ -312,8 +312,7 @@ bool InvalidateFrame(int64_t expectedFrameCount) {
 
     std::lock_guard<std::mutex> lock(g_write_mutex);
     // 调用方下结论之后来过真帧：那一帧才是屏上现在的样子，盖成黑帧它又不再重绘就一直黑下去
-    if (expectedFrameCount >= 0 &&
-        g_frame_count.load(std::memory_order_acquire) != expectedFrameCount) {
+    if (g_frame_count.load(std::memory_order_acquire) != expectedFrameCount) {
         return false;
     }
 

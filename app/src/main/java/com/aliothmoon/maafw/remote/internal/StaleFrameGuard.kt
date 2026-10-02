@@ -29,7 +29,9 @@ object StaleFrameGuard {
     /** pidof 要 fork 一个进程，而静止界面会一直停在「帧停了、屏上有任务」这一支上 */
     private const val LIVENESS_INTERVAL_MS = 1_000L
 
-    private const val ANY_FRAME_COUNT = -1L
+    private const val SETTLE_QUIET_MS = 300L
+    private const val SETTLE_TIMEOUT_MS = 1_500L
+    private const val SETTLE_POLL_MS = 50L
 
     private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO.limitedParallelism(1))
 
@@ -85,7 +87,7 @@ object StaleFrameGuard {
     }
 
     /**
-     * 刚强杀完 [displayId] 上的应用时调：不等轮询，下一次截图就不该再是它的画面
+     * 刚强杀完 [displayId] 上的应用时调：不等轮询，返回后的截图就不该再是它的画面
      *
      * 屏上还有别的任务时不动——它会自己出帧，抢在它后面作废反而把它那一帧盖掉。
      * 判不出时照样作废：应用是我们自己刚杀的
@@ -94,9 +96,36 @@ object StaleFrameGuard {
     fun onAppKilled(displayId: Int) {
         if (displayId == VirtualDisplayManager.DISPLAY_NONE) return
         if (displayId != VirtualDisplayManager.getDisplayId()) return
+        val startedMs = SystemClock.uptimeMillis()
+        val settledCount = awaitFramesSettled() ?: return
         if (ActivityUtils.probeDisplay(displayId) is DisplayOccupancy.Occupied) return
-        if (NativeBridgeLib.invalidateFrame(ANY_FRAME_COUNT)) {
-            Ln.i("StaleFrameGuard: app on display $displayId was force-stopped, frame buffer blanked")
+        if (NativeBridgeLib.invalidateFrame(settledCount)) {
+            Ln.i(
+                "StaleFrameGuard: app on display $displayId was force-stopped, " +
+                    "frame buffer blanked after ${SystemClock.uptimeMillis() - startedMs}ms"
+            )
+        }
+    }
+
+    /**
+     * 强杀返回后窗口还要播完退场动画，那几帧画的仍是它：实测当场作废的黑帧 250ms 内就被盖回去。
+     * 等帧计数停满 [SETTLE_QUIET_MS] 再动手；一直有帧就是另有东西在画，交给轮询去判
+     */
+    private fun awaitFramesSettled(): Long? {
+        val deadline = SystemClock.uptimeMillis() + SETTLE_TIMEOUT_MS
+        var count = NativeBridgeLib.getFrameCount()
+        var quietSince = SystemClock.uptimeMillis()
+        while (true) {
+            SystemClock.sleep(SETTLE_POLL_MS)
+            val now = SystemClock.uptimeMillis()
+            val current = NativeBridgeLib.getFrameCount()
+            if (current != count) {
+                count = current
+                quietSince = now
+            } else if (now - quietSince >= SETTLE_QUIET_MS) {
+                return count
+            }
+            if (now >= deadline) return null
         }
     }
 }
