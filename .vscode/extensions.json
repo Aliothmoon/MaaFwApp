@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "EditorConfig.EditorConfig",
+    "richardwillis.vscode-spotless-gradle",
+    "vscjava.vscode-gradle"
+  ]
+}
