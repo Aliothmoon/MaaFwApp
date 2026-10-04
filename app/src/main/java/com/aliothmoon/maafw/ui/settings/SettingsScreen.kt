@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +88,7 @@ import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
+import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
@@ -630,13 +632,30 @@ private fun AboutLinks(
     }
 }
 
-/** 外壳自己的仓库；放在 PI 那组链接之后，行名带上 MaaFwApp，免得和项目仓库混淆 */
+/** 卡底一行「Powered by MaaFwApp」（对齐 MXU 的页脚），点了打开外壳的仓库 */
 @Composable
-private fun AppRepositoryRow() {
+private fun PoweredByFooter() {
     val context = LocalContext.current
-    MaaNavigationRow(
-        label = stringResource(R.string.settings_about_app_repository, stringResource(R.string.app_name)),
-        onClick = { context.openLink(APP_REPOSITORY_URL) },
+    val appName = stringResource(R.string.app_name)
+    val text = stringResource(R.string.settings_about_powered_by, appName)
+    val linkColor = MaterialTheme.colorScheme.primary
+    val styled = remember(text, appName, linkColor) {
+        buildAnnotatedString {
+            append(text)
+            val start = text.indexOf(appName)
+            if (start >= 0) addStyle(SpanStyle(color = linkColor), start, start + appName.length)
+        }
+    }
+    Text(
+        text = styled,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = MaaDesignTokens.Spacing.sm)
+            .maaClickable(indication = false) { context.openLink(APP_REPOSITORY_URL) }
+            .padding(vertical = MaaDesignTokens.Spacing.xs),
     )
 }
 
@@ -690,7 +709,7 @@ private fun AboutCard(state: SessionUiState) {
             )
         }
         AboutLinks(metadata, onOpen = { sheet = it }, onOpenWelcome = { welcomeVisible = true })
-        AppRepositoryRow()
+        PoweredByFooter()
     }
 
     sheet?.let {

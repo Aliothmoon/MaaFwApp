@@ -164,7 +164,7 @@
     <string name="settings_about_contact">联系方式</string>
     <string name="settings_about_license">开源许可</string>
     <string name="settings_about_repository">项目仓库</string>
-    <string name="settings_about_app_repository">%1$s 仓库</string>
+    <string name="settings_about_powered_by">Powered by %1$s</string>
     <string name="settings_section_update">更新</string>
     <string name="settings_update_source_mirror">Mirror酱</string>
     <string name="settings_update_source_github">GitHub</string>

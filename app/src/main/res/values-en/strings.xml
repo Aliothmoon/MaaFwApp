@@ -170,7 +170,7 @@
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
-    <string name="settings_about_app_repository">%1$s repository</string>
+    <string name="settings_about_powered_by">Powered by %1$s</string>
     <string name="settings_section_update">Updates</string>
     <string name="settings_update_source_mirror">MirrorChyan</string>
     <string name="settings_update_source_github">GitHub</string>
