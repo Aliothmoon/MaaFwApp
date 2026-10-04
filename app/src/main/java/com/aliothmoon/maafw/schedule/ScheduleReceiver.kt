@@ -73,8 +73,19 @@ class ScheduleReceiver : BroadcastReceiver() {
                 }
                 val strategy = store.findById(strategyId)
                 if (strategy != null) {
-                    store.recordTrigger(strategyId, TriggerResult.FAILED_SERVICE_START, reason)
                     alarms.scheduleNext(strategy, scheduledTime)
+                    store.recordTrigger(strategyId, TriggerResult.FAILED_SERVICE_START, reason)
+                    // 用户查「昨晚为什么没跑」看的是触发日志，只记在规则上等于没记
+                    koin.get<ScheduleTriggerLog>().append(
+                        TriggerLogEntry(
+                            strategyId = strategyId,
+                            strategyName = strategy.name,
+                            scheduledAt = scheduledTime,
+                            actualAt = System.currentTimeMillis(),
+                            result = TriggerResult.FAILED_SERVICE_START,
+                            detail = reason,
+                        ),
+                    )
                 }
             } finally {
                 ScheduleWakeLock.release(handoff)

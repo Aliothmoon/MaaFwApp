@@ -80,7 +80,7 @@ class WakeUnlockHook(
     private val settings: AppSettingsGateway,
 ) : RunEnvHook {
 
-    override val id: String = "wake-unlock"
+    override val id: String = ID
     override val anchor: Anchor = Anchor.BeforeDispatch
     override val order: Int = HookOrder.WAKE_UNLOCK
     override val gating: Boolean = true
@@ -107,6 +107,11 @@ class WakeUnlockHook(
         WakeUnlockResult.WAKE_FAILED -> uiTextOf(R.string.wake_unlock_screen_off)
         WakeUnlockResult.UNSUPPORTED -> uiTextOf(R.string.wake_unlock_unsupported)
         else -> uiTextOf(R.string.wake_unlock_failed, code)
+    }
+
+    companion object {
+        /** 触发日志按它认出「卡在解锁这一步」，落盘了就别改 */
+        const val ID = "wake-unlock"
     }
 }
 

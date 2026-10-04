@@ -93,6 +93,7 @@ import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
+import com.aliothmoon.maafw.schedule.ScheduleFixAction
 import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
@@ -571,7 +572,19 @@ fun AppRoot(
                     )
                 }
                 composable(Routes.SCHEDULE_TRIGGER_LOG) {
-                    ScheduleTriggerLogScreen(onBack = { navController.popBackStack() })
+                    ScheduleTriggerLogScreen(
+                        onBack = { navController.popBackStack() },
+                        onFix = { action, entry ->
+                            when (action) {
+                                ScheduleFixAction.WAKE_UNLOCK_SETTINGS -> openSettingsTab()
+                                ScheduleFixAction.BATTERY -> viewModel.onIntent(
+                                    SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
+                                )
+                                ScheduleFixAction.EDIT_RULE ->
+                                    navController.navigate(Routes.scheduleEdit(entry.strategyId))
+                            }
+                        },
+                    )
                 }
                 composable(Routes.RUN_LOG_ARCHIVE) {
                     RunLogArchiveScreen(
