@@ -412,6 +412,9 @@
     <string name="msg_cannot_start">Cannot start: %1$s</string>
     <string name="msg_launch_in_progress">Launch already in progress</string>
     <string name="msg_precheck_ignored_confirmation">A start check ignored the confirmation; aborted</string>
+    <string name="precheck_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off in the system display settings first. Start anyway?</string>
+    <string name="precheck_eye_protection_enabled">Eye comfort / night mode is enabled, which may affect color recognition accuracy. Start anyway?</string>
+    <string name="precheck_start_anyway">Start anyway</string>
     <string name="msg_hook_timeout">Run environment setup timed out: %1$s</string>
     <string name="msg_hook_failed">Run environment setup failed: %1$s</string>
     <string name="msg_cannot_stop">Cannot stop: %1$s</string>
@@ -524,6 +527,8 @@
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
     <string name="run_log_game_fps_low">The game is running at only %1$d FPS, below 30; automation may fail. Enable high frame rate mode in the game and disable power saving mode</string>
     <string name="run_log_game_fps_degraded">The game is running at %1$d FPS, below 50; battle timing may drift. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off manually in the system display settings</string>
+    <string name="run_log_eye_protection_enabled">Eye comfort / night mode is active (%1$s), which may affect normal image recognition. Please turn it off manually</string>
 
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>

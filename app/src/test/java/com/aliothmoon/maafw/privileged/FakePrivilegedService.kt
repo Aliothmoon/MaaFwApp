@@ -67,6 +67,10 @@ open class FakePrivilegedService : RemoteService {
 
     override fun getGameFps(): Float = currentGameFps
 
+    var smartResolution: Boolean = false
+
+    override fun isSmartResolutionEnabled(): Boolean = smartResolution
+
     // ── 其余：本测试用不到，保持无副作用的零值 ──
 
     override fun destroy() = Unit

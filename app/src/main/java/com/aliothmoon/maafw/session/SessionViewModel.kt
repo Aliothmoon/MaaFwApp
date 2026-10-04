@@ -46,6 +46,7 @@ import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunTrigger
+import com.aliothmoon.maafw.runner.ConfirmToken
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -611,7 +612,7 @@ class SessionViewModel(
                 if (piInstall.reinstall()) projectRepository.reload()
             }
 
-            is SessionIntent.Start -> start(intent.surface)
+            is SessionIntent.Start -> start(intent.surface, intent.acknowledged)
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -765,12 +766,17 @@ class SessionViewModel(
      * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
      * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
      */
-    private suspend fun start(surface: TaskSurface) {
+    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>) {
         if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
             return
         }
-        when (val result = runLauncher.launch(RunTrigger.Manual)) {
+        // 悬浮窗里弹不了确认框：提醒类照跑，由运行日志兜底
+        val trigger = when (surface) {
+            TaskSurface.InApp -> RunTrigger.Manual
+            TaskSurface.Overlay -> RunTrigger.Overlay
+        }
+        when (val result = runLauncher.launch(trigger, acknowledged)) {
             // 手动发起不传 requestId，这条到不了
             RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
 
@@ -804,10 +810,8 @@ class SessionViewModel(
             is RunLaunchResult.Blocked ->
                 emitEffect(SessionEffect.ShowMessage(result.reason))
 
-            // 确认框等第一道会问的检查落地时再补；现在没有检查产生这个分支，
-            // 先原样把问题呈出来，不做无人生产的 UI
             is RunLaunchResult.NeedsConfirmation ->
-                emitEffect(SessionEffect.ShowMessage(result.prompt))
+                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token))
         }
     }
 

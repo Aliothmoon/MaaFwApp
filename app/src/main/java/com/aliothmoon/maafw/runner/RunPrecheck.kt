@@ -28,6 +28,13 @@ sealed interface Verdict {
      * 放进检查里的话，每加一个检查都得记得降级，忘一次就会在定时触发时弹出没人能点的框
      *
      * [token] 必须在下一轮被本检查自己认出来并跳过，否则用户点一次问一次，死循环
+     *
+     * [advisory] 为 true 的只是提醒：没人能点头时照常开跑（由挂载物记进运行日志），
+     * 而不是拦下
      */
-    data class NeedsConfirmation(val token: ConfirmToken, val prompt: UiText) : Verdict
+    data class NeedsConfirmation(
+        val token: ConfirmToken,
+        val prompt: UiText,
+        val advisory: Boolean = false,
+    ) : Verdict
 }

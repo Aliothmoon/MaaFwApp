@@ -59,7 +59,7 @@ sealed interface RunLaunchResult {
     /**
      * 要用户点头。调用方弹框，用户同意后带上 token 重新 [RunLauncher.launch]
      *
-     * 定时触发不会拿到这个——没人可问，编排层已把它降级成 [Blocked]
+     * 只有 [RunTrigger.Manual] 会拿到；定时与悬浮窗没人可问，编排层已把它放行（提醒）或降级成 [Blocked]
      */
     data class NeedsConfirmation(val token: ConfirmToken, val prompt: UiText) : RunLaunchResult
 }
@@ -211,18 +211,21 @@ class RunLauncher(
 
                 is Verdict.Block -> return RunLaunchResult.Blocked(verdict.reason)
 
-                is Verdict.NeedsConfirmation -> return when {
+                is Verdict.NeedsConfirmation -> when {
                     // 检查没认出自己上一轮问过的 token，再放行就是死循环弹框。
                     // 把编程错误挡成一次明确失败，而不是让用户点到手软
                     verdict.token in ctx.acknowledged ->
-                        RunLaunchResult.Blocked(uiTextOf(R.string.msg_precheck_ignored_confirmation))
+                        return RunLaunchResult.Blocked(uiTextOf(R.string.msg_precheck_ignored_confirmation))
 
+                    ctx.trigger == RunTrigger.Manual ->
+                        return RunLaunchResult.NeedsConfirmation(verdict.token, verdict.prompt)
+
+                    // 没人能点头（定时、悬浮窗）：提醒照跑，其余拦下。
                     // 降级统一在这里，不在检查里：放进检查的话每加一道都得记得降级，
                     // 忘一次就在定时触发时弹出没人能点的框
-                    ctx.trigger is RunTrigger.Schedule ->
-                        RunLaunchResult.Blocked(verdict.prompt)
+                    verdict.advisory -> Unit
 
-                    else -> RunLaunchResult.NeedsConfirmation(verdict.token, verdict.prompt)
+                    else -> return RunLaunchResult.Blocked(verdict.prompt)
                 }
             }
         }

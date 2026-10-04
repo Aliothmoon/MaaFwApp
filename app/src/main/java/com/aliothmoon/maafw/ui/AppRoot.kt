@@ -263,6 +263,7 @@ fun AppRoot(
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
         val scope = rememberCoroutineScope()
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
+        var confirmStartDialog by remember { mutableStateOf<SessionEffect.ConfirmStart?>(null) }
         var exportSheetVisible by remember { mutableStateOf(false) }
 
         // 从触发日志过来时栈上已有日志页，再推一层；单顶避免连点叠两页
@@ -300,6 +301,8 @@ fun AppRoot(
                     is SessionEffect.ShowMessage -> Unit
 
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
+
+                    is SessionEffect.ConfirmStart -> confirmStartDialog = effect
 
                     // 拉起外部 Activity 要 Context，只能落在 Route 层
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
@@ -688,6 +691,26 @@ fun AppRoot(
             ) {
                 previewContent()
             }
+        }
+
+        confirmStartDialog?.let { confirm ->
+            AlertDialog(
+                onDismissRequest = { confirmStartDialog = null },
+                text = { Text(confirm.prompt.asString()) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            confirmStartDialog = null
+                            viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
+                        },
+                    ) { Text(stringResource(R.string.precheck_start_anyway)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmStartDialog = null }) {
+                        Text(stringResource(R.string.dialog_cancel))
+                    }
+                },
+            )
         }
 
         diagnosticsDialog?.let { diagnostics ->

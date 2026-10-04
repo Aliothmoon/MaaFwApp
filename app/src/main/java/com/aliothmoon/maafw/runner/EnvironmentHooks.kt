@@ -99,6 +99,9 @@ internal object HookOrder {
     /** 同为观察者，排在看门狗之后；收尾时先停 FPS 轮询，再看门狗 */
     const val GAME_FPS = 55
 
+    /** 只写一次日志，没有可撤的 */
+    const val DISPLAY_HAZARD_NOTICE = 57
+
     /** 收尾时最先撤计时器：别的挂载物撤到一半时它不该再到点去 stop */
     const val RUN_DURATION_LIMIT = 60
 }

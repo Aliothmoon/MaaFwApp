@@ -32,6 +32,8 @@ import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
+import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
+import com.aliothmoon.maafw.runner.DisplayHazards
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
@@ -165,11 +167,12 @@ class SessionViewModelTest {
         store: InMemoryUserConfigurationStore,
         runner: RunnerPort,
         settings: FakeAppSettingsGateway,
+        hazards: DisplayHazards = DisplayHazards(),
     ) = RunLauncher(
         projectRepository = project,
         configurationStore = store,
         runnerPort = runner,
-        prechecks = listOf(ForegroundModePrecheck),
+        prechecks = listOf(ForegroundModePrecheck, DisplayHazardPrecheck { hazards }),
         hooks = listOf(KeepAliveHook(RecordingRunKeepAlive())),
         runMode = { settings.runMode.value },
         scope = backgroundScope,
@@ -188,13 +191,14 @@ class SessionViewModelTest {
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
         welcomeResolver: WelcomeResolver = WelcomeResolver { null },
+        hazards: DisplayHazards = DisplayHazards(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val focusDispatcher = focusDispatcherFor(runner)
         val vm = SessionViewModel(
             projectRepository = project,
             configurationStore = store,
             runnerPort = runner,
-            runLauncher = launcherFor(project, store, runner, settings),
+            runLauncher = launcherFor(project, store, runner, settings, hazards),
             previewPort = preview,
             permissionGateway = permissions,
             servicePort = FakePrivilegedServicePort(),
@@ -551,6 +555,61 @@ class SessionViewModelTest {
                     it.message.isResource(R.string.msg_locked_while_running)
             },
         )
+    }
+
+    /** 两项都开着：逐个问，前面点过的跟着累积，全点完才开跑 */
+    @Test
+    fun `display hazards are confirmed one by one before starting`() = runTest(mainDispatcher) {
+        val hazards = DisplayHazards(smartResolution = true, eyeProtectionSource = "xiaomi:screen_paper_mode_enabled")
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(runner = runner, hazards = hazards)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        val first = effects.filterIsInstance<SessionEffect.ConfirmStart>().single()
+        assertTrue(first.prompt.isResource(R.string.precheck_smart_resolution_enabled))
+        assertEquals(setOf(DisplayHazardPrecheck.SMART_RESOLUTION), first.acknowledged)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+
+        vm.onIntent(SessionIntent.Start(acknowledged = first.acknowledged))
+        advanceUntilIdle()
+        val second = effects.filterIsInstance<SessionEffect.ConfirmStart>().last()
+        assertTrue(second.prompt.isResource(R.string.precheck_eye_protection_enabled))
+        assertEquals(
+            setOf(DisplayHazardPrecheck.SMART_RESOLUTION, DisplayHazardPrecheck.EYE_PROTECTION),
+            second.acknowledged,
+        )
+
+        vm.onIntent(SessionIntent.Start(acknowledged = second.acknowledged))
+        advanceUntilIdle()
+        assertEquals(2, effects.filterIsInstance<SessionEffect.ConfirmStart>().size)
+        assertTrue(runner.state.value.phase.isBusy)
+    }
+
+    /** 悬浮窗里弹不了框：提醒照跑，不问 */
+    @Test
+    fun `overlay start runs through display hazards without asking`() = runTest(mainDispatcher) {
+        val hazards = DisplayHazards(smartResolution = true, eyeProtectionSource = "xiaomi:screen_paper_mode_enabled")
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(runner = runner, hazards = hazards)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start(TaskSurface.Overlay))
+        advanceUntilIdle()
+
+        assertTrue(effects.none { it is SessionEffect.ConfirmStart })
+        assertTrue(runner.state.value.phase.isBusy)
     }
 
     @Test

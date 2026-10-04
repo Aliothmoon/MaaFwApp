@@ -9,6 +9,9 @@ import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.runner.AutoSleepHook
 import com.aliothmoon.maafw.runner.CloseTargetAppHook
 import com.aliothmoon.maafw.runner.CountdownHook
+import com.aliothmoon.maafw.runner.DisplayHazardNoticeHook
+import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
+import com.aliothmoon.maafw.runner.DisplayHazardProbe
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.GameFpsHook
@@ -33,6 +36,7 @@ import com.aliothmoon.maafw.runner.RunScreenSaver
 import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.runner.ScreenSaverHook
 import com.aliothmoon.maafw.runner.SessionLogHook
+import com.aliothmoon.maafw.runner.SystemDisplayHazardProbe
 import com.aliothmoon.maafw.schedule.UnlockGestureStore
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.runner.WakeUnlockHook
@@ -138,12 +142,14 @@ val runnerModule = module {
         }
     }
 
+    single<DisplayHazardProbe> { SystemDisplayHazardProbe(androidContext(), get()) }
+
     single {
         RunLauncher(
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            prechecks = listOf(ForegroundModePrecheck),
+            prechecks = listOf(ForegroundModePrecheck, DisplayHazardPrecheck(get())),
             hooks = listOf(
                 SessionLogHook(get()),
                 TelemetryHook(get()),
@@ -157,6 +163,7 @@ val runnerModule = module {
                 CountdownHook,
                 KeepAliveHook(get()),
                 GameFpsHook(get()),
+                DisplayHazardNoticeHook(get(), get()),
                 WatchdogNoticeHook(
                     watchdogState = get<PermissionGateway>().watchdogState,
                     servicePort = get(),

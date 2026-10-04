@@ -30,6 +30,7 @@ import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.Workarounds
 import android.view.Surface
 import android.os.Process
+import android.provider.Settings
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -120,6 +121,13 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun isScreenOn(): Boolean =
         runCatching { ServiceManager.getPowerManager().isScreenOn(0) }.getOrDefault(true)
+
+    override fun isSmartResolutionEnabled(): Boolean = try {
+        Settings.Global.getInt(FakeContext.get().contentResolver, "low_resolution_switch", 0) == 1
+    } catch (e: Exception) {
+        Ln.w("$TAG: read low_resolution_switch failed", e)
+        false
+    }
 
     override fun stopTargetApp(): Boolean {
         val target = AppWatchdog.targetPackage ?: run {

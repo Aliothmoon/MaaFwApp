@@ -405,6 +405,9 @@
     <string name="msg_cannot_start">无法开始：%1$s</string>
     <string name="msg_launch_in_progress">正在启动中，请稍候</string>
     <string name="msg_precheck_ignored_confirmation">启动检查未处理确认结果，已中止</string>
+    <string name="precheck_smart_resolution_enabled">检测到系统已开启「智能分辨率」，后台模式下会导致识别出错，请先在系统显示设置中关闭。是否仍然启动？</string>
+    <string name="precheck_eye_protection_enabled">检测到设备已开启护眼/夜光模式，可能会影响图像色彩识别准确度。是否仍然启动？</string>
+    <string name="precheck_start_anyway">仍然启动</string>
     <string name="msg_hook_timeout">运行环境准备超时：%1$s</string>
     <string name="msg_hook_failed">运行环境准备失败：%1$s</string>
     <string name="msg_cannot_stop">无法停止：%1$s</string>
@@ -515,6 +518,8 @@
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
     <string name="run_log_game_fps_low">游戏画面帧率仅 %1$d FPS，低于 30，自动战斗可能出错；请在游戏设置中开启高帧率模式，并关闭省电模式</string>
     <string name="run_log_game_fps_degraded">游戏画面帧率 %1$d FPS，低于 50，战斗时机可能不准；建议在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_smart_resolution_enabled">系统已开启「智能分辨率」，后台模式下会导致识别出错，请在系统显示设置中手动关闭</string>
+    <string name="run_log_eye_protection_enabled">设备当前处于护眼/夜光模式 (%1$s)，可能影响正常图像识别，请手动关闭</string>
 
     <!-- 历史日志：每轮运行落盘一份 -->
     <string name="log_archive_title">运行历史</string>

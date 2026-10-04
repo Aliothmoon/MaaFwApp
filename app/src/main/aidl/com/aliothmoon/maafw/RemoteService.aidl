@@ -167,4 +167,9 @@ interface RemoteService {
 
     /** 设置页自测：先上锁息屏再按手势解一次 */
     int testUnlockGesture(String gestureJson) = 82;
+
+    // ── 系统显示设置 ──
+
+    /** 荣耀「智能分辨率」是否开着（global low_resolution_switch）；开着时后台模式识别会出错 */
+    boolean isSmartResolutionEnabled() = 83;
 }

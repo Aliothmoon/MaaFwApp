@@ -262,6 +262,28 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.msg_no_executable_tasks))
+
+        // 悬浮窗同样没地方弹框
+        assertTrue(launcher.launch(RunTrigger.Overlay) is RunLaunchResult.Blocked)
+    }
+
+    /** 提醒类没人可问时照跑：拦下的话定时任务会因为一个护眼开关整轮不跑 */
+    @Test
+    fun `advisory confirmation passes when nobody can answer`() = runTest(testDispatcher) {
+        val token = ConfirmToken("demo")
+        fun launcherWithAdvisory() = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            prechecks = listOf(
+                RunPrecheck {
+                    Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks), advisory = true)
+                },
+            ),
+        )
+
+        assertEquals(RunLaunchResult.Started, launcherWithAdvisory().launch(RunTrigger.Schedule("s1")))
+        assertEquals(RunLaunchResult.Started, launcherWithAdvisory().launch(RunTrigger.Overlay))
+        assertTrue(launcherWithAdvisory().launch(RunTrigger.Manual) is RunLaunchResult.NeedsConfirmation)
     }
 
     /** 检查忘了消费自己的 token 就会无限弹框；守卫把它挡成一次明确失败 */
