@@ -180,9 +180,7 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
             ) {
                 UpdateCard(settingsState, onSettingsIntent)
-                TaskSettingCards(state, onIntent)
-                ResourceOptionCard(state, onIntent)
-                ControllerOptionCard(state, onIntent)
+                TaskSettingsGroup(state, onIntent)
                 DisplayCard(state, settingsState, onIntent, onSettingsIntent, onOpenWallpaper)
                 RunDurationCard(settingsState, onSettingsIntent)
                 NotificationCard(onOpenNotificationSettings)
@@ -192,52 +190,6 @@ fun SettingsScreen(
                 AboutCard(state)
             }
         }
-    }
-}
-
-/**
- * 落在设置页而不是首页资源选择：`resource.option` 对所有运行配置生效，只随当前资源换一份
- *
- * 卡名取「资源设置」：和「任务设置」并列，值按 resource name 分桶
- */
-@Composable
-private fun ResourceOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    if (state.resourceOptions.isEmpty()) return
-    val resourceName = state.environment?.resource?.name ?: return
-    MaaCard(
-        title = stringResource(R.string.settings_section_resource_option),
-        collapsible = true,
-        revealToken = sectionRevealToken(SettingsSections.PI_RESOURCE),
-    ) {
-        OptionEditorList(
-            options = state.resourceOptions,
-            locked = state.configurationLocked,
-            searchAnchor = { SettingAnchors.projectOption(SettingsSections.PI_RESOURCE, it.name) },
-            onSetOption = { name, value ->
-                onIntent(SessionIntent.SetResourceOption(resourceName, name, value))
-            },
-        )
-    }
-}
-
-/** 同 [ResourceOptionCard]：`controller.option` 对所有运行配置生效，值按 controller name 分桶 */
-@Composable
-private fun ControllerOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    if (state.controllerOptions.isEmpty()) return
-    val controllerName = state.environment?.controller?.name ?: return
-    MaaCard(
-        title = stringResource(R.string.settings_section_controller_option),
-        collapsible = true,
-        revealToken = sectionRevealToken(SettingsSections.PI_CONTROLLER),
-    ) {
-        OptionEditorList(
-            options = state.controllerOptions,
-            locked = state.configurationLocked,
-            searchAnchor = { SettingAnchors.projectOption(SettingsSections.PI_CONTROLLER, it.name) },
-            onSetOption = { name, value ->
-                onIntent(SessionIntent.SetControllerOption(controllerName, name, value))
-            },
-        )
     }
 }
 
