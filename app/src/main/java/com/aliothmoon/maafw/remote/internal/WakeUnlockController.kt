@@ -10,10 +10,12 @@ import com.aliothmoon.maafw.remote.internal.ScreenPowerAttempts.WakeAction
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController.LOCK_SETTLE_MS
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController.lockAndSleep
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController.unlock
+import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.PowerManager
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.wrappers.WindowManager
+import android.os.PowerManager as OsPowerManager
 
 /** 唤醒/解锁/锁屏；提权进程内完成，凭证支持纯数字 PIN 与录制手势 */
 object WakeUnlockController {
@@ -38,29 +40,64 @@ object WakeUnlockController {
     private const val LOCK_SETTLE_MS = 500L
     private const val SCREEN_OFF_TIMEOUT_MS = 3_000L
 
+    /** 自测整段的 CPU 锁上限：上锁、息屏、亮屏、settle、输入、确认各步超时加起来也到不了 */
+    private const val TEST_CPU_LOCK_MS = 60_000L
+    private const val CPU_LOCK_TAG = "MaaFw:wake-unlock"
+
+    /** 任务的手指可能正按着，等它抬起；槽位是进程共享的，硬塞进去会取消或并入任务的手势 */
+    private const val CONTACTS_IDLE_TIMEOUT_MS = 1_000L
+
     /**
      * 设置页自测：先 [lockAndSleep]，等待 [LOCK_SETTLE_MS] 后再 [unlock]
      * 整段在提权进程内完成，避免息屏后 App 侧协程被挂起
      */
-    fun testUnlock(credential: String): Int {
+    fun testUnlock(credential: String): Int = keepCpuAwake(TEST_CPU_LOCK_MS) {
         val lockCode = lockAndSleep()
-        if (lockCode != WakeUnlockResult.OK) return lockCode
+        if (lockCode != WakeUnlockResult.OK) return@keepCpuAwake lockCode
         Ln.i("$TAG: locked for test, settle ${LOCK_SETTLE_MS}ms")
         Thread.sleep(LOCK_SETTLE_MS)
-        return unlock(credential)
+        unlock(credential)
     }
 
     /** 设置页自测：手势版 */
-    fun testUnlockGesture(gestureJson: String): Int {
+    fun testUnlockGesture(gestureJson: String): Int = keepCpuAwake(TEST_CPU_LOCK_MS) {
         val lockCode = lockAndSleep()
-        if (lockCode != WakeUnlockResult.OK) return lockCode
+        if (lockCode != WakeUnlockResult.OK) return@keepCpuAwake lockCode
         Ln.i("$TAG: locked for gesture test, settle ${LOCK_SETTLE_MS}ms")
         Thread.sleep(LOCK_SETTLE_MS)
-        return unlockWithGesture(gestureJson)
+        unlockWithGesture(gestureJson)
     }
 
-    /** lockNow 上锁并 goToSleep 息屏 */
-    fun lockAndSleep(): Int {
+    /**
+     * 息屏后 CPU 一睡 Thread.sleep 就停住；自测从设置页发起，App 侧没有定时那把锁兜着，提权进程自己持一把
+     * 拿不到就照旧跑，限时兜底漏放
+     */
+    internal inline fun <T> keepCpuAwake(timeoutMs: Long, block: () -> T): T {
+        val lock = acquireCpuLock(timeoutMs)
+        try {
+            return block()
+        } finally {
+            lock?.let { if (it.isHeld) runCatching { it.release() } }
+        }
+    }
+
+    internal fun acquireCpuLock(timeoutMs: Long): OsPowerManager.WakeLock? = runCatching {
+        val pm = FakeContext.get().getSystemService(OsPowerManager::class.java)
+            ?: return@runCatching null
+        pm.newWakeLock(OsPowerManager.PARTIAL_WAKE_LOCK, CPU_LOCK_TAG).apply {
+            setReferenceCounted(false)
+            acquire(timeoutMs)
+        }
+    }.getOrElse {
+        Ln.w("$TAG: cannot hold cpu wakelock: $it")
+        null
+    }
+
+    /**
+     * lockNow 上锁并 goToSleep 息屏
+     * @param isCancelled 录制被取消后不再息屏；lockNow 已经发出去，上锁本身收不回
+     */
+    fun lockAndSleep(isCancelled: () -> Boolean = { false }): Int {
         val pm = ServiceManager.getPowerManager()
         val wm = ServiceManager.getWindowManager()
 
@@ -68,7 +105,14 @@ object WakeUnlockController {
             Ln.w("$TAG: lockNow unavailable")
             return WakeUnlockResult.UNSUPPORTED
         }
-        if (!pollUntil(KEYGUARD_GONE_TIMEOUT_MS) { wm.isKeyguardLocked == true }) {
+        val keyguardUp = pollUntil(KEYGUARD_GONE_TIMEOUT_MS) {
+            isCancelled() || wm.isKeyguardLocked == true
+        }
+        if (isCancelled()) {
+            Ln.i("$TAG: cancelled after lockNow, leave screen on")
+            return WakeUnlockResult.RECORD_CANCELLED
+        }
+        if (!keyguardUp) {
             // 锁屏方式为「无」时 lockNow 后 keyguard 永不出现；滑动/密码锁屏均会出现，
             // 超时且非 secure 即视为未设置锁屏，此时也无需息屏验证
             if (wm.isKeyguardSecure(0) != true) {
@@ -79,7 +123,12 @@ object WakeUnlockController {
             return WakeUnlockResult.LOCK_FAILED
         }
 
-        if (!ensureScreenOff(pm)) {
+        val off = ensureScreenOff(pm, isCancelled)
+        if (isCancelled()) {
+            Ln.i("$TAG: cancelled while turning screen off")
+            return WakeUnlockResult.RECORD_CANCELLED
+        }
+        if (!off) {
             Ln.w("$TAG: screen still on after sleep attempts (keyguard already locked)")
         } else {
             Ln.i("$TAG: screen locked and off")
@@ -158,21 +207,21 @@ object WakeUnlockController {
         // bouncer 弹出期间 isKeyguardLocked 仍为 true，先 settle
         val settleMs = bouncerSettleMs(wakeCostMs)
         Thread.sleep(settleMs)
+        // 人脸/信任代理可能在 settle 期间解掉了锁屏，这时再按数字就落进前台应用了
+        if (keyguardGone(wm)) {
+            Ln.i("$TAG: keyguard gone during ${settleMs}ms settle, skip PIN injection")
+            return WakeUnlockResult.OK
+        }
         Ln.i(
             "$TAG: injecting ${credential.length} PIN digits after ${settleMs}ms settle" +
                     " (wake ${wakeCostMs}ms)"
         )
 
         val injectStartMs = SystemClock.elapsedRealtime()
-        for (c in credential) {
-            val keyCode = KeyEvent.KEYCODE_0 + (c - '0')
-            InputControlUtils.keyDown(keyCode, 0)
-            InputControlUtils.keyUp(keyCode, 0)
-            Thread.sleep(DIGIT_GAP_MS)
+        if (!withSensitiveInput { injectPin(wm, credential) }) {
+            Ln.i("$TAG: keyguard gone mid-injection, stopped")
+            return WakeUnlockResult.OK
         }
-        // 部分 ROM 会自动提交；补 ENTER 兼容需确认的 PIN
-        InputControlUtils.keyDown(KeyEvent.KEYCODE_ENTER, 0)
-        InputControlUtils.keyUp(KeyEvent.KEYCODE_ENTER, 0)
         Ln.i("$TAG: injection done in ${SystemClock.elapsedRealtime() - injectStartMs}ms")
 
         val pollStartMs = SystemClock.elapsedRealtime()
@@ -188,6 +237,22 @@ object WakeUnlockController {
             WakeUnlockResult.CREDENTIAL_REJECTED
         }
     }
+
+    /** 每个键前都确认 keyguard 还在；@return false 表示锁屏中途消失，余下的没注入 */
+    private fun injectPin(wm: WindowManager, credential: String): Boolean {
+        for (c in credential) {
+            if (keyguardGone(wm)) return false
+            injectKey(KeyEvent.KEYCODE_0 + (c - '0'))
+            Thread.sleep(DIGIT_GAP_MS)
+        }
+        // 部分 ROM 会自动提交；补 ENTER 兼容需确认的 PIN，已自动提交的别让 ENTER 落到前台
+        if (keyguardGone(wm)) return false
+        injectKey(KeyEvent.KEYCODE_ENTER)
+        return true
+    }
+
+    /** 查不到按还在处理：只有确认消失才放弃注入 */
+    private fun keyguardGone(wm: WindowManager): Boolean = wm.isKeyguardLocked == false
 
     /**
      * 亮屏并回放录制的解锁手势
@@ -207,6 +272,10 @@ object WakeUnlockController {
 
         // 与录制一致，在 keyguard 还在时采样
         val screen = ScreenGeometry.current()
+        if (screen == null) {
+            Ln.w("$TAG: display info unavailable")
+            return WakeUnlockResult.UNSUPPORTED
+        }
         if (screen.rotation != gesture.rotation) {
             Ln.w("$TAG: rotation ${screen.rotation} != recorded ${gesture.rotation}")
             return WakeUnlockResult.GESTURE_SCREEN_MISMATCH
@@ -220,9 +289,21 @@ object WakeUnlockController {
 
         // 录制起点就是亮屏后的锁屏首屏，这里不能再 dismissKeyguard 打乱状态
         Thread.sleep(GESTURE_SETTLE_MS)
+        if (keyguardGone(wm)) {
+            Ln.i("$TAG: keyguard gone during settle, skip gesture replay")
+            return WakeUnlockResult.OK
+        }
+        // 槽位与任务注入共用：给在途的一笔留点时间抬起。等不到也照样回放——任务被中途停掉时
+        // 残留的槽位不会自己清，在这拒绝就永远解不了锁；冲突交给 plan 的「先整体 CANCEL」自愈
+        if (!pollUntil(CONTACTS_IDLE_TIMEOUT_MS) { !InputControlUtils.hasActiveContacts() }) {
+            Ln.w("$TAG: other contacts still down, replay will cancel them")
+        }
         val actions = UnlockGestureReplay.timeline(gesture, screen.width, screen.height)
         Ln.i("$TAG: replaying ${gesture.steps.size} steps / ${actions.size} actions")
-        UnlockGestureReplay.execute(actions)
+        if (!UnlockGestureReplay.execute(actions) { !keyguardGone(wm) }) {
+            Ln.i("$TAG: keyguard gone mid-replay, stopped")
+            return WakeUnlockResult.OK
+        }
 
         return if (pollUntil(KEYGUARD_GONE_TIMEOUT_MS) { wm.isKeyguardLocked == false }) {
             Ln.i("$TAG: unlocked (gesture accepted)")
@@ -272,11 +353,13 @@ object WakeUnlockController {
             },
         )
 
-    private fun ensureScreenOff(pm: PowerManager): Boolean =
-        ScreenPowerAttempts.run(
+    /** 取消后不再发下一步息屏动作，返回值此时无意义，调用方自己查 [isCancelled] */
+    private fun ensureScreenOff(pm: PowerManager, isCancelled: () -> Boolean): Boolean {
+        return ScreenPowerAttempts.run(
             actions = ScreenPowerAttempts.sleepActions,
             alreadyDone = { !pm.isScreenOn(0) },
             perform = { action ->
+                if (isCancelled()) return false
                 when (action) {
                     SleepAction.BINDER -> {
                         if (!pm.goToSleep()) {
@@ -301,15 +384,26 @@ object WakeUnlockController {
                 } else {
                     KEY_WAKE_TIMEOUT_MS
                 }
-                val off = pollUntil(timeout) { !pm.isScreenOn(0) }
+                val off = pollUntil(timeout) { isCancelled() || !pm.isScreenOn(0) }
                 if (!off) Ln.w("$TAG: screen still on after $action")
                 off
             },
         )
+    }
 
     private fun injectKey(keyCode: Int) {
         InputControlUtils.keyDown(keyCode, 0)
         InputControlUtils.keyUp(keyCode, 0)
     }
 
+}
+
+/** PIN 与手势回放期间注入层不记键码/坐标、不回调触控预览 */
+internal inline fun <T> withSensitiveInput(block: () -> T): T {
+    InputControlUtils.beginSensitiveInput()
+    try {
+        return block()
+    } finally {
+        InputControlUtils.endSensitiveInput()
+    }
 }

@@ -65,35 +65,37 @@ internal object UnlockGestureReplay {
         return out
     }
 
-    /** 按时间轴注入到主屏；解锁发生在任务启动前，不会和 MAA 的触控抢 [InputControlUtils] */
-    fun execute(actions: List<InjectAction>) {
+    /**
+     * 按时间轴注入到主屏；解锁发生在任务启动前，不会和 MAA 的触控抢 [InputControlUtils]
+     * @param proceed 每一笔按下前问一次，false 即停；已按下的那笔照常走到抬起，触摸焦点在按下时就定在锁屏窗口
+     * @return false 表示被 [proceed] 叫停
+     */
+    fun execute(actions: List<InjectAction>, proceed: () -> Boolean = { true }): Boolean =
+        withSensitiveInput { play(actions, proceed, ::inject) }
+
+    internal fun play(
+        actions: List<InjectAction>,
+        proceed: () -> Boolean,
+        sink: (InjectAction) -> Unit,
+    ): Boolean {
         for (action in actions) {
-            when (action) {
-                is InjectAction.Sleep -> Thread.sleep(action.ms)
-                is InjectAction.Down ->
-                    InputControlUtils.down(
-                        action.x,
-                        action.y,
-                        SINGLE_CONTACT,
-                        Display.DEFAULT_DISPLAY
-                    )
+            if (action is InjectAction.Down && !proceed()) return false
+            sink(action)
+        }
+        return true
+    }
 
-                is InjectAction.Move ->
-                    InputControlUtils.move(
-                        action.x,
-                        action.y,
-                        SINGLE_CONTACT,
-                        Display.DEFAULT_DISPLAY
-                    )
+    private fun inject(action: InjectAction) {
+        when (action) {
+            is InjectAction.Sleep -> Thread.sleep(action.ms)
+            is InjectAction.Down ->
+                InputControlUtils.down(action.x, action.y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
 
-                is InjectAction.Up ->
-                    InputControlUtils.up(
-                        action.x,
-                        action.y,
-                        SINGLE_CONTACT,
-                        Display.DEFAULT_DISPLAY
-                    )
-            }
+            is InjectAction.Move ->
+                InputControlUtils.move(action.x, action.y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
+
+            is InjectAction.Up ->
+                InputControlUtils.up(action.x, action.y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
         }
     }
 

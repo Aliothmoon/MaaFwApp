@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.domain.UnlockGesture
 import com.aliothmoon.maafw.domain.UnlockGestureJson
 import com.aliothmoon.maafw.domain.UnlockStep
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -61,6 +62,39 @@ class UnlockGestureReplayTest {
         val gesture = gestureOf(UnlockStep.Tap(540, 1110))
         val actions = UnlockGestureReplay.timeline(gesture, 540, 1110)
         assertEquals(InjectAction.Down(270, 555), actions.first())
+    }
+
+    @Test
+    fun replayStopsBeforeNextPressOnceKeyguardIsGone() {
+        val actions = UnlockGestureReplay.timeline(
+            gestureOf(UnlockStep.Tap(10, 10), UnlockStep.Tap(20, 20)),
+            1080,
+            2220,
+        )
+        val injected = mutableListOf<InjectAction>()
+        var asks = 0
+        // 第一笔放行，第二笔前锁屏已经没了
+        val finished = UnlockGestureReplay.play(actions, proceed = { asks++ == 0 }) { injected += it }
+
+        assertFalse(finished)
+        assertEquals(actions.take(3), injected)
+    }
+
+    @Test
+    fun replayFinishesStrokeAlreadyPressed() {
+        val actions = listOf(
+            InjectAction.Down(1, 1),
+            InjectAction.Move(2, 2),
+            InjectAction.Up(3, 3),
+        )
+        val injected = mutableListOf<InjectAction>()
+        var asks = 0
+        val finished = UnlockGestureReplay.play(actions, proceed = { asks++ == 0 }) { injected += it }
+
+        // 只在按下前问，按下后不会半路丢掉抬起留下悬空触点
+        assertTrue(finished)
+        assertEquals(actions, injected)
+        assertEquals(1, asks)
     }
 
     @Test

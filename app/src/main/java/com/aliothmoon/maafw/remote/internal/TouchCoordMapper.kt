@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.remote.internal
 
 import android.view.Display
+import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
 
 /** 触摸屏的坐标量程，来自 getevent -p */
@@ -20,8 +21,17 @@ internal data class TouchDeviceInfo(
 /** 录制/回放当时的屏幕尺寸与方向，三者必须同时采样 */
 internal data class ScreenGeometry(val width: Int, val height: Int, val rotation: Int) {
     companion object {
-        fun current(): ScreenGeometry {
-            val info = ServiceManager.getDisplayManager().getDisplayInfo(Display.DEFAULT_DISPLAY)
+        /** 反射失败或 dumpsys 兜底也拿不到时为 null */
+        fun current(): ScreenGeometry? {
+            val info = try {
+                ServiceManager.getDisplayManager().getDisplayInfo(Display.DEFAULT_DISPLAY)
+            } catch (e: RuntimeException) {
+                Ln.w("ScreenGeometry: getDisplayInfo failed: $e")
+                null
+            } catch (e: AssertionError) {
+                Ln.w("ScreenGeometry: getDisplayInfo failed: $e")
+                null
+            } ?: return null
             return ScreenGeometry(info.size().width(), info.size().height(), info.rotation())
         }
     }

@@ -81,21 +81,81 @@ class TouchStreamParserTest {
     }
 
     @Test
-    fun coordsAreNotCarriedAcrossStrokes() {
+    fun sameSlotTapAtSamePositionIsKept() {
         val f = Feeder()
         f.down(100, 200, t = 0)
         f.up(t = 50)
-        // 新触点先来 tracking id、坐标还没到，不该在旧位置补一个假点
+        // 内核按 slot 去重：同一位置再按，只来 tracking id，坐标一个都不发
         f.raw(EV_ABS, ABS_MT_TRACKING_ID, 9)
         f.syn(t = 100)
-        f.raw(EV_ABS, ABS_MT_POSITION_X, 700)
-        f.raw(EV_ABS, ABS_MT_POSITION_Y, 800)
-        f.syn(t = 130)
-        f.up(t = 160)
+        f.up(t = 150)
 
         assertEquals(2, f.parser.strokes.size)
         assertEquals(listOf(100 to 200), f.parser.strokes[0].points.map { it.x to it.y })
-        assertEquals(listOf(700 to 800), f.parser.strokes[1].points.map { it.x to it.y })
+        assertEquals(listOf(100 to 200), f.parser.strokes[1].points.map { it.x to it.y })
+        assertEquals(150, f.parser.strokes[1].endTMs)
+    }
+
+    @Test
+    fun sameXDifferentYKeepsLastX() {
+        val f = Feeder()
+        f.down(100, 200, t = 0)
+        f.up(t = 50)
+        // X 与上次相同被内核丢掉，只来了 Y
+        f.raw(EV_ABS, ABS_MT_TRACKING_ID, 9)
+        f.raw(EV_ABS, ABS_MT_POSITION_Y, 500)
+        f.syn(t = 100)
+        f.up(t = 150)
+
+        assertEquals(2, f.parser.strokes.size)
+        assertEquals(listOf(100 to 500), f.parser.strokes[1].points.map { it.x to it.y })
+    }
+
+    @Test
+    fun lastCoordsAreTrackedPerSlot() {
+        val parser = TouchStreamParser()
+        fun ev(code: Int, value: Int, t: Int) = parser.onEvent(EV_ABS, code, value, t)
+        fun syn(t: Int) = parser.onEvent(EV_SYN, SYN_REPORT, 0, t)
+        ev(ABS_MT_SLOT, 1, 0)
+        ev(ABS_MT_TRACKING_ID, 1, 0)
+        ev(ABS_MT_POSITION_X, 300, 0)
+        ev(ABS_MT_POSITION_Y, 400, 0)
+        syn(0)
+        ev(ABS_MT_TRACKING_ID, -1, 40)
+        syn(40)
+        ev(ABS_MT_SLOT, 0, 100)
+        ev(ABS_MT_TRACKING_ID, 2, 100)
+        ev(ABS_MT_POSITION_X, 700, 100)
+        ev(ABS_MT_POSITION_Y, 800, 100)
+        syn(100)
+        ev(ABS_MT_TRACKING_ID, -1, 140)
+        syn(140)
+        // 回到 slot 1 同一位置：该 slot 的坐标没变，不能拿 slot 0 的
+        ev(ABS_MT_SLOT, 1, 200)
+        ev(ABS_MT_TRACKING_ID, 3, 200)
+        syn(200)
+        ev(ABS_MT_TRACKING_ID, -1, 240)
+        syn(240)
+
+        assertEquals(
+            listOf(listOf(300 to 400), listOf(700 to 800), listOf(300 to 400)),
+            parser.strokes.map { s -> s.points.map { it.x to it.y } },
+        )
+    }
+
+    @Test
+    fun unknownCoordsAreNotGuessed() {
+        val f = Feeder()
+        // 开录后这个 slot 还没报过坐标，不能凭空补点
+        f.raw(EV_ABS, ABS_MT_TRACKING_ID, 9)
+        f.syn(t = 0)
+        f.raw(EV_ABS, ABS_MT_POSITION_X, 700)
+        f.raw(EV_ABS, ABS_MT_POSITION_Y, 800)
+        f.syn(t = 30)
+        f.up(t = 60)
+
+        val stroke = f.parser.strokes.single()
+        assertEquals(TouchPoint(700, 800, 30), stroke.points.single())
     }
 
     @Test
@@ -143,6 +203,25 @@ class TouchStreamParserTest {
         val stroke = parser.strokes.single()
         assertEquals(TouchPoint(300, 400, 0), stroke.points.single())
         assertEquals(70, stroke.endTMs)
+    }
+
+    @Test
+    fun legacySameSpotDoubleTapIsKept() {
+        val parser = TouchStreamParser()
+        parser.onEvent(EV_KEY, BTN_TOUCH, 1, 0)
+        parser.onEvent(EV_ABS, ABS_X, 300, 0)
+        parser.onEvent(EV_ABS, ABS_Y, 400, 0)
+        parser.onEvent(EV_SYN, SYN_REPORT, 0, 0)
+        parser.onEvent(EV_KEY, BTN_TOUCH, 0, 50)
+        parser.onEvent(EV_SYN, SYN_REPORT, 0, 50)
+        // ABS_X/Y 同样去重，第二下只有 BTN_TOUCH
+        parser.onEvent(EV_KEY, BTN_TOUCH, 1, 100)
+        parser.onEvent(EV_SYN, SYN_REPORT, 0, 100)
+        parser.onEvent(EV_KEY, BTN_TOUCH, 0, 150)
+        parser.onEvent(EV_SYN, SYN_REPORT, 0, 150)
+
+        assertEquals(2, parser.strokes.size)
+        assertEquals(TouchPoint(300, 400, 100), parser.strokes[1].points.single())
     }
 
     /** 按 MT 协议 B 造事件流 */

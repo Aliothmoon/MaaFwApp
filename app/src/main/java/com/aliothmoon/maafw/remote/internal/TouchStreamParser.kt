@@ -25,8 +25,16 @@ internal class TouchStreamParser {
     private var usesBtnTouch = false
     private var usesMt = false
 
-    private var curX = -1
-    private var curY = -1
+    /**
+     * 每个 slot 最后上报的坐标：内核按 slot 丢弃与上次相同的 ABS_MT 值，抬起也不清，
+     * 同一位置再按下时只来 TRACKING_ID 不来坐标，只能沿用这里的；同一次录制内不清空
+     */
+    private val slotX = HashMap<Int, Int>()
+    private val slotY = HashMap<Int, Int>()
+
+    /** 单点协议的 ABS_X/Y 也按上次值去重，同样跨抬起保留 */
+    private var singleX = -1
+    private var singleY = -1
     private var frameHasCoords = false
 
     /** 协议 A 一帧里的第几根手指，只认第 0 根 */
@@ -70,30 +78,27 @@ internal class TouchStreamParser {
                 }
             }
 
+            // 每个 slot 都记，主触点换到别的 slot 时要用那个 slot 自己的旧值
             ABS_MT_POSITION_X -> {
                 usesMt = true
-                if (isPrimaryContact()) {
-                    curX = value
-                    frameHasCoords = true
-                }
+                if (mtFrameIndex == 0) slotX[slot] = value
+                if (isPrimaryContact()) frameHasCoords = true
             }
 
             ABS_MT_POSITION_Y -> {
                 usesMt = true
-                if (isPrimaryContact()) {
-                    curY = value
-                    frameHasCoords = true
-                }
+                if (mtFrameIndex == 0) slotY[slot] = value
+                if (isPrimaryContact()) frameHasCoords = true
             }
 
             // 同时上报 MT 与单点时以 MT 为准
             ABS_X -> if (!usesMt) {
-                curX = value
+                singleX = value
                 frameHasCoords = true
             }
 
             ABS_Y -> if (!usesMt) {
-                curY = value
+                singleY = value
                 frameHasCoords = true
             }
         }
@@ -109,28 +114,29 @@ internal class TouchStreamParser {
             // 协议 A 且无 BTN_TOUCH：空帧即抬起
             else -> frameHasCoords
         }
-        if (down && curX >= 0 && curY >= 0) {
-            appendPoint(tMs)
-        } else {
+        if (!down) {
             closeStroke(tMs)
+            return
         }
+        val contactSlot = if (usesTrackingId) primarySlot else 0
+        val x = if (usesMt) slotX[contactSlot] ?: -1 else singleX
+        val y = if (usesMt) slotY[contactSlot] ?: -1 else singleY
+        // 这个 slot 还没报过坐标：开录前的旧值拿不到，等它报上来
+        if (x >= 0 && y >= 0) appendPoint(x, y, tMs)
     }
 
-    private fun appendPoint(tMs: Int) {
+    private fun appendPoint(x: Int, y: Int, tMs: Int) {
         val points = current ?: mutableListOf<TouchPoint>().also { current = it }
         if (points.size >= MAX_POINTS_PER_STROKE) return
         val last = points.lastOrNull()
         // 静止不重复记点，时长由 endTMs 兜住
-        if (last != null && last.x == curX && last.y == curY) return
-        points.add(TouchPoint(curX, curY, tMs))
+        if (last != null && last.x == x && last.y == y) return
+        points.add(TouchPoint(x, y, tMs))
     }
 
     private fun closeStroke(tMs: Int) {
         val points = current
         current = null
-        // 抬起后清掉坐标，免得下一次按下先补一个落在旧位置的假点
-        curX = -1
-        curY = -1
         if (points == null || points.isEmpty()) return
         if (_strokes.size >= MAX_STROKES) return
         _strokes.add(TouchStroke(points, tMs.coerceAtLeast(points.last().tMs)))

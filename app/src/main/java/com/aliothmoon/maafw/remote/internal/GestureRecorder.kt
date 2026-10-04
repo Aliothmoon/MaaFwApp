@@ -35,6 +35,12 @@ internal object GestureRecorder {
 
     private const val READER_JOIN_MS = 1_000L
 
+    /** 上一轮已取消但还在收尾时，新一轮最多等它这么久；取消后各步都会尽快退出，正常远用不到 */
+    private const val PREVIOUS_JOIN_MS = 15_000L
+
+    /** CPU 锁在录制预算外多留的余量，覆盖上锁、息屏、亮屏这几步 */
+    private const val CPU_LOCK_EXTRA_MS = 30_000L
+
     /** 常量结果没必要每次轮询都重新编码 */
     private val IDLE_JSON = encode(GestureRecordResult.IDLE)
     private val RECORDING_JSON = encode(GestureRecordResult.RECORDING)
@@ -42,36 +48,60 @@ internal object GestureRecorder {
     @Volatile
     private var worker: Thread? = null
 
-    /** 兼作取消信号与可打断的睡眠闸门 */
+    /** 当前这一轮的取消信号，兼作可打断的睡眠闸门；每轮一份，旧线程只认自己那份 */
     @Volatile
     private var cancelSignal = CountDownLatch(1)
 
     @Volatile
     private var resultJson: String = IDLE_JSON
 
-    private val cancelled: Boolean get() = cancelSignal.count == 0L
+    private val CountDownLatch.cancelled: Boolean get() = count == 0L
 
+    /**
+     * 上一轮还活着且没取消：忽略，App 轮询照样能取到它的结果
+     * 上一轮已取消、还在收尾：新一轮接管，等旧线程退场再开录；旧线程的结果作废，免得它写回 IDLE 让 App 空等到超时
+     */
     @Synchronized
     fun start(timeoutMs: Int) {
-        if (worker?.isAlive == true) {
+        val previous = worker
+        if (previous?.isAlive == true && !cancelSignal.cancelled) {
             Ln.w("$TAG: already recording")
             return
         }
-        cancelSignal = CountDownLatch(1)
+        val signal = CountDownLatch(1)
+        cancelSignal = signal
         resultJson = RECORDING_JSON
         val budget = if (timeoutMs > 0) timeoutMs.toLong() else DEFAULT_TIMEOUT_MS.toLong()
+        // 从发起时算：等旧线程的时间也在预算里，和 App 侧的超时对齐
+        val deadline = SystemClock.elapsedRealtime() + budget
         worker = Thread({
-            val result = runCatching { record(budget) }.getOrElse {
-                Ln.e("$TAG: record failed", it)
-                GestureRecordResult.failed(WakeUnlockResult.UNSUPPORTED)
+            if (previous?.isAlive == true) {
+                Ln.i("$TAG: waiting for cancelled recording to wind down")
+                previous.join(PREVIOUS_JOIN_MS)
+                if (previous.isAlive) Ln.w("$TAG: previous recording still alive, starting anyway")
             }
-            // 取消是 App 发起的，它自己已经收了界面，别再留一份终态等人来取
-            resultJson = if (cancelled) IDLE_JSON else encode(result)
-            Ln.i("$TAG: finished ${result.status} steps=${result.gesture?.steps?.size ?: 0}")
+            val result = WakeUnlockController.keepCpuAwake(budget + CPU_LOCK_EXTRA_MS) {
+                runCatching { record(deadline, signal) }.getOrElse {
+                    Ln.e("$TAG: record failed", it)
+                    GestureRecordResult.failed(WakeUnlockResult.UNSUPPORTED)
+                }
+            }
+            publish(signal, result)
         }, "gesture-record").apply {
             isDaemon = true
             start()
         }
+    }
+
+    @Synchronized
+    private fun publish(signal: CountDownLatch, result: GestureRecordResult) {
+        if (signal !== cancelSignal) {
+            Ln.i("$TAG: superseded run finished ${result.status}, result dropped")
+            return
+        }
+        // 取消是 App 发起的，它自己已经收了界面，别再留一份终态等人来取
+        resultJson = if (signal.cancelled) IDLE_JSON else encode(result)
+        Ln.i("$TAG: finished ${result.status} steps=${result.gesture?.steps?.size ?: 0}")
     }
 
     /** 终态取走即清：App 侧每次进设置页都会问一次，不能重复消费同一份结果 */
@@ -92,7 +122,7 @@ internal object GestureRecorder {
     private fun encode(result: GestureRecordResult): String =
         UnlockGestureJson.encodeToString(GestureRecordResult.serializer(), result)
 
-    private fun record(budgetMs: Long): GestureRecordResult {
+    private fun record(deadline: Long, signal: CountDownLatch): GestureRecordResult {
         val device = InputDeviceProbe.findTouchDevice()
             ?: return GestureRecordResult.failed(WakeUnlockResult.RECORD_NO_DEVICE)
 
@@ -102,7 +132,6 @@ internal object GestureRecorder {
             return GestureRecordResult.failed(WakeUnlockResult.RECORD_NO_DEVICE)
         }
 
-        val deadline = SystemClock.elapsedRealtime() + budgetMs
         val parser = TouchStreamParser()
         val collecting = AtomicBoolean(false)
         val startedAt = AtomicLong(0)
@@ -128,7 +157,7 @@ internal object GestureRecorder {
         }
 
         val outcome = try {
-            lockThenAwaitUnlock(deadline, device.path, collecting, startedAt)
+            lockThenAwaitUnlock(deadline, signal, device.path, collecting, startedAt)
         } finally {
             collecting.set(false)
             reader.close()
@@ -166,18 +195,19 @@ internal object GestureRecorder {
 
     private fun lockThenAwaitUnlock(
         deadline: Long,
+        signal: CountDownLatch,
         devicePath: String,
         collecting: AtomicBoolean,
         startedAt: AtomicLong,
     ): Outcome {
-        if (cancelled) return Outcome(WakeUnlockResult.RECORD_CANCELLED)
+        if (signal.cancelled) return Outcome(WakeUnlockResult.RECORD_CANCELLED)
 
-        val locked = WakeUnlockController.lockAndSleep()
+        val locked = WakeUnlockController.lockAndSleep { signal.cancelled }
+        if (signal.cancelled) return Outcome(WakeUnlockResult.RECORD_CANCELLED)
         if (locked != WakeUnlockResult.OK) {
             Ln.w("$TAG: cannot lock for recording, code=$locked")
             return Outcome(locked)
         }
-        if (cancelled) return Outcome(WakeUnlockResult.RECORD_CANCELLED)
 
         val pm = ServiceManager.getPowerManager()
         val wm = ServiceManager.getWindowManager()
@@ -186,7 +216,7 @@ internal object GestureRecorder {
         if (!pollUntil(SCREEN_OFF_WAIT_MS) { !pm.isScreenOn(0) }) {
             Ln.w("$TAG: screen still on after lock, recording anyway")
         }
-        if (cancelled) return Outcome(WakeUnlockResult.RECORD_CANCELLED)
+        if (signal.cancelled) return Outcome(WakeUnlockResult.RECORD_CANCELLED)
 
         // 自己亮屏：用户只需做解锁动作本身，双击/抬手唤醒不会被录进来
         // 亮不了就没必要录了，回放走的是同一条唤醒路径
@@ -196,7 +226,10 @@ internal object GestureRecorder {
         }
 
         // 必须在录制当时采样：解锁后可能已经转到别的方向，拿桌面的方向映射会整体偏掉
-        val screen = ScreenGeometry.current()
+        val screen = ScreenGeometry.current() ?: run {
+            Ln.w("$TAG: display info unavailable")
+            return Outcome(WakeUnlockResult.UNSUPPORTED)
+        }
         // 紧接着开采，中间不留缓冲，免得漏掉用户的第一下
         startedAt.set(SystemClock.uptimeMillis())
         collecting.set(true)
@@ -204,7 +237,7 @@ internal object GestureRecorder {
 
         // 唤醒瞬间 keyguard 状态会抖，先让它稳下来再等它消失，
         // 否则会把这一瞬的 false 当成「用户已解锁」当场收工
-        if (sleepUnlessCancelled(KEYGUARD_SETTLE_MS)) {
+        if (sleepUnlessCancelled(signal, KEYGUARD_SETTLE_MS)) {
             return Outcome(WakeUnlockResult.RECORD_CANCELLED)
         }
         if (wm.isKeyguardLocked != true) {
@@ -212,7 +245,7 @@ internal object GestureRecorder {
             return Outcome(WakeUnlockResult.NO_KEYGUARD)
         }
 
-        val unlocked = awaitCancellable(deadline) { wm.isKeyguardLocked == false }
+        val unlocked = awaitCancellable(deadline, signal) { wm.isKeyguardLocked == false }
         if (unlocked != WakeUnlockResult.OK) {
             Ln.w("$TAG: keyguard still locked, code=$unlocked")
             return Outcome(unlocked)
@@ -224,16 +257,20 @@ internal object GestureRecorder {
     }
 
     /** 等条件成立；返回 OK / RECORD_CANCELLED / RECORD_TIMEOUT */
-    private inline fun awaitCancellable(deadline: Long, cond: () -> Boolean): Int {
+    private inline fun awaitCancellable(
+        deadline: Long,
+        signal: CountDownLatch,
+        cond: () -> Boolean,
+    ): Int {
         while (true) {
-            if (cancelled) return WakeUnlockResult.RECORD_CANCELLED
+            if (signal.cancelled) return WakeUnlockResult.RECORD_CANCELLED
             if (cond()) return WakeUnlockResult.OK
             if (SystemClock.elapsedRealtime() >= deadline) return WakeUnlockResult.RECORD_TIMEOUT
-            if (sleepUnlessCancelled(KEYGUARD_POLL_MS)) return WakeUnlockResult.RECORD_CANCELLED
+            if (sleepUnlessCancelled(signal, KEYGUARD_POLL_MS)) return WakeUnlockResult.RECORD_CANCELLED
         }
     }
 
     /** 阻塞在取消闸门上而不是空转轮询；@return true 表示期间被取消 */
-    private fun sleepUnlessCancelled(durationMs: Long): Boolean =
-        cancelSignal.await(durationMs, TimeUnit.MILLISECONDS)
+    private fun sleepUnlessCancelled(signal: CountDownLatch, durationMs: Long): Boolean =
+        signal.await(durationMs, TimeUnit.MILLISECONDS)
 }
