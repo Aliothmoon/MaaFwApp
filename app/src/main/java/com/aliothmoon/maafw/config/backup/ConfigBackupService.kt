@@ -50,6 +50,8 @@ class ConfigBackupService(
     private val appSettings: AppSettingsManager,
     private val projectRepository: ProjectRepository,
     private val runnerPort: RunnerPort,
+    /** 等定时读盘的上限；单测里调短 */
+    private val storeReadyTimeoutMs: Long = STORE_READY_TIMEOUT_MS,
 ) {
 
     fun suggestedFileName(): String {
@@ -141,7 +143,7 @@ class ConfigBackupService(
     }
 
     private suspend fun awaitSchedulesLoaded(): Boolean =
-        withTimeoutOrNull(STORE_READY_TIMEOUT_MS) { scheduleStore.isLoaded.first { it } } != null
+        withTimeoutOrNull(storeReadyTimeoutMs) { scheduleStore.isLoaded.first { it } } != null
 
     private fun definition(): ProjectDefinition? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition

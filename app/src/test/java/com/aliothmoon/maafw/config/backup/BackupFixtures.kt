@@ -74,8 +74,10 @@ internal object BackupFixtures {
     )
 
     /** 与 MXU 的 encryptSecret 相同：UTF-8 异或重复的 key，再标准 Base64 */
-    fun mxuEncrypt(plain: String, key: String): String {
-        val bytes = plain.encodeToByteArray()
+    fun mxuEncrypt(plain: String, key: String): String = mxuEncryptBytes(plain.encodeToByteArray(), key)
+
+    /** 按原始字节混淆，用来造「解出来不是合法文本」的密文 */
+    fun mxuEncryptBytes(bytes: ByteArray, key: String): String {
         val keyBytes = key.encodeToByteArray()
         return Base64.getEncoder().encodeToString(
             ByteArray(bytes.size) { (bytes[it].toInt() xor keyBytes[it % keyBytes.size].toInt()).toByte() },

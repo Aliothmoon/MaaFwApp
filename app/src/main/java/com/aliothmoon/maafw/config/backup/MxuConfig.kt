@@ -11,6 +11,8 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import java.io.ByteArrayOutputStream
 import java.net.URLDecoder
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.util.Base64
 import java.util.zip.Inflater
 
@@ -122,7 +124,15 @@ internal object MxuFormat {
         val key = keyMaterial.encodeToByteArray()
         if (key.isEmpty()) return null
         val plain = ByteArray(bytes.size) { (bytes[it].toInt() xor key[it % key.size].toInt()).toByte() }
-        return plain.decodeToString()
+        // key 对不上（项目改过名、数据坏了）多半解出非法 UTF-8 或控制字符；宁可当没填，也不把乱码当密码导进来
+        val text = runCatching {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(plain))
+                .toString()
+        }.getOrNull() ?: return null
+        return text.takeUnless { it.any(Char::isISOControl) }
     }
 
     fun inputSecretKey(projectName: String, optionName: String, fieldName: String): String {
