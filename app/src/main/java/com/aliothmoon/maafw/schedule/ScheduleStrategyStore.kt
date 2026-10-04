@@ -56,6 +56,12 @@ class ScheduleStrategyStore(private val context: Context) {
 
     suspend fun add(strategy: ScheduleStrategy) = mutate { it + strategy }
 
+    /** 导入 MXU 配置时一次追加多条 */
+    suspend fun addAll(strategies: List<ScheduleStrategy>) = mutate { it + strategies }
+
+    /** 恢复 FwApp 备份时整批换掉；闹钟由调用方随后重排 */
+    suspend fun replaceAll(strategies: List<ScheduleStrategy>) = mutate { strategies }
+
     suspend fun update(strategy: ScheduleStrategy) = mutate { current ->
         current.map { if (it.id == strategy.id) strategy else it }
     }

@@ -139,6 +139,8 @@ import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleWakeUnlockScreen
+import com.aliothmoon.maafw.ui.settings.ConfigBackupAction
+import com.aliothmoon.maafw.ui.settings.ConfigBackupController
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
@@ -287,6 +289,7 @@ fun AppRoot(
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var confirmStartDialog by remember { mutableStateOf<SessionEffect.ConfirmStart?>(null) }
         var exportSheetVisible by remember { mutableStateOf(false) }
+        var configBackupAction by remember { mutableStateOf<ConfigBackupAction?>(null) }
 
         // 从触发日志过来时栈上已有日志页，再推一层；单顶避免连点叠两页
         val openWakeUnlock: () -> Unit = {
@@ -577,6 +580,7 @@ fun AppRoot(
                         onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
                         onOpenWallpaper = { navController.navigate(Routes.WALLPAPER) },
                         onExportLogs = { exportSheetVisible = true },
+                        onConfigBackup = { configBackupAction = it },
                         onOpenSearchResult = { entry ->
                             // 先发请求再切页：目标页一进组合就能读到它
                             searchNavigator.request(entry)
@@ -714,6 +718,11 @@ fun AppRoot(
         LogExportController(
             visible = exportSheetVisible,
             onDismiss = { exportSheetVisible = false },
+            onMessage = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
+        )
+        ConfigBackupController(
+            action = configBackupAction,
+            onActionConsumed = { configBackupAction = null },
             onMessage = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
         )
 

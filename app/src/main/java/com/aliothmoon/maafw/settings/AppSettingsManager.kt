@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -56,6 +57,40 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
             },
             produceMigrations = { listOf(WakeUnlockTypeMigration) },
         )
+
+        /**
+         * 随配置导出、导入的设置：和这台设备无关、也不含凭据的那些
+         *
+         * 不在列：提权后端与 Shizuku 几项（换台设备不一定有 Root / Shizuku）、虚拟屏分辨率（看屏幕）、
+         * 运行通知样式（超级岛、实时更新看 ROM）、背景图（图不进文件）、唤醒解锁、Mirror酱 CDK。
+         * 不在列的项导入时一律不碰，本机填好的不会被清掉
+         */
+        private val PORTABLE_SETTINGS: List<Pair<Preferences.Key<String>, (AppSettings) -> String>> =
+            with(AppSettingsSchema) {
+                listOf(
+                    runMode to AppSettings::runMode,
+                    overlayControlMode to AppSettings::overlayControlMode,
+                    screenSaverEnabled to AppSettings::screenSaverEnabled,
+                    closeAppAfterTask to AppSettings::closeAppAfterTask,
+                    touchPreviewEnabled to AppSettings::touchPreviewEnabled,
+                    debugMode to AppSettings::debugMode,
+                    saveOnError to AppSettings::saveOnError,
+                    themeStyle to AppSettings::themeStyle,
+                    uiScale to AppSettings::uiScale,
+                    wallpaperImageAlpha to AppSettings::wallpaperImageAlpha,
+                    wallpaperScrim to AppSettings::wallpaperScrim,
+                    wallpaperBlur to AppSettings::wallpaperBlur,
+                    eventNotificationLevel to AppSettings::eventNotificationLevel,
+                    runDurationLimitEnabled to AppSettings::runDurationLimitEnabled,
+                    runDurationLimitMinutes to AppSettings::runDurationLimitMinutes,
+                    telemetryEnabled to AppSettings::telemetryEnabled,
+                    autoCheckUpdate to AppSettings::autoCheckUpdate,
+                    autoDownloadUpdate to AppSettings::autoDownloadUpdate,
+                    updateChannel to AppSettings::updateChannel,
+                    updateSource to AppSettings::updateSource,
+                    pipOnHome to AppSettings::pipOnHome,
+                )
+            }
     }
 
     val settings: Flow<AppSettings> = with(AppSettingsSchema) { context.dataStore.flow }
@@ -333,6 +368,22 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setMirrorchyanCdk(cdk: String): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[mirrorchyanCdk] = cdk.trim() }
+    }
+
+    /** 导出配置带走的那几项，键是 DataStore 里的键名；没写过的项按默认值导出，文件里一眼看得全 */
+    suspend fun portableSettings(): Map<String, String> {
+        val current = settings.first()
+        return PORTABLE_SETTINGS.associate { (key, read) -> key.name to read(current) }
+    }
+
+    /**
+     * 恢复备份里的设置：只认 [PORTABLE_SETTINGS] 里的键，文件里没有的项不动。
+     * 值照旧以文本落盘，非法值读的时候各自回落默认，与手改 DataStore 同一套兜底
+     */
+    suspend fun importPortableSettings(values: Map<String, String>) {
+        context.dataStore.edit { prefs ->
+            PORTABLE_SETTINGS.forEach { (key, _) -> values[key.name]?.let { prefs[key] = it } }
+        }
     }
 
     private fun parseWallpaper(s: AppSettings) = WallpaperSettings(

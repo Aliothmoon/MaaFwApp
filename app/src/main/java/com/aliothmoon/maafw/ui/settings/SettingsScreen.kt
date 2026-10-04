@@ -122,6 +122,7 @@ fun SettingsScreen(
     onOpenNotificationSettings: () -> Unit,
     onOpenWallpaper: () -> Unit,
     onExportLogs: () -> Unit,
+    onConfigBackup: (ConfigBackupAction) -> Unit,
     /** 点了某条搜索结果：发定位请求、按位置切页由 AppRoot 做，本页只管清掉输入 */
     onOpenSearchResult: (SettingSearchEntry) -> Unit,
     modifier: Modifier = Modifier,
@@ -189,6 +190,7 @@ fun SettingsScreen(
                 RunDurationCard(settingsState, onSettingsIntent)
                 NotificationCard(onOpenNotificationSettings)
                 LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
+                BackupCard(onConfigBackup)
                 PiCard(onIntent)
                 OtherCard(state, settingsState, onIntent, onSettingsIntent)
                 AboutCard(state)
@@ -415,6 +417,38 @@ OpaqueTheme {
                 },
             )
 }
+    }
+}
+
+/** 配置导出、导入；选文件、预览与确认都在 [ConfigBackupController]，这里只发起 */
+@Composable
+private fun BackupCard(onConfigBackup: (ConfigBackupAction) -> Unit) {
+    MaaCard(
+        title = stringResource(R.string.settings_section_backup),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.BACKUP),
+    ) {
+        SettingSearchTarget(SettingAnchors.EXPORT_CONFIG) {
+            MaaNavigationRow(
+                label = stringResource(R.string.config_export_title),
+                description = stringResource(R.string.config_export_desc),
+                onClick = { onConfigBackup(ConfigBackupAction.Export) },
+            )
+        }
+        SettingSearchTarget(SettingAnchors.IMPORT_CONFIG) {
+            MaaNavigationRow(
+                label = stringResource(R.string.config_import_title),
+                description = stringResource(R.string.config_import_desc),
+                onClick = { onConfigBackup(ConfigBackupAction.Import) },
+            )
+        }
+        SettingSearchTarget(SettingAnchors.IMPORT_SHARE_CODE) {
+            MaaNavigationRow(
+                label = stringResource(R.string.config_import_share_code_title),
+                description = stringResource(R.string.config_import_share_code_desc),
+                onClick = { onConfigBackup(ConfigBackupAction.PasteShareCode) },
+            )
+        }
     }
 }
 

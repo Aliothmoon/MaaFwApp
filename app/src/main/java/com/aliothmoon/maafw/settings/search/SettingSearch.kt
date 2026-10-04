@@ -28,6 +28,7 @@ object SettingsSections {
     const val DURATION = "settings.duration"
     const val NOTIFICATION = "settings.notification"
     const val LOG = "settings.log"
+    const val BACKUP = "settings.backup"
     const val PI = "settings.pi"
     const val OTHER = "settings.other"
     const val ABOUT = "settings.about"
@@ -55,6 +56,9 @@ object SettingAnchors {
     const val EXPORT_LOGS = "log.export"
     const val DEBUG_MODE = "log.debug"
     const val SAVE_ON_ERROR = "log.save_on_error"
+    const val EXPORT_CONFIG = "backup.export"
+    const val IMPORT_CONFIG = "backup.import"
+    const val IMPORT_SHARE_CODE = "backup.share_code"
     const val REINSTALL_PI = "pi.reinstall"
     const val BACKEND = "other.backend"
     const val RESOLUTION = "other.resolution"
@@ -135,6 +139,7 @@ object SettingSearchIndex {
     private val duration = section(SettingsSections.DURATION, R.string.settings_section_duration_limit)
     private val notification = section(SettingsSections.NOTIFICATION, R.string.settings_section_notification)
     private val log = section(SettingsSections.LOG, R.string.settings_section_log)
+    private val backup = section(SettingsSections.BACKUP, R.string.settings_section_backup)
     private val pi = section(SettingsSections.PI, R.string.settings_section_pi)
     private val other = section(SettingsSections.OTHER, R.string.settings_section_other)
     private val about = section(SettingsSections.ABOUT, R.string.settings_about)
@@ -180,6 +185,9 @@ object SettingSearchIndex {
         entry(R.string.log_export_title, log, SettingAnchors.EXPORT_LOGS, R.string.settings_log_export_desc),
         entry(R.string.settings_debug_mode, log, SettingAnchors.DEBUG_MODE, R.string.settings_debug_mode_desc),
         entry(R.string.settings_save_on_error, log, SettingAnchors.SAVE_ON_ERROR),
+        entry(R.string.config_export_title, backup, SettingAnchors.EXPORT_CONFIG, R.string.config_export_desc, R.string.search_keywords_backup),
+        entry(R.string.config_import_title, backup, SettingAnchors.IMPORT_CONFIG, R.string.config_import_desc, R.string.search_keywords_backup),
+        entry(R.string.config_import_share_code_title, backup, SettingAnchors.IMPORT_SHARE_CODE, R.string.config_import_share_code_desc, R.string.search_keywords_backup),
         entry(R.string.pi_reinstall_title, pi, SettingAnchors.REINSTALL_PI, R.string.pi_reinstall_desc),
         entry(R.string.permission_backend, other, SettingAnchors.BACKEND, keywordsRes = R.string.search_keywords_backend),
         entry(R.string.settings_resolution, other, SettingAnchors.RESOLUTION, keywordsRes = R.string.search_keywords_resolution),
