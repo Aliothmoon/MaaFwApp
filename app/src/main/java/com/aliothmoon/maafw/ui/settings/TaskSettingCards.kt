@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.ui.settings
 import com.aliothmoon.maafw.settings.search.SettingAnchors
 import com.aliothmoon.maafw.settings.search.SettingsSections
 import com.aliothmoon.maafw.ui.settings.search.sectionRevealToken
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -36,9 +37,12 @@ internal fun TaskSettingsGroup(state: SessionUiState, onIntent: (SessionIntent) 
     val hasResource = state.resourceOptions.isNotEmpty() && state.environment?.resource != null
     val hasController = state.controllerOptions.isNotEmpty() && state.environment?.controller != null
     if (state.globalOptions.isEmpty() && state.settingSections.isEmpty() && !hasResource && !hasController) return
+    // 浅色下 surfaceContainer 与页面底几乎同色（Semi 浅色干脆都是白），只靠底色分不出边界：
+    // 底色抬一档，再补一圈与卡片同款的描边
     Surface(
         shape = RoundedCornerShape(MaaTheme.style.radii.large),
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
     ) {
         Column(
             modifier = Modifier.padding(MaaDesignTokens.Spacing.sm),
