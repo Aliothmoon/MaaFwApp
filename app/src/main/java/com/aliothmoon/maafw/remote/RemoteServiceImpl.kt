@@ -24,6 +24,7 @@ import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
+import com.aliothmoon.maafw.remote.internal.XmsfFirewall
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
@@ -68,6 +69,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
             Thread { runCatching(::cleanup) }.apply { name = "remote-shutdown-hook" }
         )
         startHeartbeatWatchdog()
+        // 上一实例可能断了 xmsf 的网没来得及恢复（被杀、崩溃），规则在 netd 里不随进程消失；
+        // 要跑 shell，挪到后台线程，构造函数不能拖
+        Thread { runCatching(XmsfFirewall::ensureRestored) }.apply { name = "xmsf-boot-restore" }.start()
         RemoteBootTrace.mark("CTOR_DONE")
     }
 
@@ -127,6 +131,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
     } catch (e: Exception) {
         Ln.w("$TAG: read low_resolution_switch failed", e)
         false
+    }
+
+    override fun setPackageNetworkingEnabled(packageName: String?, enabled: Boolean): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        return XmsfFirewall.setNetworkingEnabled(packageName, enabled)
     }
 
     override fun stopTargetApp(): Boolean {
@@ -407,6 +416,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         step("primary display") { PrimaryDisplayManager.stop() }
         step("virtual display") { VirtualDisplayManager.stop() }
         step("preview") { shutdownPreview() }
+        step("xmsf") { XmsfFirewall.restoreIfNeeded() }
     }
 
     private inline fun step(name: String, action: () -> Unit) {

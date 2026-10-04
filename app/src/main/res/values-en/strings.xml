@@ -235,6 +235,8 @@
     <!-- Notifications -->
     <string name="notification_channel_run">Task execution</string>
     <string name="notification_channel_run_desc">Stays up while a run is in progress so the system does not reclaim the process</string>
+    <string name="notification_channel_run_island">Task execution (HyperIsland)</string>
+    <string name="notification_channel_run_island_desc">Used when the run notification style is HyperIsland; the island only floats from this channel</string>
     <string name="notification_channel_focus">Project messages</string>
     <string name="notification_channel_focus_desc">Alerts the PI project asks to push to you during a run</string>
     <string name="notification_focus_title">Project message</string>
@@ -696,6 +698,22 @@
 
     <!-- Notification settings screen -->
     <string name="notification_settings_title">Notification settings</string>
+    <string name="notification_section_live">Run notification</string>
+    <string name="notification_live_style">Style</string>
+    <string name="notification_live_style_island">HyperIsland</string>
+    <string name="notification_live_style_live_update">Live Update</string>
+    <string name="notification_live_style_plain">Standard</string>
+    <string name="notification_live_note_island">HyperIsland is experimental; switch to another style if it looks wrong</string>
+    <string name="notification_live_note_live_update">Shows a progress chip in the status bar. Needs Android 16 or later with Live Updates turned on in the app\'s notification settings</string>
+    <string name="notification_live_note_plain">Keeps a single notification with a progress bar in the shade</string>
+    <string name="notification_live_permission">Notifications</string>
+    <string name="notification_live_focus">Focus notifications</string>
+    <string name="notification_live_promoted">Live Updates</string>
+    <string name="notification_live_granted">On</string>
+    <string name="notification_live_open_settings">Turn on</string>
+    <string name="notification_live_fallback">The selected style isn\'t available right now; runs will use \"%1$s\"</string>
+    <string name="notification_live_test_title">Run notification test</string>
+    <string name="notification_live_test_text">This is a test and disappears in 15 seconds</string>
     <string name="notification_section_internal">On this device</string>
     <string name="notification_enable">Notify when a run ends</string>
     <string name="notification_popup">Show as a banner</string>
@@ -859,6 +877,7 @@
     <string name="search_keywords_update">update upgrade version auto update check</string>
     <string name="search_keywords_wallpaper">background wallpaper picture image custom blur</string>
     <string name="search_keywords_ui_scale">scale zoom font size text density</string>
+    <string name="search_keywords_live">hyperisland island live update status bar chip progress style focus</string>
     <string name="search_keywords_theme">theme dark night black amoled light appearance color</string>
     <string name="search_keywords_language">language chinese english locale</string>
     <string name="search_keywords_duration">duration timeout time limit auto stop</string>

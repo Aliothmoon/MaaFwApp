@@ -229,6 +229,8 @@
     <!-- 通知 -->
     <string name="notification_channel_run">任务执行</string>
     <string name="notification_channel_run_desc">执行期间常驻，避免应用被系统回收</string>
+    <string name="notification_channel_run_island">任务执行（超级岛）</string>
+    <string name="notification_channel_run_island_desc">运行通知选「超级岛」时用这个频道，岛要它才浮得出来</string>
     <string name="notification_channel_focus">项目消息</string>
     <string name="notification_channel_focus_desc">PI 项目在运行中要求推送给你的提示</string>
     <string name="notification_focus_title">项目消息</string>
@@ -685,6 +687,22 @@
 
     <!-- 通知设置页 -->
     <string name="notification_settings_title">通知设置</string>
+    <string name="notification_section_live">运行通知</string>
+    <string name="notification_live_style">展示方式</string>
+    <string name="notification_live_style_island">超级岛</string>
+    <string name="notification_live_style_live_update">实时更新</string>
+    <string name="notification_live_style_plain">标准通知栏</string>
+    <string name="notification_live_note_island">超级岛为实验性方案，显示不正常时请换成其他方式</string>
+    <string name="notification_live_note_live_update">在状态栏显示进度胶囊。需要 Android 16 及以上，并在应用的通知设置里打开「实时更新」</string>
+    <string name="notification_live_note_plain">只在通知栏常驻一条带进度条的通知</string>
+    <string name="notification_live_permission">通知权限</string>
+    <string name="notification_live_focus">焦点通知</string>
+    <string name="notification_live_promoted">实时更新</string>
+    <string name="notification_live_granted">已开启</string>
+    <string name="notification_live_open_settings">去开启</string>
+    <string name="notification_live_fallback">所选方式当前用不了，运行时会改用「%1$s」</string>
+    <string name="notification_live_test_title">运行通知测试</string>
+    <string name="notification_live_test_text">这是一条测试，15 秒后自动消失</string>
     <string name="notification_section_internal">本机通知</string>
     <string name="notification_enable">任务结束时提醒</string>
     <string name="notification_popup">弹出横幅</string>
@@ -847,6 +865,7 @@
     <string name="search_keywords_update">更新 升级 版本 自动更新 检查更新</string>
     <string name="search_keywords_wallpaper">背景 壁纸 图片 自定义 透明 模糊</string>
     <string name="search_keywords_ui_scale">缩放 字体 字号 大小 文字 界面 密度</string>
+    <string name="search_keywords_live">超级岛 灵动岛 实时更新 状态栏 胶囊 进度 通知样式 焦点通知</string>
     <string name="search_keywords_theme">主题 深色 夜间 暗色 黑色 纯黑 浅色 外观 配色</string>
     <string name="search_keywords_language">语言 中文 英文 English 界面语言</string>
     <string name="search_keywords_duration">时长 超时 时间限制 自动停止 运行时间</string>

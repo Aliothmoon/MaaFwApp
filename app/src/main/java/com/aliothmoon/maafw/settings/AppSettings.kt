@@ -116,6 +116,13 @@ data class AppSettings(
     val eventNotificationLevel: String = "DEFAULT",
 
     /**
+     * 运行通知的展示方式：[com.aliothmoon.maafw.notification.live.LiveBackend] 的 name；
+     * 空串是没选过，按超级岛 > 实时更新 > 标准通知栏取第一档可用的
+     */
+    @PrefKey(default = "")
+    val liveBackend: String = "",
+
+    /**
      * 定时触发时的解锁方式：swipe / gesture / pin（见 [com.aliothmoon.maafw.domain.UnlockCredential]）
      *
      * 没有总开关：定时到点总要亮屏解锁（对齐 MaaMeow）。空串是「还没选过」，按「无密码」处理；

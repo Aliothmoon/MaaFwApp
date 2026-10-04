@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UnlockCredential
+import com.aliothmoon.maafw.notification.live.LiveBackend
 import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
@@ -102,6 +103,11 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         MutableStateFlow(parseEventNotificationLevel(defaults.eventNotificationLevel))
     val eventNotificationLevel: StateFlow<EventNotificationLevel> = _eventNotificationLevel.asStateFlow()
 
+    private val _liveBackend = MutableStateFlow(parseLiveBackend(defaults.liveBackend))
+
+    /** 运行通知的展示方式；null 是没选过，见 [com.aliothmoon.maafw.notification.live.LiveBackends.resolve] */
+    val liveBackend: StateFlow<LiveBackend?> = _liveBackend.asStateFlow()
+
     private val _resolutionPreset = MutableStateFlow(ResolutionPresets.resolve(defaults.resolutionPreset))
     override val resolutionPreset: StateFlow<ResolutionPreset> = _resolutionPreset.asStateFlow()
 
@@ -176,6 +182,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _uiScale.value = UiScale.parse(s.uiScale)
                 _wallpaper.value = parseWallpaper(s)
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
+                _liveBackend.value = parseLiveBackend(s.liveBackend)
                 _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType)
                 _wakeCredential.value = s.wakeCredential
                 _runDurationLimitEnabled.value = s.runDurationLimitEnabled.toBoolean()
@@ -277,6 +284,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[eventNotificationLevel] = level.name }
     }
 
+    suspend fun setLiveBackend(backend: LiveBackend?) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[liveBackend] = backend?.name.orEmpty() }
+    }
+
     override suspend fun setWakeUnlockType(type: String): Unit = with(AppSettingsSchema) {
         if (type !in UnlockCredential.TYPES) return
         context.dataStore.edit { it[wakeUnlockType] = type }
@@ -353,6 +364,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private fun parseThemeStyle(raw: String): ThemeStyle =
         runCatching { ThemeStyle.valueOf(raw) }.getOrDefault(ThemeStyle.DEFAULT)
+
+    private fun parseLiveBackend(raw: String): LiveBackend? =
+        raw.takeIf(String::isNotEmpty)?.let { runCatching { LiveBackend.valueOf(it) }.getOrNull() }
 
     private fun parseEventNotificationLevel(raw: String): EventNotificationLevel =
         runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)

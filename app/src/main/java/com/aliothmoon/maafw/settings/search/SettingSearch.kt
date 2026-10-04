@@ -64,6 +64,7 @@ object SettingAnchors {
 
     const val WALLPAPER_ENABLE = "wallpaper.enable"
 
+    const val NOTIFY_LIVE_STYLE = "notify.live_style"
     const val NOTIFY_ENABLE = "notify.enable"
     const val NOTIFY_ON_COMPLETE = "notify.on_complete"
     const val NOTIFY_ON_ERROR = "notify.on_error"
@@ -188,6 +189,7 @@ object SettingSearchIndex {
 
         entry(R.string.wallpaper_enable, wallpaperPage, SettingAnchors.WALLPAPER_ENABLE, R.string.wallpaper_desc, R.string.search_keywords_wallpaper),
 
+        entry(R.string.notification_section_live, notificationPage, SettingAnchors.NOTIFY_LIVE_STYLE, keywordsRes = R.string.search_keywords_live),
         entry(R.string.notification_enable, notificationPage, SettingAnchors.NOTIFY_ENABLE),
         entry(R.string.notification_popup, notificationPage, SettingAnchors.NOTIFY_ENABLE),
         entry(R.string.notification_send_on_complete, notificationPage, SettingAnchors.NOTIFY_ON_COMPLETE),

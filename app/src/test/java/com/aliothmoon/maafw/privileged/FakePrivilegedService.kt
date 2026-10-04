@@ -71,6 +71,14 @@ open class FakePrivilegedService : RemoteService {
 
     override fun isSmartResolutionEnabled(): Boolean = smartResolution
 
+    /** 记下每次断 / 复网的请求，按顺序 */
+    val networkingCalls = mutableListOf<Pair<String, Boolean>>()
+
+    override fun setPackageNetworkingEnabled(packageName: String?, enabled: Boolean): Boolean {
+        networkingCalls += packageName.orEmpty() to enabled
+        return true
+    }
+
     // ── 其余：本测试用不到，保持无副作用的零值 ──
 
     override fun destroy() = Unit

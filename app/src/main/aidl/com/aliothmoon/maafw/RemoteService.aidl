@@ -172,4 +172,13 @@ interface RemoteService {
 
     /** 荣耀「智能分辨率」是否开着（global low_resolution_switch）；开着时后台模式识别会出错 */
     boolean isSmartResolutionEnabled() = 83;
+
+    // ── 运行通知 ──
+
+    /**
+     * 断开 / 恢复某个包的联网；只认 com.xiaomi.xmsf，别的包一律拒绝
+     *
+     * 超级岛的云端鉴权断网即放行，运行通知选「超级岛」时在进度通知期间断开它
+     */
+    boolean setPackageNetworkingEnabled(String packageName, boolean enabled) = 84;
 }

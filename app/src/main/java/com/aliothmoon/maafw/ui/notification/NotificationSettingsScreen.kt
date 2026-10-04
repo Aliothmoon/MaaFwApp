@@ -52,7 +52,7 @@ import org.koin.androidx.compose.koinViewModel
 /**
  * 通知设置（二级页面）
  *
- * 三段：内部系统通知的档位、外部推送的触发条件、逐个渠道的凭据
+ * 四段：运行通知的展示方式、内部系统通知的档位、外部推送的触发条件、逐个渠道的凭据
  *
  * 自带 SnackbarHost 而不是把反馈甩给 `AppRoot`：测试发送的逐条结果只在这一页有意义，
  * 走 `SessionEffect` 会让用户离开页面后还在收上一页的提示
@@ -104,6 +104,7 @@ fun NotificationSettingsScreen(
             contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
+            item(key = "live") { RunNotificationCard(state, viewModel::onIntent) }
             item(key = "internal") { InternalCard(state, viewModel::onIntent) }
             item(key = "triggers") { TriggerCard(state, viewModel::onIntent) }
             items(NOTIFICATION_PROVIDER_ORDER, key = { it }) { id ->
