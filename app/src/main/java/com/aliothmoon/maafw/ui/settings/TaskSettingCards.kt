@@ -48,7 +48,8 @@ internal fun TaskSettingCards(state: SessionUiState, onIntent: (SessionIntent) -
                     options = section.options,
                     locked = state.configurationLocked,
                     onSetOption = onSetOption,
-                    searchAnchor = { SettingAnchors.projectOption(SettingsSections.PI_GLOBAL, it.name) },
+                    // 同一个选项可以进好几个分区，锚点按分区分开，免得几处同时滚动、闪烁
+                    searchAnchor = { SettingAnchors.projectOption(SettingsSections.projectSection(section.name), it.name) },
                 )
             }
         }

@@ -124,19 +124,6 @@ fun ScheduleScreen(
                 actionIconContentColor = MaterialTheme.colorScheme.primary,
             ),
         )
-        // 没有规则时卡片放在列表外：空状态靠 fillParentMaxSize 居中，卡片进列表会把它挤出一屏
-        if (state.rows.isEmpty() && state.healthIssues.isNotEmpty()) {
-            ScheduleHealthCard(
-                issues = state.healthIssues,
-                backend = state.backend,
-                onFix = onFixIssue,
-                modifier = Modifier.padding(
-                    start = MaaDesignTokens.Spacing.lg,
-                    end = MaaDesignTokens.Spacing.lg,
-                    bottom = MaaDesignTokens.Spacing.md,
-                ),
-            )
-        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(
@@ -146,20 +133,29 @@ fun ScheduleScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            if (state.rows.isEmpty()) {
-                // 撑满视口才有多余高度可分；item 默认包裹内容，MaaEmptyState 的居中就无从谈起
-                item(key = "empty") { ScheduleEmptyState(Modifier.fillParentMaxSize()) }
-            } else {
-                // 有规则时进列表，才能跟着规则一起滚
-                if (state.healthIssues.isNotEmpty()) {
-                    item(key = "health") {
-                        ScheduleHealthCard(
-                            issues = state.healthIssues,
-                            backend = state.backend,
-                            onFix = onFixIssue,
-                        )
-                    }
+            // 有没有规则都进列表：五六项加厂商提示在矮屏 / 横屏上超出一屏，放列表外就被截掉
+            if (state.healthIssues.isNotEmpty()) {
+                item(key = "health") {
+                    ScheduleHealthCard(
+                        issues = state.healthIssues,
+                        backend = state.backend,
+                        onFix = onFixIssue,
+                    )
                 }
+            }
+            if (state.rows.isEmpty()) {
+                item(key = "empty") {
+                    ScheduleEmptyState(
+                        // 独占时撑满视口才有多余高度可分，item 默认包裹内容，居中无从谈起；
+                        // 跟在健康卡后面再撑满会被挤出一屏，只留上下余白
+                        if (state.healthIssues.isEmpty()) {
+                            Modifier.fillParentMaxSize()
+                        } else {
+                            Modifier.padding(vertical = MaaDesignTokens.Spacing.xl)
+                        },
+                    )
+                }
+            } else {
                 items(state.rows, key = { it.strategy.id }) { row ->
                     ScheduleRowCard(
                         row = row,

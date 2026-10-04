@@ -121,7 +121,7 @@ class SettingSearchTest {
 
         assertEquals(
             listOf(
-                SettingAnchors.projectOption(SettingsSections.PI_GLOBAL, "auto"),
+                SettingAnchors.projectOption(SettingsSections.projectSection("combat"), "auto"),
                 SettingAnchors.projectOption(SettingsSections.PI_GLOBAL, "loose"),
                 SettingAnchors.projectOption(SettingsSections.PI_RESOURCE, "server"),
             ),
@@ -135,6 +135,32 @@ class SettingSearchTest {
                 SettingsSections.PI_RESOURCE,
             ),
             entries.map { (it.location as SettingLocation.Section).sectionKey },
+        )
+    }
+
+    @Test
+    fun `an option shared by two sections gets one anchor per section`() {
+        fun section(name: String) = OptionSectionState(
+            name = name,
+            label = name,
+            description = null,
+            icon = null,
+            defaultExpand = false,
+            options = listOf(option("auto")),
+        )
+        val entries = SettingSearchIndex.projectEntries(
+            sections = listOf(section("combat"), section("daily")),
+            globalOptions = listOf(option("auto")),
+            resourceOptions = emptyList(),
+            controllerOptions = emptyList(),
+        )
+
+        assertEquals(
+            listOf(
+                SettingAnchors.projectOption(SettingsSections.projectSection("combat"), "auto"),
+                SettingAnchors.projectOption(SettingsSections.projectSection("daily"), "auto"),
+            ),
+            entries.map { it.anchor },
         )
     }
 
@@ -200,6 +226,17 @@ class SettingSearchTest {
             assertTrue(scope, "sectionRevealToken(SettingsSections.$scope)" in mainSources)
         }
         assertTrue("sectionRevealToken(SettingsSections.projectSection(section.name))" in mainSources)
+        assertTrue(
+            "SettingAnchors.projectOption(SettingsSections.projectSection(section.name), it.name)" in mainSources,
+        )
+    }
+
+    /** 整张卡自己就是锚点、又默认收起的首页卡：不跟着展开，定位过去只闪一下标题 */
+    @Test
+    fun `collapsed home cards reveal themselves`() {
+        listOf("RESOURCE", "CONTROLLER").forEach { anchor ->
+            assertTrue(anchor, "anchorRevealToken(SettingAnchors.$anchor)" in mainSources)
+        }
     }
 
     @Test

@@ -72,6 +72,11 @@ fun sectionRevealToken(sectionKey: String): Any? =
         location is SettingLocation.Section && location.sectionKey == sectionKey && request.isFresh()
     }
 
+/** 同 [sectionRevealToken]，给整张卡自己就是锚点的可折叠卡（首页的资源、控制器） */
+@Composable
+fun anchorRevealToken(anchor: String): Any? =
+    LocalSettingSearchRequest.current?.takeIf { it.entry.anchor == anchor && it.isFresh() }
+
 /** 当前请求落在哪个位置；任务页用它决定要不要把快捷面板打开 */
 @Composable
 fun pendingSearchLocation(): SettingLocation? =
@@ -94,21 +99,26 @@ fun SettingSearchTarget(
     val requester = remember { BringIntoViewRequester() }
     if (request != null) {
         val navigator = LocalSettingSearchNavigator.current
-        // 闪完再消费：请求不变，effect 就不会被取消
+        // 闪完再消费：请求不变，effect 就不会被取消。
+        // 闪到一半锚点离开组合（用户把卡收起）也算消费，否则请求还新鲜，锚点再进组合会凭空重放；
+        // 锚点不会露面前先离开组合：折叠卡展开后锚点才进来，切过去的页进组合后一直留到落定，任务页面板落定才开
         LaunchedEffect(request) {
-            if (fresh) {
-                // 展开动画要几帧才把锚点量出来；滚一次，等动画走完再补一次，免得只露出标题
-                withFrameNanos { }
-                withFrameNanos { }
-                requester.bringIntoView()
-                delay(EXPAND_SETTLE_MS)
-                requester.bringIntoView()
-                repeat(2) {
-                    flash.animateTo(1f, tween(180))
-                    flash.animateTo(0f, tween(420))
+            try {
+                if (fresh) {
+                    // 展开动画要几帧才把锚点量出来；滚一次，等动画走完再补一次，免得只露出标题
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    requester.bringIntoView()
+                    delay(EXPAND_SETTLE_MS)
+                    requester.bringIntoView()
+                    repeat(2) {
+                        flash.animateTo(1f, tween(180))
+                        flash.animateTo(0f, tween(420))
+                    }
                 }
+            } finally {
+                navigator?.consume(request)
             }
-            navigator?.consume(request)
         }
     }
 

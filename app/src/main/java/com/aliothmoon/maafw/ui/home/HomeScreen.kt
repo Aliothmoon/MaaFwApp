@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.ui.home
 
 import com.aliothmoon.maafw.settings.search.SettingAnchors
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
+import com.aliothmoon.maafw.ui.settings.search.anchorRevealToken
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -51,6 +52,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.project.ProjectState
@@ -128,7 +130,10 @@ fun HomeScreen(
         ) {
             OverviewCard(state, update, onSettingsIntent)
             SettingSearchTarget(SettingAnchors.RESOURCE) { ResourceCard(state, onIntent) }
-            SettingSearchTarget(SettingAnchors.CONTROLLER) { ControllerCard(state, onIntent) }
+            // 出不出卡得在锚点外判断：锚点的 Box 里空着也占一份 spacedBy 间距
+            state.environment?.takeIf { it.controllerCandidates.size >= 2 }?.let { environment ->
+                SettingSearchTarget(SettingAnchors.CONTROLLER) { ControllerCard(environment, state, onIntent) }
+            }
             RunModeCard(state, onIntent)
             SettingSearchTarget(SettingAnchors.PERMISSIONS) { PermissionCard(state, onIntent) }
             ServiceActionButtons(state, onIntent)
@@ -582,18 +587,22 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
 }
 
 /**
- * controller 选择：PI 声明了不止一个 Adb controller 才出（如本地客户端与云游戏各一个），
+ * controller 选择：PI 声明了不止一个 Adb controller 才出（如本地客户端与云游戏各一个），调用方判断；
  * 形态与 [ResourceCard] 一致
  */
 @Composable
-private fun ControllerCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    val environment = state.environment ?: return
-    if (environment.controllerCandidates.size < 2) return
+private fun ControllerCard(
+    environment: ResolvedEnvironment,
+    state: SessionUiState,
+    onIntent: (SessionIntent) -> Unit,
+) {
     MaaCard(
         title = stringResource(R.string.settings_controller),
         collapsible = true,
         initiallyExpanded = false,
         summary = environment.controller.label,
+        // 默认收起：搜索落到这张卡时得先展开，否则只闪一下标题
+        revealToken = anchorRevealToken(SettingAnchors.CONTROLLER),
     ) {
         MaaSingleChoiceFlow(
             options = environment.controllerCandidates.map { it.name to it.label },
@@ -614,6 +623,7 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
         collapsible = true,
         initiallyExpanded = false,
         summary = state.environment?.resource?.label,
+        revealToken = anchorRevealToken(SettingAnchors.RESOURCE),
     ) {
         val environment = state.environment
         val candidates = environment?.resourceCandidates.orEmpty()

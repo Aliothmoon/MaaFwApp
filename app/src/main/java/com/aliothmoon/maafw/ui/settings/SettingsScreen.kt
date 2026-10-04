@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.ui.settings
 
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.settings.search.SearchCondition
@@ -157,19 +158,29 @@ fun SettingsScreen(
                         onOpenSearchResult(entry)
                     },
                 )
-                return@Column
             }
-            UpdateCard(settingsState, onSettingsIntent)
-            TaskSettingCards(state, onIntent)
-            ResourceOptionCard(state, onIntent)
-            ControllerOptionCard(state, onIntent)
-            DisplayCard(state, onIntent)
-            RunDurationCard(settingsState, onSettingsIntent)
-            NotificationCard(onOpenNotificationSettings)
-            LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
-            PiCard(onIntent)
-            OtherCard(state, settingsState, onIntent, onSettingsIntent)
-            AboutCard(state)
+            // 搜索时只是不量不摆，不移出组合：卡片折叠态与没提交的输入草稿都挂在组合里，移出去就丢了
+            // 放在结果后面，多出的那份 spacedBy 间距只落在末尾
+            Column(
+                modifier = Modifier.layout { measurable, constraints ->
+                    if (searching) return@layout layout(0, 0) {}
+                    val placeable = measurable.measure(constraints)
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                },
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+            ) {
+                UpdateCard(settingsState, onSettingsIntent)
+                TaskSettingCards(state, onIntent)
+                ResourceOptionCard(state, onIntent)
+                ControllerOptionCard(state, onIntent)
+                DisplayCard(state, onIntent)
+                RunDurationCard(settingsState, onSettingsIntent)
+                NotificationCard(onOpenNotificationSettings)
+                LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
+                PiCard(onIntent)
+                OtherCard(state, settingsState, onIntent, onSettingsIntent)
+                AboutCard(state)
+            }
         }
     }
 }

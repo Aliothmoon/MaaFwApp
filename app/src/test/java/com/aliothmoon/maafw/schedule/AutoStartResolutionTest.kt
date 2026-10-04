@@ -42,4 +42,16 @@ class AutoStartResolutionTest {
         )
         assertEquals(AutoStartTarget.Oem("xiaomi"), target)
     }
+
+    @Test
+    fun `oem page falls back to app details when it cannot be opened`() {
+        assertEquals(
+            listOf(AutoStartTarget.Oem("vivo"), AutoStartTarget.AppDetails),
+            AutoStartResolution.launchOrder(AutoStartTarget.Oem("vivo")),
+        )
+        assertEquals(
+            listOf(AutoStartTarget.AppDetails),
+            AutoStartResolution.launchOrder(AutoStartTarget.AppDetails),
+        )
+    }
 }

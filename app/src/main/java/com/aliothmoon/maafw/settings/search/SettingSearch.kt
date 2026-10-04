@@ -212,7 +212,8 @@ object SettingSearchIndex {
                 uiTextFromProject(section.label),
             )
             section.options.forEach { grouped += it.name }
-            addOptions(section.options, location, SettingsSections.PI_GLOBAL)
+            // 同一个选项能进好几个分区，锚点跟着分区走，每处各一个靶子
+            addOptions(section.options, location, location.sectionKey)
         }
         addOptions(
             globalOptions.filterNot { it.name in grouped },

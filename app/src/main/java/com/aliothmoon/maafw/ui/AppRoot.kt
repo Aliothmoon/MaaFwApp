@@ -1,5 +1,8 @@
 package com.aliothmoon.maafw.ui
 
+import android.content.Intent
+import android.net.Uri
+import timber.log.Timber
 import com.aliothmoon.maafw.settings.search.SettingLocation
 import com.aliothmoon.maafw.settings.search.SettingSearchNavigator
 import android.app.Activity
@@ -595,9 +598,15 @@ fun AppRoot(
                         onFix = { action, entry ->
                             when (action) {
                                 ScheduleFixAction.WAKE_UNLOCK_SETTINGS -> openWakeUnlock()
-                                ScheduleFixAction.BATTERY -> viewModel.onIntent(
-                                    SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
-                                )
+                                ScheduleFixAction.BATTERY ->
+                                    if (SystemPermissionRequester.isGranted(context, SystemPermission.BatteryWhitelist)) {
+                                        // 白名单已经在了还被拦，多半是厂商自己的后台管控，开关在应用详情页里
+                                        openAppDetails(context)
+                                    } else {
+                                        viewModel.onIntent(
+                                            SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
+                                        )
+                                    }
                                 ScheduleFixAction.EDIT_RULE ->
                                     navController.navigate(Routes.scheduleEdit(entry.strategyId))
                             }
@@ -697,4 +706,11 @@ fun AppRoot(
             )
         }
     }
+}
+
+private fun openAppDetails(context: Context) {
+    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        .setData(Uri.fromParts("package", context.packageName, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }.onFailure { Timber.w(it, "open app details failed") }
 }

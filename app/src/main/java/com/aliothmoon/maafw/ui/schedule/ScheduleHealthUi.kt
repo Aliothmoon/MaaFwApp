@@ -13,7 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,6 +109,14 @@ fun ScheduleHealthCard(
     }
 }
 
+/** 存枚举名：改名或删项后旧名直接丢掉，不至于恢复时崩 */
+private val VisitedSaver = listSaver<Set<ScheduleHealthIssue>, String>(
+    save = { visited -> visited.map { it.name } },
+    restore = { names ->
+        names.mapNotNullTo(mutableSetOf()) { name -> ScheduleHealthIssue.entries.firstOrNull { it.name == name } }
+    },
+)
+
 /**
  * 保存后的逐项引导：一次只摆一项，点「去设置」就翻到下一项
  *
@@ -121,7 +130,10 @@ fun ScheduleSetupWizard(
     onFix: (ScheduleHealthIssue) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var visited by remember { mutableStateOf(emptySet<ScheduleHealthIssue>()) }
+    // VM 的引导标记活得比组合长：重建或页面移出组合后 visited 清空，走过的项就会再绕一圈
+    var visited by rememberSaveable(stateSaver = VisitedSaver) {
+        mutableStateOf(emptySet<ScheduleHealthIssue>())
+    }
     val current = pending.firstOrNull { it !in visited }
     // 逐项走完、或者全都授好了：收起并摘掉 VM 的标记，免得日后哪项权限掉了它又凭空弹出来
     LaunchedEffect(current == null) {
@@ -173,10 +185,7 @@ fun ScheduleAutoStartPrompt(
         icon = Icons.Outlined.Schedule,
         confirmText = stringResource(R.string.schedule_go_to_settings),
         onConfirm = {
-            AutoStartHelper.intentFor(context, target)?.let { intent ->
-                // 厂商页的组件名随版本漂移，resolve 过也可能起不来；起不来就算了，不能崩
-                runCatching { context.startActivity(intent) }
-            }
+            AutoStartHelper.open(context, target)
             onDismiss(false)
         },
         neutralText = stringResource(R.string.schedule_auto_start_dont_remind),

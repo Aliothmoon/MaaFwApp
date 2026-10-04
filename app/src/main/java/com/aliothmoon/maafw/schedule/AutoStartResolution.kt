@@ -22,4 +22,8 @@ object AutoStartResolution {
         knownRestrictiveManufacturer -> AutoStartTarget.AppDetails
         else -> null
     }
+
+    /** 依次尝试打开的页面：厂商页起不来就退应用详情页 */
+    fun launchOrder(target: AutoStartTarget): List<AutoStartTarget> =
+        listOf(target, AutoStartTarget.AppDetails).distinct()
 }
