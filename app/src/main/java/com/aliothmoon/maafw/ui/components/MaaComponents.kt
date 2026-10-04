@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,19 +35,21 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -55,10 +58,14 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.i18n.asString
@@ -116,114 +123,139 @@ fun MaaCard(
         elevation = CardDefaults.cardElevation(defaultElevation = MaaTheme.style.cardElevation),
         border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
     ) {
-        Column(
-            modifier = Modifier.padding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        CompositionLocalProvider(
+            LocalCardRowBleed provides contentPadding.calculateStartPadding(LayoutDirection.Ltr),
         ) {
-            // 动画状态放在 chevron 内部：不可折叠的卡片压根不组合它，也就不必付一个
-            // Animatable 与常驻协程（全仓 24 个调用点里只有 8 个可折叠）
-            val chevron: @Composable () -> Unit = {
-                val rotation by animateFloatAsState(
-                    targetValue = if (expanded) 180f else 0f,
-                    animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
-                    label = "chevron",
-                )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(MaaDesignTokens.IconSize.sm)
-                        .rotate(rotation),
-                )
-            }
-            when {
-                // trailing 已占住表头右侧，此时只有箭头本身可点，避免与开关抢同一片区域
-                trailing != null -> MaaLabeledControlRow(
-                    label = title.orEmpty(),
-                    labelStyle = MaterialTheme.typography.titleMedium,
-                    leading = leading,
-                    trailing = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-                        ) {
-                            trailing()
-                            if (canCollapse) {
-                                // 表头折叠开关不挂 maaClickable：0.97 缩放对整行标题太闹，
-                                // 退回无涟漪的普通 clickable
-                                Box(
-                                    Modifier.clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                    ) { expanded = !expanded },
+            Column(
+                modifier = Modifier.padding(contentPadding),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                // 动画状态放在 chevron 内部：不可折叠的卡片压根不组合它，也就不必付一个
+                // Animatable 与常驻协程（全仓 24 个调用点里只有 8 个可折叠）
+                val chevron: @Composable () -> Unit = {
+                    val rotation by animateFloatAsState(
+                        targetValue = if (expanded) 180f else 0f,
+                        animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
+                        label = "chevron",
+                    )
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(MaaDesignTokens.IconSize.sm)
+                            .rotate(rotation),
+                    )
+                }
+                when {
+                    // trailing 已占住表头右侧，此时只有箭头本身可点，避免与开关抢同一片区域
+                    trailing != null -> MaaLabeledControlRow(
+                        label = title.orEmpty(),
+                        labelStyle = MaterialTheme.typography.titleMedium,
+                        leading = leading,
+                        trailing = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                            ) {
+                                trailing()
+                                if (canCollapse) {
+                                    // 表头折叠开关不挂 maaClickable：0.97 缩放对整行标题太闹，
+                                    // 退回无涟漪的普通 clickable
+                                    Box(
+                                        Modifier.clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                        ) { expanded = !expanded },
+                                    ) {
+                                        chevron()
+                                    }
+                                }
+                            }
+                        },
+                    )
+
+                    title != null -> {
+                        val toggle = if (canCollapse) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { expanded = !expanded }
+                        } else {
+                            Modifier
+                        }
+                        if (canCollapse && !expanded && summary != null) {
+                            // 摘要是资源名这类外部文本，可能很长：标题按自身宽度先排，摘要只拿剩下的并截断，
+                            // 反过来标题会被挤成一列一个字
+                            Row(
+                                modifier = toggle.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+                            ) {
+                                leading?.invoke()
+                                Text(text = title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm, Alignment.End),
                                 ) {
+                                    Text(
+                                        text = summary,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
                                     chevron()
                                 }
                             }
+                        } else {
+                            MaaLabeledControlRow(
+                                label = title,
+                                labelStyle = MaterialTheme.typography.titleMedium,
+                                leading = leading,
+                                modifier = toggle,
+                                trailing = { if (canCollapse) chevron() },
+                            )
                         }
-                    },
-                )
-
-                title != null -> {
-                    val toggle = if (canCollapse) {
-                        Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { expanded = !expanded }
-                    } else {
-                        Modifier
                     }
-                    if (canCollapse && !expanded && summary != null) {
-                        // 摘要是资源名这类外部文本，可能很长：标题按自身宽度先排，摘要只拿剩下的并截断，
-                        // 反过来标题会被挤成一列一个字
-                        Row(
-                            modifier = toggle.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
-                        ) {
-                            leading?.invoke()
-                            Text(text = title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                            Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm, Alignment.End),
-                            ) {
-                                Text(
-                                    text = summary,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false),
-                                )
-                                chevron()
-                            }
-                        }
-                    } else {
-                        MaaLabeledControlRow(
-                            label = title,
-                            labelStyle = MaterialTheme.typography.titleMedium,
-                            leading = leading,
-                            modifier = toggle,
-                            trailing = { if (canCollapse) chevron() },
+                }
+                if (canCollapse) {
+                    AnimatedVisibility(visible = expanded, enter = CardExpand, exit = CardCollapse) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                            content = content,
                         )
                     }
+                } else {
+                    content()
                 }
-            }
-            if (canCollapse) {
-                AnimatedVisibility(visible = expanded, enter = CardExpand, exit = CardCollapse) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-                        content = content,
-                    )
-                }
-            } else {
-                content()
             }
         }
     }
 }
+
+/**
+ * 卡片的水平内边距；卡里的通栏可点行按它外扩，按下高亮铺到卡片两边，
+ * 由卡片的圆角裁掉，不再缩在内容区里露出方角
+ */
+val LocalCardRowBleed = staticCompositionLocalOf { 0.dp }
+
+/** 横向外扩 [bleed]，占位宽度不变；随后补回同样的内边距，内容位置不动 */
+fun Modifier.cardRowClickable(bleed: Dp, enabled: Boolean = true, onClick: () -> Unit): Modifier =
+    horizontalBleed(bleed)
+        .maaClickable(enabled = enabled, pressScale = false, onClick = onClick)
+        .padding(horizontal = bleed)
+
+internal fun Modifier.horizontalBleed(bleed: Dp): Modifier =
+    if (bleed == 0.dp) this else layout { measurable, constraints ->
+        val extra = (bleed * 2).roundToPx()
+        val placeable = measurable.measure(constraints.offset(horizontal = extra))
+        layout((placeable.width - extra).coerceAtLeast(0), placeable.height) {
+            placeable.place(-extra / 2, 0)
+        }
+    }
 
 /** 尾控件固宽，标签占剩余并换行，避免长 label 挤掉 Switch/Icon */
 @Composable
@@ -383,7 +415,7 @@ fun MaaNavigationRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .maaClickable(onClick = onClick)
+            .cardRowClickable(LocalCardRowBleed.current, onClick = onClick)
             .padding(vertical = MaaDesignTokens.Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),

@@ -180,7 +180,11 @@ internal fun LivePreview(
             MaaCardSurface(modifier = cardModifier.then(boundsReporting)) { LivePreviewIdleArt() }
             return@Box
         }
-        MaaCardSurface(modifier = cardModifier.then(boundsReporting).maaClickable(onClick = onEnterFullscreen)) {
+        // 点击挂在 Surface 外层，高亮不归它的圆角裁，得带上同一形状
+        MaaCardSurface(
+            modifier = cardModifier.then(boundsReporting)
+                .maaClickable(shape = MaterialTheme.shapes.medium, onClick = onEnterFullscreen),
+        ) {
             Box(Modifier.fillMaxSize()) {
                 content()
                 PreviewStatusMask(surfaceReady = surfaceReady, running = running)

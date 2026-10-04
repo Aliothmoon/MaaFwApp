@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -40,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -56,10 +59,13 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
+import com.aliothmoon.maafw.ui.components.LocalCardRowBleed
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.components.horizontalBleed
 import com.aliothmoon.maafw.ui.components.updateSourceLabel
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
@@ -198,14 +204,18 @@ private fun CdkInputBlock(
     val toggleLabel = stringResource(
         if (expanded) R.string.common_collapse_action else R.string.common_expand_action,
     )
+    // 卡里的通栏行：外扩到卡边再补回内边距，按下高亮铺满卡片宽度
+    val bleed = LocalCardRowBleed.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .horizontalBleed(bleed)
             .clickable(role = Role.Button, onClickLabel = toggleLabel) {
                 // 收起时把明文一并藏回去
                 if (expanded) cdkVisible = false
                 userExpanded = !expanded
-            },
+            }
+            .padding(horizontal = bleed),
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -274,7 +284,7 @@ private fun CdkInputBlock(
         text = stringResource(R.string.settings_update_cdk_subscribe),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.clickable(role = Role.Button) {
+        modifier = Modifier.clip(RoundedCornerShape(MaaTheme.style.radii.button)).clickable(role = Role.Button) {
             val intent = Intent(Intent.ACTION_VIEW, MIRRORCHYAN_SITE.toUri())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             runCatching { context.startActivity(intent) }

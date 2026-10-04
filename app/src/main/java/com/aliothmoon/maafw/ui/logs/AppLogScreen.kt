@@ -127,11 +127,15 @@ fun AppLogScreen(
 
 @Composable
 private fun AppLogFileRow(file: AppLogFileInfo, onClick: () -> Unit) {
-    MaaCardSurface(modifier = Modifier.fillMaxWidth()) {
+    // 点击挂在卡片本身并带同一圆角：挂在里面那行上，按下缩放连高亮一起缩，填不满卡片
+    MaaCardSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .maaClickable(shape = MaterialTheme.shapes.medium, onClick = onClick),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .maaClickable(onClick = onClick)
                 .padding(MaaDesignTokens.Card.innerPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {

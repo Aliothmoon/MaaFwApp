@@ -68,7 +68,9 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
+import com.aliothmoon.maafw.ui.components.LocalCardRowBleed
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.cardRowClickable
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
@@ -334,7 +336,7 @@ private fun ExpandToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(onClick = onToggle)
+            .cardRowClickable(LocalCardRowBleed.current, onClick = onToggle)
             .padding(vertical = MaaDesignTokens.Spacing.xs),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,

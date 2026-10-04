@@ -39,13 +39,15 @@ import kotlinx.coroutines.launch
  *
  * @param indication 是否挂按下高亮；卡片表头这类通栏点击区关掉——缩放已经够表达按下了
  * @param shape 高亮轮廓；本修饰符在组件形状裁剪之外（卡片、胶囊）时传入同一形状，否则会露出方角
+ * @param pressScale 按下时是否缩到 0.97；铺满卡片宽度的通栏行关掉，缩了高亮就离开卡片两边
  */
 fun Modifier.maaClickable(
     enabled: Boolean = true,
     indication: Boolean = true,
     shape: Shape = RectangleShape,
+    pressScale: Boolean = true,
     onClick: () -> Unit,
-): Modifier = this then MaaClickableElement(enabled, indication, shape, onClick)
+): Modifier = this then MaaClickableElement(enabled, indication, shape, pressScale, onClick)
 
 private const val PressedScale = 0.97f
 
@@ -59,13 +61,14 @@ private data class MaaClickableElement(
     val enabled: Boolean,
     val indication: Boolean,
     val shape: Shape,
+    val pressScale: Boolean,
     val onClick: () -> Unit,
 ) : ModifierNodeElement<MaaClickableNode>() {
 
-    override fun create(): MaaClickableNode = MaaClickableNode(enabled, indication, shape, onClick)
+    override fun create(): MaaClickableNode = MaaClickableNode(enabled, indication, shape, pressScale, onClick)
 
     override fun update(node: MaaClickableNode) {
-        node.update(enabled, indication, shape, onClick)
+        node.update(enabled, indication, shape, pressScale, onClick)
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -79,6 +82,7 @@ private class MaaClickableNode(
     private var enabled: Boolean,
     private var indication: Boolean,
     private var shape: Shape,
+    private var pressScale: Boolean,
     private var onClick: () -> Unit,
 ) : DelegatingNode(),
     LayoutModifierNode,
@@ -120,8 +124,9 @@ private class MaaClickableNode(
         interactionSource.tryEmit(PressInteraction.Cancel(press))
     }
 
-    fun update(enabled: Boolean, indication: Boolean, shape: Shape, onClick: () -> Unit) {
+    fun update(enabled: Boolean, indication: Boolean, shape: Shape, pressScale: Boolean, onClick: () -> Unit) {
         this.onClick = onClick
+        this.pressScale = pressScale
         if (this.indication != indication || this.shape != shape) {
             this.indication = indication
             this.shape = shape
@@ -155,7 +160,7 @@ private class MaaClickableNode(
                 // 一律另起协程：emit 与动画都会挂起，卡在这里就来不及等 tryAwaitRelease，
                 // 快速点击会被吞掉
                 coroutineScope.launch { interactionSource.emit(press) }
-                coroutineScope.launch { scale.animateTo(PressedScale, PressSpring) }
+                if (pressScale) coroutineScope.launch { scale.animateTo(PressedScale, PressSpring) }
                 val released = tryAwaitRelease()
                 // 先清标记再补发：onDetach 抢在前面时由它 tryEmit Cancel，不能两边都发
                 if (pendingPress === press) {
