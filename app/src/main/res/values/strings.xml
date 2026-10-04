@@ -122,6 +122,7 @@
     <string name="settings_follow_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_pure_dark">纯黑</string>
     <string name="settings_theme_style_default">默认</string>
     <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">语言</string>
@@ -826,7 +827,7 @@
     <string name="settings_search_clear">清除搜索</string>
     <string name="settings_search_empty">没有匹配的设置</string>
     <string name="search_keywords_update">更新 升级 版本 自动更新 检查更新</string>
-    <string name="search_keywords_theme">主题 深色 夜间 暗色 黑色 浅色 外观 配色</string>
+    <string name="search_keywords_theme">主题 深色 夜间 暗色 黑色 纯黑 浅色 外观 配色</string>
     <string name="search_keywords_language">语言 中文 英文 English 界面语言</string>
     <string name="search_keywords_duration">时长 超时 时间限制 自动停止 运行时间</string>
     <string name="search_keywords_notification">通知 推送 提醒 消息 Server酱 Telegram 邮件 Bark Webhook</string>

@@ -218,7 +218,7 @@ fun AppRoot(
     val darkTheme = when (state.themeMode) {
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Light -> false
-        ThemeMode.Dark -> true
+        ThemeMode.Dark, ThemeMode.PureDark -> true
     }
     LaunchedEffect(darkTheme) { onDarkThemeChanged(darkTheme) }
 
@@ -248,7 +248,11 @@ fun AppRoot(
         if (previewContent == null) previewFullscreen = false
     }
 
-    MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
+    MaaFwTheme(
+        themeStyle = state.themeStyle,
+        darkTheme = darkTheme,
+        pureBlack = state.themeMode == ThemeMode.PureDark,
+    ) {
         // 小窗与全屏同一套路数：主树原样留着，只把 movableContent 借给下面的小窗宿主
         val isInPip = LocalIsInPip.current
         // pipEligible 已排除全屏态，但 setPictureInPictureParams 要跨进程生效，

@@ -288,10 +288,32 @@ private fun shapesOf(tokens: MaaStyleTokens): Shapes = Shapes(
     extraLarge = RoundedCornerShape(tokens.radii.large),
 )
 
-private fun colorSchemeOf(style: ThemeStyle, dark: Boolean): ColorScheme = when (style) {
-    ThemeStyle.DEFAULT -> if (dark) BlueDark else BlueLight
-    ThemeStyle.SEMI_DESIGN -> if (dark) SemiDark else SemiLight
+internal fun colorSchemeOf(style: ThemeStyle, dark: Boolean, pureBlack: Boolean = false): ColorScheme {
+    val scheme = when (style) {
+        ThemeStyle.DEFAULT -> if (dark) BlueDark else BlueLight
+        ThemeStyle.SEMI_DESIGN -> if (dark) SemiDark else SemiLight
+    }
+    return if (dark && pureBlack) scheme.toPureBlack() else scheme
 }
+
+private val PureBlack = Color(0xFF000000)
+private val PureBlackRaised = Color(0xFF121212)
+
+/**
+ * 纯黑（OLED）：页面底、卡片、sheet 底压成纯黑，卡片靠 outline 描边分层（对齐 MaaMeow 的 PURE_DARK）
+ *
+ * 只动「铺满大面积」的几档；对话框与菜单用的 surfaceContainerHigh/Highest 保持原深灰，
+ * 浮在纯黑上才看得出是一层
+ */
+private fun ColorScheme.toPureBlack(): ColorScheme = copy(
+    background = PureBlack,
+    surface = PureBlack,
+    surfaceDim = PureBlack,
+    surfaceContainerLowest = PureBlack,
+    surfaceContainerLow = PureBlack,
+    surfaceVariant = PureBlackRaised,
+    surfaceContainer = PureBlackRaised,
+)
 
 private fun paletteOf(style: ThemeStyle, dark: Boolean): MaaPalette = when (style) {
     ThemeStyle.DEFAULT -> if (dark) DarkMaaPalette else LightMaaPalette
@@ -302,10 +324,12 @@ private fun paletteOf(style: ThemeStyle, dark: Boolean): MaaPalette = when (styl
 fun MaaFwTheme(
     themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     darkTheme: Boolean = isSystemInDarkTheme(),
+    /** 只在 [darkTheme] 时生效 */
+    pureBlack: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val styleTokens = styleTokensOf(themeStyle)
-    val colorScheme = colorSchemeOf(themeStyle, darkTheme)
+    val colorScheme = colorSchemeOf(themeStyle, darkTheme, pureBlack)
     val palette = paletteOf(themeStyle, darkTheme)
 
     CompositionLocalProvider(

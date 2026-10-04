@@ -246,6 +246,7 @@ private fun DisplayCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
                     ThemeMode.System to stringResource(R.string.settings_follow_system),
                     ThemeMode.Light to stringResource(R.string.settings_theme_light),
                     ThemeMode.Dark to stringResource(R.string.settings_theme_dark),
+                    ThemeMode.PureDark to stringResource(R.string.settings_theme_pure_dark),
                 )
                 MaaSingleChoiceFlow(
                     options = modes,

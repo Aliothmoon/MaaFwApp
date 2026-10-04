@@ -128,6 +128,7 @@
     <string name="settings_follow_system">System default</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_pure_dark">Pure black</string>
     <string name="settings_theme_style_default">Default</string>
     <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">Language</string>
@@ -838,7 +839,7 @@
     <string name="settings_search_clear">Clear search</string>
     <string name="settings_search_empty">No matching settings</string>
     <string name="search_keywords_update">update upgrade version auto update check</string>
-    <string name="search_keywords_theme">theme dark night light appearance color</string>
+    <string name="search_keywords_theme">theme dark night black amoled light appearance color</string>
     <string name="search_keywords_language">language chinese english locale</string>
     <string name="search_keywords_duration">duration timeout time limit auto stop</string>
     <string name="search_keywords_notification">notification push alert message telegram email bark webhook</string>

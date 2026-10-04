@@ -7,7 +7,8 @@ import kotlinx.serialization.Serializable
 @JvmInline
 value class RunConfigurationId(val value: String)
 
-enum class ThemeMode { System, Light, Dark }
+/** PureDark 是深色的变体：底与卡片压成纯黑，其余配色照深色走 */
+enum class ThemeMode { System, Light, Dark, PureDark }
 
 /** 持久化聚合根：只存用户选择，不复制 PI；schemaVersion 在序列化层 */
 @Serializable
