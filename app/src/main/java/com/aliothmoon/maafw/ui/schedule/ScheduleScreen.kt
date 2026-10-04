@@ -56,8 +56,11 @@ fun ScheduleScreen(
     onEdit: (String?) -> Unit,
     onOpenLog: () -> Unit,
     onFixIssue: (ScheduleHealthIssue) -> Unit,
+    /** pager 落定在本页；预组合不算，否则提醒会弹在相邻页上 */
+    isActivePage: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    ScheduleAutoStartReminder(active = isActivePage && state.rows.any { it.strategy.enabled })
     ScheduleSetupWizard(
         pending = state.setupWizard,
         backend = state.backend,

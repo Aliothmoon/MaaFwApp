@@ -289,6 +289,16 @@
     <string name="schedule_health_wake_credential">亮屏解锁未填 PIN</string>
     <string name="schedule_health_wake_credential_desc">设备设有锁屏密码，到点解锁会失败、本次执行被跳过。请在设置页「定时任务设置」里填写解锁 PIN</string>
     <string name="schedule_go_to_settings">去设置</string>
+    <string name="schedule_oem_hint_miui">MIUI/HyperOS：还需在应用的「省电策略」中选择「无限制」</string>
+    <string name="schedule_oem_hint_huawei">EMUI/HarmonyOS：还需在「应用启动管理」中改为手动管理，并允许自启动、关联启动、后台活动</string>
+    <string name="schedule_oem_hint_oppo">ColorOS：还需允许本应用后台运行，并关闭「应用速冻」</string>
+    <string name="schedule_oem_hint_vivo">OriginOS/FuntouchOS：还需在「后台耗电策略」中允许本应用后台高耗电</string>
+    <string name="schedule_oem_hint_samsung">One UI：还需将本应用从「深度休眠」应用列表中移除</string>
+    <string name="schedule_oem_hint_meizu">Flyme：还需在「后台管理」中允许本应用后台运行与后台弹出</string>
+    <string name="schedule_auto_start_title">自启动权限</string>
+    <string name="schedule_auto_start_message">不开自启动，系统可能不让定时把应用从后台拉起来，开机后也收不到重排闹钟的广播。请在系统设置中允许本应用自启动</string>
+    <string name="schedule_auto_start_message_fallback">没找到厂商的自启动设置页，将打开应用详情页。请在其中检查自启动 / 后台相关设置，并允许本应用自启动</string>
+    <string name="schedule_auto_start_dont_remind">不再提醒</string>
 
     <string name="schedule_edit_new">新建规则</string>
     <string name="schedule_edit_existing">编辑规则</string>

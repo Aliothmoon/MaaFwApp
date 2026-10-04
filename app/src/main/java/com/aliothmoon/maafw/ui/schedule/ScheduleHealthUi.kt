@@ -17,13 +17,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import android.os.Build
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.schedule.AutoStartHelper
+import com.aliothmoon.maafw.schedule.AutoStartTarget
+import com.aliothmoon.maafw.schedule.OemPowerHint
+import com.aliothmoon.maafw.schedule.OemPowerHints
 import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
+import kotlinx.coroutines.withContext
 
 @Composable
 private fun ScheduleHealthIssue.title(backend: RemoteBackend): String = when (this) {
@@ -43,6 +51,18 @@ private fun ScheduleHealthIssue.description(): String = when (this) {
     ScheduleHealthIssue.NOTIFICATION -> stringResource(R.string.schedule_health_notification_desc)
     ScheduleHealthIssue.OVERLAY -> stringResource(R.string.schedule_health_overlay_desc)
     ScheduleHealthIssue.WAKE_CREDENTIAL -> stringResource(R.string.schedule_health_wake_credential_desc)
+}
+
+/** 系统白名单之外，国产 ROM 各有一套省电开关；只挂在电池那一项后面 */
+@Composable
+private fun oemPowerHint(): String? = when (OemPowerHints.hintFor(Build.MANUFACTURER)) {
+    OemPowerHint.MIUI -> stringResource(R.string.schedule_oem_hint_miui)
+    OemPowerHint.HUAWEI -> stringResource(R.string.schedule_oem_hint_huawei)
+    OemPowerHint.OPPO -> stringResource(R.string.schedule_oem_hint_oppo)
+    OemPowerHint.VIVO -> stringResource(R.string.schedule_oem_hint_vivo)
+    OemPowerHint.SAMSUNG -> stringResource(R.string.schedule_oem_hint_samsung)
+    OemPowerHint.MEIZU -> stringResource(R.string.schedule_oem_hint_meizu)
+    null -> null
 }
 
 /** 调用方保证 [issues] 非空 */
@@ -71,6 +91,15 @@ fun ScheduleHealthCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (issue == ScheduleHealthIssue.BATTERY) {
+                            oemPowerHint()?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                            }
+                        }
                     }
                     TextButton(onClick = { onFix(issue) }) {
                         Text(stringResource(R.string.schedule_health_fix))
@@ -104,9 +133,10 @@ fun ScheduleSetupWizard(
         }
     }
     current ?: return
+    val oemHint = oemPowerHint().takeIf { current == ScheduleHealthIssue.BATTERY }
     MaaPromptDialog(
         title = current.title(backend),
-        message = current.description(),
+        message = listOfNotNull(current.description(), oemHint).joinToString("\n\n"),
         icon = Icons.Outlined.Schedule,
         confirmText = stringResource(R.string.schedule_go_to_settings),
         onConfirm = {
@@ -122,3 +152,52 @@ fun ScheduleSetupWizard(
     )
 }
 
+/**
+ * 国产 ROM 的自启动提醒：有启用的规则、且停在定时页时，每个开机周期最多弹一次
+ *
+ * [active] 必须是「这一页真的在看」：pager 会预组合相邻页，用组合当可见会在任务页上弹出来
+ */
+@Composable
+fun ScheduleAutoStartReminder(active: Boolean) {
+    val context = LocalContext.current
+    val prefs = remember(context) { AutoStartHelper.prefs(context) }
+    var target by remember { mutableStateOf<AutoStartTarget?>(null) }
+    LaunchedEffect(active) {
+        if (!active) return@LaunchedEffect
+        // prefs 首读与 resolveActivity 都是跨进程/读盘，整段放 IO
+        target = withContext(MaaDispatchers.IO) {
+            if (!AutoStartHelper.shouldRemindThisBoot(context, prefs)) return@withContext null
+            AutoStartHelper.resolveTarget(context)
+                ?.also { AutoStartHelper.markRemindedThisBoot(context, prefs) }
+        }
+    }
+    val shown = target ?: return
+    MaaPromptDialog(
+        title = stringResource(R.string.schedule_auto_start_title),
+        message = stringResource(
+            if (shown is AutoStartTarget.AppDetails) {
+                R.string.schedule_auto_start_message_fallback
+            } else {
+                R.string.schedule_auto_start_message
+            },
+        ),
+        icon = Icons.Outlined.Schedule,
+        confirmText = stringResource(R.string.schedule_go_to_settings),
+        onConfirm = {
+            AutoStartHelper.intentFor(context, shown)?.let { intent ->
+                // 厂商页的组件名随版本漂移，resolve 过也可能起不来；起不来就算了，不能崩
+                runCatching { context.startActivity(intent) }
+            }
+            target = null
+        },
+        // 已经配好的用户不该每次重启都挨一遍，给个永久出口
+        neutralText = stringResource(R.string.schedule_auto_start_dont_remind),
+        onNeutralClick = {
+            AutoStartHelper.markNeverRemind(prefs)
+            target = null
+        },
+        dismissText = stringResource(R.string.common_later),
+        onDismissRequest = { target = null },
+        dismissOnOutsideClick = true,
+    )
+}

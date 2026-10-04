@@ -295,6 +295,16 @@
     <string name="schedule_health_wake_credential">Wake unlock has no PIN</string>
     <string name="schedule_health_wake_credential_desc">The device has a secure lock screen, so unlocking fails and the run is skipped. Enter the unlock PIN under Settings → Scheduled tasks</string>
     <string name="schedule_go_to_settings">Go to settings</string>
+    <string name="schedule_oem_hint_miui">MIUI/HyperOS: also set the app\'s battery saver policy to \"No restrictions\"</string>
+    <string name="schedule_oem_hint_huawei">EMUI/HarmonyOS: also switch \"App launch management\" to manual and allow auto-launch, secondary launch and background activity</string>
+    <string name="schedule_oem_hint_oppo">ColorOS: also allow background running and disable \"App freezing\" for this app</string>
+    <string name="schedule_oem_hint_vivo">OriginOS/FuntouchOS: also allow high background power consumption for this app</string>
+    <string name="schedule_oem_hint_samsung">One UI: also remove this app from the \"Deep sleeping apps\" list</string>
+    <string name="schedule_oem_hint_meizu">Flyme: also allow background running and background pop-ups for this app</string>
+    <string name="schedule_auto_start_title">Auto-start permission</string>
+    <string name="schedule_auto_start_message">Without auto-start, the system may not let a schedule bring the app up from the background, and alarms are not restored after a reboot. Allow this app to auto-start in system settings.</string>
+    <string name="schedule_auto_start_message_fallback">No vendor auto-start page was found, so the app details page will open instead. Check the auto-start and background settings there and allow this app to auto-start.</string>
+    <string name="schedule_auto_start_dont_remind">Don\'t remind again</string>
 
     <string name="schedule_edit_new">New rule</string>
     <string name="schedule_edit_existing">Edit rule</string>

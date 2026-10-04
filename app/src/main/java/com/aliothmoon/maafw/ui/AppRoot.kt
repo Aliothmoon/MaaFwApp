@@ -510,6 +510,7 @@ fun AppRoot(
                         },
                         onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
                         onFixIssue = fixScheduleIssue,
+                        isActivePage = pagerState.settledPage == page,
                         modifier = Modifier.fillMaxSize(),
                     )
 
