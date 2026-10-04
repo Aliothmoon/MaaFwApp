@@ -773,7 +773,6 @@ class SessionViewModelTest {
         val (vm, _, _) = createVm(project = project, runner = runner)
         advanceUntilIdle()
         val before = project.reloadCount
-        assertTrue(before >= 1)
 
         vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()

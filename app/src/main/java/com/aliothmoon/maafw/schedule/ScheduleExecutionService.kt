@@ -20,6 +20,9 @@ import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHED
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
+import com.aliothmoon.maafw.project.PiInstallCoordinator
+import com.aliothmoon.maafw.project.ProjectRepository
+import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.service.SpecialUseFgsGate
@@ -36,6 +39,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.android.ext.android.inject
 import timber.log.Timber
@@ -61,6 +65,8 @@ class ScheduleExecutionService : Service() {
     private val triggerLog: ScheduleTriggerLog by inject()
     private val runLauncher: RunLauncher by inject()
     private val appSettings: AppSettingsManager by inject()
+    private val projectRepository: ProjectRepository by inject()
+    private val piInstall: PiInstallCoordinator by inject()
 
     /** 记账写盘的 IOException 不能把进程带崩：那会连同刚受理的这一轮一起杀掉 */
     private val serviceScope = CoroutineScope(
@@ -186,8 +192,12 @@ class ScheduleExecutionService : Service() {
         // 倒计时期间用户要能打断，而那会儿 Activity 多半不在——落点只能是本服务的通知
         signalsByStrategy[strategy.id] = signals
 
+        ensureProjectLoaded()
+        // 冷启动时 RunLauncher 多半还没建：它一路依赖到屏保浮窗，那份构造只能在主线程，
+        // 在这条 IO 协程上头一回解析会直接抛，定时就此落空（postCreate 在主线程建它，但不一定抢得过）
+        val launcher = withContext(Dispatchers.Main.immediate) { runLauncher }
         val launchResult = try {
-            runLauncher.launch(
+            launcher.launch(
                 trigger = RunTrigger.Schedule(
                     strategy.id,
                     ScheduleRunOptions(
@@ -243,6 +253,18 @@ class ScheduleExecutionService : Service() {
             ),
         )
         store.recordTrigger(strategy.id, outcome.result, message = frozen, triggeredAt = now)
+    }
+
+    /**
+     * 闹钟拉起的进程里项目多半还没载完：照界面的顺序先解包、成了再首载，与界面那边共用同一次
+     * （见 [ProjectRepository.ensureLoaded]），否则投递只会落成 ProjectNotReady
+     */
+    private suspend fun ensureProjectLoaded() {
+        if (projectRepository.state.value !is ProjectState.Loading) return
+        val loaded = withTimeoutOrNull(PROJECT_LOAD_TIMEOUT_MS) {
+            if (piInstall.ensureInstalled()) projectRepository.ensureLoaded()
+        }
+        if (loaded == null) Timber.w("Project still loading after %dms", PROJECT_LOAD_TIMEOUT_MS)
     }
 
     /**
@@ -405,6 +427,9 @@ class ScheduleExecutionService : Service() {
         const val CHANNEL_ID = "schedule_execution"
         const val NOTIFICATION_ID = 1002
         const val STORE_READY_TIMEOUT_MS = 5_000L
+
+        /** 首次解包几千个文件要些时间；超了照常投递，落成 ProjectNotReady 记进触发日志 */
+        const val PROJECT_LOAD_TIMEOUT_MS = 120_000L
 
         /** 超时只兜漏放；正常一次触发在倒计时 30 秒加投递之内就放掉 */
         const val TRIGGER_WAKE_TIMEOUT_MS = 5 * 60_000L

@@ -59,6 +59,37 @@ class DefaultProjectRepositoryTest {
         assertEquals(1, ready.definition.tasks.size)
     }
 
+    /** 界面与定时服务同时要首载：只读一次盘，后到的等那一次；载过之后不再重读 */
+    @Test
+    fun `ensureLoaded loads once for concurrent callers`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        every { MaaDispatchers.IO } returns dispatcher
+        var reads = 0
+        val source = object : ProjectSource {
+            override val projectName: String = "demo"
+            override fun list(path: String): List<String> = emptyList()
+            override fun read(path: String): String {
+                reads++
+                return """{"interface_version": 2, "name": "demo", "resource": [{"name":"R","path":["./base"]}]}"""
+            }
+        }
+        val repo = DefaultProjectRepository(ProjectLoader(source))
+
+        val first = async { repo.ensureLoaded() }
+        val second = async { repo.ensureLoaded() }
+        first.await()
+        second.await()
+        val readsAfterFirstLoad = reads
+        repo.ensureLoaded()
+
+        assertTrue(repo.state.value is ProjectState.Ready)
+        assertTrue(readsAfterFirstLoad > 0)
+        assertEquals(readsAfterFirstLoad, reads)
+        // 两个调用方各自 reload 会读两遍
+        repo.reload()
+        assertEquals(readsAfterFirstLoad * 2, reads)
+    }
+
     @Test
     fun `reload maps missing interface to Error`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)

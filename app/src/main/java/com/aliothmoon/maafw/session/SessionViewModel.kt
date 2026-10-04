@@ -235,7 +235,7 @@ class SessionViewModel(
     init {
         // 解包在前、加载在后；解包没成不要 reload，半包会被当成已解包
         viewModelScope.launch {
-            if (piInstall.ensureInstalled()) projectRepository.reload()
+            if (piInstall.ensureInstalled()) projectRepository.ensureLoaded()
         }
         viewModelScope.launch {
             for (intent in intents) handle(intent)
