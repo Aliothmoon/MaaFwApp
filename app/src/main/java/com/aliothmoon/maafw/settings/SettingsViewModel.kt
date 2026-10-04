@@ -123,6 +123,8 @@ class SettingsViewModel(
             runDurationLimitEnabled = durationLimitEnabled,
             runDurationLimitMinutes = durationLimitMinutes,
         )
+    }.combine(appSettings.uiScale) { base, uiScale ->
+        base.copy(uiScale = uiScale)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -171,6 +173,10 @@ class SettingsViewModel(
 
             is SettingsIntent.SetRunDurationLimitMinutes -> viewModelScope.launch {
                 appSettings.setRunDurationLimitMinutes(intent.minutes)
+            }
+
+            is SettingsIntent.SetUiScale -> viewModelScope.launch {
+                appSettings.setUiScale(intent.scale)
             }
 
             SettingsIntent.CheckUpdate -> viewModelScope.launch { checkUpdate() }

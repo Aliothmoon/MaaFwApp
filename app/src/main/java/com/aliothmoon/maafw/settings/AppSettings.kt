@@ -84,6 +84,10 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val themeStyle: String = "DEFAULT",
 
+    /** 页面缩放：`auto` 按屏幕推荐，或 80–110 的百分比；见 [com.aliothmoon.maafw.theme.UiScale] */
+    @PrefKey(default = "auto")
+    val uiScale: String = "auto",
+
     /**
      * [com.aliothmoon.maafw.domain.EventNotificationLevel] 的 name
      *

@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,6 +82,12 @@ class FakeAppSettingsGateway : AppSettingsGateway {
 
     override suspend fun setThemeStyle(style: ThemeStyle) {
         themeStyle.value = style
+    }
+
+    override val uiScale = MutableStateFlow(UiScale.AUTO)
+
+    override suspend fun setUiScale(scale: Int) {
+        uiScale.value = scale
     }
 
     override val wakeUnlockType = MutableStateFlow(UnlockCredential.TYPE_SWIPE)

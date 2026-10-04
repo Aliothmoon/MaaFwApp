@@ -17,6 +17,7 @@ import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.CoroutineScope
@@ -112,6 +113,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _themeStyle = MutableStateFlow(parseThemeStyle(defaults.themeStyle))
     override val themeStyle: StateFlow<ThemeStyle> = _themeStyle.asStateFlow()
 
+    private val _uiScale = MutableStateFlow(UiScale.parse(defaults.uiScale))
+    override val uiScale: StateFlow<Int> = _uiScale.asStateFlow()
+
     private val _wakeUnlockType = MutableStateFlow(parseWakeUnlockType(defaults.wakeUnlockType))
     override val wakeUnlockType: StateFlow<String> = _wakeUnlockType.asStateFlow()
 
@@ -165,6 +169,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _debugMode.value = s.debugMode.toBoolean()
                 _saveOnError.value = s.saveOnError.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
+                _uiScale.value = UiScale.parse(s.uiScale)
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
                 _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType)
                 _wakeCredential.value = s.wakeCredential
@@ -233,6 +238,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setThemeStyle(style: ThemeStyle): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[themeStyle] = style.name }
+    }
+
+    override suspend fun setUiScale(scale: Int): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[uiScale] = UiScale.format(scale) }
     }
 
     suspend fun setEventNotificationLevel(level: EventNotificationLevel) = with(AppSettingsSchema) {

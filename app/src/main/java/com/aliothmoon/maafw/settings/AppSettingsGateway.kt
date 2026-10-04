@@ -46,6 +46,10 @@ interface AppSettingsGateway {
     val themeStyle: StateFlow<ThemeStyle>
     suspend fun setThemeStyle(style: ThemeStyle)
 
+    /** 页面缩放的存储值：[com.aliothmoon.maafw.theme.UiScale.AUTO] 或 80–110 */
+    val uiScale: StateFlow<Int>
+    suspend fun setUiScale(scale: Int)
+
     // ── 定时任务解锁；逐条规则的那几项在 ScheduleStrategy 上，不在这 ──
 
     /** [com.aliothmoon.maafw.domain.UnlockCredential] 的 TYPE_* 之一，读出来的永远合法 */

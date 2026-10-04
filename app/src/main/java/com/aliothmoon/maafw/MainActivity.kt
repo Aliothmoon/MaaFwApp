@@ -16,6 +16,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.theme.ProvideUiScale
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.ui.AppRoot
 import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 import com.aliothmoon.maafw.ui.pip.PipController
@@ -39,10 +41,13 @@ class MainActivity : AppCompatActivity(), PipHost {
         super.onCreate(savedInstanceState)
 
         setContent {
+            val uiScale by appSettings.uiScale.collectAsStateWithLifecycle()
             CompositionLocalProvider(LocalIsInPip provides isInPip) {
                 // 设置搜索的定位请求要跨 tab 与子页面，挂在最外层，整棵树的锚点都看得见
                 ProvideSettingSearch(searchNavigator) {
-                    AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+                    ProvideUiScale(uiScale) {
+                        AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+                    }
                 }
             }
         }

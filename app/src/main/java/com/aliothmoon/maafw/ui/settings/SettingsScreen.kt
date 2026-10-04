@@ -94,6 +94,14 @@ import com.aliothmoon.maafw.ui.pip.PipController
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.aliothmoon.maafw.theme.UiScale
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.components.MaaValueSlider
 import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -173,7 +181,7 @@ fun SettingsScreen(
                 TaskSettingCards(state, onIntent)
                 ResourceOptionCard(state, onIntent)
                 ControllerOptionCard(state, onIntent)
-                DisplayCard(state, onIntent)
+                DisplayCard(state, settingsState, onIntent, onSettingsIntent)
                 RunDurationCard(settingsState, onSettingsIntent)
                 NotificationCard(onOpenNotificationSettings)
                 LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
@@ -231,9 +239,14 @@ private fun ControllerOptionCard(state: SessionUiState, onIntent: (SessionIntent
     }
 }
 
-/** 主题、主题风格、语言：三组都只改观感，合成一张卡（对齐 MaaMeow 的「显示设置」） */
+/** 主题、主题风格、页面缩放、语言：都只改观感，合成一张卡（对齐 MaaMeow 的「显示设置」） */
 @Composable
-private fun DisplayCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
+private fun DisplayCard(
+    state: SessionUiState,
+    settingsState: SettingsUiState,
+    onIntent: (SessionIntent) -> Unit,
+    onSettingsIntent: (SettingsIntent) -> Unit,
+) {
     MaaCard(
         title = stringResource(R.string.settings_section_display),
         collapsible = true,
@@ -269,6 +282,13 @@ private fun DisplayCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
                     onSelect = { onIntent(SessionIntent.SetThemeStyle(it)) },
                 )
             }
+        }
+        Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
+        SettingSearchTarget(SettingAnchors.UI_SCALE) {
+            UiScaleSetting(
+                stored = settingsState.uiScale,
+                onCommit = { onSettingsIntent(SettingsIntent.SetUiScale(it)) },
+            )
         }
         Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
         SettingSearchTarget(SettingAnchors.LANGUAGE) {
@@ -731,5 +751,63 @@ private fun searchEntries(state: SessionUiState): List<SettingSearchEntry> {
             resourceOptions = state.resourceOptions,
             controllerOptions = state.controllerOptions,
         )
+    }
+}
+
+/**
+ * 页面缩放：自动（按屏幕推荐）或手动 80–110（移植自 MaaMeow 的 FontSizeSetting）
+ *
+ * 拖动即进入手动，「使用自动」一键回去；预览块按拖动值相对当前生效值现缩，
+ * 松手前就能看到效果，又不必每一帧都落盘重排整棵树
+ */
+@Composable
+private fun UiScaleSetting(stored: Int, onCommit: (Int) -> Unit) {
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val isAuto = stored == UiScale.AUTO
+    val effective = UiScale.resolve(stored, configuration.smallestScreenWidthDp, density.fontScale)
+    var dragging by remember { mutableStateOf<Int?>(null) }
+    val autoText = stringResource(R.string.settings_ui_scale_auto_value, effective)
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+        MaaValueSlider(
+            label = stringResource(R.string.settings_ui_scale),
+            value = effective,
+            range = UiScale.MIN..UiScale.MAX,
+            valueText = { if (isAuto && dragging == null) autoText else "$it%" },
+            onDrag = { dragging = it },
+            onValueCommit = {
+                dragging = null
+                onCommit(it)
+            },
+        )
+        Text(
+            text = stringResource(R.string.settings_ui_scale_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        val factor = (dragging ?: effective).toFloat() / effective
+        CompositionLocalProvider(
+            LocalDensity provides Density(density.density * factor, density.fontScale),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_ui_scale_preview),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(MaaDesignTokens.Spacing.md),
+                )
+            }
+        }
+        if (!isAuto) {
+            MaaOutlinedButton(
+                onClick = { onCommit(UiScale.AUTO) },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.settings_ui_scale_use_auto))
+            }
+        }
     }
 }

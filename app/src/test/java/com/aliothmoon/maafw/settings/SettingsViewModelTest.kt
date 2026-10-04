@@ -222,6 +222,19 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `page scale is stored and reflected in ui state`() = runTest {
+        val settings = FakeAppSettingsGateway()
+        val viewModel = viewModel(settings = settings)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.onIntent(SettingsIntent.SetUiScale(105))
+        advanceUntilIdle()
+
+        assertEquals(105, settings.uiScale.value)
+        assertEquals(105, viewModel.uiState.value.uiScale)
+    }
+
+    @Test
     fun `startup check pops prompt when update available and auto download off`() = runTest {
         var checks = 0
         val viewModel = viewModel(

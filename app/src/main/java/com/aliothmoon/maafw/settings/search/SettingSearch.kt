@@ -45,6 +45,7 @@ object SettingAnchors {
     const val AUTO_DOWNLOAD_UPDATE = "update.auto_download"
     const val THEME = "display.theme"
     const val THEME_STYLE = "display.theme_style"
+    const val UI_SCALE = "display.ui_scale"
     const val LANGUAGE = "display.language"
     const val DURATION_LIMIT = "duration.limit"
     const val NOTIFICATION_SETTINGS = "notification.entry"
@@ -160,6 +161,7 @@ object SettingSearchIndex {
         entry(R.string.settings_update_auto_download, update, SettingAnchors.AUTO_DOWNLOAD_UPDATE, R.string.settings_update_auto_download_desc),
         entry(R.string.settings_theme, display, SettingAnchors.THEME, keywordsRes = R.string.search_keywords_theme),
         entry(R.string.settings_theme_style, display, SettingAnchors.THEME_STYLE),
+        entry(R.string.settings_ui_scale, display, SettingAnchors.UI_SCALE, R.string.settings_ui_scale_desc, R.string.search_keywords_ui_scale),
         entry(R.string.settings_language, display, SettingAnchors.LANGUAGE, keywordsRes = R.string.search_keywords_language),
         entry(R.string.settings_duration_limit_enabled, duration, SettingAnchors.DURATION_LIMIT, keywordsRes = R.string.search_keywords_duration),
         entry(R.string.notification_settings_title, notification, SettingAnchors.NOTIFICATION_SETTINGS, R.string.settings_notification_desc, R.string.search_keywords_notification),
