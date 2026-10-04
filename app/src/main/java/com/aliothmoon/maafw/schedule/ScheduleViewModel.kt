@@ -167,6 +167,10 @@ class ScheduleViewModel(
             setupWizard = health.wizard,
             autoStartPrompt = health.autoStart,
         )
+    }.combine(
+        combine(appSettings.runMode, appSettings.closeAppAfterTask, ::Pair),
+    ) { state, (runMode, globalCloseApp) ->
+        state.copy(runMode = runMode, globalCloseAppAfterTask = globalCloseApp)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),

@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.schedule
 
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.domain.RunMode
 
 /** 一条规则加上它算出来的下次触发时刻；后者不落盘，每次由闹钟规则现算 */
 data class ScheduleRow(
@@ -40,7 +41,33 @@ data class ScheduleUiState(
     val setupWizard: List<ScheduleHealthIssue> = emptyList(),
     /** 保存后、权限引导走完时问一句自启动；null = 不问。状态查不到，所以只在这个时机问 */
     val autoStartPrompt: AutoStartTarget? = null,
+    /** 编辑页「关闭目标应用」的当前效果要看这两项，见 [CloseAppEffect] */
+    val runMode: RunMode = RunMode.BACKGROUND,
+    val globalCloseAppAfterTask: Boolean = false,
 )
+
+/**
+ * 规则上「任务结束后关闭目标应用」此刻实际会怎样（对齐 MaaMeow 的 CloseGameEffect）
+ *
+ * 判定顺序与 `CloseTargetAppHook` 一致：前台模式整项不生效，其次全局开关压过规则
+ */
+enum class CloseAppEffect {
+    FOREGROUND_INACTIVE,
+    GLOBAL_OVERRIDE,
+    STRATEGY_ACTIVE,
+    INACTIVE;
+
+    val willClose: Boolean get() = this == GLOBAL_OVERRIDE || this == STRATEGY_ACTIVE
+
+    companion object {
+        fun of(runMode: RunMode, globalOn: Boolean, strategyOn: Boolean): CloseAppEffect = when {
+            runMode != RunMode.BACKGROUND -> FOREGROUND_INACTIVE
+            globalOn -> GLOBAL_OVERRIDE
+            strategyOn -> STRATEGY_ACTIVE
+            else -> INACTIVE
+        }
+    }
+}
 
 sealed interface ScheduleIntent {
     /** id 已存在即更新，否则新增 */

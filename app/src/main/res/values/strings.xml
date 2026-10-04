@@ -360,6 +360,10 @@
     <string name="schedule_edit_skip_sleep_if_awake_tip">触发时屏幕已经亮着，视为你正在用手机，任务结束后不熄屏</string>
     <string name="schedule_edit_close_app">任务结束后关闭目标应用</string>
     <string name="schedule_edit_close_app_tip">仅后台模式生效。若「快捷选项 → 任务自动结束时关闭目标应用」已开启，以该开关为准；未开启时才按本策略执行。手动停止任务不会关闭</string>
+    <string name="schedule_edit_close_app_effect_foreground">当前效果：运行模式为前台，本项不生效</string>
+    <string name="schedule_edit_close_app_effect_global">当前效果：快捷选项里的全局开关已开启，任务结束后会关闭目标应用</string>
+    <string name="schedule_edit_close_app_effect_strategy">当前效果：任务跑完后会按本规则关闭目标应用</string>
+    <string name="schedule_edit_close_app_effect_inactive">当前效果：任务结束后不会关闭目标应用</string>
     <string name="schedule_result_failed_start">未能开始</string>
     <string name="schedule_reason_configuration_missing">绑定的运行配置已被删除</string>
     <string name="schedule_reason_invalid_plan">配置有错，无法生成本次执行</string>

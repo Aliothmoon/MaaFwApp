@@ -367,6 +367,10 @@
     <string name="schedule_edit_skip_sleep_if_awake_tip">If the screen is already on when the rule fires, you are probably using the phone, so it stays on after the task</string>
     <string name="schedule_edit_close_app">Close the target app after the task</string>
     <string name="schedule_edit_close_app_tip">Background mode only. If "Options → Close the target app when task ends" is already enabled, that switch takes precedence; this strategy setting applies only when it is off. Manually stopping a task will not close the app</string>
+    <string name="schedule_edit_close_app_effect_foreground">Current effect: run mode is foreground, so this option does nothing</string>
+    <string name="schedule_edit_close_app_effect_global">Current effect: the global switch in Options is on, so the target app closes when the task ends</string>
+    <string name="schedule_edit_close_app_effect_strategy">Current effect: this rule closes the target app after the task finishes</string>
+    <string name="schedule_edit_close_app_effect_inactive">Current effect: the target app is not closed when the task ends</string>
     <string name="schedule_result_failed_start">Did not start</string>
     <string name="schedule_reason_configuration_missing">The bound run configuration was deleted</string>
     <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be prepared</string>

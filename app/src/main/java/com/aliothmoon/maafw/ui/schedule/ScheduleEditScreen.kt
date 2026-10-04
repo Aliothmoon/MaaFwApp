@@ -49,6 +49,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.schedule.CloseAppEffect
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleFieldError
 import com.aliothmoon.maafw.schedule.ScheduleStrategy
@@ -314,6 +315,11 @@ fun ScheduleEditScreen(
                     tip = stringResource(R.string.schedule_edit_close_app_tip),
                     // 与快捷选项的优先级容易踩坑，默认展开（对齐 MaaMeow）
                     tipInitiallyExpanded = true,
+                    supporting = {
+                        CloseAppEffectText(
+                            CloseAppEffect.of(state.runMode, state.globalCloseAppAfterTask, draft.closeAppAfterTask),
+                        )
+                    },
                     checked = draft.closeAppAfterTask,
                     onCheckedChange = { draft = draft.copy(closeAppAfterTask = it) },
                 )
@@ -376,6 +382,8 @@ private fun ScheduleToggleRow(
     modifier: Modifier = Modifier,
     tip: String? = null,
     tipInitiallyExpanded: Boolean = false,
+    /** 标题行下方常显的一行，如「当前效果」；不进标题行，标题照样和开关居中 */
+    supporting: (@Composable () -> Unit)? = null,
 ) {
     var tipExpanded by rememberSaveable { mutableStateOf(tipInitiallyExpanded) }
     Column(modifier = modifier.fillMaxWidth()) {
@@ -401,6 +409,7 @@ private fun ScheduleToggleRow(
             }
             MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
         }
+        supporting?.invoke()
         if (tip != null) {
             ExpandableTipContent(visible = tipExpanded, topSpacing = MaaDesignTokens.Spacing.xs) {
                 Text(
@@ -411,6 +420,27 @@ private fun ScheduleToggleRow(
             }
         }
     }
+}
+
+/** 跟着运行模式、全局开关与本规则现算，用户不必自己推优先级（对齐 MaaMeow） */
+@Composable
+private fun CloseAppEffectText(effect: CloseAppEffect) {
+    Text(
+        text = stringResource(
+            when (effect) {
+                CloseAppEffect.FOREGROUND_INACTIVE -> R.string.schedule_edit_close_app_effect_foreground
+                CloseAppEffect.GLOBAL_OVERRIDE -> R.string.schedule_edit_close_app_effect_global
+                CloseAppEffect.STRATEGY_ACTIVE -> R.string.schedule_edit_close_app_effect_strategy
+                CloseAppEffect.INACTIVE -> R.string.schedule_edit_close_app_effect_inactive
+            },
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (effect.willClose) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
 }
 
 @Composable
