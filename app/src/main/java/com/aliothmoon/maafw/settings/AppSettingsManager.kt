@@ -51,6 +51,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 Timber.e(it, "App settings file corrupted; resetting to defaults")
                 emptyPreferences()
             },
+            produceMigrations = { listOf(WakeUnlockTypeMigration) },
         )
     }
 
@@ -111,7 +112,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _themeStyle = MutableStateFlow(parseThemeStyle(defaults.themeStyle))
     override val themeStyle: StateFlow<ThemeStyle> = _themeStyle.asStateFlow()
 
-    private val _wakeUnlockType = MutableStateFlow(parseWakeUnlockType(defaults.wakeUnlockType, defaults.wakeCredential))
+    private val _wakeUnlockType = MutableStateFlow(parseWakeUnlockType(defaults.wakeUnlockType))
     override val wakeUnlockType: StateFlow<String> = _wakeUnlockType.asStateFlow()
 
     private val _wakeCredential = MutableStateFlow(defaults.wakeCredential)
@@ -165,7 +166,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _saveOnError.value = s.saveOnError.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
-                _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType, s.wakeCredential)
+                _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType)
                 _wakeCredential.value = s.wakeCredential
                 _runDurationLimitEnabled.value = s.runDurationLimitEnabled.toBoolean()
                 _runDurationLimitMinutes.value = RunDurationLimit.parse(s.runDurationLimitMinutes)
@@ -289,12 +290,12 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private fun parseBackend(raw: String): RemoteBackend =
         runCatching { RemoteBackend.valueOf(raw) }.getOrDefault(RemoteBackend.SHIZUKU)
 
-    /** 没选过（空串）时按有没有 PIN 推断：老版本只有「开关 + PIN」，填过 PIN 的就是要 PIN 解锁 */
-    private fun parseWakeUnlockType(raw: String, credential: String): String = when {
-        raw in UnlockCredential.TYPES -> raw
-        credential.isNotBlank() -> UnlockCredential.TYPE_PIN
-        else -> UnlockCredential.TYPE_SWIPE
-    }
+    /**
+     * 没选过（空串）一律「无密码」，不按有没有 PIN 推断：推断值会随 PIN 输入框的增删来回跳。
+     * 老版本「开关 + PIN」的用户由 [WakeUnlockTypeMigration] 写成确定值
+     */
+    private fun parseWakeUnlockType(raw: String): String =
+        if (raw in UnlockCredential.TYPES) raw else UnlockCredential.TYPE_SWIPE
 
     private fun parseRunMode(raw: String): RunMode =
         runCatching { RunMode.valueOf(raw) }.getOrDefault(RunMode.BACKGROUND)

@@ -1,5 +1,9 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.RemoteService
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.constant.WakeUnlockResult
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
@@ -58,7 +62,9 @@ class EnvironmentHooksTest {
         service: FakePrivilegedService,
         settings: FakeAppSettingsGateway,
         gestureJson: String = "",
-    ) = WakeUnlockHook(FakePrivilegedServicePort(service), settings) { gestureJson }
+        keyguardLocked: Boolean = true,
+        port: PrivilegedServicePort = FakePrivilegedServicePort(service),
+    ) = WakeUnlockHook(port, settings, { gestureJson }, { keyguardLocked })
 
     /** 没有总开关：定时到点总要亮屏，「无密码」方式传空凭证，交给特权侧 dismissKeyguard */
     @Test
@@ -138,6 +144,40 @@ class EnvironmentHooksTest {
 
         assertTrue(hook.gating)
         assertTrue(hook.engage(scheduleContext()) is EngageResult.Failed)
+    }
+
+    /** 报失败但锁屏已经不在（人脸先解开了、手机本就开着）：照常往下跑 */
+    @Test
+    fun `a failed unlock without a keyguard lets the run go on`() = runTest {
+        val service = FakePrivilegedService().apply { unlockResult = WakeUnlockResult.WAKE_FAILED }
+
+        val result = wakeHook(service, FakeAppSettingsGateway(), keyguardLocked = false).engage(scheduleContext())
+
+        assertTrue(result is EngageResult.Skipped)
+    }
+
+    /** 冷启动时服务还没连上：要先连再解，不能拿「没连接」直接把整轮拦掉 */
+    @Test
+    fun `wake unlock connects the service before unlocking`() = runTest {
+        val service = FakePrivilegedService()
+        val port = object : PrivilegedServicePort by FakePrivilegedServicePort(service) {
+            override fun serviceOrNull(): RemoteService? = null
+        }
+
+        val result = wakeHook(service, FakeAppSettingsGateway(), port = port).engage(scheduleContext())
+
+        assertTrue(result is EngageResult.Skipped)
+        assertEquals(listOf(""), service.unlockCalls)
+    }
+
+    /** 认不出的码要带进文案，不能一律说成 IPC 失败 */
+    @Test
+    fun `an unknown result code keeps the code in the failure`() = runTest {
+        val service = FakePrivilegedService().apply { unlockResult = 99 }
+
+        val result = wakeHook(service, FakeAppSettingsGateway()).engage(scheduleContext())
+
+        assertEquals(uiTextOf(R.string.wake_result_unknown, 99), (result as EngageResult.Failed).reason)
     }
 
     // ── 屏保 ────────────────────────────────────────────────────────

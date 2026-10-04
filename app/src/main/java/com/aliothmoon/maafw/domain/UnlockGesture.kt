@@ -38,7 +38,8 @@ data class UnlockGesture(
             val gesture = runCatching {
                 UnlockGestureJson.decodeFromString(serializer(), json)
             }.getOrElse {
-                onDrop("malformed gesture json: ${it.message}")
+                // 不带 message：序列化异常会摘一段原文，轨迹坐标就跟着进了可导出的日志
+                onDrop("malformed gesture json: ${it::class.simpleName}")
                 return null
             }
             if (gesture.version != VERSION) {

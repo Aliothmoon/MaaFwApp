@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.di
 
+import android.app.KeyguardManager
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.config.passwordPlaintexts
@@ -148,7 +149,9 @@ val runnerModule = module {
                 TelemetryHook(get()),
                 NotificationHook(get()),
                 AutoSleepHook(get()),
-                WakeUnlockHook(get(), get<AppSettingsManager>(), get<UnlockGestureStore>()),
+                WakeUnlockHook(get(), get<AppSettingsManager>(), get<UnlockGestureStore>()) {
+                    androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+                },
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,

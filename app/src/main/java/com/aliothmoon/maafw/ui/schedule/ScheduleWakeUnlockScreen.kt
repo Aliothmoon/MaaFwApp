@@ -96,10 +96,12 @@ fun ScheduleWakeUnlockScreen(
     LaunchedEffect(Unit) { viewModel.refreshGestureRecord() }
 
     val doneTemplate = stringResource(R.string.settings_wake_gesture_done)
+    val saveFailedText = stringResource(R.string.settings_wake_gesture_save_failed)
     LaunchedEffect(recordState) {
         val message = when (val state = recordState) {
             is GestureRecordState.Done -> doneTemplate.format(state.steps)
             is GestureRecordState.Failed -> state.result.message.resolve(context)
+            GestureRecordState.SaveFailed -> saveFailedText
             else -> return@LaunchedEffect
         }
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()

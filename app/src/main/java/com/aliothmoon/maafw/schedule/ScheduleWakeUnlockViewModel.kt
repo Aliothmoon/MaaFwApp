@@ -78,6 +78,9 @@ class ScheduleWakeUnlockViewModel(
         data object Recording : GestureRecordState
         data class Done(val steps: Int) : GestureRecordState
         data class Failed(val result: WakeResult) : GestureRecordState
+
+        /** 录到了但没落盘：不当成已录，免得进程一死才发现手势没了 */
+        data object SaveFailed : GestureRecordState
     }
 
     private val _gestureRecordState = MutableStateFlow<GestureRecordState?>(null)
@@ -150,8 +153,7 @@ class ScheduleWakeUnlockViewModel(
     private suspend fun consume(result: GestureRecordResult) {
         val gesture = result.gesture
         _gestureRecordState.value = if (result.status == GestureRecordStatus.DONE && gesture != null) {
-            gestureStore.save(gesture)
-            GestureRecordState.Done(gesture.steps.size)
+            if (gestureStore.save(gesture)) GestureRecordState.Done(gesture.steps.size) else GestureRecordState.SaveFailed
         } else {
             GestureRecordState.Failed(WakeResult.fromCode(result.errorCode))
         }

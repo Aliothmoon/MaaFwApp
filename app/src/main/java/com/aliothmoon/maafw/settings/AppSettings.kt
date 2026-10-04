@@ -96,8 +96,8 @@ data class AppSettings(
     /**
      * 定时触发时的解锁方式：swipe / gesture / pin（见 [com.aliothmoon.maafw.domain.UnlockCredential]）
      *
-     * 没有总开关：定时到点总要亮屏解锁（对齐 MaaMeow）。空串是「还没选过」，
-     * 按有没有填过 PIN 推断——老版本开过 PIN 解锁的用户升级后不用重选
+     * 没有总开关：定时到点总要亮屏解锁（对齐 MaaMeow）。空串是「还没选过」，按「无密码」处理；
+     * 老版本开过 PIN 解锁的用户由 WakeUnlockTypeMigration 迁成 pin，升级后不用重选
      */
     @PrefKey(default = "")
     val wakeUnlockType: String = "",

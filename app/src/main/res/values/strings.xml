@@ -785,6 +785,7 @@
     <string name="wake_result_unsupported">当前系统不支持该操作</string>
     <string name="wake_result_lock_failed">无法进入锁屏</string>
     <string name="wake_result_ipc_failed">提权服务未连接</string>
+    <string name="wake_result_unknown">解锁失败（代码 %1$d）</string>
     <string name="wake_result_gesture_empty">尚未录制解锁手势</string>
     <string name="wake_result_gesture_screen_mismatch">屏幕方向或分辨率与录制时不一致，请重新录制</string>
     <string name="wake_result_record_no_device">读不到触摸屏输入设备，当前系统不允许；可改用 Root 启动方式或 PIN</string>
@@ -801,6 +802,7 @@
     <string name="settings_wake_gesture_preparing">正在锁屏并亮屏…</string>
     <string name="settings_wake_gesture_waiting">已亮屏，请解锁一次</string>
     <string name="settings_wake_gesture_done">录制完成，共 %1$d 步，建议点「测试」验证一次</string>
+    <string name="settings_wake_gesture_save_failed">手势已录到，但保存失败，请重新录制</string>
     <string name="settings_wake_gesture_warning">只录单指操作，不支持指纹和人脸；轨迹等价于锁屏凭证，仅保存在本机应用私有目录，不会随配置导出</string>
     <string name="settings_wake_gesture_step_tap">点击 (%1$d, %2$d)</string>
     <string name="settings_wake_gesture_step_long_press">长按 (%1$d, %2$d) %3$d ms</string>

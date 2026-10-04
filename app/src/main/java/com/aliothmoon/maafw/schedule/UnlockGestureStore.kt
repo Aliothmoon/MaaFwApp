@@ -26,7 +26,8 @@ fun interface UnlockGestureReader {
  * 录制的解锁手势（移植自 MaaMeow）
  *
  * 单独落文件而不进 DataStore：轨迹有几 KB，塞进 AppSettings 会让每次设置变更都跟着解析一遍；
- * 落在 app 私有目录也顺带保证它不会随配置导出——轨迹等价于锁屏凭证。
+ * 落在 app 私有目录也顺带保证它不会随配置导出——轨迹等价于锁屏凭证，
+ * 同理 backup_rules / data_extraction_rules 把这个目录排除在系统备份之外。
  * 特权进程读不到这个目录，回放时由 app 把 JSON 经 binder 递过去
  */
 class UnlockGestureStore(private val context: Context) : UnlockGestureReader {
@@ -46,17 +47,26 @@ class UnlockGestureStore(private val context: Context) : UnlockGestureReader {
         scope.launch { _gesture.value = read() }
     }
 
-    suspend fun save(gesture: UnlockGesture) {
-        writeMutex.withLock {
+    /**
+     * 先写临时文件再改名：写到一半被杀，盘上留的仍是上一份完整轨迹
+     *
+     * 写失败不更新 [gesture]：否则界面显示已录、回放也从内存拿，进程一死才发现盘上没有
+     * @return 是否落盘成功
+     */
+    suspend fun save(gesture: UnlockGesture): Boolean {
+        val saved = writeMutex.withLock {
             withContext(MaaDispatchers.IO) {
                 runCatching {
                     val file = gestureFile
                     file.parentFile?.mkdirs()
-                    file.writeText(UnlockGestureJson.encodeToString(UnlockGesture.serializer(), gesture))
-                }.onFailure { Timber.e(it, "save unlock gesture failed") }
+                    val tmp = File(file.parentFile, "$FILE_NAME.tmp")
+                    tmp.writeText(UnlockGestureJson.encodeToString(UnlockGesture.serializer(), gesture))
+                    check(tmp.renameTo(file)) { "rename to ${file.name} failed" }
+                }.onFailure { Timber.e(it, "save unlock gesture failed") }.isSuccess
             }
         }
-        _gesture.value = gesture
+        if (saved) _gesture.value = gesture
+        return saved
     }
 
     suspend fun clear() {

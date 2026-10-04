@@ -797,6 +797,7 @@
     <string name="wake_result_unsupported">Not supported on this system</string>
     <string name="wake_result_lock_failed">Could not enter lock screen</string>
     <string name="wake_result_ipc_failed">Elevated service not connected</string>
+    <string name="wake_result_unknown">Unlock failed (code %1$d)</string>
     <string name="wake_result_gesture_empty">No unlock gesture recorded yet</string>
     <string name="wake_result_gesture_screen_mismatch">Screen orientation or resolution differs from the recording; please record again</string>
     <string name="wake_result_record_no_device">Cannot read the touchscreen input device on this system; use the Root backend or a PIN instead</string>
@@ -813,6 +814,7 @@
     <string name="settings_wake_gesture_preparing">Locking and waking the screen…</string>
     <string name="settings_wake_gesture_waiting">Screen is on — please unlock once</string>
     <string name="settings_wake_gesture_done">Recorded %1$d steps; run Test once to verify</string>
+    <string name="settings_wake_gesture_save_failed">Gesture recorded but could not be saved; please record again</string>
     <string name="settings_wake_gesture_warning">Single-finger gestures only; fingerprint and face unlock are not supported. The trace is equivalent to your lock credential — it stays in the app private directory and is excluded from config export</string>
     <string name="settings_wake_gesture_step_tap">Tap (%1$d, %2$d)</string>
     <string name="settings_wake_gesture_step_long_press">Long press (%1$d, %2$d) %3$d ms</string>

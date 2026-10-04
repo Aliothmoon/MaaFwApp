@@ -13,7 +13,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
-/** 特权侧回的 [WakeUnlockResult] 码 → 带文案的结局；unknown 一律当 IPC 失败 */
+/** 特权侧回的 [WakeUnlockResult] 码 → 带文案的结局 */
 enum class WakeResult(val code: Int, val message: UiText) {
     OK(WakeUnlockResult.OK, uiTextOf(R.string.wake_result_ok)),
     WAKE_FAILED(WakeUnlockResult.WAKE_FAILED, uiTextOf(R.string.wake_result_wake_failed)),
@@ -38,7 +38,10 @@ enum class WakeResult(val code: Int, val message: UiText) {
     val isUnlocked: Boolean get() = this == OK || this == NO_KEYGUARD
 
     companion object {
-        fun fromCode(code: Int): WakeResult = entries.firstOrNull { it.code == code } ?: IPC_FAILED
+        /** 认不出的码当 IPC 失败；要把码带进文案的用 [fromCodeOrNull] */
+        fun fromCode(code: Int): WakeResult = fromCodeOrNull(code) ?: IPC_FAILED
+
+        fun fromCodeOrNull(code: Int): WakeResult? = entries.firstOrNull { it.code == code }
     }
 }
 
