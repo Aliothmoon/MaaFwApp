@@ -166,11 +166,11 @@
     <string name="settings_framework">MaaFramework</string>
     <string name="settings_telemetry">Help improve this project</string>
     <string name="settings_telemetry_desc">Anonymously send crash reports and task statistics; when a task fails, its run logs and error screenshots are included, to help find common issues</string>
-    <string name="settings_project">Project</string>
     <string name="settings_about_welcome">View welcome message</string>
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
+    <string name="settings_about_app_repository">%1$s repository</string>
     <string name="settings_section_update">Updates</string>
     <string name="settings_update_source_mirror">MirrorChyan</string>
     <string name="settings_update_source_github">GitHub</string>

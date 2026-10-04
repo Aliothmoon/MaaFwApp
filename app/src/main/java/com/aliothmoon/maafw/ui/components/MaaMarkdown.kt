@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.ui.components
 import android.content.Context
 import android.graphics.Typeface
 import android.text.TextUtils
+import android.view.Gravity
 import android.text.style.AbsoluteSizeSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.viewinterop.AndroidView
@@ -77,6 +79,7 @@ fun MaaMarkdown(
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     maxLines: Int = Int.MAX_VALUE,
     linksClickable: Boolean = true,
+    textAlign: TextAlign? = null,
 ) {
     val context = LocalContext.current
     var body by remember(text) { mutableStateOf(if (isRemoteUrl(text)) null else text) }
@@ -86,7 +89,8 @@ fun MaaMarkdown(
         }
     }
 
-    val resolved = body ?: stringResource(R.string.common_loading)
+    // 文件形态的正文多半以换行收尾，纯文本路径会原样画成一行空白
+    val resolved = (body ?: stringResource(R.string.common_loading)).trimEnd()
 
     // 认不出任何记号就走 Compose Text：M9A 的 397 条 description 里 382 条是纯文本，
     // 而 AndroidView 要真 View、要跑两套 measure。必须排在建管线与解析之前，
@@ -98,6 +102,7 @@ fun MaaMarkdown(
             modifier = modifier.fillMaxWidth(),
             style = style,
             color = color,
+            textAlign = textAlign,
             maxLines = maxLines,
             overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
         )
@@ -131,6 +136,7 @@ fun MaaMarkdown(
         },
         update = { view ->
             view.setTextColor(textColor)
+            view.gravity = if (textAlign == TextAlign.Center) Gravity.CENTER_HORIZONTAL else Gravity.START
             view.textSize = fontSizeSp
             view.maxLines = maxLines
             view.ellipsize = if (maxLines == Int.MAX_VALUE) null else TextUtils.TruncateAt.END

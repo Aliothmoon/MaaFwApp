@@ -4,6 +4,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalFocusManager
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.settings.search.SearchCondition
 import com.aliothmoon.maafw.settings.search.SettingAnchors
@@ -15,6 +16,7 @@ import com.aliothmoon.maafw.ui.settings.search.SettingSearchField
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchResults
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import com.aliothmoon.maafw.ui.settings.search.sectionRevealToken
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.clickable
@@ -79,10 +81,10 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaCard
-import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaFieldLabel
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
+import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
@@ -584,7 +586,67 @@ private fun OtherCard(
     }
 }
 
-private data class AboutSheet(val titleRes: Int, val body: String)
+private data class AboutSheet(val title: String, val body: String)
+
+/** 欢迎信息、联系方式、开源许可、项目仓库；排在版本号之前 */
+@Composable
+private fun AboutLinks(
+    metadata: ProjectMetadata,
+    onOpen: (AboutSheet) -> Unit,
+    onOpenWelcome: () -> Unit,
+) {
+    val context = LocalContext.current
+    if (metadata.welcome.isNotEmpty()) {
+        MaaNavigationRow(
+            label = stringResource(R.string.settings_about_welcome),
+            onClick = onOpenWelcome,
+        )
+    }
+    // 联系方式通常就几行链接，直接摊开（对齐 MXU），不再点进 sheet
+    metadata.contact?.let { body ->
+        Column(
+            modifier = Modifier.padding(top = MaaDesignTokens.Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            Text(text = stringResource(R.string.settings_about_contact), style = MaterialTheme.typography.bodyLarge)
+            MaaDescriptionPanel {
+                MaaMarkdown(
+                    text = body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+        }
+    }
+    metadata.license?.let { body ->
+        val title = stringResource(R.string.settings_about_license)
+        MaaNavigationRow(label = title, onClick = { onOpen(AboutSheet(title, body)) })
+    }
+    metadata.github?.let { url ->
+        MaaNavigationRow(
+            label = stringResource(R.string.settings_about_repository),
+            onClick = { context.openLink(url) },
+        )
+    }
+}
+
+/** 外壳自己的仓库；放在 PI 那组链接之后，行名带上 MaaFwApp，免得和项目仓库混淆 */
+@Composable
+private fun AppRepositoryRow() {
+    val context = LocalContext.current
+    MaaNavigationRow(
+        label = stringResource(R.string.settings_about_app_repository, stringResource(R.string.app_name)),
+        onClick = { context.openLink(APP_REPOSITORY_URL) },
+    )
+}
+
+private fun Context.openLink(url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { startActivity(intent) }
+        .onFailure { Timber.w(it, "No activity handles the link %s", url) }
+}
+
+private const val APP_REPOSITORY_URL = "https://github.com/Aliothmoon/MaaFwApp"
 
 @Composable
 private fun AboutCard(state: SessionUiState) {
@@ -602,7 +664,7 @@ private fun AboutCard(state: SessionUiState) {
         revealToken = sectionRevealToken(SettingsSections.ABOUT),
     ) {
         SettingSearchTarget(SettingAnchors.ABOUT) {
-            MaaInfoRow(stringResource(R.string.settings_project), appLabel)
+            AboutHeader(name = appLabel, icon = metadata.icon, description = metadata.description)
         }
         // 空串 = 非子模块又没钉版本名，此时它和下面那行同值，不重复显示
         if (BuildConfig.MAFW_PROJECT_VERSION.isNotEmpty()) {
@@ -627,46 +689,13 @@ private fun AboutCard(state: SessionUiState) {
                 value = BuildConfig.MAFW_FRAMEWORK_VERSION,
             )
         }
-
-        metadata.description?.let {
-            MaaDescriptionPanel {
-                MaaMarkdown(text = it, color = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
-        }
-        if (metadata.welcome.isNotEmpty()) {
-            MaaNavigationRow(
-                label = stringResource(R.string.settings_about_welcome),
-                onClick = { welcomeVisible = true },
-            )
-        }
-        metadata.contact?.let { body ->
-            MaaNavigationRow(
-                label = stringResource(R.string.settings_about_contact),
-                onClick = { sheet = AboutSheet(R.string.settings_about_contact, body) },
-            )
-        }
-        metadata.license?.let { body ->
-            MaaNavigationRow(
-                label = stringResource(R.string.settings_about_license),
-                onClick = { sheet = AboutSheet(R.string.settings_about_license, body) },
-            )
-        }
-        metadata.github?.let { url ->
-            MaaNavigationRow(
-                label = stringResource(R.string.settings_about_repository),
-                onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, url.toUri())
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    runCatching { context.startActivity(intent) }
-                        .onFailure { Timber.w(it, "No activity handles the project repository link") }
-                },
-            )
-        }
+        AboutLinks(metadata, onOpen = { sheet = it }, onOpenWelcome = { welcomeVisible = true })
+        AppRepositoryRow()
     }
 
     sheet?.let {
         MaaMarkdownSheet(
-            title = stringResource(it.titleRes),
+            title = it.title,
             body = it.body,
             onDismiss = { sheet = null },
         )
