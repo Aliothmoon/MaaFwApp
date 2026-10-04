@@ -272,7 +272,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `startup check stays silent on up to date`() = runTest {
+    fun `startup check that is up to date only toasts`() = runTest {
         val viewModel = viewModel(
             service = mockk {
                 coEvery { check(any()) } returns
@@ -280,8 +280,12 @@ class SettingsViewModelTest {
             },
             settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
         )
+        val effects = mutableListOf<SettingsEffect>()
+        backgroundScope.launch { viewModel.effects.collect { effects += it } }
         advanceUntilIdle()
 
+        val message = (effects.single() as SettingsEffect.ShowMessage).message
+        assertTrue(message.isResource(R.string.settings_update_up_to_date))
         val panel = latestPanel(viewModel)
         assertNull(panel.updatePrompt)
         assertNull(panel.errorPrompt)
