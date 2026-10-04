@@ -133,6 +133,19 @@
     <string name="settings_ui_scale_desc">Scales the whole interface, spacing included. Auto picks a size from the screen width; the system font size still applies on top. Affects both the app and the floating window</string>
     <string name="settings_ui_scale_auto_value">Auto · %1$d%%</string>
     <string name="settings_ui_scale_use_auto">Use auto (recommended)</string>
+    <string name="wallpaper_title">Custom background</string>
+    <string name="wallpaper_desc">Use a picture as the background of the main screens and settings</string>
+    <string name="wallpaper_enable">Use a custom background</string>
+    <string name="wallpaper_pick">Pick a picture</string>
+    <string name="wallpaper_replace">Change picture</string>
+    <string name="wallpaper_remove">Remove</string>
+    <string name="wallpaper_image_alpha">Picture opacity</string>
+    <string name="wallpaper_scrim">Scrim strength</string>
+    <string name="wallpaper_blur">Blur</string>
+    <string name="wallpaper_import_failed">Couldn\'t import the picture</string>
+    <string name="wallpaper_crop_reset">Reset</string>
+    <string name="wallpaper_crop_rotate">Rotate 90°</string>
+    <string name="wallpaper_crop_save">Save background</string>
     <string name="settings_ui_scale_preview">Preview: drag the slider and this text scales with it</string>
     <string name="settings_theme_style_default">Default</string>
     <string name="settings_theme_style_semi">Semi Design</string>
@@ -844,6 +857,7 @@
     <string name="settings_search_clear">Clear search</string>
     <string name="settings_search_empty">No matching settings</string>
     <string name="search_keywords_update">update upgrade version auto update check</string>
+    <string name="search_keywords_wallpaper">background wallpaper picture image custom blur</string>
     <string name="search_keywords_ui_scale">scale zoom font size text density</string>
     <string name="search_keywords_theme">theme dark night black amoled light appearance color</string>
     <string name="search_keywords_language">language chinese english locale</string>

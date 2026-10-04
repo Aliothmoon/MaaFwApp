@@ -127,6 +127,19 @@
     <string name="settings_ui_scale_desc">调整界面整体大小（含间距）。自动档按屏幕宽度推荐，系统字体大小在此之上另外生效。主界面与悬浮窗都跟随此设置</string>
     <string name="settings_ui_scale_auto_value">自动 · %1$d%%</string>
     <string name="settings_ui_scale_use_auto">使用自动（推荐）</string>
+    <string name="wallpaper_title">自定义背景</string>
+    <string name="wallpaper_desc">用一张图片做主界面与设置页的背景</string>
+    <string name="wallpaper_enable">启用自定义背景</string>
+    <string name="wallpaper_pick">选择图片</string>
+    <string name="wallpaper_replace">更换图片</string>
+    <string name="wallpaper_remove">移除</string>
+    <string name="wallpaper_image_alpha">图片不透明度</string>
+    <string name="wallpaper_scrim">遮罩强度</string>
+    <string name="wallpaper_blur">模糊</string>
+    <string name="wallpaper_import_failed">背景图片导入失败</string>
+    <string name="wallpaper_crop_reset">复位</string>
+    <string name="wallpaper_crop_rotate">旋转 90°</string>
+    <string name="wallpaper_crop_save">保存背景</string>
     <string name="settings_ui_scale_preview">预览：拖动滑块，这段文字会跟着缩放</string>
     <string name="settings_theme_style_default">默认</string>
     <string name="settings_theme_style_semi">Semi Design</string>
@@ -832,6 +845,7 @@
     <string name="settings_search_clear">清除搜索</string>
     <string name="settings_search_empty">没有匹配的设置</string>
     <string name="search_keywords_update">更新 升级 版本 自动更新 检查更新</string>
+    <string name="search_keywords_wallpaper">背景 壁纸 图片 自定义 透明 模糊</string>
     <string name="search_keywords_ui_scale">缩放 字体 字号 大小 文字 界面 密度</string>
     <string name="search_keywords_theme">主题 深色 夜间 暗色 黑色 纯黑 浅色 外观 配色</string>
     <string name="search_keywords_language">语言 中文 英文 English 界面语言</string>

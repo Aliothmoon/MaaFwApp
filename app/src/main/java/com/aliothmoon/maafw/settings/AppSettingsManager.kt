@@ -20,6 +20,7 @@ import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.wallpaper.WallpaperSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -116,6 +117,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _uiScale = MutableStateFlow(UiScale.parse(defaults.uiScale))
     override val uiScale: StateFlow<Int> = _uiScale.asStateFlow()
 
+    private val _wallpaper = MutableStateFlow(parseWallpaper(defaults))
+    val wallpaper: StateFlow<WallpaperSettings> = _wallpaper.asStateFlow()
+
     private val _wakeUnlockType = MutableStateFlow(parseWakeUnlockType(defaults.wakeUnlockType))
     override val wakeUnlockType: StateFlow<String> = _wakeUnlockType.asStateFlow()
 
@@ -170,6 +174,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _saveOnError.value = s.saveOnError.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
                 _uiScale.value = UiScale.parse(s.uiScale)
+                _wallpaper.value = parseWallpaper(s)
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
                 _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType)
                 _wakeCredential.value = s.wakeCredential
@@ -244,6 +249,30 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[uiScale] = UiScale.format(scale) }
     }
 
+    /** 开关与令牌一起写：换图成功才启用，关闭时清令牌，两步分开写会让中间态去解码一张不存在的图 */
+    suspend fun setWallpaperState(enabled: Boolean, token: String) = with(AppSettingsSchema) {
+        context.dataStore.edit {
+            it[wallpaperEnabled] = enabled.toString()
+            it[wallpaperToken] = token
+        }
+    }
+
+    suspend fun setWallpaperEnabled(enabled: Boolean) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperEnabled] = enabled.toString() }
+    }
+
+    suspend fun setWallpaperImageAlpha(percent: Int) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperImageAlpha] = percent.coerceIn(0, 100).toString() }
+    }
+
+    suspend fun setWallpaperScrim(percent: Int) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperScrim] = percent.coerceIn(0, 100).toString() }
+    }
+
+    suspend fun setWallpaperBlur(percent: Int) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperBlur] = percent.coerceIn(0, 100).toString() }
+    }
+
     suspend fun setEventNotificationLevel(level: EventNotificationLevel) = with(AppSettingsSchema) {
         context.dataStore.edit { it[eventNotificationLevel] = level.name }
     }
@@ -294,6 +323,16 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     override suspend fun setMirrorchyanCdk(cdk: String): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[mirrorchyanCdk] = cdk.trim() }
     }
+
+    private fun parseWallpaper(s: AppSettings) = WallpaperSettings(
+        enabled = s.wallpaperEnabled.toBoolean(),
+        token = s.wallpaperToken,
+        imageAlpha = parsePercent(s.wallpaperImageAlpha, 80),
+        scrim = parsePercent(s.wallpaperScrim, 25),
+        blur = parsePercent(s.wallpaperBlur, 0),
+    )
+
+    private fun parsePercent(raw: String, default: Int): Int = raw.toIntOrNull()?.coerceIn(0, 100) ?: default
 
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
     private fun parseBackend(raw: String): RemoteBackend =

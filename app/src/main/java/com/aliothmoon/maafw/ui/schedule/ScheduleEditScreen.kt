@@ -57,6 +57,7 @@ import com.aliothmoon.maafw.schedule.validationErrors
 import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.CardCollapse
 import com.aliothmoon.maafw.ui.components.CardExpand
 import com.aliothmoon.maafw.ui.components.ExpandableTipContent
@@ -640,21 +641,23 @@ private fun StartDateDialog(
     onDismiss: () -> Unit,
 ) {
     val state = rememberDatePickerState(initialSelectedDateMillis = initialMs)
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = { state.selectedDateMillis?.let(onConfirm) ?: onDismiss() },
-            ) {
-                Text(stringResource(R.string.dialog_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) }
-        },
-    ) {
-        DatePicker(state = state)
-    }
+OpaqueTheme {
+        DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(
+                    onClick = { state.selectedDateMillis?.let(onConfirm) ?: onDismiss() },
+                ) {
+                    Text(stringResource(R.string.dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) }
+            },
+        ) {
+            DatePicker(state = state)
+        }
+}
 }
 
 /** 保存前收口：名称留空给个占位、时刻去重排序，间隔模式清掉固定时刻的残留字段（反之亦然） */

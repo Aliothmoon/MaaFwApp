@@ -56,6 +56,7 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
@@ -308,21 +309,23 @@ private fun MirrorInfoDialog(onDismiss: () -> Unit) {
             }
         }
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(mirrorBrand) },
-        text = {
-            Text(
-                text = cdkDescLinked,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_confirm))
-            }
-        },
-    )
+OpaqueTheme {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(mirrorBrand) },
+            text = {
+                Text(
+                    text = cdkDescLinked,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.dialog_confirm))
+                }
+            },
+        )
+}
 }
 
 @Composable

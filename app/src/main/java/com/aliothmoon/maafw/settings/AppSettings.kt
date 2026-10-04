@@ -88,6 +88,24 @@ data class AppSettings(
     @PrefKey(default = "auto")
     val uiScale: String = "auto",
 
+    /** 自定义背景开关；图片本身在 filesDir/backgrounds，见 [com.aliothmoon.maafw.wallpaper.WallpaperStore] */
+    @PrefKey(default = "false")
+    val wallpaperEnabled: String = "false",
+
+    /** 每次换图写一个新值，图片文件名不变，靠它触发重新解码 */
+    @PrefKey(default = "")
+    val wallpaperToken: String = "",
+
+    /** 以下三项都是 0–100 的百分比 */
+    @PrefKey(default = "80")
+    val wallpaperImageAlpha: String = "80",
+
+    @PrefKey(default = "25")
+    val wallpaperScrim: String = "25",
+
+    @PrefKey(default = "0")
+    val wallpaperBlur: String = "0",
+
     /**
      * [com.aliothmoon.maafw.domain.EventNotificationLevel] 的 name
      *

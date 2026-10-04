@@ -81,6 +81,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -112,6 +115,10 @@ import com.aliothmoon.maafw.settings.SettingsEffect
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
+import com.aliothmoon.maafw.theme.WallpaperBackdrop
+import com.aliothmoon.maafw.theme.WallpaperHost
+import com.aliothmoon.maafw.wallpaper.WallpaperStore
+import com.aliothmoon.maafw.ui.wallpaper.WallpaperScreen
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
@@ -159,6 +166,13 @@ private enum class TopDestination(
     Settings(R.string.nav_settings, Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
+/** 二级页面：有自定义背景时自带一层同样的背景，随转场一起滑，盖住下面的主 tab */
+private fun NavGraphBuilder.subPage(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit,
+) = composable(route = route, arguments = arguments) { entry -> WallpaperBackdrop { content(entry) } }
+
 /** M3 NavigationBar 固定 80dp 且 padding 不可调，底栏自建成这个高度 */
 private val BottomBarHeight = 56.dp
 
@@ -193,6 +207,7 @@ fun AppRoot(
     overlayController: OverlayController = koinInject(),
     screenSaverManager: ScreenSaverOverlayManager = koinInject(),
     searchNavigator: SettingSearchNavigator = koinInject(),
+    wallpaperStore: WallpaperStore = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
@@ -414,6 +429,17 @@ fun AppRoot(
         // 刻意不进快照：只在测量里读写，做成 State 就是测量期写入引发的重组
         val fullWindow = remember { intArrayOf(0, 0) }
 
+        val wallpaperImage by wallpaperStore.image.collectAsStateWithLifecycle()
+        val wallpaperSettings by wallpaperStore.settings.collectAsStateWithLifecycle()
+        // 背景跟着主 tab 横移；读在 graphicsLayer 里，滑动只重铺图层不重组
+        val wallpaperParallax = remember(pagerState) {
+            {
+                val last = pagerState.pageCount - 1
+                if (last <= 0) 0f
+                else (pagerState.currentPage + pagerState.currentPageOffsetFraction) / last * 2f - 1f
+            }
+        }
+
         // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂
         Box(
             modifier = Modifier
@@ -432,6 +458,8 @@ fun AppRoot(
                     layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
                 },
         ) {
+        // 主 tab 与二级页面共用一张背景；弹窗另开窗口，在这层之外，配色仍是不透明的
+        WallpaperHost(image = wallpaperImage, settings = wallpaperSettings, parallax = wallpaperParallax) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
@@ -547,6 +575,7 @@ fun AppRoot(
                         onOpenRunLogArchive = { navController.navigate(Routes.RUN_LOG_ARCHIVE) },
                         onOpenAppLog = { navController.navigate(Routes.APP_LOG) },
                         onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
+                        onOpenWallpaper = { navController.navigate(Routes.WALLPAPER) },
                         onExportLogs = { exportSheetVisible = true },
                         onOpenSearchResult = { entry ->
                             // 先发请求再切页：目标页一进组合就能读到它
@@ -592,7 +621,7 @@ fun AppRoot(
                 composable(Routes.TASKS) {}
                 composable(Routes.SCHEDULE) {}
                 composable(Routes.SETTINGS) {}
-                composable(
+                subPage(
                     route = Routes.SCHEDULE_EDIT,
                     arguments = listOf(
                         navArgument(Routes.SCHEDULE_EDIT_ARG) {
@@ -611,7 +640,7 @@ fun AppRoot(
                         },
                     )
                 }
-                composable(Routes.SCHEDULE_TRIGGER_LOG) {
+                subPage(Routes.SCHEDULE_TRIGGER_LOG) {
                     ScheduleTriggerLogScreen(
                         onBack = { navController.popBackStack() },
                         onFix = { action, entry ->
@@ -632,25 +661,28 @@ fun AppRoot(
                         },
                     )
                 }
-                composable(Routes.RUN_LOG_ARCHIVE) {
+                subPage(Routes.RUN_LOG_ARCHIVE) {
                     RunLogArchiveScreen(
                         onBack = { navController.popBackStack() },
                         onOpen = { navController.navigate(Routes.runLogDetail(it)) },
                     )
                 }
-                composable(Routes.APP_LOG) {
+                subPage(Routes.APP_LOG) {
                     AppLogScreen(
                         onBack = { navController.popBackStack() },
                         onOpen = { navController.navigate(Routes.appLogDetail(it)) },
                     )
                 }
-                composable(Routes.SCHEDULE_WAKE_UNLOCK) {
+                subPage(Routes.SCHEDULE_WAKE_UNLOCK) {
                     ScheduleWakeUnlockScreen(onBack = { navController.popBackStack() })
                 }
-                composable(Routes.NOTIFICATION_SETTINGS) {
+                subPage(Routes.NOTIFICATION_SETTINGS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
                 }
-                composable(
+                subPage(Routes.WALLPAPER) {
+                    WallpaperScreen(onBack = { navController.popBackStack() })
+                }
+                subPage(
                     route = Routes.APP_LOG_DETAIL,
                     arguments = listOf(
                         navArgument(Routes.APP_LOG_DETAIL_ARG) { type = NavType.StringType },
@@ -661,7 +693,7 @@ fun AppRoot(
                         onBack = { navController.popBackStack() },
                     )
                 }
-                composable(
+                subPage(
                     route = Routes.RUN_LOG_DETAIL,
                     arguments = listOf(
                         navArgument(Routes.RUN_LOG_DETAIL_ARG) { type = NavType.StringType },
@@ -675,6 +707,7 @@ fun AppRoot(
             }
         }
 
+        }
         }
 
         // 无条件挂在这一层：它注册的 SAF launcher 要活得比 sheet 的显隐久

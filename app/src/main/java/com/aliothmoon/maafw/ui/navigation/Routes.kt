@@ -38,6 +38,9 @@ object Routes {
     /** 通知设置：系统事件通知档位 + 外部推送渠道 */
     const val NOTIFICATION_SETTINGS = "notification_settings"
 
+    /** 自定义背景：选图裁剪与不透明度、遮罩、模糊 */
+    const val WALLPAPER = "wallpaper"
+
     /** 错误日志（app 自身的警告与错误） */
     const val APP_LOG = "app_log"
 

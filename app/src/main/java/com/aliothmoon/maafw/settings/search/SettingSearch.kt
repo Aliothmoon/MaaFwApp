@@ -46,6 +46,7 @@ object SettingAnchors {
     const val THEME = "display.theme"
     const val THEME_STYLE = "display.theme_style"
     const val UI_SCALE = "display.ui_scale"
+    const val WALLPAPER = "display.wallpaper"
     const val LANGUAGE = "display.language"
     const val DURATION_LIMIT = "duration.limit"
     const val NOTIFICATION_SETTINGS = "notification.entry"
@@ -60,6 +61,8 @@ object SettingAnchors {
     const val PIP_ON_HOME = "other.pip"
     const val TELEMETRY = "other.telemetry"
     const val ABOUT = "about.project"
+
+    const val WALLPAPER_ENABLE = "wallpaper.enable"
 
     const val NOTIFY_ENABLE = "notify.enable"
     const val NOTIFY_ON_COMPLETE = "notify.on_complete"
@@ -140,6 +143,11 @@ object SettingSearchIndex {
         listOf(uiTextOf(R.string.nav_settings), uiTextOf(R.string.notification_settings_title)),
     )
 
+    private val wallpaperPage = SettingLocation.Page(
+        Routes.WALLPAPER,
+        listOf(uiTextOf(R.string.nav_settings), uiTextOf(R.string.wallpaper_title)),
+    )
+
     private fun entry(
         titleRes: Int,
         location: SettingLocation,
@@ -162,6 +170,7 @@ object SettingSearchIndex {
         entry(R.string.settings_theme, display, SettingAnchors.THEME, keywordsRes = R.string.search_keywords_theme),
         entry(R.string.settings_theme_style, display, SettingAnchors.THEME_STYLE),
         entry(R.string.settings_ui_scale, display, SettingAnchors.UI_SCALE, R.string.settings_ui_scale_desc, R.string.search_keywords_ui_scale),
+        entry(R.string.wallpaper_title, display, SettingAnchors.WALLPAPER, R.string.wallpaper_desc, R.string.search_keywords_wallpaper),
         entry(R.string.settings_language, display, SettingAnchors.LANGUAGE, keywordsRes = R.string.search_keywords_language),
         entry(R.string.settings_duration_limit_enabled, duration, SettingAnchors.DURATION_LIMIT, keywordsRes = R.string.search_keywords_duration),
         entry(R.string.notification_settings_title, notification, SettingAnchors.NOTIFICATION_SETTINGS, R.string.settings_notification_desc, R.string.search_keywords_notification),
@@ -176,6 +185,8 @@ object SettingSearchIndex {
         entry(R.string.settings_pip_on_home, other, SettingAnchors.PIP_ON_HOME, R.string.settings_pip_on_home_desc, condition = SearchCondition.PIP_SUPPORTED),
         entry(R.string.settings_telemetry, other, SettingAnchors.TELEMETRY, R.string.settings_telemetry_desc, condition = SearchCondition.TELEMETRY_DECLARED),
         entry(R.string.settings_about, about, SettingAnchors.ABOUT, keywordsRes = R.string.search_keywords_about),
+
+        entry(R.string.wallpaper_enable, wallpaperPage, SettingAnchors.WALLPAPER_ENABLE, R.string.wallpaper_desc, R.string.search_keywords_wallpaper),
 
         entry(R.string.notification_enable, notificationPage, SettingAnchors.NOTIFY_ENABLE),
         entry(R.string.notification_popup, notificationPage, SettingAnchors.NOTIFY_ENABLE),

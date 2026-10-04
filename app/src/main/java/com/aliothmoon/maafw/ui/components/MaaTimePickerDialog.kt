@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.constrain
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.OpaqueTheme
 import java.time.LocalTime
 
 private val PickerItemHeight = 48.dp
@@ -54,17 +55,19 @@ fun MaaTimePickerDialog(
         initialMinute = initial.minute,
         is24Hour = is24Hour,
     )
-    BasicAlertDialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = MaterialTheme.shapes.extraLarge,
-            tonalElevation = 6.dp,
-        ) {
-            TimePickerDialogContent(
-                state = state,
-                onFormatChange = { is24Hour = it },
-                onConfirm = { onConfirm(LocalTime.of(state.hour, state.minute)) },
-                onDismiss = onDismiss,
-            )
+    OpaqueTheme {
+        BasicAlertDialog(onDismissRequest = onDismiss) {
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                tonalElevation = 6.dp,
+            ) {
+                TimePickerDialogContent(
+                    state = state,
+                    onFormatChange = { is24Hour = it },
+                    onConfirm = { onConfirm(LocalTime.of(state.hour, state.minute)) },
+                    onDismiss = onDismiss,
+                )
+            }
         }
     }
 }

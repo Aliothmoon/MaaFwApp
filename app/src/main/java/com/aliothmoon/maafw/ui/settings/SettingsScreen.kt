@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.settings.search.SettingAnchors
 import com.aliothmoon.maafw.settings.search.SettingSearchEntry
 import com.aliothmoon.maafw.settings.search.SettingSearchIndex
 import com.aliothmoon.maafw.settings.search.SettingsSections
+import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchField
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchResults
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
@@ -115,6 +116,7 @@ fun SettingsScreen(
     onOpenRunLogArchive: () -> Unit,
     onOpenAppLog: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    onOpenWallpaper: () -> Unit,
     onExportLogs: () -> Unit,
     /** 点了某条搜索结果：发定位请求、按位置切页由 AppRoot 做，本页只管清掉输入 */
     onOpenSearchResult: (SettingSearchEntry) -> Unit,
@@ -181,7 +183,7 @@ fun SettingsScreen(
                 TaskSettingCards(state, onIntent)
                 ResourceOptionCard(state, onIntent)
                 ControllerOptionCard(state, onIntent)
-                DisplayCard(state, settingsState, onIntent, onSettingsIntent)
+                DisplayCard(state, settingsState, onIntent, onSettingsIntent, onOpenWallpaper)
                 RunDurationCard(settingsState, onSettingsIntent)
                 NotificationCard(onOpenNotificationSettings)
                 LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
@@ -239,13 +241,14 @@ private fun ControllerOptionCard(state: SessionUiState, onIntent: (SessionIntent
     }
 }
 
-/** 主题、主题风格、页面缩放、语言：都只改观感，合成一张卡（对齐 MaaMeow 的「显示设置」） */
+/** 主题、主题风格、页面缩放、背景、语言：都只改观感，合成一张卡（对齐 MaaMeow 的「显示设置」） */
 @Composable
 private fun DisplayCard(
     state: SessionUiState,
     settingsState: SettingsUiState,
     onIntent: (SessionIntent) -> Unit,
     onSettingsIntent: (SettingsIntent) -> Unit,
+    onOpenWallpaper: () -> Unit,
 ) {
     MaaCard(
         title = stringResource(R.string.settings_section_display),
@@ -288,6 +291,13 @@ private fun DisplayCard(
             UiScaleSetting(
                 stored = settingsState.uiScale,
                 onCommit = { onSettingsIntent(SettingsIntent.SetUiScale(it)) },
+            )
+        }
+        SettingSearchTarget(SettingAnchors.WALLPAPER) {
+            MaaNavigationRow(
+                label = stringResource(R.string.wallpaper_title),
+                description = stringResource(R.string.wallpaper_desc),
+                onClick = onOpenWallpaper,
             )
         }
         Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
@@ -432,22 +442,24 @@ private fun LogCard(
         }
     }
     if (showEnableConfirm) {
-        AlertDialog(
-            onDismissRequest = { showEnableConfirm = false },
-            title = { Text(stringResource(R.string.dialog_enable_debug_title)) },
-            text = { Text(stringResource(R.string.dialog_enable_debug_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showEnableConfirm = false
-                    onIntent(SessionIntent.SetDebugMode(true))
-                }) { Text(stringResource(R.string.common_restart)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEnableConfirm = false }) {
-                    Text(stringResource(R.string.dialog_cancel))
-                }
-            },
-        )
+OpaqueTheme {
+            AlertDialog(
+                onDismissRequest = { showEnableConfirm = false },
+                title = { Text(stringResource(R.string.dialog_enable_debug_title)) },
+                text = { Text(stringResource(R.string.dialog_enable_debug_message)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showEnableConfirm = false
+                        onIntent(SessionIntent.SetDebugMode(true))
+                    }) { Text(stringResource(R.string.common_restart)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEnableConfirm = false }) {
+                        Text(stringResource(R.string.dialog_cancel))
+                    }
+                },
+            )
+}
     }
 }
 
@@ -474,22 +486,24 @@ private fun PiCard(onIntent: (SessionIntent) -> Unit) {
         }
     }
     if (showConfirm) {
-        AlertDialog(
-            onDismissRequest = { showConfirm = false },
-            title = { Text(stringResource(R.string.dialog_reinstall_pi_title)) },
-            text = { Text(stringResource(R.string.dialog_reinstall_pi_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showConfirm = false
-                    onIntent(SessionIntent.ReinstallPi)
-                }) { Text(stringResource(R.string.dialog_confirm)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirm = false }) {
-                    Text(stringResource(R.string.dialog_cancel))
-                }
-            },
-        )
+OpaqueTheme {
+            AlertDialog(
+                onDismissRequest = { showConfirm = false },
+                title = { Text(stringResource(R.string.dialog_reinstall_pi_title)) },
+                text = { Text(stringResource(R.string.dialog_reinstall_pi_message)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showConfirm = false
+                        onIntent(SessionIntent.ReinstallPi)
+                    }) { Text(stringResource(R.string.dialog_confirm)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showConfirm = false }) {
+                        Text(stringResource(R.string.dialog_cancel))
+                    }
+                },
+            )
+}
     }
 }
 
