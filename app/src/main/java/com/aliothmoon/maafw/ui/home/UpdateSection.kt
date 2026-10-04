@@ -58,11 +58,9 @@ import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
-import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.updateSourceLabel
 import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
 import timber.log.Timber
 
@@ -366,17 +364,7 @@ private fun DownloadProgressRow(
 
 @Composable
 private fun UpdateStatus(update: UpdatePanelState) {
-    when (update.checkResult) {
-        is UpdateCheckResult.UpdateAvailable -> Unit
-        is UpdateCheckResult.SourceFailed -> Unit
-
-        is UpdateCheckResult.UpToDate -> MaaInfoRow(
-            label = stringResource(R.string.settings_update_result),
-            value = stringResource(R.string.settings_update_up_to_date),
-        )
-
-        null -> Unit
-    }
+    // 检查结果不在这里出：新版本与失败走弹窗，已是最新走 Toast（SettingsEffect.ShowMessage）
     update.errorMessage?.let {
         Text(
             text = it.asString(),

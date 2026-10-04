@@ -171,7 +171,6 @@
     <string name="settings_update_check">Check for updates</string>
     <string name="settings_update_checking">Checking…</string>
     <string name="settings_update_download">Download update</string>
-    <string name="settings_update_result">Check result</string>
     <string name="settings_update_up_to_date">You are up to date</string>
     <string name="settings_update_no_downloadable_apk">The selected update source has no downloadable APK</string>
     <string name="settings_update_auto_check">Check for updates on launch</string>

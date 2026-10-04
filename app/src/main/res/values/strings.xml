@@ -165,7 +165,6 @@
     <string name="settings_update_check">检查更新</string>
     <string name="settings_update_checking">检查中…</string>
     <string name="settings_update_download">下载更新</string>
-    <string name="settings_update_result">检查结果</string>
     <string name="settings_update_up_to_date">当前已是最新版本</string>
     <string name="settings_update_no_downloadable_apk">所选更新源没有可下载的安装包</string>
     <string name="settings_update_auto_check">启动时自动检查更新</string>

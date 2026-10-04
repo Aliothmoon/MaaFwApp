@@ -1,11 +1,13 @@
 package com.aliothmoon.maafw.settings
 
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.SystemApkInstaller
 import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.DownloadedUpdate
@@ -27,6 +29,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -197,6 +200,25 @@ class SettingsViewModelTest {
 
         assertEquals(1, requests)
         gate.complete(Unit)
+    }
+
+    /** 已是最新只弹 Toast，不在首页留结果行 */
+    @Test
+    fun `manual check that is up to date emits a message`() = runTest {
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { check(any()) } returns UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0")
+            },
+        )
+        val effects = mutableListOf<SettingsEffect>()
+        backgroundScope.launch { viewModel.effects.collect { effects += it } }
+
+        viewModel.onIntent(SettingsIntent.CheckUpdate)
+        advanceUntilIdle()
+
+        val message = (effects.single() as SettingsEffect.ShowMessage).message
+        assertTrue(message.isResource(R.string.settings_update_up_to_date))
+        assertNull(latestPanel(viewModel).errorPrompt)
     }
 
     @Test

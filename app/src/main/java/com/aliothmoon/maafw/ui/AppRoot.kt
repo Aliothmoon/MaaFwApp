@@ -92,6 +92,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
@@ -107,6 +108,7 @@ import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.SettingsEffect
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
@@ -324,6 +326,15 @@ fun AppRoot(
                             viewModel.onIntent(SessionIntent.RefreshPermissions)
                         }
                     }
+                }
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            settingsViewModel.effects.collect { effect ->
+                when (effect) {
+                    is SettingsEffect.ShowMessage ->
+                        Toast.makeText(context, effect.message.resolve(context), Toast.LENGTH_SHORT).show()
                 }
             }
         }

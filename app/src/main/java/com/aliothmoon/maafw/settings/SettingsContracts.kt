@@ -53,6 +53,12 @@ data class UpdatePanelState(
         get() = checkResult as? UpdateCheckResult.UpdateAvailable
 }
 
+/** 一次性 Effect，不进 UiState */
+sealed interface SettingsEffect {
+    /** 轻提示；结果不值得在卡片里占一行（如「已是最新版本」） */
+    data class ShowMessage(val message: UiText) : SettingsEffect
+}
+
 sealed interface SettingsIntent {
     /** 切换 Shizuku / Root 后端；落到 AppSettings.startupBackend 并断开当前特权进程 */
     data class SetBackend(val backend: RemoteBackend) : SettingsIntent

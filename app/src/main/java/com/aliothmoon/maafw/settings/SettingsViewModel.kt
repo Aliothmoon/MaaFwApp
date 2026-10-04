@@ -23,6 +23,8 @@ import com.aliothmoon.maafw.update.UpdateSource
 import com.aliothmoon.maafw.update.message
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -60,6 +63,9 @@ class SettingsViewModel(
 ) : ViewModel() {
 
     private val updateOperation = MutableStateFlow(UpdatePanelState())
+
+    private val effectChannel = Channel<SettingsEffect>(Channel.BUFFERED)
+    val effects: Flow<SettingsEffect> = effectChannel.receiveAsFlow()
 
     /** 只在 CAS 抢到 downloading 位后登记，取消不会误伤没抢到位的空跑协程 */
     private var downloadJob: Job? = null
@@ -239,6 +245,9 @@ class SettingsViewModel(
                 errorPrompt = result.message()?.let(UpdateErrorPrompt::check),
                 updatePrompt = result as? UpdateCheckResult.UpdateAvailable,
             )
+        }
+        if (result is UpdateCheckResult.UpToDate) {
+            effectChannel.trySend(SettingsEffect.ShowMessage(uiTextOf(R.string.settings_update_up_to_date)))
         }
     }
 
