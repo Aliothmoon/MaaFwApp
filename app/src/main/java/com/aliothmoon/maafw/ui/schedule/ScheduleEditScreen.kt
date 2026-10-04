@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.ui.schedule
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -37,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +56,10 @@ import com.aliothmoon.maafw.schedule.validationErrors
 import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.CardCollapse
+import com.aliothmoon.maafw.ui.components.CardExpand
+import com.aliothmoon.maafw.ui.components.ExpandableTipContent
+import com.aliothmoon.maafw.ui.components.ExpandableTipIcon
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
@@ -276,21 +282,38 @@ fun ScheduleEditScreen(
                     checked = draft.forceStart,
                     onCheckedChange = { draft = draft.copy(forceStart = it) },
                 )
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_auto_sleep),
-                    checked = draft.autoSleepAfterTask,
-                    onCheckedChange = { draft = draft.copy(autoSleepAfterTask = it) },
-                )
-                if (draft.autoSleepAfterTask) {
+                // 子开关和父开关包成一组，间距放进子项自己的 padding：留在 Section 的 spacedBy 里，
+                // 那 8dp 会在展开开始时一下冒出来、收起结束时一下消失，看着是一跳
+                Column {
                     ScheduleToggleRow(
-                        label = stringResource(R.string.schedule_edit_skip_sleep_if_awake),
-                        checked = draft.skipAutoSleepIfAwake,
-                        onCheckedChange = { draft = draft.copy(skipAutoSleepIfAwake = it) },
+                        label = stringResource(R.string.schedule_edit_auto_sleep),
+                        tip = stringResource(R.string.schedule_edit_auto_sleep_tip),
+                        checked = draft.autoSleepAfterTask,
+                        onCheckedChange = { draft = draft.copy(autoSleepAfterTask = it) },
                     )
+                    AnimatedVisibility(
+                        visible = draft.autoSleepAfterTask,
+                        enter = CardExpand,
+                        exit = CardCollapse,
+                    ) {
+                        // 缩进一档表明从属，对齐 MaaMeow
+                        ScheduleToggleRow(
+                            label = stringResource(R.string.schedule_edit_skip_sleep_if_awake),
+                            tip = stringResource(R.string.schedule_edit_skip_sleep_if_awake_tip),
+                            checked = draft.skipAutoSleepIfAwake,
+                            onCheckedChange = { draft = draft.copy(skipAutoSleepIfAwake = it) },
+                            modifier = Modifier.padding(
+                                start = MaaDesignTokens.Spacing.lg,
+                                top = MaaDesignTokens.Spacing.sm,
+                            ),
+                        )
+                    }
                 }
                 ScheduleToggleRow(
                     label = stringResource(R.string.schedule_edit_close_app),
                     tip = stringResource(R.string.schedule_edit_close_app_tip),
+                    // 与快捷选项的优先级容易踩坑，默认展开（对齐 MaaMeow）
+                    tipInitiallyExpanded = true,
                     checked = draft.closeAppAfterTask,
                     onCheckedChange = { draft = draft.copy(closeAppAfterTask = it) },
                 )
@@ -339,29 +362,54 @@ fun ScheduleEditScreen(
 }
 
 /** 小节标题 + 内容；替掉 MaaCard 的描边卡，对齐 MaaMeow 的 SectionHeader（轻、不占高） */
+/**
+ * 高级选项的一行开关（对齐 MaaMeow）：说明收进标题旁的小 i，点开才在下方展开
+ *
+ * 标题行只放标题与开关，有没有说明都和开关居中对齐；说明默认收起，
+ * [tipInitiallyExpanded] 留给容易踩坑、要先让人看到的那条
+ */
 @Composable
 private fun ScheduleToggleRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
     tip: String? = null,
+    tipInitiallyExpanded: Boolean = false,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.bodyMedium)
-            tip?.let {
+    var tipExpanded by rememberSaveable { mutableStateOf(tipInitiallyExpanded) }
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+            ) {
+                // fill = false：标题短时小 i 紧跟标题，长了才换行而不把小 i 挤出去
                 Text(
-                    text = it,
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (tip != null) {
+                    ExpandableTipIcon(expanded = tipExpanded, onExpandedChange = { tipExpanded = it })
+                }
+            }
+            MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+        if (tip != null) {
+            ExpandableTipContent(visible = tipExpanded, topSpacing = MaaDesignTokens.Spacing.xs) {
+                Text(
+                    text = tip,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
         }
-        MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

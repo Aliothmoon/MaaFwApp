@@ -362,7 +362,9 @@
     <string name="schedule_edit_force_start">Force start</string>
     <string name="schedule_edit_force_start_tip">Interrupt a run already in progress and run this rule instead</string>
     <string name="schedule_edit_auto_sleep">Sleep after the task finishes</string>
+    <string name="schedule_edit_auto_sleep_tip">Turn the screen off after the scheduled task finishes to save battery</string>
     <string name="schedule_edit_skip_sleep_if_awake">Skip if the screen was already on at start</string>
+    <string name="schedule_edit_skip_sleep_if_awake_tip">If the screen is already on when the rule fires, you are probably using the phone, so it stays on after the task</string>
     <string name="schedule_edit_close_app">Close the target app after the task</string>
     <string name="schedule_edit_close_app_tip">Background mode only. If "Options → Close the target app when task ends" is already enabled, that switch takes precedence; this strategy setting applies only when it is off. Manually stopping a task will not close the app</string>
     <string name="schedule_result_failed_start">Did not start</string>

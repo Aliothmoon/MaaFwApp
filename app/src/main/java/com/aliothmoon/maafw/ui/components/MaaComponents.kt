@@ -71,12 +71,12 @@ import com.aliothmoon.maafw.ui.i18n.asUiText
 // 不依赖组合，提到文件级免得每次重组重建一整套 transition
 // 只 expand/shrink 会把不透明的文字裁一半，必须配 fade；Alignment.Top 不能省——
 // 默认 Bottom 展开时先冒出正文末行
-private val CardExpand = expandVertically(
+internal val CardExpand = expandVertically(
     animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
     expandFrom = Alignment.Top,
 ) + fadeIn(MaaMotion.enter(MaaMotion.DURATION_SHORT))
 
-private val CardCollapse = shrinkVertically(
+internal val CardCollapse = shrinkVertically(
     animationSpec = MaaMotion.exit(MaaMotion.DURATION_SHORT),
     shrinkTowards = Alignment.Top,
 ) + fadeOut(MaaMotion.exit(MaaMotion.DURATION_SHORT))
