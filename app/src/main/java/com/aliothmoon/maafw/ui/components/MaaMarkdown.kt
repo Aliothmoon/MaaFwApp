@@ -193,7 +193,7 @@ private fun buildMarkwon(
         }
 
         override fun configureParser(builder: Parser.Builder) {
-            builder.enabledBlockTypes(BLOCK_TYPES)
+            builder.enabledBlockTypes(PI_BLOCK_TYPES)
         }
     })
     .build()
@@ -202,7 +202,7 @@ private fun buildMarkwon(
  * commonmark 默认块类型去掉 IndentedCodeBlock：PI 的 LICENSE 这类纯文本靠前导空格居中标题，
  * 四个空格就被当成缩进代码块，渲染成灰底等宽还照搬缩进。围栏代码块不受影响
  */
-private val BLOCK_TYPES: Set<Class<out Block>> = setOf(
+internal val PI_BLOCK_TYPES: Set<Class<out Block>> = setOf(
     Heading::class.java,
     HtmlBlock::class.java,
     ThematicBreak::class.java,

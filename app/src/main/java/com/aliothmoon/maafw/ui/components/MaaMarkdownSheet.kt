@@ -1,14 +1,9 @@
 package com.aliothmoon.maafw.ui.components
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /** PI 正文（welcome / contact / license）共用：正文可能有几十 KB，一律滚动而不是塞进卡里 */
 @Composable
@@ -31,27 +26,13 @@ fun MaaMarkdownSheet(
     MaaModalSheet(onDismiss = onDismiss) { modifier ->
         Column(modifier) {
             MaaSheetHeader(title = title, onClose = onDismiss)
-            Column(
+            // WebView 自己滚动，外层不再套 verticalScroll
+            MaaHtmlBody(
+                bodies = bodies,
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = MaaDesignTokens.Spacing.lg),
-            ) {
-                bodies.forEachIndexed { index, body ->
-                    if (index > 0) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = MaaDesignTokens.Spacing.lg),
-                            thickness = MaaDesignTokens.Separator.thickness,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                    MaaMarkdown(
-                        text = body,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
+                    .fillMaxWidth(),
+            )
         }
     }
 }
