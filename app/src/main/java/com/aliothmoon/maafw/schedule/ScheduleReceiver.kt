@@ -41,7 +41,7 @@ class ScheduleReceiver : BroadcastReceiver() {
         try {
             ContextCompat.startForegroundService(context, serviceIntent)
         } catch (e: Exception) {
-            // 正常路径不该到这：闹钟走 setExactAndAllowWhileIdle / setAlarmClock，两者都豁免
+            // 正常路径不该到这：精确闹钟（setExactAndAllowWhileIdle）在豁免内
             // 前台服务的后台启动限制。真到了这里，服务不会跑、scheduleNext 也不会被调用，
             // 闹钟链就此断掉——所以在这里补注册下一环，让下次还有机会恢复。
             // 不只接 IllegalStateException：ROM 拦截时也可能是 SecurityException，漏接同样断链
@@ -58,7 +58,7 @@ class ScheduleReceiver : BroadcastReceiver() {
         handoff: PowerManager.WakeLock,
     ) {
         val pendingResult = goAsync()
-        CoroutineScope(SupervisorJob() + MaaDispatchers.IO).launch {
+        CoroutineScope(SupervisorJob() + MaaDispatchers.IO + scheduleReceiverExceptionHandler).launch {
             try {
                 val koin = GlobalContext.get()
                 val store: ScheduleStrategyStore = koin.get()
@@ -67,12 +67,19 @@ class ScheduleReceiver : BroadcastReceiver() {
                     store.isLoaded.first { it }
                 }
                 if (loaded == null) {
-                    // 规则读不出来算不出下一环，只能隔一会儿把这一次再投一遍
-                    alarms.scheduleRetry(strategyId, scheduledTime, retryCount)
+                    // 规则读不出来算不出下一环，只能隔一会儿把这一次再投一遍；重试用尽就转慢速接链，
+                    // 两样都不挂，这条链就断在这里
+                    if (!alarms.scheduleRetry(strategyId, scheduledTime, retryCount)) {
+                        alarms.scheduleReconnect(strategyId, scheduledTime)
+                    }
                     return@launch
                 }
                 val strategy = store.findById(strategyId)
-                if (strategy != null) {
+                if (strategy == null) {
+                    // 规则表读出了却没有它：删了或规则文件被重置，撤掉槽位
+                    Timber.w("Schedule strategy no longer exists: %s", strategyId)
+                    alarms.forget(strategyId)
+                } else {
                     alarms.scheduleNext(strategy, scheduledTime)
                     store.recordTrigger(strategyId, TriggerResult.FAILED_SERVICE_START, reason)
                     // 用户查「昨晚为什么没跑」看的是触发日志，只记在规则上等于没记

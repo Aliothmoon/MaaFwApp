@@ -24,7 +24,7 @@
     <!--
       定时任务
       USE_EXACT_ALARM 不申请：那是给闹钟类应用的，本应用不符合 Play 的准入描述
-      没有 SCHEDULE_EXACT_ALARM 时退到 setAlarmClock，见 ScheduleAlarmManager
+      没有 SCHEDULE_EXACT_ALARM 时靠电池白名单维持精确闹钟，再不行退成 inexact，见 ScheduleAlarmManager
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />

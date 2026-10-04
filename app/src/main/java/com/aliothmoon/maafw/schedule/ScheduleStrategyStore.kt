@@ -12,14 +12,17 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.serialization.json.Json
 import timber.log.Timber
+import java.io.IOException
 
 /**
  * 定时规则的唯一读写入口，独立的 Preferences DataStore
@@ -40,6 +43,14 @@ class ScheduleStrategyStore(private val context: Context) {
     val strategies: StateFlow<List<ScheduleStrategy>> = context.store.data
         .map { prefs ->
             decode(prefs[STRATEGIES_KEY]).also { _isLoaded.value = true }
+        }
+        // 读盘 IOException 没人接，stateIn 的协程会把进程带崩；隔一会儿重读，
+        // 期间 isLoaded 保持 false，闹钟那边按「读不出」走重试与慢速接链
+        .retryWhen { cause, _ ->
+            if (cause !is IOException) return@retryWhen false
+            Timber.w(cause, "Failed to read schedule rules; retrying")
+            delay(READ_RETRY_DELAY_MS)
+            true
         }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
@@ -99,5 +110,6 @@ class ScheduleStrategyStore(private val context: Context) {
             },
         )
         val STRATEGIES_KEY = stringPreferencesKey("strategies")
+        const val READ_RETRY_DELAY_MS = 30_000L
     }
 }

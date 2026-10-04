@@ -23,7 +23,7 @@ data class ScheduleUiState(
     val configurations: List<ScheduleConfigurationOption> = emptyList(),
     /** 新建规则时预选它；用户当下在用的那份是最可能的意图 */
     val activeConfigurationId: String? = null,
-    /** 系统是否允许精确闹钟；否则退到 setAlarmClock，状态栏会多个闹钟图标 */
+    /** 系统是否允许精确闹钟；否则只能靠电池白名单维持准点，再不行会被延后 */
     val exactAlarmAllowed: Boolean = true,
     /** 系统有没有精确闹钟开关页（API 31+）；没有就别摆那个入口 */
     val exactAlarmConfigurable: Boolean = false,

@@ -29,6 +29,7 @@ import com.aliothmoon.maafw.runner.RunRequestId
 import com.aliothmoon.maafw.runner.RunSignals
 import com.aliothmoon.maafw.runner.RunStepSink
 import com.aliothmoon.maafw.runner.RunTrigger
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -61,27 +62,44 @@ class ScheduleExecutionService : Service() {
     private val runLauncher: RunLauncher by inject()
     private val appSettings: AppSettingsManager by inject()
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO)
+    /** 记账写盘的 IOException 不能把进程带崩：那会连同刚受理的这一轮一起杀掉 */
+    private val serviceScope = CoroutineScope(
+        SupervisorJob() + MaaDispatchers.IO + CoroutineExceptionHandler { _, e ->
+            Timber.e(e, "Schedule trigger handling failed")
+        },
+    )
 
     /** 生命周期跟在途触发数走，不跟最后一个 startId：并发触发时后到的收尾会把前一条掐掉 */
     private val inFlight = AtomicInteger(0)
 
+    /**
+     * 最近一次 onStartCommand 的 startId；停服务只认它
+     *
+     * 已排队还没轮到 onStartCommand 的 startForegroundService 不在 [inFlight] 里，
+     * 裸 stopSelf 会把它连同 serviceScope 一起掐掉，那一发的续排就丢了
+     */
+    private val latestStartId = AtomicInteger(0)
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        latestStartId.set(startId)
         // 5 秒内必须 startForeground，等不了协程调度
         ensureChannel()
         startAsForeground(buildNotification(getString(R.string.notification_schedule_triggered)))
 
-        // 倒计时上的两个按钮回到这里；不新起一轮，只把信号置位
+        // 倒计时上的两个按钮回到这里；不新起一轮，只把信号置位。
+        // 它们也占了 latestStartId，那一轮已经收尾的话得由这里停
         when (intent?.action) {
             ACTION_START_NOW -> {
                 signalsByStrategy[intent.getStringExtra(EXTRA_STRATEGY_ID)]?.requestStartNow()
+                stopIfIdle()
                 return START_NOT_STICKY
             }
 
             ACTION_CANCEL_RUN -> {
                 signalsByStrategy[intent.getStringExtra(EXTRA_STRATEGY_ID)]?.requestCancel()
+                stopIfIdle()
                 return START_NOT_STICKY
             }
         }
@@ -130,7 +148,10 @@ class ScheduleExecutionService : Service() {
         }
         val strategy = store.findById(strategyId)
         if (strategy == null) {
+            // 规则表已读出却没有它：删了，或规则文件损坏被重置。撤掉槽位，不再续，
+            // 否则孤儿闹钟每响一次都来记一条失败
             Timber.w("Schedule strategy no longer exists: %s", strategyId)
+            alarms.forget(strategyId)
             triggerLog.append(
                 TriggerLogEntry(
                     strategyId = strategyId,
@@ -140,7 +161,6 @@ class ScheduleExecutionService : Service() {
                     result = TriggerResult.FAILED_VALIDATION,
                 ),
             )
-            store.recordTrigger(strategyId, TriggerResult.FAILED_VALIDATION, triggeredAt = now)
             return
         }
         if (!strategy.enabled) {
@@ -148,9 +168,17 @@ class ScheduleExecutionService : Service() {
             Timber.i("Schedule strategy disabled, skipped: %s", strategyId)
             return
         }
+        if (retryCount >= ScheduleAlarmManager.RECONNECT_RETRY_COUNT) {
+            // 慢速接链的那一发：原定那一次早已放弃，规则读得到了就只把链接回来
+            Timber.i("Schedule rules readable again, chain restored: %s", strategyId)
+            alarms.scheduleNext(strategy, scheduledTimeMs)
+            return
+        }
 
         // 先续再跑：launch 里有亮屏解锁、30 秒倒计时和抢占，这段里进程被杀，
-        // 放在后面的续排就永远轮不到。重投同一时刻由 requestId 去重，不会多跑
+        // 放在后面的续排就永远轮不到。重投同一时刻由 requestId 去重，不会多跑；
+        // 去重只在内存里，所以还要记一笔已投递，免得整批重排把这一次再挂回来
+        alarms.markDelivered(strategy.id, scheduledTimeMs)
         alarms.scheduleNext(strategy, scheduledTimeMs)
 
         val steps = mutableListOf<TriggerStep>()
@@ -221,7 +249,8 @@ class ScheduleExecutionService : Service() {
      * 规则或设置在时限内没读出来：这不等于规则被删了
      *
      * 当成被删处理就既不跑也不续，这条规则从此不再响；所以隔一会儿把同一次再投一遍。
-     * 重试用尽就放弃这一次，但只要规则此刻读得到，仍把下一环接上
+     * 重试用尽就放弃这一次：规则此刻读得到就接上下一环；规则文件本身还没读出来，
+     * 区分不了删没删，只能转慢速接链，读到为止
      */
     private suspend fun handleDataUnavailable(
         strategyId: String,
@@ -229,9 +258,27 @@ class ScheduleExecutionService : Service() {
         retryCount: Int,
         now: Long,
     ) {
+        if (retryCount >= ScheduleAlarmManager.RECONNECT_RETRY_COUNT) {
+            // 已在慢速接链：放弃那条日志已经写过，这里每 15 分钟一发，只进 Timber
+            Timber.w("Schedule rules still unavailable: %s", strategyId)
+            alarms.scheduleReconnect(strategyId, scheduledTimeMs)
+            return
+        }
         val retried = alarms.scheduleRetry(strategyId, scheduledTimeMs, retryCount)
+        val storeLoaded = store.isLoaded.value
         val strategy = store.findById(strategyId)
-        if (!retried) strategy?.let { alarms.scheduleNext(it, scheduledTimeMs) }
+        var reconnecting = false
+        if (!retried) {
+            when {
+                strategy != null -> alarms.scheduleNext(strategy, scheduledTimeMs)
+                // 规则表读出了却没有它：删了，不再续
+                storeLoaded -> alarms.forget(strategyId)
+                else -> {
+                    alarms.scheduleReconnect(strategyId, scheduledTimeMs)
+                    reconnecting = true
+                }
+            }
+        }
         Timber.w("Schedule data unavailable: %s, attempt=%d, retried=%s", strategyId, retryCount, retried)
         triggerLog.append(
             TriggerLogEntry(
@@ -240,20 +287,23 @@ class ScheduleExecutionService : Service() {
                 scheduledAt = scheduledTimeMs,
                 actualAt = now,
                 result = TriggerResult.FAILED_VALIDATION,
-                detail = if (retried) {
-                    getString(R.string.schedule_detail_data_unavailable_retry, retryCount + 1)
-                } else {
-                    getString(R.string.schedule_detail_data_unavailable_gave_up)
+                detail = when {
+                    retried -> getString(R.string.schedule_detail_data_unavailable_retry, retryCount + 1)
+                    reconnecting -> getString(R.string.schedule_detail_data_unavailable_waiting)
+                    else -> getString(R.string.schedule_detail_data_unavailable_gave_up)
                 },
             ),
         )
     }
 
-    /** 有在途触发就不摘 FGS：停了会把其他并发触发一起带走 */
+    /**
+     * 有在途触发就不摘 FGS：停了会把其他并发触发一起带走
+     *
+     * 按 [latestStartId] 停：其后又有 startForegroundService 排进来就停不掉，交给那一发自己收尾
+     */
     private fun stopIfIdle() {
         if (inFlight.get() > 0) return
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        if (stopSelfResult(latestStartId.get())) stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
     private fun ensureChannel() {
