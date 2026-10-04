@@ -412,6 +412,7 @@
     <string name="msg_cannot_start">Cannot start: %1$s</string>
     <string name="msg_launch_in_progress">Launch already in progress</string>
     <string name="msg_precheck_ignored_confirmation">A start check ignored the confirmation; aborted</string>
+    <string name="precheck_confirm_title">Before you start</string>
     <string name="precheck_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off in the system display settings first. Start anyway?</string>
     <string name="precheck_eye_protection_enabled">Eye comfort / night mode is enabled, which may affect color recognition accuracy. Start anyway?</string>
     <string name="precheck_start_anyway">Start anyway</string>

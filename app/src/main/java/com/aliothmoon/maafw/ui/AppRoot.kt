@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -693,23 +694,20 @@ fun AppRoot(
             }
         }
 
+        // 与其它提示弹窗同形态：带标题与图标，正文 bodyLarge
         confirmStartDialog?.let { confirm ->
-            AlertDialog(
+            MaaPromptDialog(
+                title = stringResource(R.string.precheck_confirm_title),
+                message = confirm.prompt.asString(),
+                icon = Icons.Outlined.WarningAmber,
+                confirmText = stringResource(R.string.precheck_start_anyway),
+                onConfirm = {
+                    confirmStartDialog = null
+                    viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
+                },
+                dismissText = stringResource(R.string.dialog_cancel),
                 onDismissRequest = { confirmStartDialog = null },
-                text = { Text(confirm.prompt.asString()) },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            confirmStartDialog = null
-                            viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
-                        },
-                    ) { Text(stringResource(R.string.precheck_start_anyway)) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmStartDialog = null }) {
-                        Text(stringResource(R.string.dialog_cancel))
-                    }
-                },
+                dismissOnOutsideClick = true,
             )
         }
 

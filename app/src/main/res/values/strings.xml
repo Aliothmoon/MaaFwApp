@@ -405,6 +405,7 @@
     <string name="msg_cannot_start">无法开始：%1$s</string>
     <string name="msg_launch_in_progress">正在启动中，请稍候</string>
     <string name="msg_precheck_ignored_confirmation">启动检查未处理确认结果，已中止</string>
+    <string name="precheck_confirm_title">启动前提醒</string>
     <string name="precheck_smart_resolution_enabled">检测到系统已开启「智能分辨率」，后台模式下会导致识别出错，请先在系统显示设置中关闭。是否仍然启动？</string>
     <string name="precheck_eye_protection_enabled">检测到设备已开启护眼/夜光模式，可能会影响图像色彩识别准确度。是否仍然启动？</string>
     <string name="precheck_start_anyway">仍然启动</string>
