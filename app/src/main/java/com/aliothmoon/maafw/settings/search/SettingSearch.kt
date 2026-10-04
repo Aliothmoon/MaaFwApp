@@ -174,7 +174,7 @@ object SettingSearchIndex {
         entry(R.string.wallpaper_title, display, SettingAnchors.WALLPAPER, R.string.wallpaper_desc, R.string.search_keywords_wallpaper),
         entry(R.string.settings_language, display, SettingAnchors.LANGUAGE, keywordsRes = R.string.search_keywords_language),
         entry(R.string.settings_duration_limit_enabled, duration, SettingAnchors.DURATION_LIMIT, keywordsRes = R.string.search_keywords_duration),
-        entry(R.string.notification_settings_title, notification, SettingAnchors.NOTIFICATION_SETTINGS, R.string.settings_notification_desc, R.string.search_keywords_notification),
+        entry(R.string.notification_settings_title, notification, SettingAnchors.NOTIFICATION_SETTINGS, keywordsRes = R.string.search_keywords_notification),
         entry(R.string.log_archive_title, log, SettingAnchors.RUN_LOG_ARCHIVE, R.string.settings_log_archive_desc),
         entry(R.string.app_log_title, log, SettingAnchors.APP_LOG, R.string.settings_log_error_desc),
         entry(R.string.log_export_title, log, SettingAnchors.EXPORT_LOGS, R.string.settings_log_export_desc),

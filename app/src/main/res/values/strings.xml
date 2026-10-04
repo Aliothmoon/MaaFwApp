@@ -683,7 +683,6 @@
 
     <!-- 设置页「通知」分组入口 -->
     <string name="settings_section_notification">通知</string>
-    <string name="settings_notification_desc">任务结束时提醒，也可推送到手机以外的地方</string>
 
     <!-- 通知设置页 -->
     <string name="notification_settings_title">通知设置</string>

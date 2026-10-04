@@ -360,7 +360,6 @@ private fun NotificationCard(onOpen: () -> Unit) {
         SettingSearchTarget(SettingAnchors.NOTIFICATION_SETTINGS) {
             MaaNavigationRow(
                 label = stringResource(R.string.notification_settings_title),
-                description = stringResource(R.string.settings_notification_desc),
                 onClick = onOpen,
             )
         }

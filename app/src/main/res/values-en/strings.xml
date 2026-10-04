@@ -694,7 +694,6 @@
 
     <!-- Settings "Notifications" group entry -->
     <string name="settings_section_notification">Notifications</string>
-    <string name="settings_notification_desc">Get told when a run ends, on this phone or elsewhere</string>
 
     <!-- Notification settings screen -->
     <string name="notification_settings_title">Notification settings</string>
