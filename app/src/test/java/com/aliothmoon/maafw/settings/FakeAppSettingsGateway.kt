@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
@@ -82,10 +83,10 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         themeStyle.value = style
     }
 
-    override val wakeUnlockEnabled = MutableStateFlow(false)
+    override val wakeUnlockType = MutableStateFlow(UnlockCredential.TYPE_SWIPE)
 
-    override suspend fun setWakeUnlockEnabled(enabled: Boolean) {
-        wakeUnlockEnabled.value = enabled
+    override suspend fun setWakeUnlockType(type: String) {
+        wakeUnlockType.value = type
     }
 
     override val wakeCredential = MutableStateFlow("")

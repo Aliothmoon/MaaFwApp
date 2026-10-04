@@ -46,8 +46,9 @@ private data class ConfigurationSnapshot(
 private data class HealthSettings(
     val backgroundMode: Boolean,
     val screenSaverEnabled: Boolean,
-    val wakeUnlockEnabled: Boolean,
+    val wakeUnlockType: String,
     val wakeCredential: String,
+    val hasGesture: Boolean,
 )
 
 private data class HealthState(
@@ -64,6 +65,7 @@ class ScheduleViewModel(
     configurationStore: UserConfigurationStore,
     permissionGateway: PermissionGateway,
     appSettings: AppSettingsGateway,
+    gestureStore: UnlockGestureStore,
     context: Context,
 ) : ViewModel() {
 
@@ -79,10 +81,11 @@ class ScheduleViewModel(
     private val healthSettings: Flow<HealthSettings> = combine(
         appSettings.runMode,
         appSettings.screenSaverEnabled,
-        appSettings.wakeUnlockEnabled,
+        appSettings.wakeUnlockType,
         appSettings.wakeCredential,
-    ) { runMode, screenSaver, wakeUnlock, credential ->
-        HealthSettings(runMode == RunMode.BACKGROUND, screenSaver, wakeUnlock, credential)
+        gestureStore.gesture,
+    ) { runMode, screenSaver, unlockType, credential, gesture ->
+        HealthSettings(runMode == RunMode.BACKGROUND, screenSaver, unlockType, credential, gesture != null)
     }
 
     private val health: Flow<HealthState> = combine(
@@ -102,9 +105,10 @@ class ScheduleViewModel(
                 settings.screenSaverEnabled,
             ),
             wakeCredentialMissing = ScheduleHealthLogic.wakeCredentialMissing(
-                settings.wakeUnlockEnabled,
-                secure,
-                settings.wakeCredential,
+                unlockType = settings.wakeUnlockType,
+                deviceSecure = secure,
+                pin = settings.wakeCredential,
+                hasGesture = settings.hasGesture,
             ),
         )
         HealthState(

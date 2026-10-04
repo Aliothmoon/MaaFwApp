@@ -123,6 +123,7 @@ import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
+import com.aliothmoon.maafw.ui.schedule.ScheduleWakeUnlockScreen
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
@@ -258,10 +259,9 @@ fun AppRoot(
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var exportSheetVisible by remember { mutableStateOf(false) }
 
-        // 解锁 PIN 在设置页「定时任务设置」卡里；从二级页过来要先退回 tab 层
-        val openSettingsTab: () -> Unit = {
-            navController.popBackStack(Routes.HOME, inclusive = false)
-            scope.launch { pagerState.animateScrollToPage(TopDestination.Settings.ordinal) }
+        // 从触发日志过来时栈上已有日志页，再推一层；单顶避免连点叠两页
+        val openWakeUnlock: () -> Unit = {
+            navController.navigate(Routes.SCHEDULE_WAKE_UNLOCK) { launchSingleTop = true }
         }
         // 健康卡与保存后引导的修复入口：授权动作仍走 Session 那条路（先代授、不成再跳系统页）
         val fixScheduleIssue: (ScheduleHealthIssue) -> Unit = { issue ->
@@ -278,7 +278,7 @@ fun AppRoot(
                 )
                 ScheduleHealthIssue.EXACT_ALARM ->
                     scheduleViewModel.onIntent(ScheduleIntent.RequestExactAlarmPermission)
-                ScheduleHealthIssue.WAKE_CREDENTIAL -> openSettingsTab()
+                ScheduleHealthIssue.WAKE_CREDENTIAL -> openWakeUnlock()
             }
         }
 
@@ -510,6 +510,7 @@ fun AppRoot(
                         },
                         onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
                         onFixIssue = fixScheduleIssue,
+                        onOpenWakeUnlock = openWakeUnlock,
                         modifier = Modifier.fillMaxSize(),
                     )
 
@@ -576,7 +577,7 @@ fun AppRoot(
                         onBack = { navController.popBackStack() },
                         onFix = { action, entry ->
                             when (action) {
-                                ScheduleFixAction.WAKE_UNLOCK_SETTINGS -> openSettingsTab()
+                                ScheduleFixAction.WAKE_UNLOCK_SETTINGS -> openWakeUnlock()
                                 ScheduleFixAction.BATTERY -> viewModel.onIntent(
                                     SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
                                 )
@@ -597,6 +598,9 @@ fun AppRoot(
                         onBack = { navController.popBackStack() },
                         onOpen = { navController.navigate(Routes.appLogDetail(it)) },
                     )
+                }
+                composable(Routes.SCHEDULE_WAKE_UNLOCK) {
+                    ScheduleWakeUnlockScreen(onBack = { navController.popBackStack() })
                 }
                 composable(Routes.NOTIFICATION_SETTINGS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })

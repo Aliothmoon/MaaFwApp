@@ -32,6 +32,7 @@ import com.aliothmoon.maafw.runner.RunScreenSaver
 import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.runner.ScreenSaverHook
 import com.aliothmoon.maafw.runner.SessionLogHook
+import com.aliothmoon.maafw.schedule.UnlockGestureStore
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.runner.WakeUnlockHook
 import com.aliothmoon.maafw.runner.WatchdogNoticeHook
@@ -147,7 +148,7 @@ val runnerModule = module {
                 TelemetryHook(get()),
                 NotificationHook(get()),
                 AutoSleepHook(get()),
-                WakeUnlockHook(get(), get<AppSettingsManager>()),
+                WakeUnlockHook(get(), get<AppSettingsManager>(), get<UnlockGestureStore>()),
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,

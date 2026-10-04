@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.domain.UnlockCredential
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -69,10 +70,17 @@ class ScheduleHealthLogicTest {
     }
 
     @Test
-    fun `pin is missing only when wake unlock is on and the device is secure`() {
-        assertTrue(ScheduleHealthLogic.wakeCredentialMissing(true, deviceSecure = true, credential = " "))
-        assertFalse(ScheduleHealthLogic.wakeCredentialMissing(false, deviceSecure = true, credential = ""))
-        assertFalse(ScheduleHealthLogic.wakeCredentialMissing(true, deviceSecure = false, credential = ""))
-        assertFalse(ScheduleHealthLogic.wakeCredentialMissing(true, deviceSecure = true, credential = "1234"))
+    fun `a secure lock screen needs a credential that can open it`() {
+        fun missing(type: String, secure: Boolean = true, pin: String = "", gesture: Boolean = false) =
+            ScheduleHealthLogic.wakeCredentialMissing(type, secure, pin, gesture)
+
+        // 滑动只能开无密码锁屏
+        assertTrue(missing(UnlockCredential.TYPE_SWIPE))
+        assertFalse(missing(UnlockCredential.TYPE_SWIPE, secure = false))
+        // PIN 要填，手势要录
+        assertTrue(missing(UnlockCredential.TYPE_PIN, pin = " "))
+        assertFalse(missing(UnlockCredential.TYPE_PIN, pin = "1234"))
+        assertTrue(missing(UnlockCredential.TYPE_GESTURE))
+        assertFalse(missing(UnlockCredential.TYPE_GESTURE, gesture = true))
     }
 }

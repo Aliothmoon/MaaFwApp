@@ -88,15 +88,9 @@ private data class SettingsSnapshot(
     val debugMode: Boolean,
     val saveOnError: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
-    val env: EnvSnapshot = EnvSnapshot(),
     val quick: QuickSnapshot = QuickSnapshot(),
 )
 
-/** 定时任务解锁那两项；单独一层只为把 combine 的元数压回上限内 */
-private data class EnvSnapshot(
-    val wakeUnlockEnabled: Boolean = false,
-    val wakeCredential: String = "",
-)
 
 /** 快捷面板「自动设置」那两项；同样只为压元数 */
 private data class QuickSnapshot(
@@ -160,9 +154,6 @@ class SessionViewModel(
     }.combine(appSettings.saveOnError) { snapshot, save ->
         snapshot.copy(saveOnError = save)
     }.combine(
-        combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
-    ) { snapshot, env -> snapshot.copy(env = env) }
-        .combine(
             combine(
                 appSettings.closeAppAfterTask,
                 appSettings.touchPreviewEnabled,
@@ -357,8 +348,6 @@ class SessionViewModel(
             closeAppAfterTask = settings.quick.closeAppAfterTask,
             touchPreviewEnabled = settings.quick.touchPreviewEnabled,
             telemetryEnabled = settings.quick.telemetryEnabled,
-            wakeUnlockEnabled = settings.env.wakeUnlockEnabled,
-            wakeCredential = settings.env.wakeCredential,
             resolutionPreset = settings.resolutionPreset,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
@@ -562,14 +551,6 @@ class SessionViewModel(
 
             is SessionIntent.SetThemeStyle ->
                 appSettings.setThemeStyle(intent.style)
-
-            // 环境开关不走 guarded：改的是下一轮的事，运行中改不影响本轮
-            // （挂载物的条件在 engage 时就冻结了）
-            is SessionIntent.SetWakeUnlockEnabled ->
-                appSettings.setWakeUnlockEnabled(intent.enabled)
-
-            is SessionIntent.SetWakeCredential ->
-                appSettings.setWakeCredential(intent.credential)
 
 
             // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上

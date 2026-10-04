@@ -69,9 +69,6 @@ data class SessionUiState(
     /** 全局的跑完关目标应用；与 ScheduleStrategy 上的同名选项并存，本项优先 */
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
-    /** 定时任务的亮屏解锁；逐条规则的收尾选项在 ScheduleStrategy 上，不在这 */
-    val wakeUnlockEnabled: Boolean = false,
-    val wakeCredential: String = "",
     val resolutionPreset: ResolutionPreset = ResolutionPresets.default,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
@@ -278,10 +275,6 @@ sealed interface SessionIntent {
     /** 立刻关掉目标应用：停虚拟屏，屏上的应用跟着一起没 */
     data object CloseTargetApp : SessionIntent
 
-    data class SetWakeUnlockEnabled(val enabled: Boolean) : SessionIntent
-
-    /** 非数字会被落盘那一层滤掉：注入按键只打得出 0-9 */
-    data class SetWakeCredential(val credential: String) : SessionIntent
 
 
     /** 虚拟屏分辨率偏好：720P / 1080P */

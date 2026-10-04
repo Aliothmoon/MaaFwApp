@@ -24,6 +24,9 @@ object Routes {
     /** 定时触发日志 */
     const val SCHEDULE_TRIGGER_LOG = "schedule_trigger_log"
 
+    /** 唤醒解锁：定时到点时的解锁方式（无密码 / 录制手势 / PIN） */
+    const val SCHEDULE_WAKE_UNLOCK = "schedule_wake_unlock"
+
     /** 历史运行日志列表 */
     const val RUN_LOG_ARCHIVE = "run_log_archive"
 

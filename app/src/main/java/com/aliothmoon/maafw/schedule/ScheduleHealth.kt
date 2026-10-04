@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.domain.UnlockCredential
+
 /**
  * 定时「调度环境检查」：哪些前提没满足，规则到点就可能不跑或跑不完
  *
@@ -21,7 +23,7 @@ enum class ScheduleHealthIssue {
     /** 后台模式开了屏保却没有悬浮窗权限：屏保盖不上，整轮亮着屏跑 */
     OVERLAY,
 
-    /** 开了亮屏解锁、设备有安全锁屏，却没填 PIN：解锁这一步必然失败，整轮被拦 */
+    /** 设备有安全锁屏，选的解锁方式却解不开（「无密码」、没填 PIN、没录手势）：整轮被锁屏拦下 */
     WAKE_CREDENTIAL,
 }
 
@@ -44,14 +46,15 @@ object ScheduleHealthLogic {
         backgroundMode && screenSaverEnabled
 
     /**
-     * 与 `WakeUnlockHook` 同一条判定：没开亮屏解锁就不解，谈不上缺凭据；
-     * 设备没设安全锁屏时滑一下就开，也用不着 PIN
+     * 与 `WakeUnlockHook` 同一份凭证判定（[UnlockCredential.isReady]）：
+     * 设备没设安全锁屏时滑一下就开，选什么方式都行
      */
     fun wakeCredentialMissing(
-        wakeUnlockEnabled: Boolean,
+        unlockType: String,
         deviceSecure: Boolean,
-        credential: String,
-    ): Boolean = wakeUnlockEnabled && deviceSecure && credential.isBlank()
+        pin: String,
+        hasGesture: Boolean,
+    ): Boolean = deviceSecure && !UnlockCredential.isReady(unlockType, pin, hasGesture)
 
     /**
      * 未通过项，枚举顺序即展示顺序；空 = 健康卡不出现

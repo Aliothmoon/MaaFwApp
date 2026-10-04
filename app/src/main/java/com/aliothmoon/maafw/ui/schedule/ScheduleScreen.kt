@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +57,7 @@ fun ScheduleScreen(
     onEdit: (String?) -> Unit,
     onOpenLog: () -> Unit,
     onFixIssue: (ScheduleHealthIssue) -> Unit,
+    onOpenWakeUnlock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScheduleSetupWizard(
@@ -94,6 +96,13 @@ fun ScheduleScreen(
                             ),
                         )
                     }
+                }
+                // 解锁方式只对定时生效，放这里而不是设置页（对齐 MaaMeow）
+                IconButton(onClick = onOpenWakeUnlock) {
+                    Icon(
+                        imageVector = Icons.Outlined.LockOpen,
+                        contentDescription = stringResource(R.string.schedule_wake_unlock_title),
+                    )
                 }
                 IconButton(onClick = onOpenLog) {
                     Icon(

@@ -93,9 +93,14 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val eventNotificationLevel: String = "DEFAULT",
 
-    /** 定时触发时是否亮屏解锁；默认关，注入 PIN 这种事要用户先点头。手动 Start 不走这条 */
-    @PrefKey(default = "false")
-    val wakeUnlockEnabled: String = "false",
+    /**
+     * 定时触发时的解锁方式：swipe / gesture / pin（见 [com.aliothmoon.maafw.domain.UnlockCredential]）
+     *
+     * 没有总开关：定时到点总要亮屏解锁（对齐 MaaMeow）。空串是「还没选过」，
+     * 按有没有填过 PIN 推断——老版本开过 PIN 解锁的用户升级后不用重选
+     */
+    @PrefKey(default = "")
+    val wakeUnlockType: String = "",
 
     /**
      * 解锁用的纯数字 PIN，**明文存在本 DataStore 里**

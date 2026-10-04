@@ -48,8 +48,9 @@ interface AppSettingsGateway {
 
     // ── 定时任务解锁；逐条规则的那几项在 ScheduleStrategy 上，不在这 ──
 
-    val wakeUnlockEnabled: StateFlow<Boolean>
-    suspend fun setWakeUnlockEnabled(enabled: Boolean)
+    /** [com.aliothmoon.maafw.domain.UnlockCredential] 的 TYPE_* 之一，读出来的永远合法 */
+    val wakeUnlockType: StateFlow<String>
+    suspend fun setWakeUnlockType(type: String)
 
     /** 纯数字 PIN；非数字会被 setter 过滤掉 */
     val wakeCredential: StateFlow<String>

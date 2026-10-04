@@ -14,6 +14,7 @@ import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.AppWatchdog
 import com.aliothmoon.maafw.remote.internal.GameFpsMonitor
+import com.aliothmoon.maafw.remote.internal.GestureRecorder
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
@@ -104,6 +105,18 @@ class RemoteServiceImpl : RemoteService.Stub() {
         WakeUnlockController.testUnlock(credential.orEmpty())
 
     override fun lockAndSleep(): Int = WakeUnlockController.lockAndSleep()
+
+    override fun startGestureRecord(timeoutMs: Int) = GestureRecorder.start(timeoutMs)
+
+    override fun pollGestureRecord(): String = GestureRecorder.poll()
+
+    override fun cancelGestureRecord() = GestureRecorder.cancel()
+
+    override fun unlockWithGesture(gestureJson: String?): Int =
+        WakeUnlockController.unlockWithGesture(gestureJson.orEmpty())
+
+    override fun testUnlockGesture(gestureJson: String?): Int =
+        WakeUnlockController.testUnlockGesture(gestureJson.orEmpty())
 
     override fun isScreenOn(): Boolean =
         runCatching { ServiceManager.getPowerManager().isScreenOn(0) }.getOrDefault(true)

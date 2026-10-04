@@ -4,7 +4,7 @@ import com.aliothmoon.maafw.runner.WakeUnlockHook
 
 /** 触发日志上「去修复」把人送去哪 */
 enum class ScheduleFixAction {
-    /** 设置页的亮屏解锁开关与 PIN */
+    /** 定时页右上角的「唤醒解锁」：换解锁方式、补 PIN、重录手势 */
     WAKE_UNLOCK_SETTINGS,
 
     /** 电源管理白名单：前台服务被系统拦下多半是它 */

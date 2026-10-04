@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -46,7 +45,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.core.net.toUri
@@ -64,7 +62,6 @@ import com.aliothmoon.maafw.settings.SettingsUiState
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.ThemeStyle
-import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
@@ -136,7 +133,6 @@ fun SettingsScreen(
             ResourceOptionCard(state, onIntent)
             ControllerOptionCard(state, onIntent)
             DisplayCard(state, onIntent)
-            ScheduleCard(state, onIntent)
             RunDurationCard(settingsState, onSettingsIntent)
             NotificationCard(onOpenNotificationSettings)
             LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
@@ -252,46 +248,6 @@ private fun ColumnScope.LanguageChoice(state: SessionUiState, onIntent: (Session
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-}
-
-/**
- * 定时任务的亮屏解锁（对齐 MaaMeow 的「定时任务解锁方式」）
- *
- * 只有解锁是全局的：熄屏、关应用、倒计时、强制启动都是**逐条规则**的，
- * 落在定时编辑页的「高级选项」里，不在这一页
- *
- * 不进 `configurationLocked`：改的是下一轮的事，挂载物的条件在 engage 时就冻结了
- */
-@Composable
-private fun ScheduleCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_section_schedule), collapsible = true) {
-        MaaLabeledControlRow(
-            label = stringResource(R.string.settings_wake_unlock),
-            trailing = {
-                MaaSwitch(
-                    checked = state.wakeUnlockEnabled,
-                    onCheckedChange = { onIntent(SessionIntent.SetWakeUnlockEnabled(it)) },
-                )
-            },
-        )
-        if (state.wakeUnlockEnabled) {
-            // 只收数字：注入按键只打得出 0-9，图案与密码锁屏的面板模拟不出来
-            ITextFieldWithFocus(
-                value = state.wakeCredential,
-                onValueChange = { onIntent(SessionIntent.SetWakeCredential(it)) },
-                onFocusLost = {},
-                label = stringResource(R.string.settings_wake_credential),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                inputFilter = { it.all(Char::isDigit) },
-                supportingText = {
-                    Text(
-                        text = stringResource(R.string.settings_wake_credential_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                },
-            )
-        }
-    }
 }
 
 /** 只是入口；档位与渠道都在二级页面里改，不参与运行锁定 */

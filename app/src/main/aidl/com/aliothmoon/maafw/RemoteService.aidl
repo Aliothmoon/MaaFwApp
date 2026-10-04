@@ -150,4 +150,21 @@ interface RemoteService {
     float getGameFps() = 76;
     /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */
     oneway void setTextInputSink(ITextInputSink sink) = 77;
+
+    // ── 解锁手势（docs/scheduled-triggers.md）──
+    // 录制整段在特权进程里跑：要锁屏、读 /dev/input 原始触摸，app 侧那时多半已被挂起
+
+    /** 开始录制：锁屏息屏 → 亮屏 → 等用户解锁一次；立即返回，结果靠轮询取 */
+    oneway void startGestureRecord(int timeoutMs) = 78;
+
+    /** 录制状态快照，GestureRecordResult 的 JSON；终态被读走一次后回到 IDLE */
+    String pollGestureRecord() = 79;
+
+    oneway void cancelGestureRecord() = 80;
+
+    /** 按录好的手势解锁；gestureJson 是 UnlockGesture 的 JSON */
+    int unlockWithGesture(String gestureJson) = 81;
+
+    /** 设置页自测：先上锁息屏再按手势解一次 */
+    int testUnlockGesture(String gestureJson) = 82;
 }

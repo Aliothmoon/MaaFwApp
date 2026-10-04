@@ -3,10 +3,12 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.WakeUnlockResult
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.schedule.UnlockGestureReader
+import com.aliothmoon.maafw.schedule.WakeResult
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.delay
 import timber.log.Timber
@@ -78,6 +80,7 @@ internal object HookOrder {
 class WakeUnlockHook(
     private val servicePort: PrivilegedServicePort,
     private val settings: AppSettingsGateway,
+    private val gestures: UnlockGestureReader,
 ) : RunEnvHook {
 
     override val id: String = ID
@@ -85,31 +88,37 @@ class WakeUnlockHook(
     override val order: Int = HookOrder.WAKE_UNLOCK
     override val gating: Boolean = true
 
+    /** 亮屏三级回退 + bouncer 等待 + 手势回放 + 5 秒确认，默认 30 秒会卡在边上 */
+    override val engageTimeoutMs: Long = ENGAGE_TIMEOUT_MS
+
     override suspend fun engage(ctx: RunContext): EngageResult {
         // 只对定时触发生效（对齐 MaaMeow 的「定时任务解锁方式」）：手动 Start 时
-        // 用户正对着亮屏解锁的手机按按钮，解一次是空操作
+        // 用户正对着亮屏解锁的手机按按钮，解一次是空操作。没有总开关：到点总要亮屏
         if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
-        if (!settings.wakeUnlockEnabled.value) return EngageResult.Skipped()
 
-        val credential = settings.wakeCredential.value
+        val credential = UnlockCredential.of(
+            type = settings.wakeUnlockType.value,
+            pin = settings.wakeCredential.value,
+            gestureJson = if (settings.wakeUnlockType.value == UnlockCredential.TYPE_GESTURE) {
+                gestures.readJson()
+            } else {
+                ""
+            },
+        )
         val code = servicePort.callOrDefault("unlock", WakeUnlockResult.IPC_FAILED) {
-            it.unlock(credential)
+            when (credential) {
+                UnlockCredential.Swipe -> it.unlock("")
+                is UnlockCredential.Pin -> it.unlock(credential.digits)
+                is UnlockCredential.Gesture -> it.unlockWithGesture(credential.json)
+            }
         }
-        return when (code) {
-            WakeUnlockResult.OK, WakeUnlockResult.NO_KEYGUARD -> EngageResult.Skipped()
-            else -> EngageResult.Failed(wakeFailureText(code))
-        }
-    }
-
-    private fun wakeFailureText(code: Int): UiText = when (code) {
-        WakeUnlockResult.CREDENTIAL_REQUIRED -> uiTextOf(R.string.wake_unlock_need_pin)
-        WakeUnlockResult.CREDENTIAL_REJECTED -> uiTextOf(R.string.wake_unlock_pin_rejected)
-        WakeUnlockResult.WAKE_FAILED -> uiTextOf(R.string.wake_unlock_screen_off)
-        WakeUnlockResult.UNSUPPORTED -> uiTextOf(R.string.wake_unlock_unsupported)
-        else -> uiTextOf(R.string.wake_unlock_failed, code)
+        val result = WakeResult.fromCode(code)
+        return if (result.isUnlocked) EngageResult.Skipped() else EngageResult.Failed(result.message)
     }
 
     companion object {
+        private const val ENGAGE_TIMEOUT_MS = 60_000L
+
         /** 触发日志按它认出「卡在解锁这一步」，落盘了就别改 */
         const val ID = "wake-unlock"
     }

@@ -12,6 +12,7 @@ import com.aliothmoon.maafw.domain.EventNotificationLevel
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
@@ -110,8 +111,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _themeStyle = MutableStateFlow(parseThemeStyle(defaults.themeStyle))
     override val themeStyle: StateFlow<ThemeStyle> = _themeStyle.asStateFlow()
 
-    private val _wakeUnlockEnabled = MutableStateFlow(defaults.wakeUnlockEnabled.toBoolean())
-    override val wakeUnlockEnabled: StateFlow<Boolean> = _wakeUnlockEnabled.asStateFlow()
+    private val _wakeUnlockType = MutableStateFlow(parseWakeUnlockType(defaults.wakeUnlockType, defaults.wakeCredential))
+    override val wakeUnlockType: StateFlow<String> = _wakeUnlockType.asStateFlow()
 
     private val _wakeCredential = MutableStateFlow(defaults.wakeCredential)
     override val wakeCredential: StateFlow<String> = _wakeCredential.asStateFlow()
@@ -164,7 +165,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _saveOnError.value = s.saveOnError.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
-                _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
+                _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType, s.wakeCredential)
                 _wakeCredential.value = s.wakeCredential
                 _runDurationLimitEnabled.value = s.runDurationLimitEnabled.toBoolean()
                 _runDurationLimitMinutes.value = RunDurationLimit.parse(s.runDurationLimitMinutes)
@@ -237,8 +238,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[eventNotificationLevel] = level.name }
     }
 
-    override suspend fun setWakeUnlockEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[wakeUnlockEnabled] = enabled.toString() }
+    override suspend fun setWakeUnlockType(type: String): Unit = with(AppSettingsSchema) {
+        if (type !in UnlockCredential.TYPES) return
+        context.dataStore.edit { it[wakeUnlockType] = type }
     }
 
     /** 只留数字：注入按键只能打出 0-9，图案与密码锁屏的面板模拟不出来 */
@@ -286,6 +288,13 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
     private fun parseBackend(raw: String): RemoteBackend =
         runCatching { RemoteBackend.valueOf(raw) }.getOrDefault(RemoteBackend.SHIZUKU)
+
+    /** 没选过（空串）时按有没有 PIN 推断：老版本只有「开关 + PIN」，填过 PIN 的就是要 PIN 解锁 */
+    private fun parseWakeUnlockType(raw: String, credential: String): String = when {
+        raw in UnlockCredential.TYPES -> raw
+        credential.isNotBlank() -> UnlockCredential.TYPE_PIN
+        else -> UnlockCredential.TYPE_SWIPE
+    }
 
     private fun parseRunMode(raw: String): RunMode =
         runCatching { RunMode.valueOf(raw) }.getOrDefault(RunMode.BACKGROUND)
