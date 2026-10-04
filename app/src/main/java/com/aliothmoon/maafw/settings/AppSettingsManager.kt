@@ -3,7 +3,9 @@ package com.aliothmoon.maafw.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.domain.EventNotificationLevel
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * app 设置的唯一读写入口
@@ -39,7 +42,15 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO)
 
     companion object {
-        private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")
+        // 文件坏了不兜就抛 CorruptionException，init 里的 collect 没人接，进程每次启动都崩；
+        // 回落默认值的代价是用户要重新选一遍后端等设置
+        private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+            name = "app_settings",
+            corruptionHandler = ReplaceFileCorruptionHandler {
+                Timber.e(it, "App settings file corrupted; resetting to defaults")
+                emptyPreferences()
+            },
+        )
     }
 
     val settings: Flow<AppSettings> = with(AppSettingsSchema) { context.dataStore.flow }

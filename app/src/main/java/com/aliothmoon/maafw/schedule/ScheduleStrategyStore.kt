@@ -4,7 +4,9 @@ import com.aliothmoon.maafw.MaaDispatchers
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
@@ -87,7 +89,15 @@ class ScheduleStrategyStore(private val context: Context) {
     }
 
     private companion object {
-        val Context.store: DataStore<Preferences> by preferencesDataStore(name = "schedule_strategies")
+        // 文件坏了不兜就抛 CorruptionException，读盘协程没人接，进程每次启动、每次闹钟都崩；
+        // 与 [decode] 同一取舍：清空重建，好过整个 app 起不来
+        val Context.store: DataStore<Preferences> by preferencesDataStore(
+            name = "schedule_strategies",
+            corruptionHandler = ReplaceFileCorruptionHandler {
+                Timber.e(it, "Schedule rules file corrupted; resetting to empty")
+                emptyPreferences()
+            },
+        )
         val STRATEGIES_KEY = stringPreferencesKey("strategies")
     }
 }
