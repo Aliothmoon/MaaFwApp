@@ -23,13 +23,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleRow
 import com.aliothmoon.maafw.schedule.ScheduleUiState
@@ -37,7 +37,6 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
-import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaEmptyState
 import com.aliothmoon.maafw.ui.components.MaaSwitch
@@ -56,8 +55,15 @@ fun ScheduleScreen(
     onIntent: (ScheduleIntent) -> Unit,
     onEdit: (String?) -> Unit,
     onOpenLog: () -> Unit,
+    onFixIssue: (ScheduleHealthIssue) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    ScheduleSetupWizard(
+        pending = state.setupWizard,
+        backend = state.backend,
+        onFix = onFixIssue,
+        onDismiss = { onIntent(ScheduleIntent.DismissSetupWizard) },
+    )
     // 编辑与日志都进二级页面（NavHost 推入），草稿与日志快照归各自的页面管
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -69,7 +75,7 @@ fun ScheduleScreen(
                 )
             },
             actions = {
-                // 与「系统未允许精确闹钟」卡片上那个按钮同一条路；那张卡片只在被关掉时出现，
+                // 与健康卡上「系统未允许精确闹钟」那一项同一条路；那一项只在被关掉时出现，
                 // 允许之后就没别的地方能回到系统开关页了
                 if (state.exactAlarmConfigurable) {
                     IconButton(
@@ -103,17 +109,6 @@ fun ScheduleScreen(
                 actionIconContentColor = MaterialTheme.colorScheme.primary,
             ),
         )
-        // 空状态靠 fillParentMaxSize 居中，卡片不能再进列表
-        if (!state.exactAlarmAllowed) {
-            ExactAlarmCard(
-                onGrant = { onIntent(ScheduleIntent.RequestExactAlarmPermission) },
-                modifier = Modifier.padding(
-                    start = MaaDesignTokens.Spacing.lg,
-                    end = MaaDesignTokens.Spacing.lg,
-                    bottom = MaaDesignTokens.Spacing.md,
-                ),
-            )
-        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(
@@ -127,6 +122,16 @@ fun ScheduleScreen(
                 // 撑满视口才有多余高度可分；item 默认包裹内容，MaaEmptyState 的居中就无从谈起
                 item(key = "empty") { ScheduleEmptyState(Modifier.fillParentMaxSize()) }
             } else {
+                // 只在有启用规则时才非空，所以不会和空状态同屏；进列表才能跟着规则一起滚
+                if (state.healthIssues.isNotEmpty()) {
+                    item(key = "health") {
+                        ScheduleHealthCard(
+                            issues = state.healthIssues,
+                            backend = state.backend,
+                            onFix = onFixIssue,
+                        )
+                    }
+                }
                 items(state.rows, key = { it.strategy.id }) { row ->
                     ScheduleRowCard(
                         row = row,
@@ -138,20 +143,6 @@ fun ScheduleScreen(
         }
     }
 
-}
-
-@Composable
-private fun ExactAlarmCard(onGrant: () -> Unit, modifier: Modifier = Modifier) {
-    MaaCard(modifier = modifier, title = stringResource(R.string.schedule_exact_alarm_blocked)) {
-        Text(
-            text = stringResource(R.string.schedule_exact_alarm_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        TextButton(onClick = onGrant) {
-            Text(stringResource(R.string.schedule_exact_alarm_grant))
-        }
-    }
 }
 
 @Composable

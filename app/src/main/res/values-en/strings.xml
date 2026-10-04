@@ -281,8 +281,20 @@
     <string name="schedule_disabled">Disabled</string>
     <string name="schedule_exact_alarm_blocked">Exact alarms are not allowed</string>
     <string name="schedule_exact_alarm_hint">Schedules still fire on time, but the status bar shows an alarm icon</string>
-    <string name="schedule_exact_alarm_grant">Allow</string>
     <string name="schedule_exact_alarm_settings">Exact alarm settings</string>
+    <string name="schedule_health_title">Scheduling check</string>
+    <string name="schedule_health_fix">Fix</string>
+    <string name="schedule_health_backend">%1$s not authorized</string>
+    <string name="schedule_health_backend_desc">Waking, unlocking, launching and running a scheduled task all depend on it; grant access first</string>
+    <string name="schedule_health_battery">Not on the battery optimization whitelist</string>
+    <string name="schedule_health_battery_desc">The system may delay or block the background start when the alarm fires</string>
+    <string name="schedule_health_notification">Notifications are off</string>
+    <string name="schedule_health_notification_desc">The countdown\'s Start now / Cancel buttons and failure alerts will be invisible</string>
+    <string name="schedule_health_overlay">Overlay permission missing</string>
+    <string name="schedule_health_overlay_desc">The screen saver is on in background mode and needs the overlay permission to show</string>
+    <string name="schedule_health_wake_credential">Wake unlock has no PIN</string>
+    <string name="schedule_health_wake_credential_desc">The device has a secure lock screen, so unlocking fails and the run is skipped. Enter the unlock PIN under Settings → Scheduled tasks</string>
+    <string name="schedule_go_to_settings">Go to settings</string>
 
     <string name="schedule_edit_new">New rule</string>
     <string name="schedule_edit_existing">Edit rule</string>
@@ -472,6 +484,7 @@
     <string name="dialog_shizuku_need_auth_title">Shizuku Not Authorized</string>
     <string name="dialog_shizuku_need_auth_message">Shizuku is running but has not authorized this app yet. Please grant access. This prompt keeps showing until access is granted.</string>
     <string name="common_got_it">Got it</string>
+    <string name="common_later">Later</string>
 
     <!-- Run log -->
     <plurals name="run_log_raw_omitted">

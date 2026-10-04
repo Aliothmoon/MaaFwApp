@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.domain.RemoteBackend
+
 /** 一条规则加上它算出来的下次触发时刻；后者不落盘，每次由闹钟规则现算 */
 data class ScheduleRow(
     val strategy: ScheduleStrategy,
@@ -26,6 +28,16 @@ data class ScheduleUiState(
     /** 系统有没有精确闹钟开关页（API 31+）；没有就别摆那个入口 */
     val exactAlarmConfigurable: Boolean = false,
     val triggerLog: List<TriggerLogEntry> = emptyList(),
+    /** 调度环境未通过项；空 = 健康卡不出现 */
+    val healthIssues: List<ScheduleHealthIssue> = emptyList(),
+    /** 健康卡上「XX 未授权」要说出是哪个后端 */
+    val backend: RemoteBackend = RemoteBackend.SHIZUKU,
+    /**
+     * 保存后待引导的项；空 = 不弹
+     *
+     * 跟着环境现算：用户从系统页回来，授好的那项自己消失，不用逐项确认
+     */
+    val setupWizard: List<ScheduleHealthIssue> = emptyList(),
 )
 
 sealed interface ScheduleIntent {
@@ -41,8 +53,13 @@ sealed interface ScheduleIntent {
     /** 拉起系统的精确闹钟设置页；要 Context，转成 Effect */
     data object RequestExactAlarmPermission : ScheduleIntent
 
-    /** 从系统设置页回来后重读；那一页没有结果回调 */
-    data object RefreshExactAlarmPermission : ScheduleIntent
+    /** 从系统设置页回来后重读精确闹钟与锁屏方式；这两项都没有变更回调 */
+    data object RefreshEnvironment : ScheduleIntent
+
+    /** 保存了一条启用的规则：把没满足的前提逐项引导一遍 */
+    data class RequestSetupWizard(val strategyId: String) : ScheduleIntent
+
+    data object DismissSetupWizard : ScheduleIntent
 }
 
 sealed interface ScheduleEffect {

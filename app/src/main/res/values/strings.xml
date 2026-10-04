@@ -275,8 +275,20 @@
     <string name="schedule_disabled">已停用</string>
     <string name="schedule_exact_alarm_blocked">系统未允许精确闹钟</string>
     <string name="schedule_exact_alarm_hint">仍会按时触发，但状态栏会多一个闹钟图标</string>
-    <string name="schedule_exact_alarm_grant">去允许</string>
     <string name="schedule_exact_alarm_settings">精确闹钟设置</string>
+    <string name="schedule_health_title">调度环境检查</string>
+    <string name="schedule_health_fix">去修复</string>
+    <string name="schedule_health_backend">%1$s 未授权</string>
+    <string name="schedule_health_backend_desc">到点后的亮屏解锁、拉起与执行都靠它，请先完成授权</string>
+    <string name="schedule_health_battery">未加入电源管理白名单</string>
+    <string name="schedule_health_battery_desc">到点时系统可能延迟或拦下后台启动</string>
+    <string name="schedule_health_notification">通知权限未开启</string>
+    <string name="schedule_health_notification_desc">倒计时的「立即开始 / 取消」按钮与失败提醒都会看不见</string>
+    <string name="schedule_health_overlay">悬浮窗权限未授予</string>
+    <string name="schedule_health_overlay_desc">后台模式开了屏保，没有悬浮窗权限就盖不上</string>
+    <string name="schedule_health_wake_credential">亮屏解锁未填 PIN</string>
+    <string name="schedule_health_wake_credential_desc">设备设有锁屏密码，到点解锁会失败、本次执行被跳过。请在设置页「定时任务设置」里填写解锁 PIN</string>
+    <string name="schedule_go_to_settings">去设置</string>
 
     <string name="schedule_edit_new">新建规则</string>
     <string name="schedule_edit_existing">编辑规则</string>
@@ -465,6 +477,7 @@
     <string name="dialog_shizuku_need_auth_title">Shizuku 未授权</string>
     <string name="dialog_shizuku_need_auth_message">Shizuku 服务正在运行但尚未授权本应用，请完成授权。授权成功前会持续提示。</string>
     <string name="common_got_it">知道了</string>
+    <string name="common_later">稍后</string>
 
     <!-- 运行日志 -->
     <plurals name="run_log_raw_omitted">

@@ -79,6 +79,8 @@ import org.koin.androidx.compose.koinViewModel
 fun ScheduleEditScreen(
     strategyId: String?,
     onBack: () -> Unit,
+    /** 本页的 VM 跟着返回栈走，存完就没了；保存后的引导要交给定时 tab 那个实例 */
+    onSaved: (ScheduleStrategy) -> Unit = {},
     viewModel: ScheduleViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -149,7 +151,9 @@ fun ScheduleEditScreen(
                     }
                     TextButton(
                         onClick = {
-                            viewModel.onIntent(ScheduleIntent.Save(draft.normalized()))
+                            val saved = draft.normalized()
+                            viewModel.onIntent(ScheduleIntent.Save(saved))
+                            onSaved(saved)
                             onBack()
                         },
                         enabled = errors.isEmpty(),

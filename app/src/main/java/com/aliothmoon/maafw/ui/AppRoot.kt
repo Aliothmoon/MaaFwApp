@@ -93,6 +93,7 @@ import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
+import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.session.SessionEffect
@@ -256,6 +257,30 @@ fun AppRoot(
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var exportSheetVisible by remember { mutableStateOf(false) }
 
+        // 解锁 PIN 在设置页「定时任务设置」卡里；从二级页过来要先退回 tab 层
+        val openSettingsTab: () -> Unit = {
+            navController.popBackStack(Routes.HOME, inclusive = false)
+            scope.launch { pagerState.animateScrollToPage(TopDestination.Settings.ordinal) }
+        }
+        // 健康卡与保存后引导的修复入口：授权动作仍走 Session 那条路（先代授、不成再跳系统页）
+        val fixScheduleIssue: (ScheduleHealthIssue) -> Unit = { issue ->
+            when (issue) {
+                ScheduleHealthIssue.BACKEND -> viewModel.onIntent(SessionIntent.RequestRemoteAccess)
+                ScheduleHealthIssue.BATTERY -> viewModel.onIntent(
+                    SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
+                )
+                ScheduleHealthIssue.NOTIFICATION -> viewModel.onIntent(
+                    SessionIntent.RequestSystemPermission(SystemPermission.Notification),
+                )
+                ScheduleHealthIssue.OVERLAY -> viewModel.onIntent(
+                    SessionIntent.RequestSystemPermission(SystemPermission.Overlay),
+                )
+                ScheduleHealthIssue.EXACT_ALARM ->
+                    scheduleViewModel.onIntent(ScheduleIntent.RequestExactAlarmPermission)
+                ScheduleHealthIssue.WAKE_CREDENTIAL -> openSettingsTab()
+            }
+        }
+
         val context = LocalContext.current
         // 悬浮窗面板的「导出」：先把应用拉到前面，再由这条流打开 Activity 里的导出 sheet
         LaunchedEffect(overlayController) {
@@ -306,7 +331,7 @@ fun AppRoot(
         DisposableEffect(scheduleLifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    scheduleViewModel.onIntent(ScheduleIntent.RefreshExactAlarmPermission)
+                    scheduleViewModel.onIntent(ScheduleIntent.RefreshEnvironment)
                 }
             }
             scheduleLifecycleOwner.lifecycle.addObserver(observer)
@@ -483,6 +508,7 @@ fun AppRoot(
                             )
                         },
                         onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
+                        onFixIssue = fixScheduleIssue,
                         modifier = Modifier.fillMaxSize(),
                     )
 
@@ -537,6 +563,11 @@ fun AppRoot(
                     ScheduleEditScreen(
                         strategyId = entry.arguments?.getString(Routes.SCHEDULE_EDIT_ARG),
                         onBack = { navController.popBackStack() },
+                        onSaved = { saved ->
+                            if (saved.enabled) {
+                                scheduleViewModel.onIntent(ScheduleIntent.RequestSetupWizard(saved.id))
+                            }
+                        },
                     )
                 }
                 composable(Routes.SCHEDULE_TRIGGER_LOG) {
