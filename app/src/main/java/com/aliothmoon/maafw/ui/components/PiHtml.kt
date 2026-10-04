@@ -46,6 +46,7 @@ internal fun piHtmlDocument(body: String, colors: PiHtmlColors): String = """
   --code: ${colors.code};
 }
 html, body { margin: 0; padding: 0; background: transparent; }
+::-webkit-scrollbar { display: none; }
 body {
   color: var(--text);
   font-family: sans-serif;

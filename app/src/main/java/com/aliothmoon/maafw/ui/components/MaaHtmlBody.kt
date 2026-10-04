@@ -87,6 +87,8 @@ fun MaaHtmlBody(
         factory = { ctx ->
             WebView(ctx).apply {
                 setBackgroundColor(AndroidColor.TRANSPARENT)
+                isVerticalScrollBarEnabled = false
+                isHorizontalScrollBarEnabled = false
                 configure(settings)
                 webViewClient = PiHtmlClient()
             }
