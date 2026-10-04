@@ -17,6 +17,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
+import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
 import com.aliothmoon.maafw.runner.RunLauncher
@@ -93,13 +94,14 @@ class ScheduleExecutionService : Service() {
         }
 
         val scheduledTime = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0L)
+        val retryCount = intent.getIntExtra(EXTRA_RETRY_COUNT, 0)
         // 锁覆盖到 launch 受理为止：亮屏解锁、倒计时、投递都在这段，之后的保活归 RunForegroundService
         val wakeLock = ScheduleWakeLock.acquire(this, TRIGGER_WAKE_TIMEOUT_MS)
         // 必须先于 launch：协程调度前计数还是 0，会被并发触发的收尾停掉
         inFlight.incrementAndGet()
         serviceScope.launch {
             try {
-                handleTrigger(strategyId, scheduledTime)
+                handleTrigger(strategyId, scheduledTime, retryCount)
             } finally {
                 ScheduleWakeLock.release(wakeLock)
                 inFlight.decrementAndGet()
@@ -114,15 +116,19 @@ class ScheduleExecutionService : Service() {
         super.onDestroy()
     }
 
-    private suspend fun handleTrigger(strategyId: String, scheduledTimeMs: Long) {
-        val strategy = withTimeoutOrNull(STORE_READY_TIMEOUT_MS) {
+    private suspend fun handleTrigger(strategyId: String, scheduledTimeMs: Long, retryCount: Int) {
+        val ready = withTimeoutOrNull(STORE_READY_TIMEOUT_MS) {
             store.isLoaded.first { it }
             // 设置读盘是异步的，投递前得等到位：runMode、分辨率、提权后端都在里面，
             // 早一步拿到的是默认值——后台模式的用户会被当成前台模式拦下来
             appSettings.loaded.first { it }
-            store.findById(strategyId)
-        }
+        } != null
         val now = System.currentTimeMillis()
+        if (!ready) {
+            handleDataUnavailable(strategyId, scheduledTimeMs, retryCount, now)
+            return
+        }
+        val strategy = store.findById(strategyId)
         if (strategy == null) {
             Timber.w("Schedule strategy no longer exists: %s", strategyId)
             triggerLog.append(
@@ -137,6 +143,15 @@ class ScheduleExecutionService : Service() {
             store.recordTrigger(strategyId, TriggerResult.FAILED_VALIDATION, triggeredAt = now)
             return
         }
+        if (!strategy.enabled) {
+            // 关掉规则时闹钟已撤，能走到这是撤之前就已投递的那一发
+            Timber.i("Schedule strategy disabled, skipped: %s", strategyId)
+            return
+        }
+
+        // 先续再跑：launch 里有亮屏解锁、30 秒倒计时和抢占，这段里进程被杀，
+        // 放在后面的续排就永远轮不到。重投同一时刻由 requestId 去重，不会多跑
+        alarms.scheduleNext(strategy, scheduledTimeMs)
 
         val steps = mutableListOf<TriggerStep>()
         val signals = RunSignals()
@@ -178,7 +193,7 @@ class ScheduleExecutionService : Service() {
         }
         val outcome = launchResult.toScheduleOutcome()
         if (outcome.result == TriggerResult.DUPLICATE) {
-            // 第一次投递已经记过账也续过闹钟了，这里什么都不做，否则会多一条记录、多排一次
+            // 第一次投递已经记过账了，这里不再记，否则会多一条记录
             Timber.i("Schedule %s duplicate delivery, dropped", strategy.id)
             return
         }
@@ -200,8 +215,38 @@ class ScheduleExecutionService : Service() {
             ),
         )
         store.recordTrigger(strategy.id, outcome.result, message = frozen, triggeredAt = now)
-        // 无论跑没跑起来都要续闹钟：断链之后这条规则就永远不会再响了
-        alarms.scheduleNext(strategy, scheduledTimeMs)
+    }
+
+    /**
+     * 规则或设置在时限内没读出来：这不等于规则被删了
+     *
+     * 当成被删处理就既不跑也不续，这条规则从此不再响；所以隔一会儿把同一次再投一遍。
+     * 重试用尽就放弃这一次，但只要规则此刻读得到，仍把下一环接上
+     */
+    private suspend fun handleDataUnavailable(
+        strategyId: String,
+        scheduledTimeMs: Long,
+        retryCount: Int,
+        now: Long,
+    ) {
+        val retried = alarms.scheduleRetry(strategyId, scheduledTimeMs, retryCount)
+        val strategy = store.findById(strategyId)
+        if (!retried) strategy?.let { alarms.scheduleNext(it, scheduledTimeMs) }
+        Timber.w("Schedule data unavailable: %s, attempt=%d, retried=%s", strategyId, retryCount, retried)
+        triggerLog.append(
+            TriggerLogEntry(
+                strategyId = strategyId,
+                strategyName = strategy?.name ?: strategyId,
+                scheduledAt = scheduledTimeMs,
+                actualAt = now,
+                result = TriggerResult.FAILED_VALIDATION,
+                detail = if (retried) {
+                    getString(R.string.schedule_detail_data_unavailable_retry, retryCount + 1)
+                } else {
+                    getString(R.string.schedule_detail_data_unavailable_gave_up)
+                },
+            ),
+        )
     }
 
     /** 有在途触发就不摘 FGS：停了会把其他并发触发一起带走 */

@@ -364,6 +364,8 @@
     <string name="schedule_edit_configuration_none">No run configurations yet; create one on the Tasks page</string>
     <string name="schedule_result_failed_validation">Rule missing</string>
     <string name="schedule_result_failed_service">Service failed to start</string>
+    <string name="schedule_detail_data_unavailable_retry">Rule data could not be read; retry %1$d in 1 minute</string>
+    <string name="schedule_detail_data_unavailable_gave_up">Rule data could not be read after several attempts; this trigger was skipped</string>
 
     <!-- Navigation & dialogs -->
     <string name="nav_home">Home</string>

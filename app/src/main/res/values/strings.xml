@@ -357,6 +357,8 @@
     <string name="schedule_edit_configuration_none">还没有运行配置，请先在任务页创建</string>
     <string name="schedule_result_failed_validation">规则缺失</string>
     <string name="schedule_result_failed_service">服务启动失败</string>
+    <string name="schedule_detail_data_unavailable_retry">规则数据暂时读不出，1 分钟后第 %1$d 次重试</string>
+    <string name="schedule_detail_data_unavailable_gave_up">规则数据多次读取失败，已放弃本次触发</string>
 
     <!-- 导航与对话框 -->
     <string name="nav_home">首页</string>
