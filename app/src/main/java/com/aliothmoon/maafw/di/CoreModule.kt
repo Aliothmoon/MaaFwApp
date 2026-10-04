@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.di
 
+import com.aliothmoon.maafw.settings.search.SettingSearchNavigator
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
@@ -61,7 +62,9 @@ val coreModule = module {
     single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
 
     single { AppSettingsManager(androidContext()) }
+    // 设置搜索的定位请求要跨过 tab 切换与子页面推入，挂在哪个页面的 VM 上都活不到那一头
+    single { SettingSearchNavigator() }
     single<AppSettingsGateway> { get<AppSettingsManager>() }
 
     single { LocalizedTextRenderer(androidContext()) }
-}
+}

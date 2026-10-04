@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.ui
 
+import com.aliothmoon.maafw.settings.search.SettingLocation
+import com.aliothmoon.maafw.settings.search.SettingSearchNavigator
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -184,6 +186,7 @@ fun AppRoot(
     settingsViewModel: SettingsViewModel = koinViewModel(),
     overlayController: OverlayController = koinInject(),
     screenSaverManager: ScreenSaverOverlayManager = koinInject(),
+    searchNavigator: SettingSearchNavigator = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
@@ -523,6 +526,20 @@ fun AppRoot(
                         onOpenAppLog = { navController.navigate(Routes.APP_LOG) },
                         onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
                         onExportLogs = { exportSheetVisible = true },
+                        onOpenSearchResult = { entry ->
+                            // 先发请求再切页：目标页一进组合就能读到它
+                            searchNavigator.request(entry)
+                            when (val location = entry.location) {
+                                // 就在本页：锚点自己滚过去，可折叠卡自己展开
+                                is SettingLocation.Section -> Unit
+                                is SettingLocation.Page ->
+                                    navController.navigate(location.route) { launchSingleTop = true }
+                                is SettingLocation.Home ->
+                                    scope.launch { pagerState.animateScrollToPage(TopDestination.Home.ordinal) }
+                                SettingLocation.TasksQuickOptions ->
+                                    scope.launch { pagerState.animateScrollToPage(TopDestination.Tasks.ordinal) }
+                            }
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }

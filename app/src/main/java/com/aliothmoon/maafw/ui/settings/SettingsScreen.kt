@@ -1,5 +1,18 @@
 package com.aliothmoon.maafw.ui.settings
 
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalFocusManager
+import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.settings.search.SearchCondition
+import com.aliothmoon.maafw.settings.search.SettingAnchors
+import com.aliothmoon.maafw.settings.search.SettingSearchEntry
+import com.aliothmoon.maafw.settings.search.SettingSearchIndex
+import com.aliothmoon.maafw.settings.search.SettingsSections
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchField
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchResults
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
+import com.aliothmoon.maafw.ui.settings.search.sectionRevealToken
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.clickable
@@ -94,8 +107,13 @@ fun SettingsScreen(
     onOpenAppLog: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onExportLogs: () -> Unit,
+    /** 点了某条搜索结果：发定位请求、按位置切页由 AppRoot 做，本页只管清掉输入 */
+    onOpenSearchResult: (SettingSearchEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val searching by remember { derivedStateOf { query.isNotBlank() } }
+    val focusManager = LocalFocusManager.current
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = {
@@ -128,6 +146,19 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
+            SettingSearchField(query = query, onQueryChange = { query = it })
+            if (searching) {
+                SettingSearchResults(
+                    entries = searchEntries(state),
+                    query = query,
+                    onClick = { entry ->
+                        focusManager.clearFocus()
+                        query = ""
+                        onOpenSearchResult(entry)
+                    },
+                )
+                return@Column
+            }
             UpdateCard(settingsState, onSettingsIntent)
             TaskSettingCards(state, onIntent)
             ResourceOptionCard(state, onIntent)
@@ -152,10 +183,15 @@ fun SettingsScreen(
 private fun ResourceOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     if (state.resourceOptions.isEmpty()) return
     val resourceName = state.environment?.resource?.name ?: return
-    MaaCard(title = stringResource(R.string.settings_section_resource_option), collapsible = true) {
+    MaaCard(
+        title = stringResource(R.string.settings_section_resource_option),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.PI_RESOURCE),
+    ) {
         OptionEditorList(
             options = state.resourceOptions,
             locked = state.configurationLocked,
+            searchAnchor = { SettingAnchors.projectOption(SettingsSections.PI_RESOURCE, it.name) },
             onSetOption = { name, value ->
                 onIntent(SessionIntent.SetResourceOption(resourceName, name, value))
             },
@@ -168,10 +204,15 @@ private fun ResourceOptionCard(state: SessionUiState, onIntent: (SessionIntent) 
 private fun ControllerOptionCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     if (state.controllerOptions.isEmpty()) return
     val controllerName = state.environment?.controller?.name ?: return
-    MaaCard(title = stringResource(R.string.settings_section_controller_option), collapsible = true) {
+    MaaCard(
+        title = stringResource(R.string.settings_section_controller_option),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.PI_CONTROLLER),
+    ) {
         OptionEditorList(
             options = state.controllerOptions,
             locked = state.configurationLocked,
+            searchAnchor = { SettingAnchors.projectOption(SettingsSections.PI_CONTROLLER, it.name) },
             onSetOption = { name, value ->
                 onIntent(SessionIntent.SetControllerOption(controllerName, name, value))
             },
@@ -182,32 +223,48 @@ private fun ControllerOptionCard(state: SessionUiState, onIntent: (SessionIntent
 /** 主题、主题风格、语言：三组都只改观感，合成一张卡（对齐 MaaMeow 的「显示设置」） */
 @Composable
 private fun DisplayCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_section_display), collapsible = true) {
-        MaaFieldLabel(stringResource(R.string.settings_theme))
-        val modes = listOf(
-            ThemeMode.System to stringResource(R.string.settings_follow_system),
-            ThemeMode.Light to stringResource(R.string.settings_theme_light),
-            ThemeMode.Dark to stringResource(R.string.settings_theme_dark),
-        )
-        MaaSingleChoiceFlow(
-            options = modes,
-            selected = state.themeMode,
-            onSelect = { onIntent(SessionIntent.SetThemeMode(it)) },
-        )
+    MaaCard(
+        title = stringResource(R.string.settings_section_display),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.DISPLAY),
+    ) {
+        SettingSearchTarget(SettingAnchors.THEME) {
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaFieldLabel(stringResource(R.string.settings_theme))
+                val modes = listOf(
+                    ThemeMode.System to stringResource(R.string.settings_follow_system),
+                    ThemeMode.Light to stringResource(R.string.settings_theme_light),
+                    ThemeMode.Dark to stringResource(R.string.settings_theme_dark),
+                )
+                MaaSingleChoiceFlow(
+                    options = modes,
+                    selected = state.themeMode,
+                    onSelect = { onIntent(SessionIntent.SetThemeMode(it)) },
+                )
+            }
+        }
         Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
-        MaaFieldLabel(stringResource(R.string.settings_theme_style))
-        val styles = listOf(
-            ThemeStyle.DEFAULT to stringResource(R.string.settings_theme_style_default),
-            ThemeStyle.SEMI_DESIGN to stringResource(R.string.settings_theme_style_semi),
-        )
-        MaaSingleChoiceFlow(
-            options = styles,
-            selected = state.themeStyle,
-            onSelect = { onIntent(SessionIntent.SetThemeStyle(it)) },
-        )
+        SettingSearchTarget(SettingAnchors.THEME_STYLE) {
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaFieldLabel(stringResource(R.string.settings_theme_style))
+                val styles = listOf(
+                    ThemeStyle.DEFAULT to stringResource(R.string.settings_theme_style_default),
+                    ThemeStyle.SEMI_DESIGN to stringResource(R.string.settings_theme_style_semi),
+                )
+                MaaSingleChoiceFlow(
+                    options = styles,
+                    selected = state.themeStyle,
+                    onSelect = { onIntent(SessionIntent.SetThemeStyle(it)) },
+                )
+            }
+        }
         Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
-        MaaFieldLabel(stringResource(R.string.settings_language))
-        LanguageChoice(state, onIntent)
+        SettingSearchTarget(SettingAnchors.LANGUAGE) {
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaFieldLabel(stringResource(R.string.settings_language))
+                LanguageChoice(state, onIntent)
+            }
+        }
     }
 }
 
@@ -253,12 +310,18 @@ private fun ColumnScope.LanguageChoice(state: SessionUiState, onIntent: (Session
 /** 只是入口；档位与渠道都在二级页面里改，不参与运行锁定 */
 @Composable
 private fun NotificationCard(onOpen: () -> Unit) {
-    MaaCard(title = stringResource(R.string.settings_section_notification), collapsible = true) {
-        MaaNavigationRow(
-            label = stringResource(R.string.notification_settings_title),
-            description = stringResource(R.string.settings_notification_desc),
-            onClick = onOpen,
-        )
+    MaaCard(
+        title = stringResource(R.string.settings_section_notification),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.NOTIFICATION),
+    ) {
+        SettingSearchTarget(SettingAnchors.NOTIFICATION_SETTINGS) {
+            MaaNavigationRow(
+                label = stringResource(R.string.notification_settings_title),
+                description = stringResource(R.string.settings_notification_desc),
+                onClick = onOpen,
+            )
+        }
     }
 }
 
@@ -276,49 +339,65 @@ private fun LogCard(
     onExportLogs: () -> Unit,
 ) {
     var showEnableConfirm by remember { mutableStateOf(false) }
-    MaaCard(title = stringResource(R.string.settings_section_log), collapsible = true) {
-        MaaNavigationRow(
-            label = stringResource(R.string.log_archive_title),
-            description = stringResource(R.string.settings_log_archive_desc),
-            onClick = onOpenRunLogArchive,
-        )
-        MaaNavigationRow(
-            label = stringResource(R.string.app_log_title),
-            description = stringResource(R.string.settings_log_error_desc),
-            onClick = onOpenAppLog,
-        )
-        MaaNavigationRow(
-            label = stringResource(R.string.log_export_title),
-            description = stringResource(R.string.settings_log_export_desc),
-            onClick = onExportLogs,
-        )
+    MaaCard(
+        title = stringResource(R.string.settings_section_log),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.LOG),
+    ) {
+        SettingSearchTarget(SettingAnchors.RUN_LOG_ARCHIVE) {
+            MaaNavigationRow(
+                label = stringResource(R.string.log_archive_title),
+                description = stringResource(R.string.settings_log_archive_desc),
+                onClick = onOpenRunLogArchive,
+            )
+        }
+        SettingSearchTarget(SettingAnchors.APP_LOG) {
+            MaaNavigationRow(
+                label = stringResource(R.string.app_log_title),
+                description = stringResource(R.string.settings_log_error_desc),
+                onClick = onOpenAppLog,
+            )
+        }
+        SettingSearchTarget(SettingAnchors.EXPORT_LOGS) {
+            MaaNavigationRow(
+                label = stringResource(R.string.log_export_title),
+                description = stringResource(R.string.settings_log_export_desc),
+                onClick = onExportLogs,
+            )
+        }
         // 启用走确认弹窗，确认即落盘 + 重启 App（对齐 MaaMeow）；关闭直接关
-        MaaLabeledControlRow(
-            label = stringResource(R.string.settings_debug_mode),
-            trailing = {
-                MaaSwitch(
-                    checked = state.debugMode,
-                    onCheckedChange = { enabled ->
-                        if (enabled) showEnableConfirm = true
-                        else onIntent(SessionIntent.SetDebugMode(false))
+        SettingSearchTarget(SettingAnchors.DEBUG_MODE) {
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaLabeledControlRow(
+                    label = stringResource(R.string.settings_debug_mode),
+                    trailing = {
+                        MaaSwitch(
+                            checked = state.debugMode,
+                            onCheckedChange = { enabled ->
+                                if (enabled) showEnableConfirm = true
+                                else onIntent(SessionIntent.SetDebugMode(false))
+                            },
+                        )
                     },
                 )
-            },
-        )
-        Text(
-            text = stringResource(R.string.settings_debug_mode_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        MaaLabeledControlRow(
-            label = stringResource(R.string.settings_save_on_error),
-            trailing = {
-                MaaSwitch(
-                    checked = state.saveOnError,
-                    onCheckedChange = { enabled -> onIntent(SessionIntent.SetSaveOnError(enabled)) },
+                Text(
+                    text = stringResource(R.string.settings_debug_mode_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            },
-        )
+            }
+        }
+        SettingSearchTarget(SettingAnchors.SAVE_ON_ERROR) {
+            MaaLabeledControlRow(
+                label = stringResource(R.string.settings_save_on_error),
+                trailing = {
+                    MaaSwitch(
+                        checked = state.saveOnError,
+                        onCheckedChange = { enabled -> onIntent(SessionIntent.SetSaveOnError(enabled)) },
+                    )
+                },
+            )
+        }
     }
     if (showEnableConfirm) {
         AlertDialog(
@@ -349,12 +428,18 @@ private fun LogCard(
 @Composable
 private fun PiCard(onIntent: (SessionIntent) -> Unit) {
     var showConfirm by remember { mutableStateOf(false) }
-    MaaCard(title = stringResource(R.string.settings_section_pi), collapsible = true) {
-        MaaNavigationRow(
-            label = stringResource(R.string.pi_reinstall_title),
-            description = stringResource(R.string.pi_reinstall_desc),
-            onClick = { showConfirm = true },
-        )
+    MaaCard(
+        title = stringResource(R.string.settings_section_pi),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.PI),
+    ) {
+        SettingSearchTarget(SettingAnchors.REINSTALL_PI) {
+            MaaNavigationRow(
+                label = stringResource(R.string.pi_reinstall_title),
+                description = stringResource(R.string.pi_reinstall_desc),
+                onClick = { showConfirm = true },
+            )
+        }
     }
     if (showConfirm) {
         AlertDialog(
@@ -383,21 +468,29 @@ private fun UpdateCard(
     onSettingsIntent: (SettingsIntent) -> Unit,
 ) {
     val update = state.update
-    MaaCard(title = stringResource(R.string.settings_section_update), collapsible = true) {
+    MaaCard(
+        title = stringResource(R.string.settings_section_update),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.UPDATE),
+    ) {
         // 下载过程中更新设置锁死，防止改到进行中那一轮的语义；VM 写入口有二次校验
         val settingsEnabled = !update.downloading
-        MaaSwitchRow(
-            label = stringResource(R.string.settings_update_auto_check),
-            checked = update.autoCheckUpdate,
-            enabled = settingsEnabled,
-            onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoCheckUpdate(it)) },
-        )
-        MaaSwitchRow(
-            label = stringResource(R.string.settings_update_auto_download),
-            checked = update.autoDownloadUpdate,
-            enabled = update.autoCheckUpdate && settingsEnabled,
-            onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoDownloadUpdate(it)) },
-        )
+        SettingSearchTarget(SettingAnchors.AUTO_CHECK_UPDATE) {
+            MaaSwitchRow(
+                label = stringResource(R.string.settings_update_auto_check),
+                checked = update.autoCheckUpdate,
+                enabled = settingsEnabled,
+                onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoCheckUpdate(it)) },
+            )
+        }
+        SettingSearchTarget(SettingAnchors.AUTO_DOWNLOAD_UPDATE) {
+            MaaSwitchRow(
+                label = stringResource(R.string.settings_update_auto_download),
+                checked = update.autoDownloadUpdate,
+                enabled = update.autoCheckUpdate && settingsEnabled,
+                onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoDownloadUpdate(it)) },
+            )
+        }
         Text(
             text = stringResource(R.string.settings_update_auto_download_desc),
             style = MaterialTheme.typography.bodySmall,
@@ -421,41 +514,55 @@ private fun OtherCard(
     onSettingsIntent: (SettingsIntent) -> Unit,
 ) {
     val locked = state.configurationLocked
-    MaaCard(title = stringResource(R.string.settings_section_other), collapsible = true) {
-        MaaFieldLabel(stringResource(R.string.permission_backend))
-        MaaSingleChoiceFlow(
-            // 对齐 MaaMeow：只列后端名，不展示「可用/不可用」——选哪个都行，可用性交给连接流程判
-            options = RemoteBackend.entries.map { it to it.display },
-            selected = settingsState.remoteAccess.configuredBackend,
-            enabled = !locked,
-            onSelect = { onSettingsIntent(SettingsIntent.SetBackend(it)) },
-        )
+    MaaCard(
+        title = stringResource(R.string.settings_section_other),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.OTHER),
+    ) {
+        SettingSearchTarget(SettingAnchors.BACKEND) {
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaFieldLabel(stringResource(R.string.permission_backend))
+                MaaSingleChoiceFlow(
+                    // 对齐 MaaMeow：只列后端名，不展示「可用/不可用」——选哪个都行，可用性交给连接流程判
+                    options = RemoteBackend.entries.map { it to it.display },
+                    selected = settingsState.remoteAccess.configuredBackend,
+                    enabled = !locked,
+                    onSelect = { onSettingsIntent(SettingsIntent.SetBackend(it)) },
+                )
+            }
+        }
         Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
-        MaaFieldLabel(stringResource(R.string.settings_resolution))
-        // 预设来自打包配方，label 语言无关；具体尺寸与 dpi 写在下面一行
-        MaaSingleChoiceFlow(
-            options = ResolutionPresets.available.map { it to it.label },
-            selected = state.resolutionPreset,
-            enabled = !locked,
-            onSelect = { onIntent(SessionIntent.SetResolutionPreset(it)) },
-        )
-        Text(
-            text = stringResource(
-                R.string.settings_resolution_detail,
-                state.resolutionPreset.resolution.width,
-                state.resolutionPreset.resolution.height,
-                state.resolutionPreset.dpi,
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        SettingSearchTarget(SettingAnchors.RESOLUTION) {
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaFieldLabel(stringResource(R.string.settings_resolution))
+                // 预设来自打包配方，label 语言无关；具体尺寸与 dpi 写在下面一行
+                MaaSingleChoiceFlow(
+                    options = ResolutionPresets.available.map { it to it.label },
+                    selected = state.resolutionPreset,
+                    enabled = !locked,
+                    onSelect = { onIntent(SessionIntent.SetResolutionPreset(it)) },
+                )
+                Text(
+                    text = stringResource(
+                        R.string.settings_resolution_detail,
+                        state.resolutionPreset.resolution.width,
+                        state.resolutionPreset.resolution.height,
+                        state.resolutionPreset.dpi,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (PipController.isSupported(LocalContext.current)) {
             Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
-            MaaSwitchRow(
-                label = stringResource(R.string.settings_pip_on_home),
-                checked = settingsState.pipOnHome,
-                onCheckedChange = { onSettingsIntent(SettingsIntent.SetPipOnHome(it)) },
-            )
+            SettingSearchTarget(SettingAnchors.PIP_ON_HOME) {
+                MaaSwitchRow(
+                    label = stringResource(R.string.settings_pip_on_home),
+                    checked = settingsState.pipOnHome,
+                    onCheckedChange = { onSettingsIntent(SettingsIntent.SetPipOnHome(it)) },
+                )
+            }
             Text(
                 text = stringResource(R.string.settings_pip_on_home_desc),
                 style = MaterialTheme.typography.bodySmall,
@@ -464,11 +571,13 @@ private fun OtherCard(
         }
         if (state.telemetryDeclared) {
             Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
-            MaaSwitchRow(
-                label = stringResource(R.string.settings_telemetry),
-                checked = state.telemetryEnabled,
-                onCheckedChange = { onIntent(SessionIntent.SetTelemetryEnabled(it)) },
-            )
+            SettingSearchTarget(SettingAnchors.TELEMETRY) {
+                MaaSwitchRow(
+                    label = stringResource(R.string.settings_telemetry),
+                    checked = state.telemetryEnabled,
+                    onCheckedChange = { onIntent(SessionIntent.SetTelemetryEnabled(it)) },
+                )
+            }
             Text(
                 text = stringResource(R.string.settings_telemetry_desc),
                 style = MaterialTheme.typography.bodySmall,
@@ -490,8 +599,14 @@ private fun AboutCard(state: SessionUiState) {
         context.applicationInfo.loadLabel(context.packageManager).toString()
     }
 
-    MaaCard(title = stringResource(R.string.settings_about), collapsible = true) {
-        MaaInfoRow(stringResource(R.string.settings_project), appLabel)
+    MaaCard(
+        title = stringResource(R.string.settings_about),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.ABOUT),
+    ) {
+        SettingSearchTarget(SettingAnchors.ABOUT) {
+            MaaInfoRow(stringResource(R.string.settings_project), appLabel)
+        }
         // 空串 = 非子模块又没钉版本名，此时它和下面那行同值，不重复显示
         if (BuildConfig.MAFW_PROJECT_VERSION.isNotEmpty()) {
             MaaInfoRow(
@@ -565,6 +680,44 @@ private fun AboutCard(state: SessionUiState) {
             title = appLabel,
             bodies = metadata.welcome,
             onDismiss = { welcomeVisible = false },
+        )
+    }
+}
+
+/**
+ * 当下能搜到的条目：手写的 + 当前 PI 的选项，滤掉此刻不会渲染的
+ *
+ * 渲染条件与各卡片自己的判断同源（画中画、遥测、运行模式），否则点了定位不到
+ */
+@Composable
+private fun searchEntries(state: SessionUiState): List<SettingSearchEntry> {
+    val pipSupported = PipController.isSupported(LocalContext.current)
+    return remember(
+        state.settingSections,
+        state.globalOptions,
+        state.resourceOptions,
+        state.controllerOptions,
+        state.telemetryDeclared,
+        state.runMode,
+        state.environment,
+        pipSupported,
+    ) {
+        val static = SettingSearchIndex.staticEntries.filter { entry ->
+            when (entry.condition) {
+                null -> true
+                SearchCondition.PIP_SUPPORTED -> pipSupported
+                SearchCondition.TELEMETRY_DECLARED -> state.telemetryDeclared
+                SearchCondition.BACKGROUND_MODE -> state.runMode == RunMode.BACKGROUND
+                SearchCondition.FOREGROUND_MODE -> state.runMode == RunMode.FOREGROUND
+                SearchCondition.CONTROLLER_CHOICE ->
+                    (state.environment?.controllerCandidates?.size ?: 0) >= 2
+            }
+        }
+        static + SettingSearchIndex.projectEntries(
+            sections = state.settingSections,
+            globalOptions = state.globalOptions,
+            resourceOptions = state.resourceOptions,
+            controllerOptions = state.controllerOptions,
         )
     }
 }

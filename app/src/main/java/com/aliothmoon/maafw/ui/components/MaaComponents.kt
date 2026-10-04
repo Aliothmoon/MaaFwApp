@@ -41,6 +41,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,11 +99,16 @@ fun MaaCard(
     summary: String? = null,
     // 默认参数不能读 CompositionLocal；innerPadding 两风格同值，静态回落安全
     contentPadding: PaddingValues = PaddingValues(MaaDesignTokens.Card.innerPadding),
+    /** 非空且变了就展开一次（设置搜索定位用）；不锁定，用户之后照样能收起 */
+    revealToken: Any? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 不要给 rememberSaveable 传 key：运行时已废弃它，理由正是会绕开位置作用域造成状态串卡
     var expanded by rememberSaveable { mutableStateOf(initiallyExpanded) }
     val canCollapse = collapsible && title != null
+    if (canCollapse && revealToken != null) {
+        LaunchedEffect(revealToken) { expanded = true }
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),

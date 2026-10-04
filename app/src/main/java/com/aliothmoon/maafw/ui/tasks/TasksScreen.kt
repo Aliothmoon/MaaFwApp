@@ -1,5 +1,8 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import androidx.compose.runtime.LaunchedEffect
+import com.aliothmoon.maafw.settings.search.SettingLocation
+import com.aliothmoon.maafw.ui.settings.search.pendingSearchLocation
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import android.graphics.Rect
@@ -123,6 +126,11 @@ private fun TasksContent(
     modifier: Modifier = Modifier,
 ) {
     var showQuickOptions by rememberSaveable { mutableStateOf(false) }
+    // 设置搜索点中的是快捷面板里的项：面板是本页的局部状态，只能由本页自己打开
+    val searchLocation = pendingSearchLocation()
+    LaunchedEffect(searchLocation) {
+        if (searchLocation == SettingLocation.TasksQuickOptions) showQuickOptions = true
+    }
 
     // 小窗里只让出画面，本页其余部分照常组合——拆掉的话展开时要整页重组，
     // 列表滚动与面板开合也跟着丢

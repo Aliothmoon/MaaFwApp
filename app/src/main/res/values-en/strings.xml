@@ -819,4 +819,20 @@
     <string name="settings_wake_gesture_step_swipe">Swipe (%1$d, %2$d) → (%3$d, %4$d) %5$d ms</string>
     <string name="settings_wake_gesture_step_delay">Wait %1$d ms</string>
     <string name="settings_wake_gesture_test_hint">Locks first, then replays the recorded gesture after ~1s</string>
+    <!-- Settings search; search_keywords_* are space separated synonyms, matched but never shown -->
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_clear">Clear search</string>
+    <string name="settings_search_empty">No matching settings</string>
+    <string name="search_keywords_update">update upgrade version auto update check</string>
+    <string name="search_keywords_theme">theme dark night light appearance color</string>
+    <string name="search_keywords_language">language chinese english locale</string>
+    <string name="search_keywords_duration">duration timeout time limit auto stop</string>
+    <string name="search_keywords_notification">notification push alert message telegram email bark webhook</string>
+    <string name="search_keywords_backend">startup mode backend shizuku root privilege authorization</string>
+    <string name="search_keywords_resolution">resolution size screen dpi</string>
+    <string name="search_keywords_about">about version license repository contact</string>
+    <string name="search_keywords_run_mode">run mode foreground background virtual display</string>
+    <string name="search_keywords_overlay">overlay floating ball control accessibility</string>
+    <string name="search_keywords_permissions">permission authorization overlay battery whitelist notification accessibility storage</string>
+    <string name="search_keywords_screen_saver">screen saver blackout display off power saving</string>
 </resources>

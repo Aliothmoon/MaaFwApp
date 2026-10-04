@@ -1,5 +1,8 @@
 package com.aliothmoon.maafw.ui.settings
 
+import com.aliothmoon.maafw.settings.search.SettingAnchors
+import com.aliothmoon.maafw.settings.search.SettingsSections
+import com.aliothmoon.maafw.ui.settings.search.sectionRevealToken
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -34,6 +37,7 @@ internal fun TaskSettingCards(state: SessionUiState, onIntent: (SessionIntent) -
                 leading = section.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.sm, null) } },
                 collapsible = true,
                 initiallyExpanded = section.defaultExpand,
+                revealToken = sectionRevealToken(SettingsSections.projectSection(section.name)),
             ) {
                 section.description?.let {
                     MaaDescriptionPanel {
@@ -44,6 +48,7 @@ internal fun TaskSettingCards(state: SessionUiState, onIntent: (SessionIntent) -
                     options = section.options,
                     locked = state.configurationLocked,
                     onSetOption = onSetOption,
+                    searchAnchor = { SettingAnchors.projectOption(SettingsSections.PI_GLOBAL, it.name) },
                 )
             }
         }
@@ -51,11 +56,16 @@ internal fun TaskSettingCards(state: SessionUiState, onIntent: (SessionIntent) -
     val grouped = state.settingSections.flatMapTo(mutableSetOf()) { section -> section.options.map { it.name } }
     val ungrouped = state.globalOptions.filterNot { it.name in grouped }
     if (ungrouped.isEmpty()) return
-    MaaCard(title = stringResource(R.string.settings_section_global_option), collapsible = true) {
+    MaaCard(
+        title = stringResource(R.string.settings_section_global_option),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.PI_GLOBAL),
+    ) {
         OptionEditorList(
             options = ungrouped,
             locked = state.configurationLocked,
             onSetOption = onSetOption,
+            searchAnchor = { SettingAnchors.projectOption(SettingsSections.PI_GLOBAL, it.name) },
         )
     }
 }

@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw
 
+import com.aliothmoon.maafw.settings.search.SettingSearchNavigator
+import com.aliothmoon.maafw.ui.settings.search.ProvideSettingSearch
 import android.content.res.Configuration
 import android.graphics.Color
 import android.os.Build
@@ -29,6 +31,7 @@ class MainActivity : AppCompatActivity(), PipHost {
     override var pipRequest: PipRequest? = null
 
     private var isInPip by mutableStateOf(false)
+    private val searchNavigator: SettingSearchNavigator by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -37,7 +40,10 @@ class MainActivity : AppCompatActivity(), PipHost {
 
         setContent {
             CompositionLocalProvider(LocalIsInPip provides isInPip) {
-                AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+                // 设置搜索的定位请求要跨 tab 与子页面，挂在最外层，整棵树的锚点都看得见
+                ProvideSettingSearch(searchNavigator) {
+                    AppRoot(onDarkThemeChanged = ::applyEdgeToEdge)
+                }
             }
         }
     }

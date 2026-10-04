@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.ui.home
 
+import com.aliothmoon.maafw.settings.search.SettingAnchors
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -125,10 +127,10 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             OverviewCard(state, update, onSettingsIntent)
-            ResourceCard(state, onIntent)
-            ControllerCard(state, onIntent)
+            SettingSearchTarget(SettingAnchors.RESOURCE) { ResourceCard(state, onIntent) }
+            SettingSearchTarget(SettingAnchors.CONTROLLER) { ControllerCard(state, onIntent) }
             RunModeCard(state, onIntent)
-            PermissionCard(state, onIntent)
+            SettingSearchTarget(SettingAnchors.PERMISSIONS) { PermissionCard(state, onIntent) }
             ServiceActionButtons(state, onIntent)
             ProjectDiagnosticsCard(state)
         }
@@ -472,6 +474,16 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
 @Composable
 private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     // 单行：左 "运行模式"，右 当前模式名 + 开关（对齐 MaaMeow）
+    SettingSearchTarget(SettingAnchors.RUN_MODE) { RunModeSwitchCard(state, onIntent) }
+    // 这两张卡只有前台用得上；后台模式在自己建的虚拟屏上跑，主屏尺寸与控制层都不相干
+    if (state.runMode == RunMode.FOREGROUND) {
+        SettingSearchTarget(SettingAnchors.FOREGROUND_RESOLUTION) { ForegroundResolutionCard(onIntent) }
+        SettingSearchTarget(SettingAnchors.OVERLAY_MODE) { OverlayModeCard(state, onIntent) }
+    }
+}
+
+@Composable
+private fun RunModeSwitchCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     MaaCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -507,11 +519,6 @@ private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
                 )
             }
         }
-    }
-    // 这两张卡只有前台用得上；后台模式在自己建的虚拟屏上跑，主屏尺寸与控制层都不相干
-    if (state.runMode == RunMode.FOREGROUND) {
-        ForegroundResolutionCard(onIntent)
-        OverlayModeCard(state, onIntent)
     }
 }
 

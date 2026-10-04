@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import com.aliothmoon.maafw.settings.search.SettingAnchors
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -231,25 +233,31 @@ internal fun TasksQuickOptionsPanel(
 
                 GroupLabel(stringResource(R.string.quick_settings_title))
                 if (state.runMode == RunMode.BACKGROUND) {
+                    SettingSearchTarget(SettingAnchors.SCREEN_SAVER) {
+                        SettingToggleRow(
+                            icon = Icons.Outlined.Nightlight,
+                            label = stringResource(R.string.settings_screen_saver_auto),
+                            checked = state.screenSaverEnabled,
+                            onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
+                        )
+                    }
+                    SettingSearchTarget(SettingAnchors.CLOSE_APP_AFTER_TASK) {
+                        SettingToggleRow(
+                            icon = Icons.Outlined.Cancel,
+                            label = stringResource(R.string.quick_setting_close_app_after_task),
+                            checked = state.closeAppAfterTask,
+                            onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterTask(it)) },
+                        )
+                    }
+                }
+                SettingSearchTarget(SettingAnchors.TOUCH_PREVIEW) {
                     SettingToggleRow(
-                        icon = Icons.Outlined.Nightlight,
-                        label = stringResource(R.string.settings_screen_saver_auto),
-                        checked = state.screenSaverEnabled,
-                        onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
-                    )
-                    SettingToggleRow(
-                        icon = Icons.Outlined.Cancel,
-                        label = stringResource(R.string.quick_setting_close_app_after_task),
-                        checked = state.closeAppAfterTask,
-                        onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterTask(it)) },
+                        icon = Icons.Outlined.TouchApp,
+                        label = stringResource(R.string.quick_setting_touch_preview),
+                        checked = state.touchPreviewEnabled,
+                        onCheckedChange = { onIntent(SessionIntent.SetTouchPreviewEnabled(it)) },
                     )
                 }
-                SettingToggleRow(
-                    icon = Icons.Outlined.TouchApp,
-                    label = stringResource(R.string.quick_setting_touch_preview),
-                    checked = state.touchPreviewEnabled,
-                    onCheckedChange = { onIntent(SessionIntent.SetTouchPreviewEnabled(it)) },
-                )
             }
         }
     }
