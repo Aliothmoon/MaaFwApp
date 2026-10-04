@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import android.os.Build
-import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.schedule.AutoStartHelper
@@ -31,7 +30,6 @@ import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
-import kotlinx.coroutines.withContext
 
 @Composable
 private fun ScheduleHealthIssue.title(backend: RemoteBackend): String = when (this) {
@@ -153,29 +151,20 @@ fun ScheduleSetupWizard(
 }
 
 /**
- * 国产 ROM 的自启动提醒：有启用的规则、且停在定时页时，每个开机周期最多弹一次
+ * 国产 ROM 的自启动询问：系统查不到它开没开，只在刚保存规则、权限引导走完后问一句
  *
- * [active] 必须是「这一页真的在看」：pager 会预组合相邻页，用组合当可见会在任务页上弹出来
+ * 「不再提醒」给已经配好的用户一个永久出口，否则每存一次规则都要挨一遍
  */
 @Composable
-fun ScheduleAutoStartReminder(active: Boolean) {
+fun ScheduleAutoStartPrompt(
+    target: AutoStartTarget,
+    onDismiss: (neverRemind: Boolean) -> Unit,
+) {
     val context = LocalContext.current
-    val prefs = remember(context) { AutoStartHelper.prefs(context) }
-    var target by remember { mutableStateOf<AutoStartTarget?>(null) }
-    LaunchedEffect(active) {
-        if (!active) return@LaunchedEffect
-        // prefs 首读与 resolveActivity 都是跨进程/读盘，整段放 IO
-        target = withContext(MaaDispatchers.IO) {
-            if (!AutoStartHelper.shouldRemindThisBoot(context, prefs)) return@withContext null
-            AutoStartHelper.resolveTarget(context)
-                ?.also { AutoStartHelper.markRemindedThisBoot(context, prefs) }
-        }
-    }
-    val shown = target ?: return
     MaaPromptDialog(
         title = stringResource(R.string.schedule_auto_start_title),
         message = stringResource(
-            if (shown is AutoStartTarget.AppDetails) {
+            if (target is AutoStartTarget.AppDetails) {
                 R.string.schedule_auto_start_message_fallback
             } else {
                 R.string.schedule_auto_start_message
@@ -184,20 +173,16 @@ fun ScheduleAutoStartReminder(active: Boolean) {
         icon = Icons.Outlined.Schedule,
         confirmText = stringResource(R.string.schedule_go_to_settings),
         onConfirm = {
-            AutoStartHelper.intentFor(context, shown)?.let { intent ->
+            AutoStartHelper.intentFor(context, target)?.let { intent ->
                 // 厂商页的组件名随版本漂移，resolve 过也可能起不来；起不来就算了，不能崩
                 runCatching { context.startActivity(intent) }
             }
-            target = null
+            onDismiss(false)
         },
-        // 已经配好的用户不该每次重启都挨一遍，给个永久出口
         neutralText = stringResource(R.string.schedule_auto_start_dont_remind),
-        onNeutralClick = {
-            AutoStartHelper.markNeverRemind(prefs)
-            target = null
-        },
+        onNeutralClick = { onDismiss(true) },
         dismissText = stringResource(R.string.common_later),
-        onDismissRequest = { target = null },
+        onDismissRequest = { onDismiss(false) },
         dismissOnOutsideClick = true,
     )
 }

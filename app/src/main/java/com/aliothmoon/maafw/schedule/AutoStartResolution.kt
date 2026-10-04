@@ -22,29 +22,4 @@ object AutoStartResolution {
         knownRestrictiveManufacturer -> AutoStartTarget.AppDetails
         else -> null
     }
-
-    /** token 每次开机变化，与上次提醒所在周期不同才提醒 */
-    fun shouldRemindByBootId(currentBootId: String?, lastRemindedBootId: String?): Boolean =
-        currentBootId != null && currentBootId != lastRemindedBootId
-
-    /**
-     * 读不到 BOOT_COUNT 时的兜底：uptime 单调递增，回落即新周期
-     *
-     * 重启后隔得比上次提醒时更久才打开会漏一轮 —— 宁可漏也不重复打扰
-     */
-    fun shouldRemindByUptime(currentUptimeMs: Long, lastRemindedUptimeMs: Long?): Boolean =
-        lastRemindedUptimeMs == null || currentUptimeMs < lastRemindedUptimeMs
-
-    /** 统一入口；不把「读不到 token」当成「本轮已提醒过」 */
-    fun shouldRemind(
-        neverRemind: Boolean,
-        currentBootToken: String?,
-        lastRemindedBootToken: String?,
-        currentUptimeMs: Long,
-        lastRemindedUptimeMs: Long?,
-    ): Boolean = when {
-        neverRemind -> false
-        currentBootToken != null -> shouldRemindByBootId(currentBootToken, lastRemindedBootToken)
-        else -> shouldRemindByUptime(currentUptimeMs, lastRemindedUptimeMs)
-    }
 }

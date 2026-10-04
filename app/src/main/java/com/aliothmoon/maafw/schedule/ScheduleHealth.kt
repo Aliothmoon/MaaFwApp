@@ -25,9 +25,8 @@ enum class ScheduleHealthIssue {
     WAKE_CREDENTIAL,
 }
 
-/** 全部为「是否满足」语义；只有 [hasEnabledRule] 为真时其余各项才有意义 */
+/** 全部为「是否满足」语义 */
 data class ScheduleHealthSnapshot(
-    val hasEnabledRule: Boolean,
     /** 只看授权，不看特权进程连没连上：到点时服务本就未必在线，按连接态判会误报 */
     val backendGranted: Boolean,
     val batteryWhitelist: Boolean,
@@ -54,10 +53,13 @@ object ScheduleHealthLogic {
         credential: String,
     ): Boolean = wakeUnlockEnabled && deviceSecure && credential.isBlank()
 
-    /** 未通过项，枚举顺序即展示顺序；空 = 健康卡不出现。没有启用的规则时不打扰 */
-    fun failingIssues(snapshot: ScheduleHealthSnapshot): List<ScheduleHealthIssue> {
-        if (!snapshot.hasEnabledRule) return emptyList()
-        return buildList {
+    /**
+     * 未通过项，枚举顺序即展示顺序；空 = 健康卡不出现
+     *
+     * 不看有没有启用的规则：用户正是在建第一条规则之前最该知道环境缺什么
+     */
+    fun failingIssues(snapshot: ScheduleHealthSnapshot): List<ScheduleHealthIssue> =
+        buildList {
             if (!snapshot.backendGranted) add(ScheduleHealthIssue.BACKEND)
             if (!snapshot.batteryWhitelist) add(ScheduleHealthIssue.BATTERY)
             if (!snapshot.exactAlarmAllowed) add(ScheduleHealthIssue.EXACT_ALARM)
@@ -65,7 +67,6 @@ object ScheduleHealthLogic {
             if (snapshot.overlayNeeded && !snapshot.overlayGranted) add(ScheduleHealthIssue.OVERLAY)
             if (snapshot.wakeCredentialMissing) add(ScheduleHealthIssue.WAKE_CREDENTIAL)
         }
-    }
 
     /**
      * 保存后逐项引导的那几项：都是跳一次系统页就能解决的

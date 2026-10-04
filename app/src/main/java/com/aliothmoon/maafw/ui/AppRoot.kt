@@ -510,7 +510,6 @@ fun AppRoot(
                         },
                         onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
                         onFixIssue = fixScheduleIssue,
-                        isActivePage = pagerState.settledPage == page,
                         modifier = Modifier.fillMaxSize(),
                     )
 
@@ -567,7 +566,7 @@ fun AppRoot(
                         onBack = { navController.popBackStack() },
                         onSaved = { saved ->
                             if (saved.enabled) {
-                                scheduleViewModel.onIntent(ScheduleIntent.RequestSetupWizard(saved.id))
+                                scheduleViewModel.onIntent(ScheduleIntent.RequestSetupWizard)
                             }
                         },
                     )

@@ -8,7 +8,6 @@ import org.junit.Test
 class ScheduleHealthLogicTest {
 
     private val healthy = ScheduleHealthSnapshot(
-        hasEnabledRule = true,
         backendGranted = true,
         batteryWhitelist = true,
         exactAlarmAllowed = true,
@@ -19,7 +18,6 @@ class ScheduleHealthLogicTest {
     )
 
     private val allFailing = ScheduleHealthSnapshot(
-        hasEnabledRule = true,
         backendGranted = false,
         batteryWhitelist = false,
         exactAlarmAllowed = false,
@@ -37,14 +35,6 @@ class ScheduleHealthLogicTest {
     @Test
     fun `issues follow enum order`() {
         assertEquals(ScheduleHealthIssue.entries, ScheduleHealthLogic.failingIssues(allFailing))
-    }
-
-    @Test
-    fun `no enabled rule means nothing to report`() {
-        val snapshot = allFailing.copy(hasEnabledRule = false)
-
-        assertEquals(emptyList<ScheduleHealthIssue>(), ScheduleHealthLogic.failingIssues(snapshot))
-        assertEquals(emptyList<ScheduleHealthIssue>(), ScheduleHealthLogic.wizardItems(snapshot))
     }
 
     @Test

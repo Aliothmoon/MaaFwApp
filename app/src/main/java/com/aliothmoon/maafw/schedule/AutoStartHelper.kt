@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
-import android.os.SystemClock
 import android.provider.Settings
 import androidx.core.content.edit
 
@@ -112,45 +111,19 @@ object AutoStartHelper {
         }
     }
 
-    // ===== 每个开机周期最多提醒一次，用户可永久关闭 =====
+    // ===== 只记「不再提醒」：自启动开没开查不到，问的时机交给调用方（保存规则后） =====
 
     /**
-     * 独立的 SharedPreferences，不进 `AppSettings`：这几项只描述「这台设备这次开机提醒过没有」，
-     * 跟着设置导出到别的设备毫无意义；而且要在组合期同步读，不值得为它开一份 DataStore
+     * 独立的 SharedPreferences，不进 `AppSettings`：这一项只关乎这台设备的系统设置，
+     * 跟着设置导出到别的设备毫无意义
      */
     fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private const val PREFS_NAME = "schedule_autostart"
-    private const val PREFS_REMINDED_BOOT_TOKEN = "reminded_boot_token"
-    private const val PREFS_REMINDED_UPTIME = "reminded_uptime"
     private const val PREFS_NEVER_REMIND = "never_remind"
 
-    /** 读不到（个别 ROM）返回 null，调用方回退 uptime 语义 */
-    private fun currentBootToken(context: Context): String? = runCatching {
-        val count = Settings.Global.getLong(context.contentResolver, Settings.Global.BOOT_COUNT, -1L)
-        if (count >= 0) count.toString() else null
-    }.getOrNull()
-
-    fun shouldRemindThisBoot(context: Context, prefs: SharedPreferences): Boolean =
-        AutoStartResolution.shouldRemind(
-            neverRemind = prefs.getBoolean(PREFS_NEVER_REMIND, false),
-            currentBootToken = currentBootToken(context),
-            lastRemindedBootToken = prefs.getString(PREFS_REMINDED_BOOT_TOKEN, null),
-            currentUptimeMs = SystemClock.elapsedRealtime(),
-            lastRemindedUptimeMs = prefs.getLong(PREFS_REMINDED_UPTIME, -1L).takeIf { it >= 0 },
-        )
-
-    fun markRemindedThisBoot(context: Context, prefs: SharedPreferences) {
-        val token = currentBootToken(context)
-        prefs.edit {
-            if (token != null) {
-                putString(PREFS_REMINDED_BOOT_TOKEN, token)
-            } else {
-                putLong(PREFS_REMINDED_UPTIME, SystemClock.elapsedRealtime())
-            }
-        }
-    }
+    fun isNeverRemind(prefs: SharedPreferences): Boolean = prefs.getBoolean(PREFS_NEVER_REMIND, false)
 
     fun markNeverRemind(prefs: SharedPreferences) {
         prefs.edit { putBoolean(PREFS_NEVER_REMIND, true) }

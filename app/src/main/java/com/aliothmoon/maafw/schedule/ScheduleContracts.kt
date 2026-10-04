@@ -38,6 +38,8 @@ data class ScheduleUiState(
      * 跟着环境现算：用户从系统页回来，授好的那项自己消失，不用逐项确认
      */
     val setupWizard: List<ScheduleHealthIssue> = emptyList(),
+    /** 保存后、权限引导走完时问一句自启动；null = 不问。状态查不到，所以只在这个时机问 */
+    val autoStartPrompt: AutoStartTarget? = null,
 )
 
 sealed interface ScheduleIntent {
@@ -57,9 +59,12 @@ sealed interface ScheduleIntent {
     data object RefreshEnvironment : ScheduleIntent
 
     /** 保存了一条启用的规则：把没满足的前提逐项引导一遍 */
-    data class RequestSetupWizard(val strategyId: String) : ScheduleIntent
+    data object RequestSetupWizard : ScheduleIntent
 
     data object DismissSetupWizard : ScheduleIntent
+
+    /** [neverRemind] = 用户点了「不再提醒」，以后保存规则也不再问 */
+    data class DismissAutoStartPrompt(val neverRemind: Boolean) : ScheduleIntent
 }
 
 sealed interface ScheduleEffect {

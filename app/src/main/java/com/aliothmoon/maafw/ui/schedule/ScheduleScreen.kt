@@ -56,17 +56,20 @@ fun ScheduleScreen(
     onEdit: (String?) -> Unit,
     onOpenLog: () -> Unit,
     onFixIssue: (ScheduleHealthIssue) -> Unit,
-    /** pager 落定在本页；预组合不算，否则提醒会弹在相邻页上 */
-    isActivePage: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    ScheduleAutoStartReminder(active = isActivePage && state.rows.any { it.strategy.enabled })
     ScheduleSetupWizard(
         pending = state.setupWizard,
         backend = state.backend,
         onFix = onFixIssue,
         onDismiss = { onIntent(ScheduleIntent.DismissSetupWizard) },
     )
+    state.autoStartPrompt?.let { target ->
+        ScheduleAutoStartPrompt(
+            target = target,
+            onDismiss = { never -> onIntent(ScheduleIntent.DismissAutoStartPrompt(never)) },
+        )
+    }
     // 编辑与日志都进二级页面（NavHost 推入），草稿与日志快照归各自的页面管
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -112,6 +115,19 @@ fun ScheduleScreen(
                 actionIconContentColor = MaterialTheme.colorScheme.primary,
             ),
         )
+        // 没有规则时卡片放在列表外：空状态靠 fillParentMaxSize 居中，卡片进列表会把它挤出一屏
+        if (state.rows.isEmpty() && state.healthIssues.isNotEmpty()) {
+            ScheduleHealthCard(
+                issues = state.healthIssues,
+                backend = state.backend,
+                onFix = onFixIssue,
+                modifier = Modifier.padding(
+                    start = MaaDesignTokens.Spacing.lg,
+                    end = MaaDesignTokens.Spacing.lg,
+                    bottom = MaaDesignTokens.Spacing.md,
+                ),
+            )
+        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(
@@ -125,7 +141,7 @@ fun ScheduleScreen(
                 // 撑满视口才有多余高度可分；item 默认包裹内容，MaaEmptyState 的居中就无从谈起
                 item(key = "empty") { ScheduleEmptyState(Modifier.fillParentMaxSize()) }
             } else {
-                // 只在有启用规则时才非空，所以不会和空状态同屏；进列表才能跟着规则一起滚
+                // 有规则时进列表，才能跟着规则一起滚
                 if (state.healthIssues.isNotEmpty()) {
                     item(key = "health") {
                         ScheduleHealthCard(

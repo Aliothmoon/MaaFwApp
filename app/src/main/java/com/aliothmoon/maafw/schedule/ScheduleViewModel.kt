@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.schedule
 
 import android.app.KeyguardManager
 import android.content.Context
+import com.aliothmoon.maafw.MaaDispatchers
 import androidx.lifecycle.ViewModel
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.RemoteBackend
@@ -21,7 +22,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 
 /**
  * 定时规则的 Activity 作用域会话
@@ -53,6 +54,7 @@ private data class HealthState(
     val issues: List<ScheduleHealthIssue>,
     val wizard: List<ScheduleHealthIssue>,
     val backend: RemoteBackend,
+    val autoStart: AutoStartTarget? = null,
 )
 
 class ScheduleViewModel(
@@ -69,6 +71,9 @@ class ScheduleViewModel(
     private val exactAlarmAllowed = MutableStateFlow(alarms.canScheduleExact())
     private val deviceSecure = MutableStateFlow(readDeviceSecure())
     private val wizardRequested = MutableStateFlow(false)
+    private val autoStartPrompt = MutableStateFlow<AutoStartTarget?>(null)
+    private val autoStartPrefs = AutoStartHelper.prefs(context)
+    private val appContext = context.applicationContext
     private val loadedLog = MutableStateFlow<List<TriggerLogEntry>>(emptyList())
 
     private val healthSettings: Flow<HealthSettings> = combine(
@@ -81,14 +86,12 @@ class ScheduleViewModel(
     }
 
     private val health: Flow<HealthState> = combine(
-        store.strategies,
         permissionGateway.state,
         permissionGateway.systemPermissions,
         combine(exactAlarmAllowed, deviceSecure, ::Pair),
         healthSettings,
-    ) { strategies, access, system, (exact, secure), settings ->
+    ) { access, system, (exact, secure), settings ->
         val snapshot = ScheduleHealthSnapshot(
-            hasEnabledRule = strategies.any { it.enabled },
             backendGranted = access.isGranted(access.configuredBackend),
             batteryWhitelist = system.batteryWhitelist,
             exactAlarmAllowed = exact,
@@ -111,8 +114,14 @@ class ScheduleViewModel(
         )
     }
 
-    private val healthWithWizard: Flow<HealthState> = combine(health, wizardRequested) { state, requested ->
-        if (requested) state else state.copy(wizard = emptyList())
+    private val healthWithWizard: Flow<HealthState> = combine(
+        health,
+        wizardRequested,
+        autoStartPrompt,
+    ) { state, requested, autoStart ->
+        val wizard = if (requested) state.wizard else emptyList()
+        // 排在权限引导之后：先把能检测的补齐，最后才是这项查不到状态的
+        state.copy(wizard = wizard, autoStart = autoStart.takeIf { wizard.isEmpty() })
     }
 
     private val configurations: Flow<ConfigurationSnapshot> = configurationStore.data
@@ -152,6 +161,7 @@ class ScheduleViewModel(
             healthIssues = health.issues,
             backend = health.backend,
             setupWizard = health.wizard,
+            autoStartPrompt = health.autoStart,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -218,23 +228,26 @@ class ScheduleViewModel(
                 deviceSecure.value = readDeviceSecure()
             }
 
-            is ScheduleIntent.RequestSetupWizard -> viewModelScope.launch {
-                // 保存走的是编辑页那个 VM 实例，这边的 strategies 可能还没刷到；不等它落地，
-                // 「第一条启用的规则」会被当成没有，引导一项都算不出来
-                withTimeoutOrNull(SAVED_RULE_WAIT_MS) {
-                    store.strategies.first { list -> list.any { it.id == intent.strategyId && it.enabled } }
-                }
+            ScheduleIntent.RequestSetupWizard -> viewModelScope.launch {
                 // 当下就没有要引导的就不挂标记：否则日后哪项权限掉了，弹窗会凭空冒出来
                 if (health.first().wizard.isNotEmpty()) wizardRequested.value = true
+                // 自启动查不到开没开，只能在刚配好规则这个时机问一句；用户说过不再提醒就不问
+                autoStartPrompt.value = withContext(MaaDispatchers.IO) {
+                    if (AutoStartHelper.isNeverRemind(autoStartPrefs)) null
+                    else AutoStartHelper.resolveTarget(appContext)
+                }
             }
 
             ScheduleIntent.DismissSetupWizard -> wizardRequested.value = false
+
+            is ScheduleIntent.DismissAutoStartPrompt -> {
+                autoStartPrompt.value = null
+                if (intent.neverRemind) {
+                    withContext(MaaDispatchers.IO) { AutoStartHelper.markNeverRemind(autoStartPrefs) }
+                }
+            }
         }
     }
 
     private fun readDeviceSecure(): Boolean = keyguard?.isDeviceSecure == true
-
-    private companion object {
-        const val SAVED_RULE_WAIT_MS = 2_000L
-    }
 }
