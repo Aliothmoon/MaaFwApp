@@ -88,6 +88,7 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     "MAFW_RESOLUTION_PRESETS",
                     profile.resolutionPresets.map { it.encode() }.toJavaStringArray(),
                 )
+                buildConfigField("boolean", "MAFW_FOREGROUND_ALLOWED", profile.foregroundAllowed.toString())
 
                 // Placeholders rather than resValue: with no profile the value stays a resource
                 // reference and the checked-in label and icon keep working untouched

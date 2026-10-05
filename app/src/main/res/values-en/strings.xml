@@ -43,6 +43,7 @@
     <!-- Runner toggle -->
     <string name="runner_start">Start tasks</string>
     <string name="runner_foreground_blocked">Foreground mode is active; switch to background mode first</string>
+    <string name="runner_background_unsupported">Background mode is unavailable below Android 10. Try another device or update the system.</string>
     <string name="runner_stop">Stop</string>
     <string name="runner_stopping">Stopping…</string>
 
@@ -249,7 +250,8 @@
     <!-- Foreground control layer -->
     <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode, and type text such as Chinese into the target app\'s input box when a task needs it. The input box is looked up only at that moment; screen content is never recorded or uploaded.</string>
     <string name="text_input_accessibility_unavailable">The text contains characters a keyboard can\'t type, such as Chinese, which need the accessibility service, but it is not enabled. Enable this app\'s accessibility service in the system accessibility settings and try again.</string>
-    <string name="text_input_unsupported_display">Below Android 11, text such as Chinese can\'t be written to the background virtual display. Run in primary-display mode instead.</string>
+    <string name="text_input_unsupported_display">Chinese text isn\'t supported below Android 11 yet. Run in foreground mode instead.</string>
+    <string name="text_input_unsupported_display_background_only">Chinese text isn\'t supported below Android 11 yet.</string>
     <string name="text_input_no_focused_input">No focused input box was found, so the text was not written. Tap the input box before typing.</string>
     <string name="text_input_foreign_package">The focused input box does not belong to the target app %1$s; the text was not written to avoid typing into another app.</string>
     <string name="text_input_action_failed">The input box rejected the accessibility write; the text was not written.</string>
@@ -550,7 +552,7 @@
     <string name="run_log_task_succeeded">Task completed: %1$s</string>
     <string name="run_log_task_failed">Task failed: %1$s</string>
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
-    <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s). Try foreground mode instead.</string>
+    <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s).</string>
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
     <string name="run_log_app_unknown">unknown app</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>

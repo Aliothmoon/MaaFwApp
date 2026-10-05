@@ -96,6 +96,7 @@ internal data class BuildProfile(
     val piLogInclude: List<String>,
     /** Empty means the app's built-in presets; a non-empty list replaces them and its first entry is the default */
     val resolutionPresets: List<ResolutionPresetSpec>,
+    val foregroundAllowed: Boolean,
 )
 
 /** Nothing configured at all: the package ships without a PI, see the soft failure on syncPiAssets */
@@ -112,6 +113,7 @@ private val NO_PROFILE = BuildProfile(
     mirrorchyanRid = null,
     piLogInclude = DEFAULT_PI_LOG_INCLUDE,
     resolutionPresets = emptyList(),
+    foregroundAllowed = true,
 )
 
 /**
@@ -163,7 +165,14 @@ private fun File.readProfile(): BuildProfile {
         mirrorchyanRid = update?.text("mirrorchyanRid")?.requireMirrorchyanRid(),
         piLogInclude = logs?.textList("include")?.map { it.requireLogPattern() } ?: DEFAULT_PI_LOG_INCLUDE,
         resolutionPresets = display?.resolutionPresets().orEmpty(),
+        foregroundAllowed = display?.foregroundAllowed() ?: true,
     )
+}
+
+private fun Map<*, *>.foregroundAllowed(): Boolean? {
+    if (keys.none { it == "foreground" }) return null
+    val raw = text("foreground")
+    return requireNotNull(raw?.toBooleanStrictOrNull()) { "display.foreground must be true or false, got ${raw ?: "nothing"}" }
 }
 
 /** Written but empty is a mistake, not a request for the defaults: leaving the key out already means that */

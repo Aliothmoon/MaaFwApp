@@ -114,7 +114,7 @@ sealed interface SettingLocation {
 }
 
 /** 条目只在某些条件下才渲染；不满足就别出现在结果里，否则点了定位不到 */
-enum class SearchCondition { PIP_SUPPORTED, TELEMETRY_DECLARED, BACKGROUND_MODE, FOREGROUND_MODE, CONTROLLER_CHOICE }
+enum class SearchCondition { PIP_SUPPORTED, TELEMETRY_DECLARED, BACKGROUND_MODE, FOREGROUND_MODE, FOREGROUND_ALLOWED, CONTROLLER_CHOICE }
 
 /**
  * @param keywords 空格分隔的同义词，走字符串资源才能跟着语言走
@@ -205,7 +205,7 @@ object SettingSearchIndex {
         entry(R.string.notification_send_on_service_died, notificationPage, SettingAnchors.NOTIFY_ON_SERVICE_DIED),
         entry(R.string.notification_include_log_details, notificationPage, SettingAnchors.NOTIFY_LOG_DETAILS),
 
-        entry(R.string.settings_run_mode, SettingLocation.Home(uiTextOf(R.string.settings_run_mode)), SettingAnchors.RUN_MODE, keywordsRes = R.string.search_keywords_run_mode),
+        entry(R.string.settings_run_mode, SettingLocation.Home(uiTextOf(R.string.settings_run_mode)), SettingAnchors.RUN_MODE, keywordsRes = R.string.search_keywords_run_mode, condition = SearchCondition.FOREGROUND_ALLOWED),
         entry(R.string.settings_overlay_mode, SettingLocation.Home(uiTextOf(R.string.settings_overlay_mode)), SettingAnchors.OVERLAY_MODE, keywordsRes = R.string.search_keywords_overlay, condition = SearchCondition.FOREGROUND_MODE),
         entry(R.string.permission_section, SettingLocation.Home(uiTextOf(R.string.permission_section)), SettingAnchors.PERMISSIONS, keywordsRes = R.string.search_keywords_permissions),
         entry(R.string.foreground_resolution_title, SettingLocation.Home(uiTextOf(R.string.foreground_resolution_title)), SettingAnchors.FOREGROUND_RESOLUTION, keywordsRes = R.string.search_keywords_resolution, condition = SearchCondition.FOREGROUND_MODE),

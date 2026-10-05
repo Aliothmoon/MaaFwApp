@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.config.passwordPlaintexts
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.runner.AutoSleepHook
+import com.aliothmoon.maafw.runner.BackgroundModePrecheck
 import com.aliothmoon.maafw.runner.CloseTargetAppHook
 import com.aliothmoon.maafw.runner.CountdownHook
 import com.aliothmoon.maafw.runner.DisplayHazardNoticeHook
@@ -149,7 +150,7 @@ val runnerModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            prechecks = listOf(ForegroundModePrecheck, DisplayHazardPrecheck(get())),
+            prechecks = listOf(ForegroundModePrecheck, BackgroundModePrecheck(), DisplayHazardPrecheck(get())),
             hooks = listOf(
                 SessionLogHook(get()),
                 TelemetryHook(get()),

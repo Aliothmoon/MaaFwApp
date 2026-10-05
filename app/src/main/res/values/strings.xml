@@ -43,6 +43,7 @@
     <!-- 运行开关 -->
     <string name="runner_start">开始任务</string>
     <string name="runner_foreground_blocked">当前是前台模式，请先切换到后台模式</string>
+    <string name="runner_background_unsupported">Android 10 以下无法使用后台模式，尝试更换设备或者升级系统</string>
     <string name="runner_stop">停止</string>
     <string name="runner_stopping">停止中…</string>
 
@@ -243,7 +244,8 @@
     <!-- 前台模式控制层 -->
     <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板；任务要输入中文等文本时，把文字写进目标应用的输入框。只在输入的那一刻查找输入框，不记录也不上传屏幕内容</string>
     <string name="text_input_accessibility_unavailable">要输入的文本含有中文等键盘打不出的字符，需要无障碍服务写入，但服务没有开启：请到系统设置的无障碍页面手动开启本应用的无障碍服务后重试</string>
-    <string name="text_input_unsupported_display">Android 11 以下无法向后台虚拟屏写入中文等键盘打不出的文本，请改用前台模式运行</string>
+    <string name="text_input_unsupported_display">Android 11 以下暂时不支持中文文本，请改用前台模式运行</string>
+    <string name="text_input_unsupported_display_background_only">Android 11 以下暂时不支持中文文本</string>
     <string name="text_input_no_focused_input">没有找到获得焦点的输入框，文本没有写入：输入前要先点中输入框</string>
     <string name="text_input_foreign_package">获得焦点的输入框不属于目标应用 %1$s，为防止输进别的应用已放弃写入</string>
     <string name="text_input_action_failed">输入框拒绝了无障碍写入，文本没有写入</string>
@@ -541,7 +543,7 @@
     <string name="run_log_task_succeeded">任务完成: %1$s</string>
     <string name="run_log_task_failed">任务失败: %1$s</string>
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
-    <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)，可改用前台模式</string>
+    <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)</string>
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
     <string name="run_log_app_unknown">未知应用</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>

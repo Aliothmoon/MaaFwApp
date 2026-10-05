@@ -481,7 +481,9 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
 @Composable
 private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     // 单行：左 "运行模式"，右 当前模式名 + 开关（对齐 MaaMeow）
-    SettingSearchTarget(SettingAnchors.RUN_MODE) { RunModeSwitchCard(state, onIntent) }
+    if (BuildConfig.MAFW_FOREGROUND_ALLOWED) {
+        SettingSearchTarget(SettingAnchors.RUN_MODE) { RunModeSwitchCard(state, onIntent) }
+    }
     // 这两张卡只有前台用得上；后台模式在自己建的虚拟屏上跑，主屏尺寸与控制层都不相干
     if (state.runMode == RunMode.FOREGROUND) {
         SettingSearchTarget(SettingAnchors.FOREGROUND_RESOLUTION) { ForegroundResolutionCard(onIntent) }

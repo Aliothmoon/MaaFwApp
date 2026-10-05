@@ -7,6 +7,7 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.domain.EventNotificationLevel
 import com.aliothmoon.maafw.domain.OverlayControlMode
@@ -407,8 +408,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private fun parseWakeUnlockType(raw: String): String =
         if (raw in UnlockCredential.TYPES) raw else UnlockCredential.TYPE_SWIPE
 
-    private fun parseRunMode(raw: String): RunMode =
-        runCatching { RunMode.valueOf(raw) }.getOrDefault(RunMode.BACKGROUND)
+    private fun parseRunMode(raw: String): RunMode = RunMode.resolve(raw, BuildConfig.MAFW_FOREGROUND_ALLOWED)
 
     private fun parseOverlayMode(raw: String): OverlayControlMode =
         runCatching { OverlayControlMode.valueOf(raw) }.getOrDefault(OverlayControlMode.FLOAT_BALL)

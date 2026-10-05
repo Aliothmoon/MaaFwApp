@@ -788,6 +788,7 @@ private fun searchEntries(state: SessionUiState): List<SettingSearchEntry> {
                 SearchCondition.TELEMETRY_DECLARED -> state.telemetryDeclared
                 SearchCondition.BACKGROUND_MODE -> state.runMode == RunMode.BACKGROUND
                 SearchCondition.FOREGROUND_MODE -> state.runMode == RunMode.FOREGROUND
+                SearchCondition.FOREGROUND_ALLOWED -> BuildConfig.MAFW_FOREGROUND_ALLOWED
                 SearchCondition.CONTROLLER_CHOICE ->
                     (state.environment?.controllerCandidates?.size ?: 0) >= 2
             }
