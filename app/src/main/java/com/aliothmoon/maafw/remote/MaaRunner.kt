@@ -67,7 +67,10 @@ class MaaRunner(private val agentHost: AgentHost) {
     /** agent child 的 cwd，对齐上游 MaaPiCli 的 `agent.cwd = resource_dir_` */
     private var projectRoot: String? = null
 
-    /** 与 resource 同生命周期：client 绑在 resource 上，resource 重建则整批重来 */
+    /**
+     * 与 resource 同生命周期：client 绑在 resource 上，resource 重建则整批重来
+     * 另外每个 client 还登记着当前的 resource / controller / tasker（见 [registerAgentSinks]）
+     */
     private var agents: List<ActiveAgent> = emptyList()
     private var loadedAgents: List<AgentPayload> = emptyList()
 
@@ -75,7 +78,16 @@ class MaaRunner(private val agentHost: AgentHost) {
     @Volatile
     private var saveOnError = true
 
-    private class ActiveAgent(val client: Pointer, val session: AgentSession)
+    private class ActiveAgent(val client: Pointer, val session: AgentSession) {
+        /** 这个 client 当前登记着的对象；null 表示还没登记 */
+        var sinks: SinkTargets? = null
+    }
+
+    /** JNA Pointer 按地址判等 */
+    private data class SinkTargets(val resource: Pointer, val controller: Pointer, val tasker: Pointer)
+
+    /** 换 controller 时退下来的旧对象，等 agent 改登记到新对象上之后再拆 */
+    private class RetiredHandles(val controller: Pointer?, val tasker: Pointer?)
 
     fun setProjectRoot(path: String) {
         projectRoot = path
@@ -344,11 +356,14 @@ class MaaRunner(private val agentHost: AgentHost) {
 
         prepareAgents(lib, payload)?.let { return it }
 
+        // 换 controller 时先建新的、把 agent 改登记过去，再拆旧的 controller 与 tasker：
+        // agent client 断开与销毁时还要对登记过的对象 remove_sink，旧对象先拆就成了野指针；
+        // 这样换屏时活着的 agent 照常复用，不必重拉 child
+        var retired: RetiredHandles? = null
         if (controller == null ||
             boundDisplayId != displayId ||
             lib.MaaControllerConnected(controller).toInt() == 0
         ) {
-            releaseController(lib)
             val config = buildControllerConfig(payload, displayId)
             val ctrl = lib.MaaAndroidNativeControllerCreate(config)
                 ?: return "MaaAndroidNativeControllerCreate 失败: $config"
@@ -362,24 +377,69 @@ class MaaRunner(private val agentHost: AgentHost) {
                 lib.MaaControllerDestroy(ctrl)
                 return "controller 连接失败"
             }
+            // Tasker 手里是旧 controller 的裸指针，跟着一起退
+            retired = RetiredHandles(controller, takeTasker())
             controller = ctrl
             boundDisplayId = displayId
         }
 
-        val needsTasker = synchronized(lifecycleLock) { tasker == null }
-        if (needsTasker) {
-            val tsk = lib.MaaTaskerCreate() ?: return "MaaTaskerCreate 失败"
-            lib.MaaTaskerAddSink(tsk, eventSink, null)
-            // tasker sink 只收 Tasker.Task.*；Node.* 连同 focus 模板都走 context sink
-            lib.MaaTaskerAddContextSink(tsk, eventSink, null)
-            if (lib.MaaTaskerBindResource(tsk, resource).toInt() == 0 ||
-                lib.MaaTaskerBindController(tsk, controller).toInt() == 0 ||
-                lib.MaaTaskerInited(tsk).toInt() == 0
-            ) {
-                lib.MaaTaskerDestroy(tsk)
-                return "Tasker 绑定失败"
+        try {
+            val needsTasker = synchronized(lifecycleLock) { tasker == null }
+            if (needsTasker) {
+                val tsk = lib.MaaTaskerCreate() ?: return "MaaTaskerCreate 失败"
+                lib.MaaTaskerAddSink(tsk, eventSink, null)
+                // tasker sink 只收 Tasker.Task.*；Node.* 连同 focus 模板都走 context sink
+                lib.MaaTaskerAddContextSink(tsk, eventSink, null)
+                if (lib.MaaTaskerBindResource(tsk, resource).toInt() == 0 ||
+                    lib.MaaTaskerBindController(tsk, controller).toInt() == 0 ||
+                    lib.MaaTaskerInited(tsk).toInt() == 0
+                ) {
+                    lib.MaaTaskerDestroy(tsk)
+                    return "Tasker 绑定失败"
+                }
+                synchronized(lifecycleLock) { tasker = tsk }
             }
-            synchronized(lifecycleLock) { tasker = tsk }
+            return registerAgentSinks()
+        } finally {
+            // 没能改登记过去的（建 tasker 或登记失败），由 destroyTasker / destroyController 先收掉 agent
+            retired?.let {
+                it.tasker?.let { handle -> destroyTasker(lib, handle) }
+                it.controller?.let { handle -> destroyController(lib, handle) }
+            }
+        }
+    }
+
+    /**
+     * 每个 agent 都登记当前这套 resource / controller / tasker，agent 侧 `AgentServerAdd*Sink` 的监听器
+     * （比如 MaaEnd go-service 在任务开始前查分辨率）才收得到事件；对齐 MXU 在 connect 之后的 register_sinks
+     *
+     * client 只记裸指针，再次登记、Disconnect、Destroy 都会对上一次登记的对象 remove_sink，
+     * 所以登记过的对象必须活得比登记久：换对象时先改登记到新的上再拆旧的，
+     * 拆的时候还没改过去的，由 [releaseAgentsRegisteredOn] 连 agent 一起收掉
+     */
+    private fun registerAgentSinks(): String? {
+        if (agents.isEmpty()) return null
+        val agentLib = MaaAgentClientLoader.library
+            ?: return "libMaaAgentClient.so 加载失败，无法登记 agent 事件"
+        val res = resource
+        val ctrl = controller
+        val tsk = synchronized(lifecycleLock) { tasker }
+        if (res == null || ctrl == null || tsk == null) {
+            return "登记 agent 事件时 resource / controller / tasker 未就绪"
+        }
+        val targets = SinkTargets(res, ctrl, tsk)
+        agents.forEachIndexed { index, agent ->
+            if (agent.sinks == targets) return@forEachIndexed
+            val registered = agentLib.MaaAgentClientRegisterResourceSink(agent.client, res).toInt() != 0 &&
+                agentLib.MaaAgentClientRegisterControllerSink(agent.client, ctrl).toInt() != 0 &&
+                agentLib.MaaAgentClientRegisterTaskerSink(agent.client, tsk).toInt() != 0
+            if (!registered) {
+                // 可能只登记了一半，agent.sinks 已经对不上，整批收掉下一轮重拉
+                releaseAgents()
+                return "agent[$index] 登记事件失败"
+            }
+            agent.sinks = targets
+            Ln.i("MaaRunner: agent[$index] sinks registered, resource=$res controller=$ctrl tasker=$tsk")
         }
         return null
     }
@@ -553,25 +613,47 @@ class MaaRunner(private val agentHost: AgentHost) {
     }
 
 
+    private fun takeTasker(): Pointer? = synchronized(lifecycleLock) {
+        val current = tasker
+        tasker = null
+        current
+    }
+
     private fun releaseTasker(lib: MaaFrameworkLibrary) {
-        val handle = synchronized(lifecycleLock) {
-            val current = tasker
-            tasker = null
-            current
-        } ?: return
-        // 销毁前必须等任务线程真的退出：框架析构 Tasker 时先拆缓存再 join 线程，还在跑的任务会踩到已析构的锁
-        // 不能靠 MaaTaskerWait：PostStop 一发，在跑的任务就被标成已结束，Wait 立刻返回
+        takeTasker()?.let { destroyTasker(lib, it) }
+    }
+
+    /**
+     * 销毁前必须等任务线程真的退出：框架析构 Tasker 时先拆缓存再 join 线程，还在跑的任务会踩到已析构的锁
+     * 不能靠 MaaTaskerWait：PostStop 一发，在跑的任务就被标成已结束，Wait 立刻返回
+     *
+     * 登记在它上面的 agent 排在等完之后、销毁之前收：退出前的任务可能还在调 agent
+     */
+    private fun destroyTasker(lib: MaaFrameworkLibrary, handle: Pointer) {
         lib.MaaTaskerPostStop(handle)
         while (lib.MaaTaskerRunning(handle).toInt() != 0) Thread.sleep(TASKER_STOP_POLL_MILLIS)
+        releaseAgentsRegisteredOn { it.tasker == handle }
         lib.MaaTaskerDestroy(handle)
     }
 
     /** Tasker 手里是 controller 的裸指针，停止时还要用，必须先于它拆 */
     private fun releaseController(lib: MaaFrameworkLibrary) {
         releaseTasker(lib)
-        controller?.let(lib::MaaControllerDestroy)
+        controller?.let { destroyController(lib, it) }
         controller = null
         boundDisplayId = null
+    }
+
+    private fun destroyController(lib: MaaFrameworkLibrary, handle: Pointer) {
+        releaseAgentsRegisteredOn { it.controller == handle }
+        lib.MaaControllerDestroy(handle)
+    }
+
+    /** 拆对象前还有 agent 登记在它上面，又没法改登记到别处时，只能连 agent 整批收掉，下一轮重拉 */
+    private fun releaseAgentsRegisteredOn(match: (SinkTargets) -> Boolean) {
+        if (agents.none { agent -> agent.sinks?.let(match) == true }) return
+        Ln.i("MaaRunner: releasing agents registered on a handle about to be destroyed")
+        releaseAgents()
     }
 
     /**
