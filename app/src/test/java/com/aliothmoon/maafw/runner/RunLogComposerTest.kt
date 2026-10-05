@@ -202,6 +202,35 @@ class RunLogComposerTest {
         assertEquals(false, compose(agentLine("err", fromStderr = true))!!.isEssential)
     }
 
+    /** go-service 拿不到 Context 时往 stdout 打 HTML 警告：按 focus 渲染、进关键档 */
+    @Test
+    fun `html an agent prints for the user is shown like a focus`() {
+        val warning = """<span style="color: #ff0000;">🚨 警告：分辨率不符合要求！🚨</span> <br/>任务已强制停止"""
+        val entry = compose(agentLine(warning))!!
+        assertEquals(RunLogKind.Focus, entry.kind)
+        assertEquals(UiText.Verbatim(warning), entry.text)
+        assertEquals(true, entry.isEssential)
+    }
+
+    /** 它往往正是这一轮停下来的原因，刷屏期也不能被吞 */
+    @Test
+    fun `html for the user is not swallowed by an agent flood`() {
+        repeat(AGENT_THRESHOLD) { index -> compose(agentLine("line $index"), 0) }
+        assertNull(compose(agentLine("still flooding"), 0))
+        assertEquals(RunLogKind.Focus, compose(agentLine("<b>stopped</b>"), 0)?.kind)
+    }
+
+    /** 终端日志与代码里的尖括号不算：带 ANSI 转义的、C++ 模板参数、traceback 的 `<module>` */
+    @Test
+    fun `angle brackets in logs are not mistaken for html`() {
+        assertEquals(RunLogKind.Agent, compose(agentLine("\u001B[31m<span>colored log</span>\u001B[0m"))?.kind)
+        assertEquals(RunLogKind.Agent, compose(agentLine("std::vector<int> size=3"))?.kind)
+        assertEquals(
+            RunLogKind.AgentError,
+            compose(agentLine("""  File "agent/main.py", line 1, in <module>""", fromStderr = true))?.kind,
+        )
+    }
+
     /** 编排层的 connect 成功是关键档，跟设备连接同一档；child 自己的 stderr 仍不是 */
     @Test
     fun `agent connect is an essential success line using the exec basename`() {

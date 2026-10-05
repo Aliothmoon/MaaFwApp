@@ -28,6 +28,9 @@ interface AgentSession : AutoCloseable {
 
     /** 接下来的退出是我们要它退的（Disconnect 握手），不按意外退出上报；[close] 自带这一步 */
     fun expectExit()
+
+    /** 把按窗口攒着、还没交出去的输出立刻交出去 */
+    fun flushOutput() {}
 }
 
 /**

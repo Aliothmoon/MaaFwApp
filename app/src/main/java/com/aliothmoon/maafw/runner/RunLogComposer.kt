@@ -97,6 +97,8 @@ class RunLogComposer {
      * 阈值永远踩不到，抑制器等于关掉了。两条流合起来算：刷屏就是刷屏，不分从哪条管道出来
      */
     private fun agentEntry(event: RunnerEvent.AgentOutput, atMillis: Long): Composed? {
+        // 写给用户看的按 focus 渲染、进进度档；不进洪泛滑窗：它往往正是这一轮停下来的原因，刷屏期也不能吞
+        if (event.isUserFacing) return Composed(RunLogKind.Focus, uiTextFromProject(event.line))
         while (agentTimestamps.isNotEmpty() && atMillis - agentTimestamps.first() >= AGENT_FLOOD_WINDOW_MS) {
             agentTimestamps.removeFirst()
         }

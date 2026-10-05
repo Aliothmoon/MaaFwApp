@@ -199,6 +199,13 @@ class RunLogRecorder(
 
     private fun record(envelope: RunnerEventEnvelope) {
         val event = envelope.event
+        if (event is RunnerEvent.AgentOutput) {
+            val parts = event.splitUserFacing()
+            if (parts.size > 1) {
+                parts.forEach { record(envelope.copy(event = it)) }
+                return
+            }
+        }
         val session = sessions[envelope.executionId]
         if (event is RunnerEvent.ExecutionFinished) {
             session?.drained?.complete(Unit)

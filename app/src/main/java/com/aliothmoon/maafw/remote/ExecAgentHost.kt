@@ -207,6 +207,10 @@ internal class ProcessAgentSession(
         exitExpected = true
     }
 
+    override fun flushOutput() {
+        batchers.forEach { it.flush() }
+    }
+
     override fun close() {
         exitExpected = true
         process.destroy()
