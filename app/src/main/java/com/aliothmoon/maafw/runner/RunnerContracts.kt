@@ -167,5 +167,6 @@ private fun agentLabel(name: String?, exec: String, index: Int): String =
 
 sealed interface RunnerCommandResult {
     data object Accepted : RunnerCommandResult
-    data class Rejected(val reason: UiText) : RunnerCommandResult
+    /** [error] 是外壳这一侧接住的异常；特权进程里的失败只回一个 false，现场在调试模式抓的 logcat 里 */
+    data class Rejected(val reason: UiText, val error: Throwable? = null) : RunnerCommandResult
 }

@@ -156,6 +156,7 @@ class RunLogRecorder(
     /** 看到 Idle 时事件可能还没消费完，等本轮 marker 过了合成协程再写 Footer */
     override suspend fun end(executionId: String, reason: RunEndReason) {
         val session = sessions[executionId] ?: return
+        if (reason is RunEndReason.NotRun) noteNotRun(executionId, session, reason)
         // NotRun 没进过 Runner，不会有 marker
         if (reason !is RunEndReason.NotRun &&
             withTimeoutOrNull(DRAIN_TIMEOUT_MS) { session.drained.await() } == null
@@ -178,6 +179,27 @@ class RunLogRecorder(
             writer.write(records)
             writer.close()
         }
+    }
+
+    /**
+     * 没跑起来的那句原因，排在 Footer 之前；只有 NOT_RUN 的文件查不出是哪一步拦下的
+     *
+     * 堆栈放进 detail，与 details_json 不同，不看调试模式：它只在出事时有，一轮至多一条
+     */
+    private fun noteNotRun(executionId: String, session: Session, reason: RunEndReason.NotRun) {
+        val text = reason.reason ?: return
+        publish(
+            RunLogEntry(
+                id = nextId.incrementAndGet(),
+                atMillis = clock(),
+                kind = if (reason.cause == NotRunCause.Cancelled) RunLogKind.Warning else RunLogKind.Error,
+                text = text,
+                detail = reason.error?.stackTraceToString(),
+            ),
+            session = session,
+            current = isCurrent(executionId),
+            writeDetail = true,
+        )
     }
 
     /**
@@ -255,6 +277,8 @@ class RunLogRecorder(
         session: Session?,
         current: Boolean,
         updateLiveStatus: Boolean = true,
+        /** 默认只有调试模式才落 detail（details_json 太占地方）；自带堆栈的行另说 */
+        writeDetail: Boolean = includeDetails(),
     ) {
         if (current) {
             if (entry.isEssential) {
@@ -290,7 +314,7 @@ class RunLogRecorder(
                 atMillis = entry.atMillis,
                 kind = entry.kind,
                 text = renderText(entry.text),
-                detail = entry.detail?.takeIf { includeDetails() },
+                detail = entry.detail?.takeIf { writeDetail },
             ),
         )
     }

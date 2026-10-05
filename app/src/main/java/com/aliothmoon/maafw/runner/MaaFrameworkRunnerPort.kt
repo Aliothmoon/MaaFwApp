@@ -310,6 +310,7 @@ class MaaFrameworkRunnerPort(
                 failPreparation(
                     uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
                     executionId,
+                    error = throwable,
                 )
             }
         }
@@ -350,16 +351,9 @@ class MaaFrameworkRunnerPort(
         service: RemoteService,
         executionId: String,
     ): UiText? {
-        if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
-            return uiTextOf(R.string.msg_reject_setup_failed)
-        }
-        // 环境性开关，不作为拒跑理由：设不上只是不存图，下一轮再试
-        runCatching { service.setSaveOnError(saveOnError()) }
-            .onFailure { Timber.w(it, "setSaveOnError failed") }
-        runCatching { service.setTextInputSink(textInputSink()) }
-            .onFailure { Timber.w(it, "setTextInputSink failed") }
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
-        // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作
+        // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作。
+        // 排在 setup 之前：它不依赖 setup，而 setup 失败正是最需要现场的时候
         if (debugMode()) {
             scope.launch(MaaDispatchers.IO) {
                 runCatching {
@@ -373,6 +367,14 @@ class MaaFrameworkRunnerPort(
                 }.onFailure { Timber.w(it, "LogcatService startCapture failed") }
             }
         }
+        if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
+            return uiTextOf(R.string.msg_reject_setup_failed)
+        }
+        // 环境性开关，不作为拒跑理由：设不上只是不存图，下一轮再试
+        runCatching { service.setSaveOnError(saveOnError()) }
+            .onFailure { Timber.w(it, "setSaveOnError failed") }
+        runCatching { service.setTextInputSink(textInputSink()) }
+            .onFailure { Timber.w(it, "setTextInputSink failed") }
         val mode = runMode()
         if (!service.setVirtualDisplayMode(mode.displayMode)) {
             return uiTextOf(R.string.msg_reject_switch_display_mode, mode)
@@ -428,7 +430,7 @@ class MaaFrameworkRunnerPort(
     /**
      * 准备失败才把 phase 收回 Idle；onFinished / abort 已经写过终态的不要盖掉
      */
-    private fun failPreparation(reason: UiText, executionId: String): RunnerCommandResult {
+    private fun failPreparation(reason: UiText, executionId: String, error: Throwable? = null): RunnerCommandResult {
         val next = _state.updateAndGet { current ->
             if (current.phase == RunnerPhase.Preparing) {
                 RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Failed(reason))
@@ -441,7 +443,7 @@ class MaaFrameworkRunnerPort(
             }
         }
         val rejected = (next.latestResult as? ExecutionResult.Failed)?.reason ?: reason
-        return RunnerCommandResult.Rejected(rejected)
+        return RunnerCommandResult.Rejected(rejected, error)
     }
 
     /**

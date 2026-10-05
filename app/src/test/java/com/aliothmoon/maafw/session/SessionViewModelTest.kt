@@ -177,6 +177,7 @@ class SessionViewModelTest {
         runMode = { settings.runMode.value },
         scope = backgroundScope,
         journal = DiscardingRunJournal,
+        renderText = { it.toString() },
     )
 
     private fun TestScope.createVm(

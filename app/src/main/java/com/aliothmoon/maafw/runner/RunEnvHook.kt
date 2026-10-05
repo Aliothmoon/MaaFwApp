@@ -36,6 +36,8 @@ sealed interface EngageResult {
     data class Failed(
         val reason: UiText,
         val notRun: NotRunCause = NotRunCause.HookFailed,
+        /** engage 崩了时编排层接住的那个异常，随拒绝原因进运行日志与 app.log */
+        val error: Throwable? = null,
     ) : EngageResult
 }
 
@@ -76,8 +78,16 @@ interface RunEnvHook {
 
 /** 收尾理由；投递之后的结局直接复用 [ExecutionResult]，不另造一套平行分类 */
 sealed interface RunEndReason {
-    /** 没投出去就结束，撤销栈里只有 [Anchor.BeforeDispatch] 那批 */
-    data class NotRun(val cause: NotRunCause) : RunEndReason
+    /**
+     * 没投出去就结束，撤销栈里只有 [Anchor.BeforeDispatch] 那批
+     *
+     * [reason] 与界面上那句提示同源，[error] 是外壳接住的异常；两者都可能没有（投递前被取消）
+     */
+    data class NotRun(
+        val cause: NotRunCause,
+        val reason: UiText? = null,
+        val error: Throwable? = null,
+    ) : RunEndReason
 
     /** 投出去了；手动 Stop 落在 [ExecutionResult.Cancelled] */
     data class Ran(val result: ExecutionResult) : RunEndReason

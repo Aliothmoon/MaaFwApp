@@ -304,6 +304,46 @@ class RunLogRecorderTest {
         )
     }
 
+    /** 只有 NOT_RUN 查不出是哪一步拦下的；原因排在 Footer 前，堆栈不看调试模式也落盘 */
+    @Test
+    fun `a round that never dispatched writes why, with the stack`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("清体力"), ID)
+        recorder.end(
+            ID,
+            RunEndReason.NotRun(
+                NotRunCause.Rejected,
+                UiText.Verbatim("虚拟屏建不起来"),
+                IllegalStateException("boom"),
+            ),
+        )
+
+        val records = sessionRecords()
+        val line = records[records.size - 2] as RunSessionRecord.Line
+        assertEquals(RunLogKind.Error, line.kind)
+        assertEquals("虚拟屏建不起来", line.text)
+        assertTrue(line.detail.orEmpty(), line.detail.orEmpty().startsWith("java.lang.IllegalStateException: boom"))
+        assertEquals(RunSessionOutcome.NOT_RUN, (records.last() as RunSessionRecord.Footer).outcome)
+        // 屏上这一轮也看得见，不用等去翻历史
+        settleRunLog()
+        assertEquals(RunLogKind.Error, recorder.runLog.value.progress.single().kind)
+    }
+
+    @Test
+    fun `a cancelled round notes why as a warning`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("清体力"), ID)
+        recorder.end(ID, RunEndReason.NotRun(NotRunCause.Cancelled, UiText.Verbatim("倒计时取消")))
+
+        val line = sessionRecords().filterIsInstance<RunSessionRecord.Line>().single()
+        assertEquals(RunLogKind.Warning, line.kind)
+        assertNull(line.detail)
+    }
+
     /** 认不出的回调调试模式也不留，屏上与文件都没有：maa.log 里连 details 都有全份 */
     @Test
     fun `raw callbacks are neither shown nor written`() = runTest(dispatcher) {
