@@ -552,6 +552,7 @@
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
     <string name="run_log_game_fps_low">游戏画面帧率仅 %1$d FPS，低于 30，自动战斗可能出错；请在游戏设置中开启高帧率模式，并关闭省电模式</string>
     <string name="run_log_game_fps_degraded">游戏画面帧率 %1$d FPS，低于 50，战斗时机可能不准；建议在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_task_skipped">已跳过任务「%1$s」：%2$s</string>
     <string name="run_log_smart_resolution_enabled">系统已开启「智能分辨率」，后台模式下会导致识别出错，请在系统显示设置中手动关闭</string>
     <string name="run_log_eye_protection_enabled">设备当前处于护眼/夜光模式 (%1$s)，可能影响正常图像识别，请手动关闭</string>
 
@@ -684,7 +685,6 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId 指向不存在的配置</string>
     <string name="diagnostic_configured_task_missing">任务 "%1$s" 已不在项目中</string>
     <string name="diagnostic_runtime_no_resource">没有可用的 resource，无法构造运行环境</string>
-    <string name="diagnostic_enabled_task_missing_definition">已启用任务 "%1$s" 在当前项目中已不存在（可能被改名或移除），请在任务列表中删除它</string>
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
     <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>

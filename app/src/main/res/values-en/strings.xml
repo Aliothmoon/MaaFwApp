@@ -561,6 +561,7 @@
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
     <string name="run_log_game_fps_low">The game is running at only %1$d FPS, below 30; automation may fail. Enable high frame rate mode in the game and disable power saving mode</string>
     <string name="run_log_game_fps_degraded">The game is running at %1$d FPS, below 50; battle timing may drift. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_task_skipped">Skipped task "%1$s": %2$s</string>
     <string name="run_log_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off manually in the system display settings</string>
     <string name="run_log_eye_protection_enabled">Eye comfort / night mode is active (%1$s), which may affect normal image recognition. Please turn it off manually</string>
 
@@ -694,7 +695,6 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId points to a missing configuration</string>
     <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>
     <string name="diagnostic_runtime_no_resource">No resource is available to build the runtime environment</string>
-    <string name="diagnostic_enabled_task_missing_definition">Enabled task "%1$s" no longer exists in this project (it may have been renamed or removed). Remove it from the task list</string>
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
     <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
