@@ -684,7 +684,7 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId 指向不存在的配置</string>
     <string name="diagnostic_configured_task_missing">任务 "%1$s" 已不在项目中</string>
     <string name="diagnostic_runtime_no_resource">没有可用的 resource，无法构造运行环境</string>
-    <string name="diagnostic_enabled_task_missing_definition">已启用任务 "%1$s" 缺少 definition</string>
+    <string name="diagnostic_enabled_task_missing_definition">已启用任务 "%1$s" 在当前项目中已不存在（可能被改名或移除），请在任务列表中删除它</string>
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
     <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>
