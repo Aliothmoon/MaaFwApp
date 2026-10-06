@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.update
 
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.constant.MiscConstants
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -85,7 +84,7 @@ class MirrorChyanUpdateTest {
         assertEquals("1.0.0", parsedUrl.queryParameter("current_version"))
         assertEquals("android", parsedUrl.queryParameter("os"))
         assertEquals("arm64", parsedUrl.queryParameter("arch"))
-        assertEquals(MiscConstants.UA, parsedUrl.queryParameter("user_agent"))
+        assertEquals("MaaFwApp", parsedUrl.queryParameter("user_agent"))
     }
 
     @Test

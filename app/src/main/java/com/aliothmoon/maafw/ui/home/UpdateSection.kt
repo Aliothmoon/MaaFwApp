@@ -71,7 +71,8 @@ import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
 import timber.log.Timber
 
-private const val MIRRORCHYAN_SITE = "https://mirrorchyan.com/"
+/** source 让 MirrorChyan 认出访问来自本应用 */
+private const val MIRRORCHYAN_SITE = "https://mirrorchyan.com/?source=MaaFwApp"
 
 /** 概览行左侧标签；不用 MaaFieldLabel（组标题档），颜色跟 MaaInfoRow 的 onSurface 一致 */
 @Composable
