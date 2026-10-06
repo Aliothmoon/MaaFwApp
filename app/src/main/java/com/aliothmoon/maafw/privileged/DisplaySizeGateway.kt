@@ -16,7 +16,7 @@ import timber.log.Timber
  * 抽接口只为可测：单测里换成记录调用的替身，不去碰 binder 与 WindowManager。
  * 生产实现是 [DisplaySizeController]，由 Koin 显式注入，不做默认参数
  *
- * 与后台虚拟屏的 `ResolutionPreference` 无关——那边是自己建的屏，尺寸由外壳指定；
+ * 与后台虚拟屏的 `ResolutionPreset` 无关——那边是自己建的屏，尺寸由外壳指定；
  * 这里动的是物理主屏，改完整个系统的 UI 都会重排
  */
 interface DisplaySizeGateway {

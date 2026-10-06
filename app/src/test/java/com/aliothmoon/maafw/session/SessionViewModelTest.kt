@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -27,13 +28,16 @@ import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.PiPackage
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
+import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
+import com.aliothmoon.maafw.runner.DisplayHazards
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.DiscardingRunJournal
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunLogRecorder
@@ -43,9 +47,10 @@ import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.GameFpsReader
+import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PassthroughFocusContentResolver
 import com.aliothmoon.maafw.runner.RunLogKind
-import com.aliothmoon.maafw.runner.isEssential
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
@@ -75,6 +80,7 @@ import kotlin.io.path.createTempDirectory
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -95,7 +101,7 @@ class SessionViewModelTest {
     private val definition = ProjectDefinition(
         name = "demo",
         version = "1",
-        controller = ControllerDefinition(),
+        controllers = listOf(ControllerDefinition()),
         resources = listOf(ResourceDefinition("官服", listOf("./base"))),
         tasks = listOf(
             TaskDefinition(
@@ -161,15 +167,17 @@ class SessionViewModelTest {
         store: InMemoryUserConfigurationStore,
         runner: RunnerPort,
         settings: FakeAppSettingsGateway,
+        hazards: DisplayHazards = DisplayHazards(),
     ) = RunLauncher(
         projectRepository = project,
         configurationStore = store,
         runnerPort = runner,
-        prechecks = listOf(ForegroundModePrecheck),
+        prechecks = listOf(ForegroundModePrecheck, DisplayHazardPrecheck { hazards }),
         hooks = listOf(KeepAliveHook(RecordingRunKeepAlive())),
         runMode = { settings.runMode.value },
         scope = backgroundScope,
         journal = DiscardingRunJournal,
+        renderText = { it.toString() },
     )
 
     private fun TestScope.createVm(
@@ -183,21 +191,31 @@ class SessionViewModelTest {
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
+        welcomeResolver: WelcomeResolver = WelcomeResolver { null },
+        hazards: DisplayHazards = DisplayHazards(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
-        val focusDispatcher = idleFocusDispatcher()
+        val focusDispatcher = focusDispatcherFor(runner)
         val vm = SessionViewModel(
             projectRepository = project,
             configurationStore = store,
             runnerPort = runner,
-            runLauncher = launcherFor(project, store, runner, settings),
+            runLauncher = launcherFor(project, store, runner, settings, hazards),
             previewPort = preview,
             permissionGateway = permissions,
             servicePort = FakePrivilegedServicePort(),
             displaySize = displaySize,
             appSettings = settings,
             focusDispatcher = focusDispatcher,
-            recorder = recorderFor(runner, focusDispatcher),
+            recorder = recorderFor(focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
+            welcomeResolver = welcomeResolver,
         )
         return Triple(vm, store, runner)
     }
@@ -205,7 +223,7 @@ class SessionViewModelTest {
     /** 只换 RunnerPort 的构造点；createVm 的返回三元组绑死了 StubRunnerPort */
     private fun TestScope.createVmWithRunner(
         runner: RunnerPort,
-        focusDispatcher: FocusDispatcher = idleFocusDispatcher(),
+        focusDispatcher: FocusDispatcher = focusDispatcherFor(runner),
     ): SessionViewModel {
         val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
         val store = readyStore()
@@ -221,8 +239,16 @@ class SessionViewModelTest {
             displaySize = FakeDisplaySizeGateway(),
             appSettings = settings,
             focusDispatcher = focusDispatcher,
-            recorder = recorderFor(runner, focusDispatcher),
+            recorder = recorderFor(focusDispatcher),
+            gameFpsWatcher = GameFpsWatcher(
+                object : GameFpsReader {
+                    override suspend fun readGameFps(): Float? = 60f
+                },
+                DiscardingRunJournal,
+                backgroundScope,
+            ),
             piInstall = emptyPiInstall(),
+            welcomeResolver = WelcomeResolver { null },
         )
     }
 
@@ -232,11 +258,7 @@ class SessionViewModelTest {
      * 落盘那条路走不到——单测不经 `SessionLogHook` 开会话，[RunSessionLogStore] 的目录
      * 因此从头到尾没被碰过
      */
-    private fun TestScope.recorderFor(
-        runner: RunnerPort,
-        focusDispatcher: FocusDispatcher,
-    ) = RunLogRecorder(
-        runnerPort = runner,
+    private fun TestScope.recorderFor(focusDispatcher: FocusDispatcher) = RunLogRecorder(
         focusDispatcher = focusDispatcher,
         store = RunSessionLogStore(),
         renderText = { it.toString() },
@@ -250,10 +272,10 @@ class SessionViewModelTest {
     private fun emptyPiInstall() =
         PiInstallCoordinator(PiInstaller(EmptyPiPackage, versionCode = 1))
 
-    /** 不接任何 RunnerPort 的 dispatcher：focus 的补完另有 FocusDispatcherTest 覆盖 */
-    private fun TestScope.idleFocusDispatcher(
+    /** 运行日志只从它那条流取事件，必须接在 VM 用的同一个 runner 上 */
+    private fun TestScope.focusDispatcherFor(
+        runner: RunnerPort,
         resolver: FocusContentResolver = PassthroughFocusContentResolver,
-        runner: RunnerPort = RecordingEventRunnerPort(),
     ) = FocusDispatcher(
         projectRepository = FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
         resolver = resolver,
@@ -292,13 +314,13 @@ class SessionViewModelTest {
         advanceTimeBy(100)
         advanceUntilIdle()
 
-        assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.size)
+        assertEquals(RUN_LOG_CAPACITY, vm.runLog.value.all.size)
         // 丢的是最老的，最新一条必须还在
-        assertEquals(UiText.Verbatim("line ${RUN_LOG_CAPACITY + 19}"), vm.runLog.value.last().text)
+        assertEquals(UiText.Verbatim("line ${RUN_LOG_CAPACITY + 19}"), vm.runLog.value.all.last().text)
 
         vm.onIntent(SessionIntent.ClearRunLog)
         advanceUntilIdle()
-        assertTrue(vm.runLog.value.isEmpty())
+        assertTrue(vm.runLog.value.all.isEmpty())
     }
 
     /** 合成规则由 RunLogComposerTest 覆盖，这里只验 ViewModel 确实把事件送进了合成器 */
@@ -313,13 +335,11 @@ class SessionViewModelTest {
         advanceTimeBy(100)
         advanceUntilIdle()
 
+        // 认不出的节点回调被合成器丢掉
         assertEquals(
-            listOf(RunLogKind.Success, RunLogKind.Verbose, RunLogKind.Error),
-            vm.runLog.value.map { it.kind },
+            listOf(RunLogKind.Success, RunLogKind.Error),
+            vm.runLog.value.all.map { it.kind },
         )
-        // 认不出的那条保留原文与 details，「全部」档才有东西可看
-        assertEquals(UiText.Verbatim("Node.Action.Failed"), vm.runLog.value[1].text)
-        assertEquals("""{"name":"NodeA"}""", vm.runLog.value[1].detail)
     }
 
     /**
@@ -330,7 +350,7 @@ class SessionViewModelTest {
     @Test
     fun `focus with the log channel reaches the run log`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
-        val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
+        val vm = createVmWithRunner(runner)
 
         runner.emit(RunnerEvent.Focus(FocusMessage(
                 message = "Node.PipelineNode.Succeeded",
@@ -340,15 +360,15 @@ class SessionViewModelTest {
             )))
         advanceUntilIdle()
 
-        assertEquals(RunLogKind.Focus, vm.runLog.value.single().kind)
-        assertEquals(UiText.Verbatim("显影罐不足"), vm.runLog.value.single().text)
+        assertEquals(RunLogKind.Focus, vm.runLog.value.all.single().kind)
+        assertEquals(UiText.Verbatim("显影罐不足"), vm.runLog.value.all.single().text)
     }
 
     /** 只声明 toast 的模板不进日志 */
     @Test
     fun `toast only focus does not reach the log`() = runTest(mainDispatcher) {
         val runner = RecordingEventRunnerPort()
-        val vm = createVmWithRunner(runner, idleFocusDispatcher(runner = runner))
+        val vm = createVmWithRunner(runner)
 
         runner.emit(RunnerEvent.Focus(FocusMessage(
                 message = "Node.PipelineNode.Succeeded",
@@ -358,7 +378,7 @@ class SessionViewModelTest {
             )))
         advanceUntilIdle()
 
-        assertTrue(vm.runLog.value.isEmpty())
+        assertTrue(vm.runLog.value.all.isEmpty())
     }
 
     /** 「只看关键」留下合成过的，滤掉没被合成的原始回调 */
@@ -376,8 +396,69 @@ class SessionViewModelTest {
         // 只剩「任务开始」；截图动作与节点识别失败都是原始回调，节点失败在协议里是正常控制流
         assertEquals(
             listOf(RunLogKind.Info),
-            vm.runLog.value.filter { it.isEssential }.map { it.kind },
+            vm.runLog.value.progress.map { it.kind },
         )
+    }
+
+    /** 回归：指纹曾算在 URL 上，远端公告改了内容也不再弹 */
+    @Test
+    fun `URL welcome prompts again once its content changes`() = runTest(mainDispatcher) {
+        val url = "https://example.com/anno.md"
+        var body = "旧公告"
+        val project = FakeProjectRepository(
+            ProjectState.Ready(
+                definition.copy(metadata = ProjectMetadata(welcome = listOf(url), welcomeDeclarations = listOf(url))),
+                emptyList(),
+            ),
+        )
+        val (vm, store, _) = createVm(project = project, welcomeResolver = WelcomeResolver { body })
+        advanceUntilIdle()
+        assertEquals(listOf("旧公告"), vm.uiState.value.welcomePrompt)
+
+        vm.onIntent(SessionIntent.DismissWelcome)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.welcomePrompt.isEmpty())
+
+        body = "新公告"
+        val (relaunched, _, _) = createVm(store = store, project = project, welcomeResolver = WelcomeResolver { body })
+        advanceUntilIdle()
+        assertEquals(listOf("新公告"), relaunched.uiState.value.welcomePrompt)
+    }
+
+    @Test
+    fun `URL welcome that fails to load does not prompt`() = runTest(mainDispatcher) {
+        val url = "https://example.com/anno.md"
+        val project = FakeProjectRepository(
+            ProjectState.Ready(
+                definition.copy(metadata = ProjectMetadata(welcome = listOf(url), welcomeDeclarations = listOf(url))),
+                emptyList(),
+            ),
+        )
+        val (vm, store, _) = createVm(project = project)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.welcomePrompt.isEmpty())
+
+        vm.onIntent(SessionIntent.DismissWelcome)
+        advanceUntilIdle()
+        assertEquals(null, store.current.welcomeFingerprint)
+    }
+
+    @Test
+    fun `unsupported controller tasks cannot be added or checked`() = runTest(mainDispatcher) {
+        val pcTask = definition.tasks.single().copy(name = "PC", entry = "PC", label = "PC", controllers = listOf("Win32"))
+        val project = FakeProjectRepository(
+            ProjectState.Ready(definition.copy(tasks = definition.tasks + pcTask), emptyList()),
+        )
+        val store = readyStore(tasks = listOf(ConfiguredTask("PC", enabled = false, instanceId = "pc")))
+        val (vm, _, _) = createVm(store = store, project = project)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.ToggleTask(RunConfigurationId("c1"), "pc", true))
+        vm.onIntent(SessionIntent.ConfirmAddTasks(RunConfigurationId("c1"), listOf("PC", "启动游戏")))
+        advanceUntilIdle()
+
+        val tasks = store.current.configurations.single().tasks
+        assertEquals(listOf("PC" to false, "启动游戏" to true), tasks.map { it.taskName to it.enabled })
     }
 
     @Test
@@ -388,6 +469,53 @@ class SessionViewModelTest {
         advanceUntilIdle()
         assertTrue(store.current.initialized)
         assertEquals("官服", store.current.activeResourceName)
+    }
+
+    @Test
+    fun `stale resource selection is cleared and noticed only until the next launch`() = runTest(mainDispatcher) {
+        val store = InMemoryUserConfigurationStore(
+            UserConfiguration(initialized = true, activeResourceName = "universal"),
+        )
+        val (vm, _, _) = createVm(store = store)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertNull(store.current.activeResourceName)
+        assertEquals("官服", vm.uiState.value.environment?.resource?.name)
+        assertEquals(
+            1,
+            vm.uiState.value.sessionDiagnostics.count {
+                it.message.isResource(R.string.diagnostic_resource_selection_missing)
+            },
+        )
+
+        // 同一份 store 换一个 VM = 下次启动：存的已经是 null，提示也没带过来
+        val (reopened, _, _) = createVm(store = store)
+        backgroundScope.launch { reopened.uiState.collect {} }
+        advanceUntilIdle()
+        assertTrue(reopened.uiState.value.sessionDiagnostics.isEmpty())
+    }
+
+    @Test
+    fun `selecting a resource drops the stale resource notice`() = runTest(mainDispatcher) {
+        val store = InMemoryUserConfigurationStore(
+            UserConfiguration(initialized = true, activeResourceName = "universal"),
+        )
+        val project = FakeProjectRepository(
+            ProjectState.Ready(
+                definition.copy(resources = definition.resources + ResourceDefinition("B 服", listOf("./bili"))),
+                emptyList(),
+            ),
+        )
+        val (vm, _, _) = createVm(store = store, project = project)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+        assertEquals(1, vm.uiState.value.sessionDiagnostics.size)
+
+        vm.onIntent(SessionIntent.SelectResource("B 服"))
+        advanceUntilIdle()
+        assertEquals("B 服", store.current.activeResourceName)
+        assertTrue(vm.uiState.value.sessionDiagnostics.isEmpty())
     }
 
     @Test
@@ -428,6 +556,61 @@ class SessionViewModelTest {
                     it.message.isResource(R.string.msg_locked_while_running)
             },
         )
+    }
+
+    /** 两项都开着：逐个问，前面点过的跟着累积，全点完才开跑 */
+    @Test
+    fun `display hazards are confirmed one by one before starting`() = runTest(mainDispatcher) {
+        val hazards = DisplayHazards(smartResolution = true, eyeProtectionSource = "xiaomi:screen_paper_mode_enabled")
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(runner = runner, hazards = hazards)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        val first = effects.filterIsInstance<SessionEffect.ConfirmStart>().single()
+        assertTrue(first.prompt.isResource(R.string.precheck_smart_resolution_enabled))
+        assertEquals(setOf(DisplayHazardPrecheck.SMART_RESOLUTION), first.acknowledged)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+
+        vm.onIntent(SessionIntent.Start(acknowledged = first.acknowledged))
+        advanceUntilIdle()
+        val second = effects.filterIsInstance<SessionEffect.ConfirmStart>().last()
+        assertTrue(second.prompt.isResource(R.string.precheck_eye_protection_enabled))
+        assertEquals(
+            setOf(DisplayHazardPrecheck.SMART_RESOLUTION, DisplayHazardPrecheck.EYE_PROTECTION),
+            second.acknowledged,
+        )
+
+        vm.onIntent(SessionIntent.Start(acknowledged = second.acknowledged))
+        advanceUntilIdle()
+        assertEquals(2, effects.filterIsInstance<SessionEffect.ConfirmStart>().size)
+        assertTrue(runner.state.value.phase.isBusy)
+    }
+
+    /** 悬浮窗里弹不了框：提醒照跑，不问 */
+    @Test
+    fun `overlay start runs through display hazards without asking`() = runTest(mainDispatcher) {
+        val hazards = DisplayHazards(smartResolution = true, eyeProtectionSource = "xiaomi:screen_paper_mode_enabled")
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(runner = runner, hazards = hazards)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start(TaskSurface.Overlay))
+        advanceUntilIdle()
+
+        assertTrue(effects.none { it is SessionEffect.ConfirmStart })
+        assertTrue(runner.state.value.phase.isBusy)
     }
 
     @Test
@@ -599,19 +782,19 @@ class SessionViewModelTest {
 
     /** 虚拟屏尺寸改由用户选之后，这条是它进 UiState 的唯一通路 */
     @Test
-    fun `preview resolution follows the resolution preference`() = runTest(mainDispatcher) {
+    fun `preview resolution follows the resolution preset`() = runTest(mainDispatcher) {
         val settings = FakeAppSettingsGateway()
         val (vm, _, _) = createVm(settings = settings)
         // stateIn(WhileSubscribed) 需要活跃收集器才会投影
         backgroundScope.launch { vm.uiState.collect {} }
         advanceUntilIdle()
 
-        assertEquals(ResolutionPreference.P720.resolution, vm.uiState.value.previewResolution)
+        assertEquals(ResolutionPresets.builtIn[0].resolution, vm.uiState.value.previewResolution)
 
-        settings.resolutionPreference.value = ResolutionPreference.P1080
+        settings.resolutionPreset.value = ResolutionPresets.builtIn[1]
         advanceUntilIdle()
 
-        assertEquals(ResolutionPreference.P1080.resolution, vm.uiState.value.previewResolution)
+        assertEquals(ResolutionPresets.builtIn[1].resolution, vm.uiState.value.previewResolution)
     }
 
     @Test
@@ -650,7 +833,6 @@ class SessionViewModelTest {
         val (vm, _, _) = createVm(project = project, runner = runner)
         advanceUntilIdle()
         val before = project.reloadCount
-        assertTrue(before >= 1)
 
         vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()

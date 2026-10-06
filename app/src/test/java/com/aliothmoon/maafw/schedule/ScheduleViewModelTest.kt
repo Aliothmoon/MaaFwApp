@@ -1,7 +1,10 @@
 package com.aliothmoon.maafw.schedule
 
+import android.app.KeyguardManager
+import android.content.Context
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import io.mockk.mockk
 import io.mockk.every
@@ -43,12 +46,21 @@ class ScheduleViewModelTest {
             every { canScheduleExact() } returns true
             every { hasExactAlarmToggle() } returns false
         }
+        val context = mockk<Context>(relaxed = true) {
+            every { getSharedPreferences(any(), eq(Context.MODE_PRIVATE)) } returns mockk(relaxed = true)
+            every { getSystemService(KeyguardManager::class.java) } returns mockk(relaxed = true)
+        }
         val viewModel = ScheduleViewModel(
             store = store,
             alarms = alarms,
             triggerLog = mockk(relaxed = true),
             configurationStore = InMemoryUserConfigurationStore(),
+            permissionGateway = FakePermissionGateway(),
             appSettings = settings,
+            gestureStore = mockk {
+                every { gesture } returns MutableStateFlow(null)
+            },
+            context = context,
         )
 
         check(viewModel.uiState.first { it.rows.isEmpty() }.runMode == RunMode.FOREGROUND)

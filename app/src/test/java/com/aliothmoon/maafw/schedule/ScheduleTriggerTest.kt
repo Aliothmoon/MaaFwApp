@@ -94,6 +94,45 @@ class ScheduleTriggerTest {
         assertEquals(at("2026-08-10T12:00"), nextTriggerOf(strategy, now = at("2026-08-10T09:30")))
     }
 
+    /** 08:00 那次已响，时间往回拨到 07:55 后重排：不能把 08:00 再挂一遍 */
+    @Test
+    fun `resync after the clock moves back skips the slot that already fired`() {
+        val strategy = fixed(setOf(DayOfWeek.MONDAY), "08:00", "20:00")
+        val now = at("2026-08-10T07:55")
+        val delivered = at("2026-08-10T08:00").toInstant().toEpochMilli()
+        val after = resyncAfterEpochMs(delivered, now.toInstant().toEpochMilli())
+        assertEquals(at("2026-08-10T20:00"), nextTriggerOf(strategy, now, after))
+    }
+
+    @Test
+    fun `resync without a delivered slot computes from now`() {
+        val strategy = fixed(setOf(DayOfWeek.MONDAY), "08:00", "20:00")
+        val now = at("2026-08-10T07:55")
+        val after = resyncAfterEpochMs(null, now.toInstant().toEpochMilli())
+        assertEquals(0L, after)
+        assertEquals(at("2026-08-10T08:00"), nextTriggerOf(strategy, now, after))
+    }
+
+    /** 已投递时刻在过去：界不起作用，照常从现在往后找 */
+    @Test
+    fun `resync with a past delivered slot is the same as from now`() {
+        val strategy = fixed(setOf(DayOfWeek.MONDAY), "08:00", "20:00")
+        val now = at("2026-08-10T09:00")
+        val delivered = at("2026-08-10T08:00").toInstant().toEpochMilli()
+        val after = resyncAfterEpochMs(delivered, now.toInstant().toEpochMilli())
+        assertEquals(at("2026-08-10T20:00"), nextTriggerOf(strategy, now, after))
+    }
+
+    /** 时钟往回纠正了一天以上：不认旧时刻，否则规则要哑到那时 */
+    @Test
+    fun `resync ignores a delivered slot far ahead of a corrected clock`() {
+        val now = at("2026-08-10T07:55").toInstant().toEpochMilli()
+        val farAhead = now + RESYNC_GUARD_WINDOW_MS + 1
+        assertEquals(0L, resyncAfterEpochMs(farAhead, now))
+        val withinWindow = now + RESYNC_GUARD_WINDOW_MS
+        assertEquals(withinWindow, resyncAfterEpochMs(withinWindow, now))
+    }
+
     @Test
     fun `interval without a usable period never fires`() {
         val base = ScheduleStrategy(name = "t", scheduleType = ScheduleType.INTERVAL)

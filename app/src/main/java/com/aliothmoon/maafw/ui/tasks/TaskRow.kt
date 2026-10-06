@@ -19,7 +19,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +43,7 @@ import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.components.MaaCheckbox
 
 /** 未勾选任务的文案区淡化程度；Checkbox 与删除钮不跟着淡，否则点不准 */
 private const val DisabledTaskAlpha = 0.55f
@@ -114,7 +114,7 @@ internal fun TaskRow(
     MaaCard(
         modifier = modifier
             .shadow(elevation = dragElevation, shape = MaterialTheme.shapes.medium)
-            .maaClickable(enabled = task.hasOptions, onClick = onClick),
+            .maaClickable(enabled = task.hasOptions, shape = MaterialTheme.shapes.medium, onClick = onClick),
         contentPadding = PaddingValues(
             horizontal = MaaDesignTokens.Spacing.xs,
             vertical = MaaDesignTokens.Spacing.xs,
@@ -124,10 +124,11 @@ internal fun TaskRow(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(
-                checked = task.enabled,
+            MaaCheckbox(
+                checked = task.checkedForDisplay,
                 onCheckedChange = onToggle,
-                enabled = !locked && !task.missingDefinition,
+                enabled = !locked && task.toggleable,
+                warning = task.checkedButSkipped,
             )
             MaaPiIcon(
                 path = task.icon,
@@ -191,8 +192,8 @@ internal fun TaskRow(
                 enabled = !locked,
                 onClick = onRemove,
             )
-            // 不用 IconButton：它内部写死 ripple()，不读主题里那句 NoIndication，
-            // 四个图标里只有它会冒涟漪；48dp 的框也比旁边三个宽出一截
+            // 不用 IconButton：它内部写死原生 ripple()，不走主题里的 MaaPressIndication，
+            // 按下反馈会借宿主视图池串到别的组件上；48dp 的框也比旁边三个宽出一截
             CompactActionIcon(
                 icon = Icons.Outlined.DragIndicator,
                 contentDescription = stringResource(R.string.tasks_drag_reorder),
