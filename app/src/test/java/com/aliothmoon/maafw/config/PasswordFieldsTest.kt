@@ -29,7 +29,7 @@ class PasswordFieldsTest {
     private val definition = ProjectDefinition(
         name = "p",
         version = "1.0.0",
-        controller = ControllerDefinition(),
+        controllers = listOf(ControllerDefinition()),
         resources = emptyList(),
         tasks = emptyList(),
         groups = emptyList(),

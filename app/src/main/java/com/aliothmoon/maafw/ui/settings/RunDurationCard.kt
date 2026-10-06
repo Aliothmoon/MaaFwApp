@@ -1,5 +1,9 @@
 package com.aliothmoon.maafw.ui.settings
 
+import com.aliothmoon.maafw.settings.search.SettingAnchors
+import com.aliothmoon.maafw.settings.search.SettingsSections
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
+import com.aliothmoon.maafw.ui.settings.search.sectionRevealToken
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,12 +34,18 @@ internal fun RunDurationCard(
     // 失焦才钳位提交：逐键钳位会让人刚敲下「8」就被改成别的数。以已存值为 key，读盘晚到也能同步进来
     var draft by remember(saved) { mutableStateOf(saved.toString()) }
 
-    MaaCard(title = stringResource(R.string.settings_section_duration_limit), collapsible = true) {
-        MaaSwitchRow(
-            label = stringResource(R.string.settings_duration_limit_enabled),
-            checked = state.runDurationLimitEnabled,
-            onCheckedChange = { onSettingsIntent(SettingsIntent.SetRunDurationLimitEnabled(it)) },
-        )
+    MaaCard(
+        title = stringResource(R.string.settings_section_duration_limit),
+        collapsible = true,
+        revealToken = sectionRevealToken(SettingsSections.DURATION),
+    ) {
+        SettingSearchTarget(SettingAnchors.DURATION_LIMIT) {
+            MaaSwitchRow(
+                label = stringResource(R.string.settings_duration_limit_enabled),
+                checked = state.runDurationLimitEnabled,
+                onCheckedChange = { onSettingsIntent(SettingsIntent.SetRunDurationLimitEnabled(it)) },
+            )
+        }
         if (state.runDurationLimitEnabled) {
             ITextFieldWithFocus(
                 value = draft,

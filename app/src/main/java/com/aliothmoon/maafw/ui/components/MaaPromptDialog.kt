@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.window.DialogProperties
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.OpaqueTheme
 
 /**
  * 三按钮提示弹窗：确认 / 中间出口 / 关闭
@@ -39,42 +40,44 @@ fun MaaPromptDialog(
     iconTint: Color? = null,
     titleColor: Color? = null,
 ) {
-    AlertDialog(
-        onDismissRequest = { if (dismissOnOutsideClick) onDismissRequest() },
-        properties = DialogProperties(
-            dismissOnBackPress = dismissOnOutsideClick,
-            dismissOnClickOutside = dismissOnOutsideClick,
-        ),
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint ?: Color.Unspecified,
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-                )
-                Text(title, color = titleColor ?: Color.Unspecified)
-            }
-        },
-        text = { Text(message, style = MaterialTheme.typography.bodyLarge) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(confirmText) }
-        },
-        dismissButton = {
-            if (neutralText != null || dismissText != null) {
-                Row {
-                    neutralText?.let {
-                        TextButton(onClick = onNeutralClick) { Text(it) }
-                    }
-                    dismissText?.let {
-                        TextButton(onClick = onDismissRequest) { Text(it) }
+    OpaqueTheme {
+        AlertDialog(
+            onDismissRequest = { if (dismissOnOutsideClick) onDismissRequest() },
+            properties = DialogProperties(
+                dismissOnBackPress = dismissOnOutsideClick,
+                dismissOnClickOutside = dismissOnOutsideClick,
+            ),
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconTint ?: Color.Unspecified,
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    )
+                    Text(title, color = titleColor ?: Color.Unspecified)
+                }
+            },
+            text = { Text(message, style = MaterialTheme.typography.bodyLarge) },
+            confirmButton = {
+                TextButton(onClick = onConfirm) { Text(confirmText) }
+            },
+            dismissButton = {
+                if (neutralText != null || dismissText != null) {
+                    Row {
+                        neutralText?.let {
+                            TextButton(onClick = onNeutralClick) { Text(it) }
+                        }
+                        dismissText?.let {
+                            TextButton(onClick = onDismissRequest) { Text(it) }
+                        }
                     }
                 }
-            }
-        },
-    )
+            },
+        )
+    }
 }

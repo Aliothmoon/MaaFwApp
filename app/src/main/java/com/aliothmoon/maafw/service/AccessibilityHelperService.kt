@@ -1,6 +1,9 @@
 package com.aliothmoon.maafw.service
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.aliothmoon.maafw.BuildConfig
@@ -31,6 +34,8 @@ class AccessibilityHelperService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        // 连上之前就可能已经装了监听，按当前状态补一次
+        applyKeyFiltering()
         _isConnected.value = true
         Timber.d("Accessibility service connected")
     }
@@ -55,6 +60,33 @@ class AccessibilityHelperService : AccessibilityService() {
             }
         }
         return super.onKeyEvent(event)
+    }
+
+    /**
+     * 只在有人监听组合键时才让系统把按键先交给本服务；没人监听时按键根本不经过这里
+     *
+     * 常开的话，服务一启用所有物理按键都要先绕本服务一圈，哪怕最后原样放行
+     */
+    private fun applyKeyFiltering() {
+        val wanted = onVolumeUpDownPressed.get() != null
+        if (!wanted) resetCombo()
+        val info = serviceInfo ?: return
+        val filtering = info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0
+        if (filtering == wanted) return
+        info.flags = if (wanted) {
+            info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        } else {
+            info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
+        }
+        serviceInfo = info
+        Timber.d("Key event filtering %s", if (wanted) "on" else "off")
+    }
+
+    /** 过滤关掉时半截的组合状态不能留到下次打开 */
+    private fun resetCombo() {
+        volumeUpPressTime = 0L
+        volumeDownPressTime = 0L
+        triggered = false
     }
 
     private inline fun recordAndCheck(record: (Long) -> Unit): Boolean {
@@ -104,8 +136,19 @@ class AccessibilityHelperService : AccessibilityService() {
         var instance: AccessibilityHelperService? = null
             private set
 
-        /** 由 OverlayController 装卸；null 表示当前不需要拦截 */
-        val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()
+        private val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()
+
+        private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+
+        /**
+         * 由 OverlayController 装卸；null 表示当前不需要拦截，按键过滤随之关掉
+         *
+         * 切到主线程改 serviceInfo：组合键状态只在主线程的 onKeyEvent 里读写
+         */
+        fun setVolumeComboListener(listener: (() -> Unit)?) {
+            onVolumeUpDownPressed.set(listener)
+            mainHandler.post { instance?.applyKeyFiltering() }
+        }
 
         private val _isConnected = MutableStateFlow(false)
 

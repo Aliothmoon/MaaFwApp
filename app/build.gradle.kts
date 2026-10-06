@@ -76,6 +76,10 @@ dependencies {
     implementation(libs.androidx.datastore)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.window)
+    // 自定义背景选图时按 EXIF 方向摆正
+    implementation(libs.androidx.exifinterface)
+    // 运行通知走小米超级岛时拼焦点通知模板
+    implementation(libs.xzakota.focus.api)
     // 解包与项目加载各圈一段，Perfetto / macrobenchmark 里才归得了因
     implementation(libs.androidx.tracing.ktx)
     // Baseline Profile 在 API 33 以下靠它在启动时装入
@@ -95,6 +99,7 @@ dependencies {
     implementation(libs.markwon.linkify)
     implementation(libs.markwon.strikethrough)
     implementation(libs.okhttp)
+    implementation(libs.semver)
     implementation(libs.sentry.android.core)
     // Android 没有自带的 mail 实现，三个一起才跑得起 Transport.send
     implementation(libs.angus.mail)

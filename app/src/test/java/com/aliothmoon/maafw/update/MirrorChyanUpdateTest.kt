@@ -124,7 +124,7 @@ class MirrorChyanUpdateTest {
                 UpdateSource.MIRRORCHYAN,
                 UpdateCheckFailure.RESOURCE_NOT_FOUND,
             ),
-            client(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest(abi = AndroidAbi.UNIVERSAL)),
         )
     }
 
@@ -139,7 +139,7 @@ class MirrorChyanUpdateTest {
                 UpdateSource.MIRRORCHYAN,
                 UpdateCheckFailure.RESOURCE_NOT_FOUND,
             ),
-            client(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest(abi = AndroidAbi.UNIVERSAL)),
         )
     }
 
@@ -237,7 +237,7 @@ class MirrorChyanUpdateTest {
                 UpdateSource.MIRRORCHYAN,
                 UpdateCheckFailure.INVALID_ARCH,
             ),
-            client(gateway).check(checkRequest()),
+            client(gateway).check(checkRequest(abi = AndroidAbi.UNIVERSAL)),
         )
     }
 
@@ -300,5 +300,64 @@ class MirrorChyanUpdateTest {
             ),
             client(gateway).check(checkRequest()),
         )
+    }
+
+    @Test
+    fun `universal package query omits arch`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, """{"code":0,"data":{"version_name":"1.0.0"}}"""),
+        )
+
+        client(gateway).check(checkRequest(abi = AndroidAbi.UNIVERSAL))
+
+        assertEquals(null, gateway.requests.single().first.toHttpUrl().queryParameter("arch"))
+    }
+
+    @Test
+    fun `abi package retries as universal when its arch has no package`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(404, """{"code":8001,"msg":"resource not found"}"""),
+            FakeHttpResponse(200, apkPayload),
+        )
+
+        assertEquals(
+            UpdateResolveResult.Resolved(
+                ResolvedUpdate(
+                    source = UpdateSource.MIRRORCHYAN,
+                    version = "v1.1.0",
+                    downloadUrl = "https://example.com/M9A-v1.1.0.apk",
+                    sha256 = "a".repeat(64),
+                ),
+            ),
+            client(gateway).resolve(resolveRequest(mirrorchyanCdk = "cdk")),
+        )
+        val (first, second) = gateway.requests.map { it.first.toHttpUrl().queryParameter("arch") }
+        assertEquals("arm64", first)
+        assertEquals(null, second)
+    }
+
+    @Test
+    fun `failed universal retry reports the abi package reason`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(400, """{"code":8003,"msg":"invalid arch"}"""),
+            FakeHttpResponse(404, """{"code":8001,"msg":"resource not found"}"""),
+        )
+
+        assertEquals(
+            UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.INVALID_ARCH),
+            client(gateway).check(checkRequest()),
+        )
+        assertEquals(2, gateway.requests.size)
+    }
+
+    @Test
+    fun `universal package does not retry`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(404, """{"code":8001,"msg":"resource not found"}"""),
+        )
+
+        client(gateway).check(checkRequest(abi = AndroidAbi.UNIVERSAL))
+
+        assertEquals(1, gateway.requests.size)
     }
 }

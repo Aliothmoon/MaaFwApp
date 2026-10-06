@@ -10,11 +10,15 @@ import android.content.Intent
 import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
-import androidx.core.graphics.drawable.IconCompat
 import com.aliothmoon.maafw.MainActivity
+import com.aliothmoon.maafw.di.AppCoroutineScope
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.notification.RunProgressSnapshots
-import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
+import com.aliothmoon.maafw.notification.live.LiveBackend
+import com.aliothmoon.maafw.notification.live.LiveCapabilityProbe
+import com.aliothmoon.maafw.notification.live.RunNotificationContent
+import com.aliothmoon.maafw.notification.live.RunNotificationFactory
+import com.aliothmoon.maafw.notification.live.XmsfNetworkGate
 import com.aliothmoon.maafw.notification.stringRes
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
@@ -22,7 +26,9 @@ import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.focusPlainText
 import com.aliothmoon.maafw.runner.isBusy
+import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,9 +36,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import org.koin.core.qualifier.named
 import timber.log.Timber
 
 /**
@@ -42,7 +50,9 @@ import timber.log.Timber
  * 表现成「任务跑一半自己停了」。实测 MIUI 的 ProcessManager 会对 Adj=905 的空进程
  * 直接 force-stop（`SwipeUpClean: force-stop <pkg> Adj=905`），前台服务是唯一挡得住的一层
  *
- * 同一条通知顺带走 Live Update：进度来自 [RunnerState]，状态句来自 [RunLogRecorder.liveUpdateStatus]
+ * 同一条通知顺带当运行通知：进度来自 [RunnerState]，状态句来自 [RunLogRecorder.liveUpdateStatus]，
+ * 按用户选的展示方式（超级岛 / 实时更新 / 标准通知栏）由 [RunNotificationFactory] 拼。
+ * 超级岛要先经 [XmsfNetworkGate] 断开小米推送的联网再发，拿到闸门前按标准通知栏发，免得被云端鉴权撤岛
  *
  * 只提供 [start] 不提供外部 stop：`startForegroundService` 之后若 `stopService` 抢在
  * onCreate 之前到达，系统会因 startForeground 未调用直接杀进程。终态退出由本服务自己
@@ -53,6 +63,11 @@ class RunForegroundService : Service() {
     private val runnerPort: RunnerPort by inject()
     private val focusDispatcher: FocusDispatcher by inject()
     private val recorder: RunLogRecorder by inject()
+    private val appSettings: AppSettingsManager by inject()
+    private val liveProbe: LiveCapabilityProbe by inject()
+    private val notificationFactory: RunNotificationFactory by inject()
+    private val xmsfGate: XmsfNetworkGate by inject()
+    private val appScope: CoroutineScope by inject(named<AppCoroutineScope>())
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var observeJob: Job? = null
@@ -66,11 +81,18 @@ class RunForegroundService : Service() {
     /** startForeground 被系统拒绝后本实例已 stopSelf，排队中的 start 不再重试 */
     private var foregroundDenied = false
 
+    /** 超级岛：断网闸门是否已拿到；拿到之前按标准通知栏发 */
+    private val islandReady = MutableStateFlow(false)
+    private var islandGateJob: Job? = null
+
+    /** 超级岛：本轮是否已浮出过一次，之后的刷新不再浮 */
+    private var islandFloated = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        ensureChannel()
+        notificationFactory.ensureChannels()
         // 必须先 startForeground 再判终态：慢一步就是 ForegroundServiceDidNotStartInTimeException
         val initial = runnerPort.state.value
         if (!startAsForeground(buildNotification(initial, recorder.liveUpdateStatus.value))) return
@@ -98,6 +120,7 @@ class RunForegroundService : Service() {
 
     override fun onDestroy() {
         observeJob = null
+        releaseIslandGate()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -112,9 +135,13 @@ class RunForegroundService : Service() {
 
     private suspend fun observeProgress() {
         var lastPostedPhase: RunnerPhase? = null
-        combine(runnerPort.state, recorder.liveUpdateStatus) { state, status ->
-            state to status
-        }.collectLatest { (state, status) ->
+        // 展示方式与闸门也算输入：设置里换了方式、闸门拿到了，都要立刻重发一帧
+        combine(
+            runnerPort.state,
+            recorder.liveUpdateStatus,
+            appSettings.liveBackend,
+            islandReady,
+        ) { state, status, _, _ -> state to status }.collectLatest { (state, status) ->
             if (!state.phase.isBusy) {
                 lastPostedPhase = null
                 stopNow()
@@ -142,17 +169,21 @@ class RunForegroundService : Service() {
      *
      * 收的是 [FocusDispatcher] 补完之后的正文，不是原始事件——`$key`、文件路径、
      * `{name}` 这些形态得先补完，否则推给用户的是没处理过的模板
+     *
+     * 通知正文是纯文本面，Markdown 与 HTML 记号要先剥掉
      */
     private suspend fun observeFocusNotifications() {
         focusDispatcher.resolved.collect { focus ->
             if (FocusChannel.Notification !in focus.channels) return@collect
+            // 只有一张图的模板剥完记号什么都不剩，不发空通知
+            val text = focusPlainText(focus.content).ifEmpty { return@collect }
             ensureFocusChannel()
             val notification = NotificationCompat.Builder(this, FOCUS_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(getString(R.string.notification_focus_title))
-                .setContentText(focus.content)
+                .setContentText(text)
                 // 模板正文可以很长，折叠成一行就没意义了
-                .setStyle(NotificationCompat.BigTextStyle().bigText(focus.content))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setContentIntent(contentIntent())
                 .setAutoCancel(true)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
@@ -181,21 +212,45 @@ class RunForegroundService : Service() {
 
     private fun stopNow() {
         stopForeground(STOP_FOREGROUND_REMOVE)
+        releaseIslandGate()
         stopSelf()
     }
 
-    private fun ensureChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            getString(R.string.notification_channel_run),
-            // LOW：常驻不该出声。MIN 进不了状态栏，部分 ROM 还当成前台服务不成立；
-            // Live Update 也只禁 MIN。重要性建成就改不了，沿用 run_execution
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = getString(R.string.notification_channel_run_desc)
-            setShowBadge(false)
+    /**
+     * 这一帧实际用哪种方式发：选的是超级岛但闸门还没拿到，先按标准通知栏发并去拿闸门；
+     * 中途换走了超级岛就把闸门还掉
+     */
+    private fun effectiveBackend(): LiveBackend {
+        val backend = liveProbe.snapshot().backend
+        if (backend != LiveBackend.HYPER_ISLAND) {
+            releaseIslandGate()
+            return backend
         }
-        notificationManager.createNotificationChannel(channel)
+        if (islandReady.value) return backend
+        if (islandGateJob == null) {
+            // 闸门要跑特权进程里的 shell，不能占主线程
+            islandGateJob = serviceScope.launch(Dispatchers.IO) {
+                xmsfGate.acquire()
+                islandReady.value = true
+            }
+        }
+        return LiveBackend.PLAIN
+    }
+
+    /**
+     * 还闸门；拿闸门的协程还在路上就等它拿完再还，否则晚到的 acquire 会让 xmsf 一直断着
+     *
+     * 等待放到应用级作用域：服务的作用域此刻可能正在取消
+     */
+    private fun releaseIslandGate() {
+        val job = islandGateJob ?: return
+        islandGateJob = null
+        islandReady.value = false
+        islandFloated = false
+        appScope.launch(Dispatchers.IO) {
+            job.join()
+            xmsfGate.release()
+        }
     }
 
     /** 被拒时停服务，onDestroy 撤掉已发出的进度通知；任务本身仍在提权进程继续 */
@@ -215,41 +270,20 @@ class RunForegroundService : Service() {
 
     private fun buildNotification(state: RunnerState, statusText: String?): Notification {
         val snapshot = RunProgressSnapshots.from(state.phase, state.activeExecution, statusText)
-        val style = NotificationCompat.ProgressStyle()
-            .setStyledByProgress(true)
-            .setProgressIndeterminate(snapshot.indeterminate)
-            .setProgressTrackerIcon(
-                IconCompat.createWithResource(this, R.drawable.ic_progress_tracker),
-            )
-            .addProgressSegment(
-                NotificationCompat.ProgressStyle.Segment(RunProgressSnapshots.PROGRESS_MAX)
-                    .setColor(snapshot.barColor),
-            )
-        if (!snapshot.indeterminate) {
-            style.setProgress(snapshot.progress)
-        }
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setColor(snapshot.barColor)
-            .setContentTitle(getString(snapshot.title.stringRes))
-            .setContentText(snapshot.contentText.takeIf { it.isNotBlank() })
-            // ProgressStyle 只在 36+ 生效；经典模板仍靠 setProgress，否则 9–15 没有条子
-            .setProgress(
-                RunProgressSnapshots.PROGRESS_MAX,
-                snapshot.progress,
-                snapshot.indeterminate,
-            )
-            .setStyle(style)
-            .setContentIntent(contentIntent())
-            .setOngoing(true)
-            .setRequestPromotedOngoing(notificationManager.canRequestPromotedOngoing())
-            .setSilent(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .apply {
-                snapshot.shortCriticalText?.let { setShortCriticalText(it) }
-            }
-            .build()
+        val content = RunNotificationContent(
+            title = getString(snapshot.title.stringRes),
+            text = snapshot.contentText,
+            progressLabel = snapshot.shortCriticalText,
+            taskLabel = snapshot.taskLabel,
+            statusLine = snapshot.statusLine,
+            progress = snapshot.progress,
+            indeterminate = snapshot.indeterminate,
+            barColor = snapshot.barColor,
+        )
+        val backend = effectiveBackend()
+        val firstFloat = backend == LiveBackend.HYPER_ISLAND && !islandFloated
+        if (firstFloat) islandFloated = true
+        return notificationFactory.build(content, backend, NOTIFICATION_ID, firstFloat)
     }
 
     /** 通知权限被拒时 notify/cancel 会抛 SecurityException，不能让它掀翻 FGS 主线程 */
@@ -274,7 +308,6 @@ class RunForegroundService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "run_execution"
         private const val NOTIFICATION_ID = 1001
         private const val MIN_UPDATE_INTERVAL_MS = 1_000L
 

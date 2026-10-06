@@ -28,7 +28,7 @@ class FocusDispatcherTest {
     private val definition = ProjectDefinition(
         name = "demo",
         version = "1",
-        controller = ControllerDefinition(),
+        controllers = listOf(ControllerDefinition()),
         resources = listOf(ResourceDefinition("base", listOf("./base"))),
         tasks = emptyList(),
         groups = listOf(TaskGroupDefinition(name = "ungrouped", isUngrouped = true)),
@@ -180,7 +180,7 @@ class FocusDispatcherTest {
 
         runner.emit(focus("./docs/tip.md"), "e1", "启动")
         runner.emit(RunnerEvent.Log("之后的一行"), "e1", "启动")
-        runner.emit(RunnerEvent.ExecutionFinished, "e1")
+        runner.emit(RunnerEvent.ExecutionFinished(ExecutionResult.Completed(emptyList())), "e1")
         // 补完跑在 backgroundScope 上，advanceUntilIdle 不推它的虚拟时间
         testScheduler.advanceTimeBy(2_000)
         testScheduler.runCurrent()
@@ -191,6 +191,7 @@ class FocusDispatcherTest {
                 when (val event = it.event) {
                     is RunnerEvent.Focus -> event.focus.content
                     is RunnerEvent.Log -> event.message
+                    is RunnerEvent.ExecutionFinished -> "ExecutionFinished"
                     else -> event.toString()
                 }
             },

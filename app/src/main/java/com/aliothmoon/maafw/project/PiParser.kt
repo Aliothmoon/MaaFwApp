@@ -27,7 +27,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import java.security.MessageDigest
 
 /** 单个 PI 分片文件（task[] / option{} / global_option[] / setting[] / preset[] / group[]）的解析结果 */
 data class PiFileContent(
@@ -39,6 +38,8 @@ data class PiFileContent(
     val settingSections: List<SettingSectionDefinition> = emptyList(),
     val templates: List<ConfigurationTemplate> = emptyList(),
     val groups: List<TaskGroupDefinition> = emptyList(),
+    /** 协议允许、外壳有意不投影的 option（如 hotkey）；已记 warning，别处引用它们不算悬空 */
+    val skippedOptionNames: Set<String> = emptySet(),
     val diagnostics: List<Diagnostic> = emptyList(),
 )
 
@@ -54,16 +55,22 @@ data class PiResourceContent(
 )
 
 /**
- * controller 声明的原样投影；挑哪一个由 loader 按平台决定
+ * controller 声明的原样投影；loader 只留 Android 能驱动的 Adb 项
  * [name] 是 task 的 controller[] 实际引用的标识，不能用 type 代替
  */
 data class PiControllerContent(
     val name: String,
     val type: String,
+    /** 未物化的原文，`$key` 由 loader 查表 */
+    val label: String? = null,
     /** 三者互斥；都缺省时由外壳按默认分辨率兜底 */
     val displayShortSide: Int? = null,
     val displayLongSide: Int? = null,
     val displayRaw: Boolean = false,
+    /** v2.2.0 `attach_resource_path`，已规范化，相对 interface.json 目录 */
+    val attachResourcePaths: List<String> = emptyList(),
+    /** v2.3.0 `option` */
+    val optionNames: List<String> = emptyList(),
     /** 原样条目，PI_CONTROLLER 要整条 */
     val raw: JsonObject = JsonObject(emptyMap()),
 )
@@ -186,9 +193,12 @@ object PiParser {
             PiControllerContent(
                 name = name,
                 type = type,
+                label = obj.string("label"),
                 displayShortSide = obj.int("display_short_side"),
                 displayLongSide = obj.int("display_long_side"),
                 displayRaw = obj.boolean("display_raw") ?: false,
+                attachResourcePaths = obj.stringList("attach_resource_path").map(::normalizeProjectPath),
+                optionNames = obj.stringList("option"),
                 raw = obj,
             )
         }
@@ -253,9 +263,9 @@ object PiParser {
         val welcomeRaw = welcomeDeclarations(root["welcome"])
         return ProjectMetadata(
             welcome = welcomeRaw.mapNotNull(text::description),
-            welcomeFingerprint = welcomeRaw.takeIf { it.isNotEmpty() }
-                ?.let { welcomeFingerprint(it, root.string("version")) },
+            welcomeDeclarations = welcomeRaw,
             description = text.description(root.string("description")),
+            icon = text.label(root.string("icon"))?.takeIf(String::isNotBlank)?.let(::normalizeProjectPath),
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
             github = text.label(root.string("github"))?.takeIf(::isRemoteUrl),
@@ -282,6 +292,8 @@ object PiParser {
             dsn = dsn,
             tracing = sentry.boolean("tracing") ?: true,
             tracesSampleRate = sentry.string("traces_sample_rate")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 1.0,
+            failureAttachmentsSampleRate =
+                sentry.string("failure_attachments_sample_rate")?.toDoubleOrNull()?.coerceIn(0.0, 1.0) ?: 1.0,
             environment = sentry.string("environment")?.takeIf(String::isNotBlank),
         )
     }
@@ -292,18 +304,6 @@ object PiParser {
         is JsonPrimitive -> listOfNotNull(element.contentOrNull)
         else -> emptyList()
     }.filter(String::isNotBlank)
-
-    /**
-     * 单条沿用数组支持之前的算法：看过的用户升级后不重弹，`"x"` 改写成 `["x"]` 也不算内容变化。
-     * 多条按有序原文整体算，增删、重排、改任一条都会重弹
-     */
-    private fun welcomeFingerprint(raws: List<String>, version: String?): String {
-        val declaration = raws.singleOrNull() ?: JsonArray(raws.map(::JsonPrimitive)).toString()
-        return MessageDigest.getInstance("SHA-256")
-            .digest("$declaration@${version.orEmpty()}".toByteArray())
-            .take(8)
-            .joinToString("") { "%02x".format(it) }
-    }
 
     fun parseFile(source: String, content: String, text: PiTextResolver): PiFileContent {
         val root = try {
@@ -322,9 +322,10 @@ object PiParser {
         val tasks = (root["task"] as? JsonArray).orEmpty().mapNotNull { element ->
             parseTask(source, element, diagnostics, text)
         }
+        val skippedOptionNames = mutableSetOf<String>()
         val options = buildMap {
             (root["option"] as? JsonObject)?.forEach { (name, element) ->
-                parseOption(source, name, element, diagnostics, text)?.let { put(name, it) }
+                parseOption(source, name, element, diagnostics, text, skippedOptionNames)?.let { put(name, it) }
             }
         }
         val templates = (root["preset"] as? JsonArray).orEmpty().mapNotNull { element ->
@@ -338,6 +339,7 @@ object PiParser {
             settingSections = parseSettingSections(source, root, diagnostics, text),
             templates = templates,
             groups = groups,
+            skippedOptionNames = skippedOptionNames,
             diagnostics = diagnostics,
         )
     }
@@ -442,6 +444,7 @@ object PiParser {
         element: JsonElement,
         diagnostics: MutableList<Diagnostic>,
         text: PiTextResolver,
+        skipped: MutableSet<String>,
     ): OptionDefinition? {
         val obj = element as? JsonObject
             ?: return null.also {
@@ -450,12 +453,12 @@ object PiParser {
         val label = text.label(obj.string("label")) ?: name
         val description = text.description(obj.string("description"))
         val icon = obj.iconPath()
-        // controller 名在 Android 上只可能是 PI 声明的那一个 Adb 项
         val applicability = OptionApplicability(
             controllers = obj.stringList("controller"),
             resources = obj.stringList("resource"),
         )
-        return when (val type = obj.string("type")) {
+        // 协议里 type 可省略，缺省即 select
+        return when (val type = obj.string("type") ?: "select") {
             "select", "switch" -> {
                 val cases = parseCases(source, name, obj, diagnostics, text)
                 val defaultCase = obj.string("default_case")?.also {
@@ -528,6 +531,7 @@ object PiParser {
                     source,
                     DiagnosticMessages.unsupportedOptionType(name, "hotkey"),
                 )
+                skipped += name
                 null
             }
 

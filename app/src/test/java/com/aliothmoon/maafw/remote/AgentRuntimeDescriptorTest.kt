@@ -40,6 +40,15 @@ class AgentRuntimeDescriptorTest {
         assertEquals(AgentRuntimeLocation.NATIVE_LIBS, entry.location)
         assertTrue(entry.args.isEmpty())
         assertTrue(entry.env.isEmpty())
+        assertEquals(null, entry.name)
+    }
+
+    @Test
+    fun `配方给的显示名随条目解析出来`() {
+        val descriptor = AgentRuntimeDescriptor.parse(
+            """{"runtimes":[{"location":"nativeLibs","executable":"libgo-service.so","name":"go-service"}]}""",
+        )
+        assertEquals("go-service", descriptor.runtimes.single().name)
     }
 
     @Test

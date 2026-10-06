@@ -27,7 +27,7 @@ class ExportSnapshotsTest {
     fun `settings snapshot keeps configuration and redacts credentials`() {
         val settings = AppSettings(
             runMode = "FOREGROUND",
-            resolutionPreference = "P1080",
+            resolutionPreset = "P1080",
             wakeCredential = "123456",
             mirrorchyanCdk = "secret-cdk",
         )
@@ -35,7 +35,7 @@ class ExportSnapshotsTest {
         val snapshot = Json.parseToJsonElement(ExportSnapshots.settings(settings)).jsonObject
 
         assertEquals("FOREGROUND", snapshot.getValue("runMode").jsonPrimitive.content)
-        assertEquals("P1080", snapshot.getValue("resolutionPreference").jsonPrimitive.content)
+        assertEquals("P1080", snapshot.getValue("resolutionPreset").jsonPrimitive.content)
         assertEquals("[redacted]", snapshot.getValue("wakeCredential").jsonPrimitive.content)
         assertEquals("[redacted]", snapshot.getValue("mirrorchyanCdk").jsonPrimitive.content)
         assertFalse(snapshot.toString().contains("123456"))
@@ -175,7 +175,7 @@ class ExportSnapshotsTest {
     private fun definition() = ProjectDefinition(
         name = "test",
         version = null,
-        controller = ControllerDefinition(),
+        controllers = listOf(ControllerDefinition()),
         resources = emptyList(),
         tasks = emptyList(),
         groups = emptyList(),

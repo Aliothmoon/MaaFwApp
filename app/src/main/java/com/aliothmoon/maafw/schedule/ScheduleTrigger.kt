@@ -63,5 +63,18 @@ private fun nextInterval(
     return Instant.ofEpochMilli(nextMs).atZone(now.zone)
 }
 
+/**
+ * 整批重排时传给 [nextTriggerOf] 的 afterEpochMs：以最近已投递的原定时刻为界
+ *
+ * 只按「现在」算，时间往回拨后会把已经响过的那一次原样再挂一遍（requestId 也相同），
+ * 而 RunLauncher 的去重只在内存里，进程一换就拦不住。
+ * 已投递时刻比现在晚出 [RESYNC_GUARD_WINDOW_MS] 以上就不认：多半是在纠正一个跑快了的时钟，
+ * 认了规则要一直哑到那个时刻
+ */
+fun resyncAfterEpochMs(lastDeliveredMs: Long?, nowMs: Long): Long =
+    if (lastDeliveredMs == null || lastDeliveredMs - nowMs > RESYNC_GUARD_WINDOW_MS) 0L else lastDeliveredMs
+
+const val RESYNC_GUARD_WINDOW_MS = 24 * 3_600_000L
+
 /** 系统默认时区的当下；生产调用点统一走它，测试传自己造的时刻 */
 fun systemNow(): ZonedDateTime = ZonedDateTime.now(ZoneId.systemDefault())

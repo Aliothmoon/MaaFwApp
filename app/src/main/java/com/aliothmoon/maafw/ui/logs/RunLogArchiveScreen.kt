@@ -39,9 +39,11 @@ import com.aliothmoon.maafw.log.RunLogArchiveViewModel
 import com.aliothmoon.maafw.runner.RunSessionLogFile
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
+import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.maaClickable
 import org.koin.androidx.compose.koinViewModel
+import com.aliothmoon.maafw.ui.components.MaaIconButton
 
 /**
  * 历史运行日志的文件列表（二级页面）
@@ -105,38 +107,27 @@ fun RunLogArchiveScreen(
             )
         },
     ) { padding ->
-        if (state.files.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(MaaDesignTokens.Spacing.lg),
-                contentAlignment = Alignment.TopStart,
-            ) {
-                Text(
-                    text = stringResource(
-                        if (state.loading) R.string.common_loading else R.string.log_archive_empty,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            return@Scaffold
-        }
-
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            items(state.files, key = { it.fileName }) { file ->
-                ArchiveRow(
-                    file = file,
-                    onClick = { onOpen(file.fileName) },
-                    onDelete = { pendingDelete = file },
-                )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                items(state.files, key = { it.fileName }) { file ->
+                    ArchiveRow(
+                        file = file,
+                        onClick = { onOpen(file.fileName) },
+                        onDelete = { pendingDelete = file },
+                    )
+                }
+            }
+            if (state.files.isEmpty()) {
+                ListPlaceholder(if (state.loading) R.string.common_loading else R.string.log_archive_empty)
             }
         }
     }
@@ -148,11 +139,15 @@ private fun ArchiveRow(
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    MaaCardSurface(modifier = Modifier.fillMaxWidth()) {
+    // 点击挂在卡片本身并带同一圆角：挂在里面那行上，按下缩放连高亮一起缩，填不满卡片
+    MaaCardSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .maaClickable(shape = MaterialTheme.shapes.medium, onClick = onClick),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .maaClickable(onClick = onClick)
                 .padding(MaaDesignTokens.Card.innerPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
@@ -176,7 +171,7 @@ private fun ArchiveRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onDelete) {
+            MaaIconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Outlined.DeleteOutline,
                     contentDescription = stringResource(R.string.common_delete),

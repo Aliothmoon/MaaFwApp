@@ -460,6 +460,32 @@ class ProjectLoaderGroupTest {
             },
         )
     }
+
+    /** 回归：MaaEnd Keymap.json 把 hotkey 挂进 global_option 与 setting，跳过后又被当成悬空引用报了 4 条 Error */
+    @Test
+    fun `引用被跳过的 hotkey option 不算悬空`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot("tasks/a.json"),
+                "tasks/a.json" to """
+                    {
+                        "setting": [{"name":"Keymap","option":["Keymap"]}],
+                        "global_option": ["Keymap"],
+                        "task": [{"name":"T1","entry":"E1","option":["Keymap"]}],
+                        "option": {"Keymap": {"type":"hotkey","hotkeys":[]}}
+                    }
+                """.trimIndent(),
+            ),
+        )
+        assertTrue(ready.diagnostics.none { it.severity == DiagnosticSeverity.Error })
+        assertEquals(
+            1,
+            ready.diagnostics.count { it.message.isResource(R.string.diagnostic_unsupported_option_type, "Keymap", "hotkey") },
+        )
+        assertEquals(setOf("Keymap"), ready.definition.skippedOptionNames)
+        assertTrue(ready.definition.globalOptionNames.isEmpty())
+        assertTrue(ready.definition.settingSections.single().optionNames.isEmpty())
+    }
 }
 
 class ProjectLoaderProtocolTest {
@@ -642,8 +668,77 @@ class ProjectLoaderControllerTest {
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
             ),
         )
-        assertEquals("安卓", ready.definition.controller.name)
-        assertEquals("Adb", ready.definition.controller.type)
+        assertEquals("安卓", ready.definition.controllers.single().name)
+        assertEquals("Adb", ready.definition.controllers.single().type)
+    }
+
+    /** 本地客户端与云游戏各一个 Adb 项：全留下由用户选，首项缺省，label 与 option 一并带上 */
+    @Test
+    fun `多个 Adb controller 按声明顺序全部留下`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"controller":[
+                        {"name":"ADB","type":"Adb","label":"安卓端"},
+                        {"name":"PC","type":"Win32"},
+                        {"name":"CloudADB","type":"Adb","attach_resource_path":["./resource_cloud"],"option":["O1"]}
+                    ]""",
+                ),
+                "tasks/a.json" to """
+                    {"task":[{"name":"T1","entry":"E1"}],
+                     "option":{"O1":{"cases":[{"name":"A"}]}}}
+                """.trimIndent(),
+            ),
+        )
+        val controllers = ready.definition.controllers
+        assertEquals(listOf("ADB", "CloudADB"), controllers.map { it.name })
+        assertEquals(listOf("安卓端", "CloudADB"), controllers.map { it.label })
+        assertEquals(listOf("O1"), controllers[1].optionNames)
+        assertEquals("ADB", ready.definition.controller(null).name)
+        assertEquals(listOf("resource_cloud"), ready.definition.controller("CloudADB").attachResourcePaths)
+        // PI 更新后删了用户选的那项：回落首项
+        assertEquals("ADB", ready.definition.controller("Gone").name)
+    }
+
+    @Test
+    fun `controller 引用不存在的 option 报 Error`() {
+        val result = ProjectLoader(
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to piRoot(
+                        "tasks/a.json",
+                        body = """"controller":[{"name":"ADB","type":"Adb","option":["Nope"]}]""",
+                    ),
+                    "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+                ),
+            ),
+        ).load()
+        val diagnostics = when (result) {
+            is ProjectLoadResult.Ready -> result.diagnostics
+            is ProjectLoadResult.Failure -> result.diagnostics
+        }
+        assertTrue(diagnostics.any { it.severity == DiagnosticSeverity.Error && it.source == "controller:ADB" })
+    }
+
+    @Test
+    fun `attach_resource_path 取 Adb 项并规范化路径`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"controller":[
+                        {"name":"PC","type":"Win32","attach_resource_path":["./resource_pc"]},
+                        {"name":"安卓","type":"Adb","attach_resource_path":["./resource_adb","resource_cloud"]}
+                    ]""",
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+            ),
+        )
+        assertEquals(
+            listOf("resource_adb", "resource_cloud"),
+            ready.definition.controllers.single().attachResourcePaths,
+        )
     }
 
     /** 回归：曾写死 name=Android/type=ADB，只有恰好把 controller 命名为 ADB 的 PI 才匹配得上 */
@@ -664,10 +759,11 @@ class ProjectLoaderControllerTest {
             ),
         )
         val definition = ready.definition
-        assertNull(ConfigurationResolver.checkApplicability(definition, definition.task("T1")!!, null))
+        val controller = definition.controller(null)
+        assertNull(ConfigurationResolver.checkApplicability(definition, definition.task("T1")!!, controller, null))
         assertTrue(
-            ConfigurationResolver.checkApplicability(definition, definition.task("T2")!!, null)
-                .isResource(R.string.task_unavailable_controller, "PC"),
+            ConfigurationResolver.checkApplicability(definition, definition.task("T2")!!, controller, null)
+                .isResource(R.string.task_unavailable_controller),
         )
     }
 
@@ -688,7 +784,7 @@ class ProjectLoaderControllerTest {
                     it.message.isResource(R.string.diagnostic_no_adb_controller)
             },
         )
-        assertEquals(ControllerDefinition(), ready.definition.controller)
+        assertEquals(listOf(ControllerDefinition()), ready.definition.controllers)
     }
 }
 

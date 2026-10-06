@@ -7,14 +7,18 @@ import kotlinx.serialization.Serializable
 @JvmInline
 value class RunConfigurationId(val value: String)
 
-enum class ThemeMode { System, Light, Dark }
+/** PureDark 是深色的变体：底与卡片压成纯黑，其余配色照深色走 */
+enum class ThemeMode { System, Light, Dark, PureDark }
 
 /** 持久化聚合根：只存用户选择，不复制 PI；schemaVersion 在序列化层 */
 @Serializable
 data class UserConfiguration(
     val initialized: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.System,
+    /** null = PI 声明的第一个 resource；存的名字在 PI 里消失后由 SessionViewModel 写回 null */
     val activeResourceName: String? = null,
+    /** null = PI 声明的第一个 Adb controller；只有 PI 声明了不止一个时用户才会去选 */
+    val activeControllerName: String? = null,
     val globalOptionValues: Map<String, OptionValue> = emptyMap(),
     val controllerOptionValues: Map<String, Map<String, OptionValue>> = emptyMap(),
     val resourceOptionValues: Map<String, Map<String, OptionValue>> = emptyMap(),

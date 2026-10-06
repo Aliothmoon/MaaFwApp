@@ -48,10 +48,10 @@ sealed interface RunLaunchResult {
     data class Invalid(val diagnostics: List<Diagnostic>) : RunLaunchResult
 
     /** RunnerPort 拒绝原因；UiText 随 locale 解析（外壳自产走 resId，底层原文走 uiTextFromFramework） */
-    data class Rejected(val reason: UiText) : RunLaunchResult
+    data class Rejected(val reason: UiText, val error: Throwable? = null) : RunLaunchResult
 
     /** 被某道 [RunPrecheck] 拦下，或 gating 挂载物挂了 */
-    data class Blocked(val reason: UiText) : RunLaunchResult
+    data class Blocked(val reason: UiText, val error: Throwable? = null) : RunLaunchResult
 
     /** 同一个 [RunRequestId] 已经处理过；不是失败，是这次请求本就该被丢掉 */
     data object DuplicateRequest : RunLaunchResult
@@ -59,7 +59,7 @@ sealed interface RunLaunchResult {
     /**
      * 要用户点头。调用方弹框，用户同意后带上 token 重新 [RunLauncher.launch]
      *
-     * 定时触发不会拿到这个——没人可问，编排层已把它降级成 [Blocked]
+     * 只有 [RunTrigger.Manual] 会拿到；定时与悬浮窗没人可问，编排层已把它放行（提醒）或降级成 [Blocked]
      */
     data class NeedsConfirmation(val token: ConfirmToken, val prompt: UiText) : RunLaunchResult
 }
@@ -84,6 +84,8 @@ class RunLauncher(
     /** 收尾要守着整轮，活得比 launch 的调用方久 */
     private val scope: CoroutineScope,
     private val journal: RunJournal,
+    /** 没跑起来的原因要写进 app.log；那份文件给人读，资源 id 得先渲染 */
+    private val renderText: (UiText) -> String,
 ) {
 
     /** 只护投递这一段，不护整轮；运行中的第二次 Start 由 RunnerPort 拒 */
@@ -112,6 +114,19 @@ class RunLauncher(
         steps: RunStepSink? = null,
         signals: RunSignals = RunSignals(),
         progress: RunProgress = RunProgress { _, _ -> },
+    ): RunLaunchResult =
+        dispatch(trigger, acknowledged, configurationId, requestId, force, steps, signals, progress)
+            .also { logOutcome(trigger, configurationId, it) }
+
+    private suspend fun dispatch(
+        trigger: RunTrigger,
+        acknowledged: Set<ConfirmToken>,
+        configurationId: RunConfigurationId?,
+        requestId: RunRequestId?,
+        force: Boolean,
+        steps: RunStepSink?,
+        signals: RunSignals,
+        progress: RunProgress,
     ): RunLaunchResult {
         if (!gate.tryLock()) {
             return RunLaunchResult.Blocked(uiTextOf(R.string.msg_launch_in_progress))
@@ -151,21 +166,21 @@ class RunLauncher(
 
             engage(Anchor.BeforeDispatch, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
-                return RunLaunchResult.Blocked(halt.reason)
+                return RunLaunchResult.Blocked(halt.reason, halt.cause.error)
             }
 
             when (val command = runnerPort.start(plan, ctx.executionId)) {
                 RunnerCommandResult.Accepted -> Unit
                 is RunnerCommandResult.Rejected -> {
-                    finalize(engaged, RunEndReason.NotRun(NotRunCause.Rejected))
-                    return RunLaunchResult.Rejected(command.reason)
+                    finalize(engaged, RunEndReason.NotRun(NotRunCause.Rejected, command.reason, command.error))
+                    return RunLaunchResult.Rejected(command.reason, command.error)
                 }
             }
             requestId?.let(::remember)
 
             engage(Anchor.AfterAccepted, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
-                return RunLaunchResult.Blocked(halt.reason)
+                return RunLaunchResult.Blocked(halt.reason, halt.cause.error)
             }
 
             // 交棒给守着整轮的协程。此刻 phase 一定是 busy——两个 RunnerPort 实现都在
@@ -179,6 +194,33 @@ class RunLauncher(
             throw cancellation
         } finally {
             gate.unlock()
+        }
+    }
+
+    /**
+     * 没跑起来的每一种结局都在这里落一行 app.log：界面上那句提示一闪就没了，
+     * 定时触发更是没人看。拿到异常就带上堆栈
+     */
+    private fun logOutcome(trigger: RunTrigger, configurationId: RunConfigurationId?, result: RunLaunchResult) {
+        val config = configurationId?.value ?: "active"
+        // Schedule 自带整条规则的选项，toString 一长串；日志里认得出是哪条就够
+        val source = when (trigger) {
+            RunTrigger.Manual -> "manual"
+            RunTrigger.Overlay -> "overlay"
+            is RunTrigger.Schedule -> "schedule:${trigger.strategyId}"
+        }
+        when (result) {
+            RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
+            is RunLaunchResult.NeedsConfirmation ->
+                Timber.i("run %s (%s) awaits confirmation: %s", source, config, renderText(result.prompt))
+            is RunLaunchResult.Rejected ->
+                Timber.w(result.error, "run %s (%s) rejected: %s", source, config, renderText(result.reason))
+            is RunLaunchResult.Blocked ->
+                Timber.w(result.error, "run %s (%s) blocked: %s", source, config, renderText(result.reason))
+            is RunLaunchResult.Invalid ->
+                Timber.w("run %s (%s) not started: %d plan diagnostics", source, config, result.diagnostics.size)
+            RunLaunchResult.ProjectNotReady, RunLaunchResult.NoExecutableTasks, RunLaunchResult.ConfigurationMissing ->
+                Timber.w("run %s (%s) not started: %s", source, config, result)
         }
     }
 
@@ -211,18 +253,21 @@ class RunLauncher(
 
                 is Verdict.Block -> return RunLaunchResult.Blocked(verdict.reason)
 
-                is Verdict.NeedsConfirmation -> return when {
+                is Verdict.NeedsConfirmation -> when {
                     // 检查没认出自己上一轮问过的 token，再放行就是死循环弹框。
                     // 把编程错误挡成一次明确失败，而不是让用户点到手软
                     verdict.token in ctx.acknowledged ->
-                        RunLaunchResult.Blocked(uiTextOf(R.string.msg_precheck_ignored_confirmation))
+                        return RunLaunchResult.Blocked(uiTextOf(R.string.msg_precheck_ignored_confirmation))
 
+                    ctx.trigger == RunTrigger.Manual ->
+                        return RunLaunchResult.NeedsConfirmation(verdict.token, verdict.prompt)
+
+                    // 没人能点头（定时、悬浮窗）：提醒照跑，其余拦下。
                     // 降级统一在这里，不在检查里：放进检查的话每加一道都得记得降级，
                     // 忘一次就在定时触发时弹出没人能点的框
-                    ctx.trigger is RunTrigger.Schedule ->
-                        RunLaunchResult.Blocked(verdict.prompt)
+                    verdict.advisory -> Unit
 
-                    else -> RunLaunchResult.NeedsConfirmation(verdict.token, verdict.prompt)
+                    else -> return RunLaunchResult.Blocked(verdict.prompt)
                 }
             }
         }
@@ -242,14 +287,14 @@ class RunLauncher(
                 "gating hook ${hook.id} cannot use AfterAccepted"
             }
             val result = try {
-                withTimeout(ENGAGE_TIMEOUT_MS) { hook.engage(ctx) }
+                withTimeout(hook.engageTimeoutMs) { hook.engage(ctx) }
             } catch (timeout: TimeoutCancellationException) {
                 EngageResult.Failed(uiTextOf(R.string.msg_hook_timeout, hook.id))
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (t: Throwable) {
                 Timber.w(t, "env hook %s engage crashed", hook.id)
-                EngageResult.Failed(uiTextOf(R.string.msg_hook_failed, hook.id))
+                EngageResult.Failed(uiTextOf(R.string.msg_hook_failed, hook.id), error = t)
             }
             val release = when (result) {
                 is EngageResult.Engaged -> result.release
@@ -265,13 +310,13 @@ class RunLauncher(
             steps?.record(RunStep(hook.id, outcome))
             if (release != null) engaged.addLast(release)
             if (result is EngageResult.Failed && hook.gating) {
-                return Halt(result.reason, RunEndReason.NotRun(result.notRun))
+                return Halt(result.reason, RunEndReason.NotRun(result.notRun, result.reason, result.error))
             }
         }
         return null
     }
 
-    private class Halt(val reason: UiText, val cause: RunEndReason)
+    private class Halt(val reason: UiText, val cause: RunEndReason.NotRun)
 
     /**
      * 等待任务结束直到
@@ -301,7 +346,6 @@ class RunLauncher(
     }
 
     private companion object {
-        const val ENGAGE_TIMEOUT_MS = 30_000L
         const val RELEASE_TIMEOUT_MS = 10_000L
 
         /** 闹钟重投的间隔是秒级，记这么多足够，也不至于无限长 */

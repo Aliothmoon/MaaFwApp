@@ -44,7 +44,7 @@ internal class MirrorChyanLatestApi(
                 put("channel", channel.name.lowercase())
                 put("current_version", currentVersion)
                 put("os", "android")
-                put("arch", abi.mirrorArch)
+                abi.mirrorArch.takeIf(String::isNotEmpty)?.let { put("arch", it) }
                 put("user_agent", MiscConstants.UA)
                 cdk?.trim()?.takeIf(String::isNotBlank)?.let {
                     put("cdk", it)
@@ -125,7 +125,7 @@ internal class MirrorChyanUpdateClient(
                 UpdateCheckFailure.VERSION_INVALID,
                 detail = uiTextFromFramework(request.currentVersion),
             )
-        val latest = when (val outcome = api.latest(rid, request.channel, request.abi, request.currentVersion, cdk = null)) {
+        val latest = when (val outcome = latestWithUniversalFallback(rid, request.channel, request.abi, request.currentVersion, cdk = null)) {
             is UpdateSourceOutcome.Failed -> return UpdateCheckResult.SourceFailed(source, outcome.reason, detail = outcome.detail)
             is UpdateSourceOutcome.Ok -> outcome.value
         }
@@ -154,7 +154,7 @@ internal class MirrorChyanUpdateClient(
         if (request.mirrorchyanCdk.isNullOrBlank()) {
             return UpdateResolveResult.Failed(source, UpdateCheckFailure.CDK_REQUIRED)
         }
-        val outcome = api.latest(
+        val outcome = latestWithUniversalFallback(
             rid,
             request.channel,
             request.abi,
@@ -177,5 +177,28 @@ internal class MirrorChyanUpdateClient(
     } catch (e: Exception) {
         Timber.tag("UpdateResolve").w(e, "%s resolve failed", source)
         UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
+    }
+
+    /**
+     * 服务端按 os/arch 精确匹配，不回退通用包；单 ABI 包那一架构下架后只剩 universal 时，
+     * 再不带 arch 问一次。重试仍失败就报第一次的原因，那才是这个包自己的情况
+     */
+    private suspend fun latestWithUniversalFallback(
+        rid: String,
+        channel: UpdateChannel,
+        abi: AndroidAbi,
+        currentVersion: String,
+        cdk: String?,
+    ): UpdateSourceOutcome<MirrorChyanLatestApi.Latest> {
+        val outcome = api.latest(rid, channel, abi, currentVersion, cdk)
+        if (abi == AndroidAbi.UNIVERSAL) return outcome
+        if (outcome !is UpdateSourceOutcome.Failed || outcome.reason !in ARCH_MISSING) return outcome
+        Timber.tag("UpdateCheck").i("%s has no %s package, retrying as universal", source, abi)
+        return api.latest(rid, channel, AndroidAbi.UNIVERSAL, currentVersion, cdk)
+            .takeIf { it is UpdateSourceOutcome.Ok } ?: outcome
+    }
+
+    private companion object {
+        val ARCH_MISSING = setOf(UpdateCheckFailure.RESOURCE_NOT_FOUND, UpdateCheckFailure.INVALID_ARCH)
     }
 }

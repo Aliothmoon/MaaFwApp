@@ -35,11 +35,12 @@ object ExportSnapshots {
         put("screenSaverEnabled", settings.screenSaverEnabled)
         put("closeAppAfterTask", settings.closeAppAfterTask)
         put("touchPreviewEnabled", settings.touchPreviewEnabled)
-        put("resolutionPreference", settings.resolutionPreference)
+        put("resolutionPreset", settings.resolutionPreset)
         put("debugMode", settings.debugMode)
+        put("saveOnError", settings.saveOnError)
         put("themeStyle", settings.themeStyle)
         put("eventNotificationLevel", settings.eventNotificationLevel)
-        put("wakeUnlockEnabled", settings.wakeUnlockEnabled)
+        put("wakeUnlockType", settings.wakeUnlockType)
         put(
             "wakeCredential",
             settings.wakeCredential.takeUnless { redactSecrets } ?: redact(settings.wakeCredential),

@@ -2,9 +2,12 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.domain.UnlockCredential
+import com.aliothmoon.maafw.runner.ResolutionPreset
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,10 +60,10 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         touchPreviewEnabled.value = enabled
     }
 
-    override val resolutionPreference = MutableStateFlow(ResolutionPreference.P720)
+    override val resolutionPreset = MutableStateFlow(ResolutionPresets.builtIn.first())
 
-    override suspend fun setResolutionPreference(preference: ResolutionPreference) {
-        resolutionPreference.value = preference
+    override suspend fun setResolutionPreset(preset: ResolutionPreset) {
+        resolutionPreset.value = preset
     }
 
     override val debugMode = MutableStateFlow(false)
@@ -81,10 +84,16 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         themeStyle.value = style
     }
 
-    override val wakeUnlockEnabled = MutableStateFlow(false)
+    override val uiScale = MutableStateFlow(UiScale.AUTO)
 
-    override suspend fun setWakeUnlockEnabled(enabled: Boolean) {
-        wakeUnlockEnabled.value = enabled
+    override suspend fun setUiScale(scale: Int) {
+        uiScale.value = scale
+    }
+
+    override val wakeUnlockType = MutableStateFlow(UnlockCredential.TYPE_SWIPE)
+
+    override suspend fun setWakeUnlockType(type: String) {
+        wakeUnlockType.value = type
     }
 
     override val wakeCredential = MutableStateFlow("")
@@ -105,7 +114,7 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         runDurationLimitMinutes.value = RunDurationLimit.normalize(minutes)
     }
 
-    override val telemetryEnabled = MutableStateFlow(false)
+    override val telemetryEnabled = MutableStateFlow(true)
 
     override suspend fun setTelemetryEnabled(enabled: Boolean) {
         telemetryEnabled.value = enabled

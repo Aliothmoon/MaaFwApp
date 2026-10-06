@@ -293,14 +293,15 @@ private fun OverlayChoiceChip(
     leading: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(MaaTheme.style.radii.button)
     Surface(
-        shape = RoundedCornerShape(MaaTheme.style.radii.button),
+        shape = shape,
         color = if (selected) scheme.primaryContainer else Color.Transparent,
         border = BorderStroke(
             MaaDesignTokens.Separator.thickness,
             if (selected) scheme.primary else scheme.outline,
         ),
-        modifier = Modifier.maaClickable(enabled = enabled, onClick = onClick),
+        modifier = Modifier.maaClickable(enabled = enabled, shape = shape, onClick = onClick),
     ) {
         Row(
             modifier = Modifier.padding(
