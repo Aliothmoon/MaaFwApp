@@ -19,8 +19,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -59,6 +57,7 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
@@ -234,7 +233,7 @@ private fun CdkInputBlock(
             )
         }
         Icon(
-            imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+            imageVector = if (expanded) MaaIcons.ChevronUp else MaaIcons.ChevronDown,
             contentDescription = toggleLabel,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(MaaDesignTokens.IconSize.md),
