@@ -644,6 +644,17 @@ fun MaaInfoRow(label: String, value: String) {
     }
 }
 
+/** 任务这一轮跑不了的原因；跳过不算出错，用警示色不用 error */
+@Composable
+fun MaaSkipReason(reason: String, modifier: Modifier = Modifier) {
+    Text(
+        text = reason,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaaTheme.palette.warning.content,
+        modifier = modifier,
+    )
+}
+
 @Composable
 fun MaaToneBadge(
     text: String,

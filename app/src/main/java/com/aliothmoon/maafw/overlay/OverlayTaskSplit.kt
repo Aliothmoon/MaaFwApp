@@ -38,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +53,7 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.components.MaaSkipReason
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.tasks.setPresent
@@ -263,11 +265,12 @@ private fun OverlayCompactTaskList(
                             onIntent(SessionIntent.ToggleTask(active.id, task.instanceId, enabled))
                         },
                         enabled = !locked && task.toggleable,
-                        warning = task.checkedButSkipped,
+                        skipped = task.skipped,
                     )
                     Text(
                         text = task.label,
                         style = MaterialTheme.typography.labelSmall,
+                        color = if (task.skipped) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
                         fontWeight = if (instanceId == selectedId) FontWeight.Medium else FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -364,6 +367,7 @@ private fun OverlayOptionPane(
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Medium,
         )
+        task.unavailableReason?.let { MaaSkipReason(it.asString()) }
         OverlayOptionEditorList(
             options = task.options,
             locked = locked,
@@ -449,12 +453,16 @@ private fun OverlayAddPane(
                     enabled = !locked && !item.unsupported,
                     onClick = { selected.setPresent(item.taskName, item.taskName !in selected) },
                 ) {
-                    Text(
-                        text = item.label,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs)) {
+                        Text(
+                            text = item.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (item.applicable) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        item.unavailableReason?.let { MaaSkipReason(it.asString()) }
+                    }
                 }
             }
         }
