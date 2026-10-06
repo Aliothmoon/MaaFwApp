@@ -691,7 +691,7 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId points to a missing configuration</string>
     <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>
     <string name="diagnostic_runtime_no_resource">No resource is available to build the runtime environment</string>
-    <string name="diagnostic_enabled_task_missing_definition">Enabled task "%1$s" does not exist in this project. It may have been renamed or removed; please reconfigure it</string>
+    <string name="diagnostic_enabled_task_missing_definition">Enabled task "%1$s" no longer exists in this project (it may have been renamed or removed). Remove it from the task list</string>
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
     <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
