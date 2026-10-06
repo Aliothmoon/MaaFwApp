@@ -29,6 +29,7 @@ import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.Workarounds
+import android.graphics.Bitmap
 import android.view.Surface
 import android.os.Process
 import android.provider.Settings
@@ -343,6 +344,22 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun saveCachedImage(path: String?): Boolean =
         !path.isNullOrBlank() && runner.saveCachedImage(path)
+
+    override fun saveDisplayFrame(path: String?): Boolean {
+        if (path.isNullOrBlank()) return false
+        var bitmap: Bitmap? = null
+        return try {
+            bitmap = NativeBridgeLib.getFrameBufferBitmap() ?: return false
+            val file = File(path)
+            file.parentFile?.mkdirs()
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        } catch (e: Throwable) {
+            Ln.w("$TAG: saveDisplayFrame failed: ${e.message}")
+            false
+        } finally {
+            bitmap?.recycle()
+        }
+    }
 
     override fun getGameFps(): Float = GameFpsMonitor.currentFps()
 

@@ -470,8 +470,11 @@
     <string name="quick_action_reset_task_list">Reset task list</string>
     <string name="quick_action_screen_saver">Screen off</string>
     <string name="quick_action_close_app">Close target app</string>
+    <string name="quick_action_screenshot">Screenshot</string>
     <string name="quick_setting_close_app_after_task">Close the target app when task ends</string>
     <string name="quick_setting_touch_preview">Show touch preview</string>
+    <string name="msg_screenshot_saved">Screenshot saved. It will be included when you export logs</string>
+    <string name="msg_screenshot_failed">Screenshot failed. Try again later</string>
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>
@@ -692,7 +695,7 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId points to a missing configuration</string>
     <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>
     <string name="diagnostic_runtime_no_resource">No resource is available to build the runtime environment</string>
-    <string name="diagnostic_enabled_task_missing_definition">Enabled task "%1$s" has no definition</string>
+    <string name="diagnostic_enabled_task_missing_definition">Enabled task "%1$s" no longer exists in this project (it may have been renamed or removed). Remove it from the task list</string>
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
     <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
