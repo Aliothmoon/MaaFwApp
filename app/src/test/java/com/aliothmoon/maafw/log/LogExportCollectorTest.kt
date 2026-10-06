@@ -57,7 +57,6 @@ class LogExportCollectorTest {
         write("log/crash/crash_a.txt", ageDays = 2)
         write("log/crash/crash_b.txt", ageDays = 8)
         write("log/focus/focus_0.png", ageDays = 100)
-        write("log/manual/manual_a.png", ageDays = 1)
         write("log/manual/manual_b.png", ageDays = 8)
         write("debug/logcat/app/logcat_a.log", ageDays = 3)
         write("debug/logcat/app/logcat_b.log", ageDays = 9)

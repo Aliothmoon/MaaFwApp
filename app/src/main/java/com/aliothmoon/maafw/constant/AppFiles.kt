@@ -32,3 +32,4 @@ object AppFiles {
     const val LOGCAT_CORE_DIR = "logcat/core"
     const val LOGCAT_APP_DIR = "logcat/app"
 }
+

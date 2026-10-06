@@ -32,6 +32,7 @@ import com.aliothmoon.maafw.privileged.ServiceBindResult
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
+import com.aliothmoon.maafw.privileged.callWithTimeout
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -52,7 +53,6 @@ import com.aliothmoon.maafw.runner.ConfirmToken
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
-import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.focusPlainText
 import com.aliothmoon.maafw.runner.isBusy
@@ -81,13 +81,12 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 /** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
 private data class SettingsSnapshot(
@@ -594,9 +593,7 @@ class SessionViewModel(
             SessionIntent.ApplyForegroundResolution -> applyForegroundResolution()
             SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
-
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
-
             // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
             // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
             SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
@@ -651,32 +648,31 @@ class SessionViewModel(
         }
     }
 
-    /**
-     * 手动截屏取 controller 缓存帧：后台运行中它就是刚从虚拟屏抓到的画面。
-     * 成功后直接接日志导出，让这张现场图随日志包一起交出去。
-     */
     private suspend fun captureVirtualDisplay() {
-        if (runnerPort.state.value.phase != RunnerPhase.Running ||
-            appSettings.runMode.value != RunMode.BACKGROUND
-        ) {
+        if (!appSettings.debugMode.value || appSettings.runMode.value != RunMode.BACKGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_screenshot_failed)))
             return
         }
 
         val dir = File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR)
         val target = File(dir, "manual_${SCREENSHOT_STAMP.format(Date())}.png")
-        val saved = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
-            withContext(MaaDispatchers.IO) {
-                runCatching { servicePort.serviceOrNull()?.saveCachedImage(target.absolutePath) }
-                    .onFailure { Timber.w(it, "manual screenshot failed") }
-                    .getOrNull()
-            }
+        val saved = servicePort.callWithTimeout(CAPTURE_TIMEOUT) {
+            it.saveDisplayFrame(target.absolutePath).also { pruneManualScreenshots(dir) }
         } == true
 
         emitEffect(
-            if (saved) SessionEffect.OpenLogExport
-            else SessionEffect.ShowMessage(uiTextOf(R.string.msg_screenshot_failed)),
+            SessionEffect.ShowMessage(
+                uiTextOf(if (saved) R.string.msg_screenshot_saved else R.string.msg_screenshot_failed),
+            ),
         )
+    }
+
+    private fun pruneManualScreenshots(dir: File) {
+        dir.listFiles()
+            ?.filter { it.isFile }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(MANUAL_SCREENSHOT_KEEP)
+            ?.forEach { it.delete() }
     }
 
     /** Screen 禁用之外的第二层写锁：写入前再读 RunnerState */
@@ -864,7 +860,9 @@ class SessionViewModel(
     }
 
     private companion object {
-        const val CAPTURE_TIMEOUT_MS = 3_000L
+        // 整帧 PNG 编码在特权进程里做，高分辨率下要几百毫秒
+        val CAPTURE_TIMEOUT = 5.seconds
+        const val MANUAL_SCREENSHOT_KEEP = 20
         val SCREENSHOT_STAMP = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
     }
 }

@@ -297,7 +297,7 @@ sealed interface SessionIntent {
     /** 不等运行开始，立刻盖上屏保；同样要 Application 上下文 */
     data object ShowScreenSaver : SessionIntent
 
-    /** 保存后台运行时的 controller 缓存帧；成功后交给日志导出流程 */
+    /** 存一张虚拟屏当前画面到 log/manual/，随日志导出带走 */
     data object CaptureVirtualDisplay : SessionIntent
 
     data object ReloadProject : SessionIntent
@@ -385,9 +385,6 @@ sealed interface SessionEffect {
      */
     data object ShowOverlay : SessionEffect
     data object ShowScreenSaver : SessionEffect
-
-    /** 截图已落盘；Route 层复用现有日志导出 sheet 询问分享或保存 */
-    data object OpenLogExport : SessionEffect
 
     /** 调试模式已启用并落盘，重启 App 让日志管线以新状态起来（对齐 MaaMeow） */
     data object RestartApp : SessionEffect

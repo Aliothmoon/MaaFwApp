@@ -235,18 +235,18 @@ internal fun TasksQuickOptionsPanel(
                         },
                         modifier = Modifier.weight(1f),
                     )
-                    ActionTile(
-                        icon = Icons.Outlined.PhotoCamera,
-                        label = stringResource(R.string.quick_action_screenshot),
-                        accent = MaterialTheme.colorScheme.secondary,
-                        enabled = state.runMode == RunMode.BACKGROUND &&
-                            state.runner.phase == RunnerPhase.Running,
-                        onClick = {
-                            onDismiss()
-                            onIntent(SessionIntent.CaptureVirtualDisplay)
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
+                    if (state.debugMode && state.runMode == RunMode.BACKGROUND) {
+                        ActionTile(
+                            icon = Icons.Outlined.PhotoCamera,
+                            label = stringResource(R.string.quick_action_screenshot),
+                            accent = MaterialTheme.colorScheme.secondary,
+                            onClick = {
+                                onDismiss()
+                                onIntent(SessionIntent.CaptureVirtualDisplay)
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
 
                 GroupLabel(stringResource(R.string.quick_settings_title))

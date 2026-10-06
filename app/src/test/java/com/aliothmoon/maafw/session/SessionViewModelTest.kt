@@ -186,7 +186,7 @@ class SessionViewModelTest {
     private fun TestScope.createVm(
         store: InMemoryUserConfigurationStore = readyStore(),
         project: FakeProjectRepository = FakeProjectRepository(ProjectState.Ready(definition, emptyList())),
-        runner: RunnerPort = StubRunnerPort(
+        runner: StubRunnerPort = StubRunnerPort(
             scope = kotlinx.coroutines.CoroutineScope(mainDispatcher),
             scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 0),
         ),
@@ -197,7 +197,7 @@ class SessionViewModelTest {
         preview: RecordingPreviewPort = RecordingPreviewPort(),
         welcomeResolver: WelcomeResolver = WelcomeResolver { null },
         hazards: DisplayHazards = DisplayHazards(),
-    ): Triple<SessionViewModel, InMemoryUserConfigurationStore, RunnerPort> {
+    ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val focusDispatcher = focusDispatcherFor(runner)
         val vm = SessionViewModel(
             projectRepository = project,
@@ -224,7 +224,7 @@ class SessionViewModelTest {
         return Triple(vm, store, runner)
     }
 
-    /** 只换 RunnerPort 的构造点，避免重复展开 createVm 的默认依赖 */
+    /** 只换 RunnerPort 的构造点；createVm 的返回三元组绑死了 StubRunnerPort */
     private fun TestScope.createVmWithRunner(
         runner: RunnerPort,
         focusDispatcher: FocusDispatcher = focusDispatcherFor(runner),
@@ -617,78 +617,86 @@ class SessionViewModelTest {
         assertTrue(runner.state.value.phase.isBusy)
     }
 
-    @Test
-    fun `manual screenshot saves a virtual display frame and opens log export`() = runTest(mainDispatcher) {
-        val service = FakePrivilegedService()
-        val runner = RecordingEventRunnerPort()
-        val (vm, _, _) = createVm(
-            runner = runner,
-            servicePort = FakePrivilegedServicePort(service),
-        )
-        advanceUntilIdle()
+    private val debugSettings get() = FakeAppSettingsGateway().apply { debugMode.value = true }
 
+    private fun List<SessionEffect>.hasMessage(res: Int) =
+        any { it is SessionEffect.ShowMessage && it.message.isResource(res) }
+
+    @Test
+    fun `manual screenshot saves the display frame without a run`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = debugSettings)
+        advanceUntilIdle()
         val effects = mutableListOf<SessionEffect>()
         backgroundScope.launch { vm.effects.collect { effects += it } }
-        runner.updatePhase(RunnerPhase.Running)
 
         vm.onIntent(SessionIntent.CaptureVirtualDisplay)
         advanceUntilIdle()
 
-        assertEquals(1, service.savedImagePaths.size)
-        val path = service.savedImagePaths.single()
-        val expectedDir = File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR)
-        assertTrue(path.startsWith("${expectedDir.absolutePath}${File.separator}"))
-        assertTrue(path.endsWith(".png"))
-        assertTrue(SessionEffect.OpenLogExport in effects)
+        val saved = File(service.savedFramePaths.single())
+        assertEquals(File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR), saved.parentFile)
+        assertTrue(effects.hasMessage(R.string.msg_screenshot_saved))
     }
 
     @Test
-    fun `manual screenshot failure keeps log export closed`() = runTest(mainDispatcher) {
-        val service = FakePrivilegedService().apply { saveCachedImageResult = false }
-        val runner = RecordingEventRunnerPort()
+    fun `manual screenshot keeps only the newest frames on disk`() = runTest(mainDispatcher) {
+        val dir = File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR).apply { mkdirs() }
+        val old = (0 until 25).map { i ->
+            File(dir, "manual_$i.png").apply {
+                writeText("x")
+                setLastModified(1_000_000L + i * 1_000L)
+            }
+        }
         val (vm, _, _) = createVm(
-            runner = runner,
-            servicePort = FakePrivilegedServicePort(service),
+            servicePort = FakePrivilegedServicePort(FakePrivilegedService()),
+            settings = debugSettings,
         )
         advanceUntilIdle()
-
-        val effects = mutableListOf<SessionEffect>()
-        backgroundScope.launch { vm.effects.collect { effects += it } }
-        runner.updatePhase(RunnerPhase.Running)
 
         vm.onIntent(SessionIntent.CaptureVirtualDisplay)
         advanceUntilIdle()
 
-        assertTrue(
-            effects.any {
-                it is SessionEffect.ShowMessage &&
-                    it.message.isResource(R.string.msg_screenshot_failed)
-            },
-        )
-        assertFalse(SessionEffect.OpenLogExport in effects)
+        val kept = dir.listFiles().orEmpty().map { it.name }.toSet()
+        assertEquals(old.takeLast(20).map { it.name }.toSet(), kept)
     }
 
     @Test
-    fun `manual screenshot rejects foreground runs before ipc`() = runTest(mainDispatcher) {
-        val service = FakePrivilegedService()
-        val runner = RecordingEventRunnerPort()
-        val settings = FakeAppSettingsGateway().apply { runMode.value = RunMode.FOREGROUND }
-        val (vm, _, _) = createVm(
-            runner = runner,
-            servicePort = FakePrivilegedServicePort(service),
-            settings = settings,
-        )
+    fun `manual screenshot failure reports it`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService().apply { saveDisplayFrameResult = false }
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = debugSettings)
         advanceUntilIdle()
-
         val effects = mutableListOf<SessionEffect>()
         backgroundScope.launch { vm.effects.collect { effects += it } }
-        runner.updatePhase(RunnerPhase.Running)
 
         vm.onIntent(SessionIntent.CaptureVirtualDisplay)
         advanceUntilIdle()
 
-        assertTrue(service.savedImagePaths.isEmpty())
-        assertFalse(SessionEffect.OpenLogExport in effects)
+        assertTrue(effects.hasMessage(R.string.msg_screenshot_failed))
+    }
+
+    @Test
+    fun `manual screenshot is debug-only and rejects before ipc`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service))
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(service.savedFramePaths.isEmpty())
+    }
+
+    @Test
+    fun `manual screenshot rejects foreground mode before ipc`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val settings = debugSettings.apply { runMode.value = RunMode.FOREGROUND }
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = settings)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(service.savedFramePaths.isEmpty())
     }
 
     @Test

@@ -33,10 +33,6 @@ class RecordingEventRunnerPort : RunnerPort {
         _state.value = state
     }
 
-    fun updatePhase(phase: RunnerPhase) {
-        _state.value = _state.value.copy(phase = phase)
-    }
-
     fun emit(event: RunnerEvent, executionId: String = DEFAULT_EXECUTION_ID, taskLabel: String? = null) {
         check(_events.tryEmit(RunnerEventEnvelope(executionId, taskLabel, event))) {
             "事件缓冲满了，调大 extraBufferCapacity"
