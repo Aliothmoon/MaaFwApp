@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -77,6 +76,7 @@ import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.components.MaaIconButton
 
 private sealed interface ConfigSheetPage {
     /** 导航深度；AnimatedContent 用 depth 差决定滑入方向 */
@@ -486,7 +486,7 @@ private fun CreateEmptyCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(enabled = writeEnabled, onClick = onClick)
+            .maaClickable(enabled = writeEnabled, shape = MaterialTheme.shapes.medium, onClick = onClick)
             .alpha(if (writeEnabled) 1f else MaaDesignTokens.Alpha.disabled),
         shape = MaterialTheme.shapes.medium,
         color = Color.Transparent,
@@ -562,7 +562,7 @@ private fun ConfigRowCard(
                     color = contentColor.copy(alpha = MaaDesignTokens.Alpha.secondary),
                 )
             }
-            IconButton(onClick = onDuplicate, enabled = writeEnabled) {
+            MaaIconButton(onClick = onDuplicate, enabled = writeEnabled) {
                 Icon(
                     imageVector = Icons.Outlined.ContentCopy,
                     contentDescription = stringResource(R.string.common_copy),
@@ -570,7 +570,7 @@ private fun ConfigRowCard(
                     modifier = Modifier.size(MaaDesignTokens.IconSize.md),
                 )
             }
-            IconButton(onClick = onRename, enabled = writeEnabled) {
+            MaaIconButton(onClick = onRename, enabled = writeEnabled) {
                 Icon(
                     imageVector = Icons.Outlined.Edit,
                     contentDescription = stringResource(R.string.common_rename),
@@ -578,7 +578,7 @@ private fun ConfigRowCard(
                     modifier = Modifier.size(MaaDesignTokens.IconSize.md),
                 )
             }
-            IconButton(onClick = onDelete, enabled = writeEnabled) {
+            MaaIconButton(onClick = onDelete, enabled = writeEnabled) {
                 Icon(
                     imageVector = Icons.Outlined.DeleteOutline,
                     contentDescription = stringResource(R.string.common_delete),
@@ -598,7 +598,7 @@ private fun TemplateCard(
 ) {
     MaaCard(
         modifier = Modifier
-            .maaClickable(enabled = writeEnabled, onClick = onClick)
+            .maaClickable(enabled = writeEnabled, shape = MaterialTheme.shapes.medium, onClick = onClick)
             .alpha(if (writeEnabled) 1f else MaaDesignTokens.Alpha.disabled),
         contentPadding = PaddingValues(MaaDesignTokens.Spacing.md),
     ) {

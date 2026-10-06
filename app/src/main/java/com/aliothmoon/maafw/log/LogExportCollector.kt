@@ -24,13 +24,22 @@ object LogExportCollector {
      */
     private val ROLLING_MARKERS = listOf("/run/", "/focus/", "/manual/", "/logcat/", "/crash/")
 
-    fun collect(roots: List<File>, now: Long): List<File> =
-        roots.asSequence()
+    /**
+     * agent 以 PI 根为工作目录，日志写在它下面；外壳不知道这些文件会不会轮转，一律只收近 7 天
+     *
+     * [include] 是相对 [root] 的 glob，来自配方的 `logs.include`
+     */
+    data class PiLogs(val root: File, val include: List<String>)
+
+    fun collect(roots: List<File>, now: Long, piLogs: PiLogs? = null): List<File> {
+        val rollingCutoff = now - ROLLING_KEEP_DAYS * MS_PER_DAY
+        val own = roots.asSequence()
             .filter { it.isDirectory }
             .flatMap { it.walkTopDown() }
             .filter { it.isFile }
-            .filter { shouldExport(it, now - ROLLING_KEEP_DAYS * MS_PER_DAY) }
-            .toList()
+            .filter { shouldExport(it, rollingCutoff) }
+        return (own + piLogFiles(piLogs, rollingCutoff)).toList()
+    }
 
     private fun shouldExport(file: File, rollingCutoff: Long): Boolean {
         val path = file.invariantSeparatorsPath
@@ -38,5 +47,45 @@ object LogExportCollector {
         if (path.contains("/$EXPORT_DIR_NAME/")) return false
         if (ROLLING_MARKERS.none { path.contains(it) }) return true
         return file.lastModified() >= rollingCutoff
+    }
+
+    private fun piLogFiles(piLogs: PiLogs?, rollingCutoff: Long): Sequence<File> {
+        if (piLogs == null || piLogs.include.isEmpty() || !piLogs.root.isDirectory) return emptySequence()
+        val patterns = piLogs.include.map(::globToRegex)
+        return piLogs.root.walkTopDown()
+            .filter { it.isFile && it.lastModified() >= rollingCutoff }
+            .filter { file ->
+                val relative = file.relativeTo(piLogs.root).invariantSeparatorsPath
+                patterns.any { it.matches(relative) }
+            }
+    }
+
+    /** 与配方 `include` 同一套写法：`**` 跨目录，`*`、`?` 不跨 `/` */
+    internal fun globToRegex(glob: String): Regex {
+        val out = StringBuilder()
+        var i = 0
+        while (i < glob.length) {
+            when {
+                glob.startsWith("**/", i) -> {
+                    out.append("(?:.*/)?")
+                    i += 3
+                }
+                glob.startsWith("**", i) -> {
+                    out.append(".*")
+                    i += 2
+                }
+                else -> {
+                    out.append(
+                        when (val c = glob[i]) {
+                            '*' -> "[^/]*"
+                            '?' -> "[^/]"
+                            else -> Regex.escape(c.toString())
+                        },
+                    )
+                    i++
+                }
+            }
+        }
+        return Regex(out.toString())
     }
 }

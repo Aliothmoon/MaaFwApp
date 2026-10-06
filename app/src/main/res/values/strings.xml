@@ -43,6 +43,7 @@
     <!-- 运行开关 -->
     <string name="runner_start">开始任务</string>
     <string name="runner_foreground_blocked">当前是前台模式，请先切换到后台模式</string>
+    <string name="runner_background_unsupported">Android 10 以下无法使用后台模式，尝试更换设备或者升级系统</string>
     <string name="runner_stop">停止</string>
     <string name="runner_stopping">停止中…</string>
 
@@ -84,6 +85,8 @@
     <string name="home_project_loading">正在加载 ProjectInterface…</string>
     <string name="home_project_load_failed">项目加载失败</string>
     <string name="home_diagnostics_summary">诊断：%1$d 条</string>
+    <string name="home_diagnostics_expand">查看诊断详情</string>
+    <string name="home_diagnostics_collapse">收起诊断详情</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="other">诊断：%1$d 条（%2$d 条错误）</item>
     </plurals>
@@ -104,10 +107,16 @@
     <string name="result_failed">失败：%1$s</string>
 
     <!-- 设置页；分组对齐 MaaMeow 的 settings_section_* -->
-    <string name="settings_section_global_option">任务设置</string>
+    <string name="settings_group_task">任务设置</string>
+    <string name="settings_group_task_desc">由项目资源提供，作用于每次运行</string>
+    <string name="settings_section_global_option">通用</string>
     <string name="settings_section_resource_option">资源设置</string>
+    <string name="settings_section_controller_option">控制器设置</string>
     <string name="settings_section_display">显示设置</string>
-    <string name="settings_section_schedule">定时任务设置</string>
+    <string name="settings_section_duration_limit">运行时长上限</string>
+    <string name="settings_duration_limit_enabled">单轮超时后自动停止</string>
+    <string name="settings_duration_limit_minutes">最长运行分钟数</string>
+    <string name="settings_duration_limit_hint">范围 %1$d–%2$d 分钟；运行中改动下一轮生效</string>
     <string name="settings_section_other">其他设置</string>
     <string name="settings_pip_on_home">后台运行时自动画中画</string>
     <string name="settings_pip_on_home_desc">后台模式任务运行中，停在任务页时按 Home 或手势回桌面，自动缩为画中画小窗继续显示画面。小窗内无法操作游戏</string>
@@ -116,6 +125,25 @@
     <string name="settings_follow_system">跟随系统</string>
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_pure_dark">纯黑</string>
+    <string name="settings_ui_scale">页面缩放</string>
+    <string name="settings_ui_scale_desc">调整界面整体大小（含间距）。自动档按屏幕宽度推荐，系统字体大小在此之上另外生效。主界面与悬浮窗都跟随此设置</string>
+    <string name="settings_ui_scale_auto_value">自动 · %1$d%%</string>
+    <string name="settings_ui_scale_use_auto">使用自动（推荐）</string>
+    <string name="wallpaper_title">自定义背景</string>
+    <string name="wallpaper_desc">用一张图片做主界面与设置页的背景</string>
+    <string name="wallpaper_enable">启用自定义背景</string>
+    <string name="wallpaper_pick">选择图片</string>
+    <string name="wallpaper_replace">更换图片</string>
+    <string name="wallpaper_remove">移除</string>
+    <string name="wallpaper_image_alpha">图片不透明度</string>
+    <string name="wallpaper_scrim">遮罩强度</string>
+    <string name="wallpaper_blur">模糊</string>
+    <string name="wallpaper_import_failed">背景图片导入失败</string>
+    <string name="wallpaper_crop_reset">复位</string>
+    <string name="wallpaper_crop_rotate">旋转 90°</string>
+    <string name="wallpaper_crop_save">保存背景</string>
+    <string name="settings_ui_scale_preview">预览：拖动滑块，这段文字会跟着缩放</string>
     <string name="settings_theme_style_default">默认</string>
     <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">语言</string>
@@ -125,17 +153,19 @@
     <string name="settings_run_mode_foreground">前台模式</string>
     <string name="settings_resource">服务器</string>
     <string name="settings_no_resources">项目未提供可选服务器</string>
+    <string name="settings_controller">控制器</string>
     <string name="settings_reload_project">重新加载项目</string>
     <string name="settings_about">关于</string>
     <string name="settings_version">版本</string>
     <string name="settings_version_of">%1$s 版本</string>
     <string name="settings_framework">MaaFramework</string>
     <string name="settings_telemetry">帮助改进本项目</string>
-    <string name="settings_telemetry_desc">向项目作者发送任务名与运行结果，不含截图、日志正文与你填写的内容</string>
-    <string name="settings_project">项目</string>
+    <string name="settings_telemetry_desc">匿名发送崩溃与任务统计；任务失败时附带该任务的运行日志与出错截图，帮助发现常见问题</string>
+    <string name="settings_about_welcome">查看欢迎信息</string>
     <string name="settings_about_contact">联系方式</string>
     <string name="settings_about_license">开源许可</string>
     <string name="settings_about_repository">项目仓库</string>
+    <string name="settings_about_powered_by">Powered by %1$s</string>
     <string name="settings_section_update">更新</string>
     <string name="settings_update_source_mirror">Mirror酱</string>
     <string name="settings_update_source_github">GitHub</string>
@@ -157,7 +187,6 @@
     <string name="settings_update_check">检查更新</string>
     <string name="settings_update_checking">检查中…</string>
     <string name="settings_update_download">下载更新</string>
-    <string name="settings_update_result">检查结果</string>
     <string name="settings_update_up_to_date">当前已是最新版本</string>
     <string name="settings_update_no_downloadable_apk">所选更新源没有可下载的安装包</string>
     <string name="settings_update_auto_check">启动时自动检查更新</string>
@@ -199,11 +228,12 @@
     <string name="update_install_fail_file_invalid">安装包不可用</string>
     <string name="update_install_fail_installer_not_found">找不到系统安装器</string>
     <string name="update_install_fail_unknown">无法启动安装</string>
-    <string name="welcome_title">欢迎</string>
 
     <!-- 通知 -->
     <string name="notification_channel_run">任务执行</string>
     <string name="notification_channel_run_desc">执行期间常驻，避免应用被系统回收</string>
+    <string name="notification_channel_run_island">任务执行（超级岛）</string>
+    <string name="notification_channel_run_island_desc">运行通知选「超级岛」时用这个频道，岛要它才浮得出来</string>
     <string name="notification_channel_focus">项目消息</string>
     <string name="notification_channel_focus_desc">PI 项目在运行中要求推送给你的提示</string>
     <string name="notification_focus_title">项目消息</string>
@@ -212,7 +242,13 @@
     <string name="notification_run_stopping">正在停止</string>
 
     <!-- 前台模式控制层 -->
-    <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板。只拦按键，不读取屏幕内容</string>
+    <string name="accessibility_service_description">前台模式下同时按音量 + 与音量 − 唤起控制面板；任务要输入中文等文本时，把文字写进目标应用的输入框。只在输入的那一刻查找输入框，不记录也不上传屏幕内容</string>
+    <string name="text_input_accessibility_unavailable">要输入的文本含有中文等键盘打不出的字符，需要无障碍服务写入，但服务没有开启：请到系统设置的无障碍页面手动开启本应用的无障碍服务后重试</string>
+    <string name="text_input_unsupported_display">Android 11 以下暂时不支持中文文本，请改用前台模式运行</string>
+    <string name="text_input_unsupported_display_background_only">Android 11 以下暂时不支持中文文本</string>
+    <string name="text_input_no_focused_input">没有找到获得焦点的输入框，文本没有写入：输入前要先点中输入框</string>
+    <string name="text_input_foreign_package">获得焦点的输入框不属于目标应用 %1$s，为防止输进别的应用已放弃写入</string>
+    <string name="text_input_action_failed">输入框拒绝了无障碍写入，文本没有写入</string>
     <string name="overlay_tab_tasks">任务</string>
     <string name="overlay_tab_log">日志</string>
     <string name="overlay_hide">隐藏</string>
@@ -261,9 +297,31 @@
     <string name="schedule_next_none">规则不完整，不会触发</string>
     <string name="schedule_disabled">已停用</string>
     <string name="schedule_exact_alarm_blocked">系统未允许精确闹钟</string>
-    <string name="schedule_exact_alarm_hint">仍会按时触发，但状态栏会多一个闹钟图标</string>
-    <string name="schedule_exact_alarm_grant">去允许</string>
+    <string name="schedule_exact_alarm_hint">未允许时定时可能被系统延后，甚至无法启动</string>
     <string name="schedule_exact_alarm_settings">精确闹钟设置</string>
+    <string name="schedule_health_title">调度环境检查</string>
+    <string name="schedule_health_fix">去修复</string>
+    <string name="schedule_health_backend">%1$s 未授权</string>
+    <string name="schedule_health_backend_desc">到点后的亮屏解锁、拉起与执行都靠它，请先完成授权</string>
+    <string name="schedule_health_battery">未加入电源管理白名单</string>
+    <string name="schedule_health_battery_desc">到点时系统可能延迟或拦下后台启动</string>
+    <string name="schedule_health_notification">通知权限未开启</string>
+    <string name="schedule_health_notification_desc">倒计时的「立即开始 / 取消」按钮与失败提醒都会看不见</string>
+    <string name="schedule_health_overlay">悬浮窗权限未授予</string>
+    <string name="schedule_health_overlay_desc">后台模式开了屏保，没有悬浮窗权限就盖不上</string>
+    <string name="schedule_health_wake_credential">解锁凭证未配置</string>
+    <string name="schedule_health_wake_credential_desc">设备设有锁屏密码，「无密码」方式解不开，到点会被锁屏挡住、本次执行被跳过。请在定时页右上角「唤醒解锁」里录制解锁手势或填写 PIN</string>
+    <string name="schedule_go_to_settings">去设置</string>
+    <string name="schedule_oem_hint_miui">MIUI/HyperOS：还需在应用的「省电策略」中选择「无限制」</string>
+    <string name="schedule_oem_hint_huawei">EMUI/HarmonyOS：还需在「应用启动管理」中改为手动管理，并允许自启动、关联启动、后台活动</string>
+    <string name="schedule_oem_hint_oppo">ColorOS：还需允许本应用后台运行，并关闭「应用速冻」</string>
+    <string name="schedule_oem_hint_vivo">OriginOS/FuntouchOS：还需在「后台耗电策略」中允许本应用后台高耗电</string>
+    <string name="schedule_oem_hint_samsung">One UI：还需将本应用从「深度休眠」应用列表中移除</string>
+    <string name="schedule_oem_hint_meizu">Flyme：还需在「后台管理」中允许本应用后台运行与后台弹出</string>
+    <string name="schedule_auto_start_title">自启动权限</string>
+    <string name="schedule_auto_start_message">不开自启动，系统可能不让定时把应用从后台拉起来，开机后也收不到重排闹钟的广播。请在系统设置中允许本应用自启动</string>
+    <string name="schedule_auto_start_message_fallback">没找到厂商的自启动设置页，将打开应用详情页。请在其中检查自启动 / 后台相关设置，并允许本应用自启动</string>
+    <string name="schedule_auto_start_dont_remind">不再提醒</string>
 
     <string name="schedule_edit_new">新建规则</string>
     <string name="schedule_edit_existing">编辑规则</string>
@@ -275,6 +333,13 @@
     <string name="schedule_edit_days">星期</string>
     <string name="schedule_edit_times">时刻</string>
     <string name="schedule_edit_add_time">添加时刻</string>
+    <string name="schedule_time_picker_title">选择时间</string>
+    <string name="time_picker_hour">小时</string>
+    <string name="time_picker_minute">分钟</string>
+    <string name="time_picker_am">AM</string>
+    <string name="time_picker_pm">PM</string>
+    <string name="time_picker_format_12h">12h</string>
+    <string name="time_picker_format_24h">24h</string>
     <string name="schedule_edit_start_time">首次触发</string>
     <string name="schedule_edit_interval">执行间隔</string>
     <string name="schedule_edit_save">保存</string>
@@ -309,21 +374,21 @@
     <string name="run_log_screen_saver_skipped">熄屏挂机未能打开，本轮不自动关闭</string>
     <string name="run_log_auto_sleep_skipped_not_run">任务未开始，跳过自动熄屏</string>
     <string name="run_log_auto_sleep_skipped_awake">启动时屏幕已亮，跳过自动熄屏</string>
-    <string name="wake_unlock_need_pin">需要 PIN 才能解锁，请到设置里填写</string>
-    <string name="wake_unlock_pin_rejected">PIN 不对，或该机型锁屏不接受注入按键</string>
-    <string name="wake_unlock_screen_off">屏幕没有亮起来</string>
-    <string name="wake_unlock_unsupported">该机型上的亮屏解锁不可用</string>
-    <string name="wake_unlock_failed">亮屏解锁失败（%1$d）</string>
-    <string name="settings_wake_unlock">定时触发时亮屏解锁</string>
-    <string name="settings_wake_credential">解锁 PIN</string>
-    <string name="settings_wake_credential_hint">只支持纯数字 PIN；明文存在本机，导出配置时会清空</string>
+    <string name="run_log_duration_limit_reached">已达到运行时长上限（%1$d 分钟），停止任务</string>
+    <string name="run_log_duration_limit_stop_failed">按时长上限停止失败：%1$s</string>
     <string name="schedule_edit_advanced">高级选项</string>
     <string name="schedule_edit_force_start">强制启动</string>
     <string name="schedule_edit_force_start_tip">到达设定时间时若有任务正在执行，中断后执行本规则</string>
     <string name="schedule_edit_auto_sleep">任务结束后自动熄屏</string>
+    <string name="schedule_edit_auto_sleep_tip">定时任务执行完成后自动熄屏，节省电量</string>
     <string name="schedule_edit_skip_sleep_if_awake">启动时已亮屏则不熄屏</string>
+    <string name="schedule_edit_skip_sleep_if_awake_tip">触发时屏幕已经亮着，视为你正在用手机，任务结束后不熄屏</string>
     <string name="schedule_edit_close_app">任务结束后关闭目标应用</string>
     <string name="schedule_edit_close_app_tip">仅后台模式生效。若「快捷选项 → 任务自动结束时关闭目标应用」已开启，以该开关为准；未开启时才按本策略执行。手动停止任务不会关闭</string>
+    <string name="schedule_edit_close_app_effect_foreground">当前效果：运行模式为前台，本项不生效</string>
+    <string name="schedule_edit_close_app_effect_global">当前效果：快捷选项里的全局开关已开启，任务结束后会关闭目标应用</string>
+    <string name="schedule_edit_close_app_effect_strategy">当前效果：任务跑完后会按本规则关闭目标应用</string>
+    <string name="schedule_edit_close_app_effect_inactive">当前效果：任务结束后不会关闭目标应用</string>
     <string name="schedule_result_failed_start">未能开始</string>
     <string name="schedule_reason_configuration_missing">绑定的运行配置已被删除</string>
     <string name="schedule_reason_invalid_plan">配置有错，无法生成本次执行</string>
@@ -335,6 +400,9 @@
     <string name="schedule_edit_configuration_none">还没有运行配置，请先在任务页创建</string>
     <string name="schedule_result_failed_validation">规则缺失</string>
     <string name="schedule_result_failed_service">服务启动失败</string>
+    <string name="schedule_detail_data_unavailable_retry">规则数据暂时读不出，1 分钟后第 %1$d 次重试</string>
+    <string name="schedule_detail_data_unavailable_gave_up">规则数据多次读取失败，已放弃本次触发</string>
+    <string name="schedule_detail_data_unavailable_waiting">规则数据多次读取失败，已放弃本次触发；之后每 15 分钟检查一次，读到后恢复定时</string>
 
     <!-- 导航与对话框 -->
     <string name="nav_home">首页</string>
@@ -346,11 +414,16 @@
 
     <!-- option 编辑器 -->
     <string name="option_input_invalid">输入不合法</string>
+    <string name="option_checkbox_count_at_least">至少选 %1$d 项</string>
+    <string name="option_checkbox_count_at_most">最多选 %1$d 项</string>
+    <string name="option_checkbox_count_between">选 %1$d–%2$d 项</string>
+    <string name="option_checkbox_count_exactly">选 %1$d 项</string>
 
     <!-- 跨层结构化语义的展示文案（domain/VM -> ui/i18n/DomainStrings） -->
     <string name="tasks_ungrouped">未分组</string>
     <string name="task_unavailable_missing">项目中已不存在该任务</string>
-    <string name="task_unavailable_controller">不支持当前控制器（需要 %1$s）</string>
+    <string name="task_unavailable_controller">不支持该任务</string>
+    <string name="task_unavailable_controller_switch">需切换控制器到 %1$s</string>
     <string name="task_unavailable_resource">不支持当前资源（需要 %1$s）</string>
     <string name="msg_locked_while_running">运行期间不能修改配置</string>
     <string name="msg_project_not_loaded">项目尚未加载完成</string>
@@ -362,6 +435,10 @@
     <string name="msg_cannot_start">无法开始：%1$s</string>
     <string name="msg_launch_in_progress">正在启动中，请稍候</string>
     <string name="msg_precheck_ignored_confirmation">启动检查未处理确认结果，已中止</string>
+    <string name="precheck_confirm_title">启动前提醒</string>
+    <string name="precheck_smart_resolution_enabled">检测到系统已开启「智能分辨率」，后台模式下会导致识别出错，请先在系统显示设置中关闭。是否仍然启动？</string>
+    <string name="precheck_eye_protection_enabled">检测到设备已开启护眼/夜光模式，可能会影响图像色彩识别准确度。是否仍然启动？</string>
+    <string name="precheck_start_anyway">仍然启动</string>
     <string name="msg_hook_timeout">运行环境准备超时：%1$s</string>
     <string name="msg_hook_failed">运行环境准备失败：%1$s</string>
     <string name="msg_cannot_stop">无法停止：%1$s</string>
@@ -438,13 +515,18 @@
     <string name="dialog_shizuku_need_auth_title">Shizuku 未授权</string>
     <string name="dialog_shizuku_need_auth_message">Shizuku 服务正在运行但尚未授权本应用，请完成授权。授权成功前会持续提示。</string>
     <string name="common_got_it">知道了</string>
+    <string name="common_later">稍后</string>
 
     <!-- 运行日志 -->
+    <plurals name="run_log_raw_omitted">
+        <item quantity="other">已省略更早的 %1$d 条原始日志，完整记录请导出查看</item>
+    </plurals>
     <plurals name="run_log_count">
         <item quantity="other">%1$d 条</item>
     </plurals>
     <string name="run_log_export">导出</string>
     <string name="run_log_clear">清空</string>
+    <string name="run_log_scroll_to_bottom">回到底部</string>
     <string name="run_log_empty">暂无日志</string>
     <string name="tasks_log">日志</string>
     <string name="run_log_filter_progress">进度</string>
@@ -452,6 +534,9 @@
     <string name="run_log_connecting">正在连接设备…</string>
     <string name="run_log_connected">设备连接成功</string>
     <string name="run_log_agent_connected">Agent 已连接: %1$s</string>
+    <string name="run_log_agent_exited_signal">Agent 异常退出: %1$s（%2$s）</string>
+    <string name="run_log_agent_exited_code">Agent 异常退出: %1$s（退出码 %2$d）</string>
+    <string name="run_log_agent_crash_report">%1$s，崩溃现场已存到 log/crash/%2$s</string>
     <string name="run_log_connect_failed">设备连接失败</string>
     <string name="run_log_resource_loading">正在加载资源: %1$s</string>
     <string name="run_log_resource_loaded">资源加载成功: %1$s</string>
@@ -460,10 +545,14 @@
     <string name="run_log_task_succeeded">任务完成: %1$s</string>
     <string name="run_log_task_failed">任务失败: %1$s</string>
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
-    <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)，可改用前台模式</string>
+    <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)</string>
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
     <string name="run_log_app_unknown">未知应用</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
+    <string name="run_log_game_fps_low">游戏画面帧率仅 %1$d FPS，低于 30，自动战斗可能出错；请在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_game_fps_degraded">游戏画面帧率 %1$d FPS，低于 50，战斗时机可能不准；建议在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_smart_resolution_enabled">系统已开启「智能分辨率」，后台模式下会导致识别出错，请在系统显示设置中手动关闭</string>
+    <string name="run_log_eye_protection_enabled">设备当前处于护眼/夜光模式 (%1$s)，可能影响正常图像识别，请手动关闭</string>
 
     <!-- 历史日志：每轮运行落盘一份 -->
     <string name="log_archive_title">运行历史</string>
@@ -508,6 +597,49 @@
     <string name="settings_log_archive_desc">查看每次运行的执行日志</string>
     <string name="settings_log_error_desc">查看应用异常和错误记录</string>
     <string name="settings_log_export_desc">打包所有日志为 ZIP 文件分享</string>
+    <string name="settings_section_backup">备份与恢复</string>
+    <string name="config_export_title">导出配置</string>
+    <string name="config_export_desc">保存任务配置、定时与应用设置，不含密码、CDK 与推送凭据</string>
+    <string name="config_import_title">导入配置</string>
+    <string name="config_import_desc">支持本应用导出的备份、MXU 的配置文件（mxu-*.json）和 MXU 导出的 txt</string>
+    <string name="config_import_share_code_title">粘贴 MXU 分享码</string>
+    <string name="config_import_share_code_desc">在 MXU 里右键标签页，选「导出配置 → 导出到剪贴板」，再粘贴到这里</string>
+    <string name="config_share_code_hint">MXU 分享码</string>
+    <string name="config_share_code_paste">从剪贴板粘贴</string>
+    <string name="config_share_code_parse">下一步</string>
+    <string name="config_export_saved">配置已导出：%1$s</string>
+    <string name="config_export_failed">导出配置失败</string>
+    <string name="config_import_unreadable">无法读取该文件</string>
+    <string name="config_import_unrecognized">无法识别的配置格式</string>
+    <string name="config_import_project_mismatch">这是 %1$s 的配置，与当前项目 %2$s 不符</string>
+    <string name="config_import_newer">该备份由更新版本的应用导出，请先更新应用</string>
+    <string name="config_import_share_code_version">不支持该版本的 MXU 分享码</string>
+    <string name="config_import_empty">里面没有可以导入到当前项目的任务</string>
+    <string name="config_import_not_ready">项目还没加载完成，请稍后再试</string>
+    <string name="config_import_failed">导入配置失败</string>
+    <string name="config_import_done">配置已导入</string>
+    <string name="config_import_preview_title">导入配置</string>
+    <string name="config_import_source_backup">来自 %1$s 的备份，导出于 %2$s</string>
+    <string name="config_import_source_mxu_file">来自 MXU 配置文件</string>
+    <string name="config_import_source_mxu_share">来自 MXU 分享码</string>
+    <string name="config_import_restore_warning">当前的全部配置、定时和应用设置将被覆盖，无法撤销。</string>
+    <string name="config_import_restore_counts">配置 %1$d 套 · 定时 %2$d 条 · 应用设置 %3$d 项</string>
+    <string name="config_import_secrets_kept">密码、CDK、解锁 PIN 与推送凭据不会被导入，本机已填写的保持不变。</string>
+    <string name="config_import_append_warning">以下配置将追加到现有配置之后；全局、资源与控制器选项中的同名设置将被覆盖。</string>
+    <string name="config_import_configuration_item">%1$s（%2$d 个任务）</string>
+    <string name="config_import_schedules_disabled">定时 %1$d 条，导入后为关闭状态，确认时间后再开启</string>
+    <string name="config_import_skipped_title">以下内容无法导入：</string>
+    <string name="config_import_skipped_unknown_tasks">当前项目没有的任务：%1$s</string>
+    <string name="config_import_skipped_mxu_tasks">MXU 特殊任务 %1$d 个</string>
+    <string name="config_import_skipped_pre_actions">前置任务与前置动作 %1$d 个</string>
+    <string name="config_import_skipped_options">对不上的选项值 %1$d 个</string>
+    <string name="config_import_skipped_schedules">没有星期或时刻的定时 %1$d 条</string>
+    <string name="config_import_mxu_secrets_kept">MXU 里保存的密码会一并导入；本机已填写的密码、CDK、解锁 PIN 与推送凭据保持不变。</string>
+    <string name="config_import_name_separator">、</string>
+    <string name="config_picker_unavailable">没有可用的系统文件选择器</string>
+    <string name="config_import_confirm_restore">覆盖导入</string>
+    <string name="config_import_confirm_append">导入</string>
+    <string name="search_keywords_backup">备份 恢复 导入 导出 迁移 MXU 分享码</string>
 
     <!-- 诊断文案；构造点在 domain/Diagnostics.kt 的 DiagnosticMessages -->
     <string name="diagnostic_severity_warning">警告</string>
@@ -529,6 +661,12 @@
     <string name="diagnostic_description_read_failed">description 文件读取失败，保留原始文本：%1$s</string>
     <string name="diagnostic_default_case_missing">option "%1$s" 的 default_case "%2$s" 不在 cases 中</string>
     <string name="diagnostic_input_has_no_fields">input option "%1$s" 没有可用的 inputs</string>
+    <string name="diagnostic_setting_option_not_global">setting "%1$s" 列出的 option "%2$s" 不在 global_option 里，不显示</string>
+    <string name="diagnostic_password_default_ignored">option "%1$s" 的 password 输入 "%2$s" 不能带 default，已忽略</string>
+    <string name="diagnostic_preset_password_ignored">preset "%1$s" 给 option "%2$s" 的 password 输入 "%3$s" 写了值，已忽略</string>
+    <string name="diagnostic_checkbox_count_adjusted">option "%1$s" 的 %2$s 为 %3$d，已按 %4$d 处理</string>
+    <string name="diagnostic_checkbox_count_ignored">option "%1$s" 的 %2$s 为 %3$d，已忽略</string>
+    <string name="diagnostic_checkbox_default_count_out_of_range">option "%1$s" 的 default_case 有 %2$d 项，不满足：%3$s</string>
     <string name="diagnostic_unsupported_option_type">option "%1$s" 的 type "%2$s" 在 Android 端不支持，已跳过</string>
     <string name="diagnostic_invalid_option_type">option "%1$s" 的 type 非法：%2$s</string>
     <string name="diagnostic_option_case_not_object">option "%1$s" 存在非对象 case</string>
@@ -540,6 +678,7 @@
     <string name="diagnostic_directory_enumeration_failed">无法枚举 %1$s 目录：%2$s</string>
     <string name="diagnostic_no_available_resource">没有可用的 resource</string>
     <string name="diagnostic_resource_selection_missing">resource "%1$s" 已不存在，回退到 %2$s</string>
+    <string name="diagnostic_controller_selection_missing">controller "%1$s" 已不存在，回退到 %2$s</string>
     <string name="diagnostic_none">无</string>
     <string name="diagnostic_active_configuration_missing">activeConfigurationId 指向不存在的配置</string>
     <string name="diagnostic_configured_task_missing">任务 "%1$s" 已不在项目中</string>
@@ -548,14 +687,15 @@
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
     <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>
+    <string name="diagnostic_checkbox_count_out_of_range">option "%1$s" 选了 %2$d 项，不满足：%3$s</string>
     <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
     <string name="diagnostic_boolean_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为布尔值</string>
     <string name="schedule_default_name">定时任务 %1$d</string>
     <string name="settings_resolution">后台模式分辨率</string>
-    <string name="settings_resolution_720p">720P</string>
-    <string name="settings_resolution_1080p">1080P</string>
+    <string name="settings_resolution_detail">%1$d×%2$d · %3$d dpi</string>
     <string name="settings_debug_mode">调试模式</string>
     <string name="settings_debug_mode_desc">启用后错误日志记录全部过程，MaaFramework 详细日志从下一轮运行起</string>
+    <string name="settings_save_on_error">保存调试图像</string>
     <string name="dialog_enable_debug_title">启用调试模式</string>
     <string name="dialog_enable_debug_message">启用后需要重启 App 生效，将记录 MaaFramework 详细日志与 app、特权进程的 logcat。</string>
 
@@ -575,7 +715,7 @@
     <string name="pi_reinstall_title">重新解压资源</string>
     <string name="pi_reinstall_desc">从安装包重新解压项目资源</string>
     <string name="dialog_reinstall_pi_title">重新解压项目资源</string>
-    <string name="dialog_reinstall_pi_message">确定要重新解压项目资源吗？\n\n这将删除设备上已解压的项目资源并重新解压，请勿在此期间退出应用。运行配置与日志不受影响。</string>
+    <string name="dialog_reinstall_pi_message">确定要重新解压项目资源吗？\n\n这将删除设备上已解压的项目资源并重新解压，请勿在此期间退出应用。Agent 写在资源目录下的记录与日志会一并清除，运行配置与应用日志不受影响。</string>
 
     <!-- 前台模式：主屏分辨率与操作面板 -->
     <string name="foreground_resolution_title">屏幕分辨率</string>
@@ -592,10 +732,25 @@
 
     <!-- 设置页「通知」分组入口 -->
     <string name="settings_section_notification">通知</string>
-    <string name="settings_notification_desc">任务结束时提醒，也可推送到手机以外的地方</string>
 
     <!-- 通知设置页 -->
     <string name="notification_settings_title">通知设置</string>
+    <string name="notification_section_live">运行通知</string>
+    <string name="notification_live_style">展示方式</string>
+    <string name="notification_live_style_island">超级岛</string>
+    <string name="notification_live_style_live_update">实时更新</string>
+    <string name="notification_live_style_plain">标准通知栏</string>
+    <string name="notification_live_note_island">超级岛为实验性方案，显示不正常时请换成其他方式</string>
+    <string name="notification_live_note_live_update">在状态栏显示进度胶囊。需要 Android 16 及以上，并在应用的通知设置里打开「实时更新」</string>
+    <string name="notification_live_note_plain">只在通知栏常驻一条带进度条的通知</string>
+    <string name="notification_live_permission">通知权限</string>
+    <string name="notification_live_focus">焦点通知</string>
+    <string name="notification_live_promoted">实时更新</string>
+    <string name="notification_live_granted">已开启</string>
+    <string name="notification_live_open_settings">去开启</string>
+    <string name="notification_live_fallback">所选方式当前用不了，运行时会改用「%1$s」</string>
+    <string name="notification_live_test_title">运行通知测试</string>
+    <string name="notification_live_test_text">这是一条测试，15 秒后自动消失</string>
     <string name="notification_section_internal">本机通知</string>
     <string name="notification_enable">任务结束时提醒</string>
     <string name="notification_popup">弹出横幅</string>
@@ -706,4 +861,68 @@
     <string name="notification_err_gotify_scheme">Gotify 服务器地址要以 http:// 或 https:// 开头</string>
     <string name="notification_err_webhook_url_empty">Webhook 地址未填写</string>
     <string name="notification_err_webhook_body_empty">Webhook 请求体模板未填写</string>
+    <!-- 唤醒解锁（移植自 MaaMeow） -->
+    <string name="settings_wake_unlock_type">定时任务解锁方式</string>
+    <string name="settings_wake_unlock_type_swipe">无密码</string>
+    <string name="settings_wake_unlock_type_pin">PIN</string>
+    <string name="settings_wake_unlock_type_gesture">手动录制</string>
+    <string name="settings_wake_swipe_desc">亮屏后直接解除锁屏，适用于没设密码的锁屏（无锁屏或上滑即可进入）。设了 PIN、图案或密码时解不开，请改用手动录制或 PIN</string>
+    <string name="schedule_wake_unlock_title">唤醒解锁</string>
+    <string name="schedule_wake_unlock_desc">定时任务触发时若设备已锁屏，会按下面的方式自动解锁；手动启动的任务不受影响</string>
+    <string name="settings_wake_credential">PIN</string>
+    <string name="settings_wake_credential_hint">4～16 位数字</string>
+    <string name="settings_wake_credential_warning">不支持图案和字母密码</string>
+    <string name="settings_wake_test_button">测试</string>
+    <string name="settings_wake_test_hint">先锁屏，约 0.5 秒后自动解锁</string>
+    <string name="wake_result_ok">唤醒并解锁成功</string>
+    <string name="wake_result_wake_failed">屏幕无法点亮</string>
+    <string name="wake_result_credential_required">当前为密码锁屏，请先填写 PIN</string>
+    <string name="wake_result_credential_rejected">解锁失败，已停止重试以免锁定。检查 PIN 是否正确；启用指纹解锁时 PIN 输入可能被系统拦截，无法完成自动解锁</string>
+    <string name="wake_result_no_keyguard">未设置锁屏，无需解锁</string>
+    <string name="wake_result_unsupported">当前系统不支持该操作</string>
+    <string name="wake_result_lock_failed">无法进入锁屏</string>
+    <string name="wake_result_ipc_failed">提权服务未连接</string>
+    <string name="wake_result_unknown">解锁失败（代码 %1$d）</string>
+    <string name="wake_result_gesture_empty">尚未录制解锁手势</string>
+    <string name="wake_result_gesture_screen_mismatch">屏幕方向或分辨率与录制时不一致，请重新录制</string>
+    <string name="wake_result_record_no_device">读不到触摸屏输入设备，当前系统不允许；可改用 Root 启动方式或 PIN</string>
+    <string name="wake_result_record_timeout">等待解锁超时，录制已结束</string>
+    <string name="wake_result_record_cancelled">已取消录制</string>
+    <string name="wake_result_record_no_touch">没有采集到任何触摸操作。指纹和人脸解锁不经过触摸屏，无法录制；请在录制时改用图案或密码解锁</string>
+    <string name="settings_wake_gesture_none">尚未录制</string>
+    <string name="settings_wake_gesture_summary">共 %1$d 步 · %2$d×%3$d</string>
+    <string name="settings_wake_gesture_record">开始录制</string>
+    <string name="settings_wake_gesture_rerecord">重新录制</string>
+    <string name="settings_wake_gesture_clear">清除</string>
+    <string name="settings_wake_gesture_cancel">取消录制</string>
+    <string name="settings_wake_gesture_hint">点击后会先锁屏再自动亮屏，你只需像平时一样解锁一次；解锁完成即自动结束录制</string>
+    <string name="settings_wake_gesture_preparing">正在锁屏并亮屏…</string>
+    <string name="settings_wake_gesture_waiting">已亮屏，请解锁一次</string>
+    <string name="settings_wake_gesture_done">录制完成，共 %1$d 步，建议点「测试」验证一次</string>
+    <string name="settings_wake_gesture_save_failed">手势已录到，但保存失败，请重新录制</string>
+    <string name="settings_wake_gesture_warning">只录单指操作，不支持指纹和人脸；轨迹等价于锁屏凭证，仅保存在本机应用私有目录，不会随配置导出</string>
+    <string name="settings_wake_gesture_step_tap">点击 (%1$d, %2$d)</string>
+    <string name="settings_wake_gesture_step_long_press">长按 (%1$d, %2$d) %3$d ms</string>
+    <string name="settings_wake_gesture_step_swipe">滑动 (%1$d, %2$d) → (%3$d, %4$d) %5$d ms</string>
+    <string name="settings_wake_gesture_step_delay">等待 %1$d ms</string>
+    <string name="settings_wake_gesture_test_hint">先锁屏，约 1 秒后回放录制的手势</string>
+    <!-- 设置搜索；search_keywords_* 是空格分隔的同义词，只参与匹配不显示 -->
+    <string name="settings_search_hint">搜索设置</string>
+    <string name="settings_search_clear">清除搜索</string>
+    <string name="settings_search_empty">没有匹配的设置</string>
+    <string name="search_keywords_update">更新 升级 版本 自动更新 检查更新</string>
+    <string name="search_keywords_wallpaper">背景 壁纸 图片 自定义 透明 模糊</string>
+    <string name="search_keywords_ui_scale">缩放 字体 字号 大小 文字 界面 密度</string>
+    <string name="search_keywords_live">超级岛 灵动岛 实时更新 状态栏 胶囊 进度 通知样式 焦点通知</string>
+    <string name="search_keywords_theme">主题 深色 夜间 暗色 黑色 纯黑 浅色 外观 配色</string>
+    <string name="search_keywords_language">语言 中文 英文 English 界面语言</string>
+    <string name="search_keywords_duration">时长 超时 时间限制 自动停止 运行时间</string>
+    <string name="search_keywords_notification">通知 推送 提醒 消息 Server酱 Telegram 邮件 Bark Webhook</string>
+    <string name="search_keywords_backend">启动模式 后端 Shizuku Root 提权 授权</string>
+    <string name="search_keywords_resolution">分辨率 尺寸 屏幕 dpi 画面大小</string>
+    <string name="search_keywords_about">关于 版本 许可证 仓库 联系</string>
+    <string name="search_keywords_run_mode">运行模式 前台 后台 虚拟屏</string>
+    <string name="search_keywords_overlay">悬浮窗 悬浮球 控制层 无障碍</string>
+    <string name="search_keywords_permissions">权限 授权 悬浮窗 电池 白名单 通知 无障碍 存储</string>
+    <string name="search_keywords_screen_saver">屏保 黑屏 息屏 熄屏 省电</string>
 </resources>

@@ -104,5 +104,7 @@ void ReleaseNativeCapturer() {
         LOGI("NativeCapturer released");
     }
 
+    // 那块屏没了，预览上留着的是它的最后一帧；listener 已摘，帧计数不会再变
+    BlankPreview(GetFrameCount());
     ReleaseFrameBuffers();
 }

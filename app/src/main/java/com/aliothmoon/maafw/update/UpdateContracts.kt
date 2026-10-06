@@ -16,12 +16,29 @@ enum class UpdateChannel {
     BETA,
 }
 
+/**
+ * 安装包自带原生库的架构，构建时按 abiFilters 写进 BuildConfig.MAFW_PACKAGE_ABI
+ * 更新按它选包而不是按设备：装 universal 的升级后仍是 universal，装单 ABI 的留在该 ABI
+ */
 enum class AndroidAbi(val mirrorArch: String) {
-    ANY(""),
+    /** 同时带多个 ABI 的包；MirrorChyan 请求不带 arch */
+    UNIVERSAL(""),
     ARM64("arm64"),
     X86_64("amd64"),
     ARM("arm"),
     X86("386"),
+    ;
+
+    companion object {
+        /** 认不出的值按 universal 处理：不带 ABI 标记的包是 GitHub 与 MirrorChyan 共同的最后一档 */
+        fun fromPackageAbi(raw: String): AndroidAbi = when (raw) {
+            "arm64-v8a" -> ARM64
+            "x86_64" -> X86_64
+            "armeabi-v7a" -> ARM
+            "x86" -> X86
+            else -> UNIVERSAL
+        }
+    }
 }
 
 /** 失败原因自带文案；动态细节由 [UpdateMessages] 拼接。CDK_* 与 INVALID_* 对应 MirrorChyan 业务码 */

@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * 盯虚拟屏上的目标 app：从 [VirtualDisplayManager] 的 displayId 反推顶层包名作为目标，
  * 离屏则用 [ActivityUtils.repinAppToDisplay] 拉回；状态经 RemoteService.watchdogState() 暴露给 app。
  *
- * 与 MaaMeow 的差异：目标包不是外部告知，而是 getTopPackageOnDisplay 自取；
+ * 与 MaaMeow 的差异：目标包不是外部告知，而是 [ActivityUtils.probeDisplay] 自取；
  * 判活与 onDisplay 合成一步（屏上有 app 即活）。全程 runCatching 宽松，不抛不误伤
  */
 object AppWatchdog {
@@ -81,7 +81,7 @@ object AppWatchdog {
             _state.value = STATE_IDLE
             return
         }
-        val top = runCatching { ActivityUtils.getTopPackageOnDisplay(displayId) }.getOrNull()
+        val top = (ActivityUtils.probeDisplay(displayId) as? ActivityUtils.DisplayOccupancy.Occupied)?.topPackage
         if (top != null) {
             if (targetPackage == null) Ln.i("AppWatchdog: target acquired: $top")
             targetPackage = top
@@ -101,8 +101,8 @@ object AppWatchdog {
 
         // 屏上空了先问进程还在不在：被杀和"窗口跑到主屏去了"是两回事，
         // 拿后者的文案去讲前者，用户会照着去改前台模式而问题根本不在那
-        when (isAlive(pkg)) {
-            ALIVE_NO -> {
+        when (ProcessLiveness.probe(pkg)) {
+            ProcessLiveness.DEAD -> {
                 if (!diedNotified) {
                     diedNotified = true
                     _state.value = STATE_APP_DIED
@@ -111,7 +111,8 @@ object AppWatchdog {
                 return
             }
             // 判不出就不下结论，等下一拍
-            ALIVE_UNKNOWN -> return
+            ProcessLiveness.UNKNOWN -> return
+            ProcessLiveness.ALIVE -> Unit
         }
 
         // 进程还在，那就是窗口飘了 → 宽限后 repin，超限上报
@@ -139,33 +140,5 @@ object AppWatchdog {
             _state.value = STATE_DISPLAY_DRIFT
             Ln.w("AppWatchdog: $pkg left the virtual display and repin failed")
         }
-    }
-
-    private const val ALIVE_YES = 0
-    private const val ALIVE_NO = 1
-    private const val ALIVE_UNKNOWN = 2
-
-    /**
-     * 判活走 pidof（与 MaaMeow 同法）：本对象跑在特权进程里，shell 身份直接 exec 即可
-     *
-     * 只有"退出码 1 且两个流都空"才算确认死亡——ROM 换了 pidof 实现、或权限被挡时，
-     * 输出形态五花八门，一律当判不出，宁可漏报也不要把还活着的应用报成死了
-     */
-    private fun isAlive(packageName: String): Int = runCatching {
-        val process = Runtime.getRuntime().exec(arrayOf("pidof", packageName))
-        val exitCode = process.waitFor()
-        val out = process.inputStream.bufferedReader().readText().trim()
-        val err = process.errorStream.bufferedReader().readText().trim()
-        when {
-            exitCode == 0 && out.isNotEmpty() -> ALIVE_YES
-            exitCode == 1 && out.isEmpty() && err.isEmpty() -> ALIVE_NO
-            else -> {
-                Ln.w("AppWatchdog: pidof $packageName unexpected: exit=$exitCode out=$out err=$err")
-                ALIVE_UNKNOWN
-            }
-        }
-    }.getOrElse {
-        Ln.w("AppWatchdog: pidof $packageName failed: ${it.message}")
-        ALIVE_UNKNOWN
     }
 }

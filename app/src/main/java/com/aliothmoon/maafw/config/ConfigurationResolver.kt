@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.config
 
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.DiagnosticMessages
@@ -13,9 +14,11 @@ import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
+import com.aliothmoon.maafw.domain.ResolvedController
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.domain.ResolvedResource
+import com.aliothmoon.maafw.domain.OptionSectionState
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -35,61 +38,82 @@ object ConfigurationResolver {
     fun resolve(definition: ProjectDefinition, config: UserConfiguration): ResolvedProjectSession {
         val diagnostics = mutableListOf<Diagnostic>()
 
-        val resourceNames = definition.resources.map { it.name }
-        val resourceName = when {
-            config.activeResourceName != null && config.activeResourceName in resourceNames ->
-                config.activeResourceName
+        val staleResource = staleResourceSelection(definition, config)
+        if (staleResource != null) diagnostics += staleResource
+        val resourceName = config.activeResourceName.takeIf { staleResource == null }
+            ?: definition.resources.firstOrNull()?.name
 
-            config.activeResourceName != null -> {
-                diagnostics += warning(
-                    "resource",
-                    DiagnosticMessages.resourceSelectionMissing(
-                        selected = config.activeResourceName,
-                        fallback = resourceNames.firstOrNull(),
-                    ),
-                )
-                resourceNames.firstOrNull()
-            }
-
-            else -> resourceNames.firstOrNull()
+        val controller = definition.controller(config.activeControllerName)
+        if (config.activeControllerName != null && controller.name != config.activeControllerName) {
+            diagnostics += warning(
+                "controller",
+                DiagnosticMessages.controllerSelectionMissing(
+                    selected = config.activeControllerName,
+                    fallback = controller.label,
+                ),
+            )
         }
 
         val environment = ResolvedEnvironment(
-            controllerName = definition.controller.name,
+            controller = ResolvedController(controller.name, controller.label),
             resource = definition.resources.firstOrNull { it.name == resourceName }
                 ?.let { ResolvedResource(it.name, it.label, it.icon) },
             resourceCandidates = definition.resources.map {
                 ResolvedResource(it.name, it.label, it.icon)
             },
+            controllerCandidates = definition.controllers.map { ResolvedController(it.name, it.label) },
         )
-
         val configurationList = config.configurations.map { runConfiguration ->
-            resolveConfiguration(definition, runConfiguration, resourceName, config, diagnostics)
+            resolveConfiguration(definition, runConfiguration, controller, resourceName, config, diagnostics)
         }
         val activeConfiguration = configurationList.firstOrNull { it.isActive }
         if (config.activeConfigurationId != null && activeConfiguration == null) {
             diagnostics += warning("configuration", DiagnosticMessages.activeConfigurationMissing())
         }
 
+        val globalOptions = buildOptionEditors(
+            definition = definition,
+            optionNames = definition.globalOptionNames,
+            values = config.globalOptionValues,
+            controller = controller,
+            resourceName = resourceName,
+        )
         return ResolvedProjectSession(
             configurationList = configurationList,
             activeConfiguration = activeConfiguration,
-            taskCatalog = buildTaskCatalog(definition, resourceName),
-            globalOptions = buildOptionEditors(
-                definition = definition,
-                optionNames = definition.globalOptionNames,
-                values = config.globalOptionValues,
-                resourceName = resourceName,
-            ),
+            taskCatalog = buildTaskCatalog(definition, controller, resourceName),
+            globalOptions = globalOptions,
+            settingSections = buildSettingSections(definition, globalOptions),
             resourceOptions = buildOptionEditors(
                 definition = definition,
                 optionNames = definition.resources.firstOrNull { it.name == resourceName }?.optionNames.orEmpty(),
                 values = resourceName?.let { config.resourceOptionValues[it] }.orEmpty(),
+                controller = controller,
+                resourceName = resourceName,
+            ),
+            controllerOptions = buildOptionEditors(
+                definition = definition,
+                optionNames = controller.optionNames,
+                values = config.controllerOptionValues[controller.name].orEmpty(),
+                controller = controller,
                 resourceName = resourceName,
             ),
             environment = environment,
             diagnostics = diagnostics,
         )
+    }
+
+    /**
+     * 存的 resource 名在当前 PI 里已不存在时的那条警告，没失效为 null
+     *
+     * resolve 与 SessionViewModel 的写回共用这一处：写回之后 resolve 不再报，
+     * 本进程内的提示靠 VM 留的这份副本，两边文案不能各写各的
+     */
+    fun staleResourceSelection(definition: ProjectDefinition, config: UserConfiguration): Diagnostic? {
+        val selected = config.activeResourceName ?: return null
+        val names = definition.resources.map { it.name }
+        if (selected in names) return null
+        return warning("resource", DiagnosticMessages.resourceSelectionMissing(selected, names.firstOrNull()))
     }
 
     /** 每个 preset 一份配置；无 preset 则空列表 */
@@ -122,7 +146,12 @@ object ConfigurationResolver {
             name = configurationName?.takeIf { it.isNotBlank() } ?: template.label,
             tasks = template.distinctTasks
                 .filter { included == null || it.taskName in included }
-                .map { ConfiguredTask(it.taskName, it.enabled, it.optionValues) },
+                .map {
+                    // Android 跑不了的任务照样收进来（与模板一致），但默认不勾
+                    val supported = definition.task(it.taskName)
+                        ?.let { task -> isControllerSupported(definition, task) } ?: true
+                    ConfiguredTask(it.taskName, it.enabled && supported, it.optionValues)
+                },
         )
     }
 
@@ -131,6 +160,7 @@ object ConfigurationResolver {
     private fun resolveConfiguration(
         definition: ProjectDefinition,
         runConfiguration: RunConfiguration,
+        controller: ControllerDefinition,
         resourceName: String?,
         config: UserConfiguration,
         diagnostics: MutableList<Diagnostic>,
@@ -157,7 +187,7 @@ object ConfigurationResolver {
                     options = emptyList(),
                 )
             } else {
-                val applicability = checkApplicability(definition, taskDefinition, resourceName)
+                val applicability = checkApplicability(definition, taskDefinition, controller, resourceName)
                 ResolvedConfiguredTask(
                     instanceId = configured.instanceId,
                     taskName = configured.taskName,
@@ -167,11 +197,13 @@ object ConfigurationResolver {
                     applicable = applicability == null,
                     missingDefinition = false,
                     unavailableReason = applicability,
+                    unsupported = !isControllerSupported(definition, taskDefinition),
                     options = if (isActive) {
                         buildOptionEditors(
                             definition = definition,
                             optionNames = taskDefinition.optionNames,
                             values = configured.optionValues,
+                            controller = controller,
                             resourceName = resourceName,
                         )
                     } else {
@@ -189,18 +221,25 @@ object ConfigurationResolver {
         )
     }
 
+    /** 外壳能驱动的 Adb controller 里有没有一个能跑它；一个都没有就是 Android 上永远跑不了 */
+    fun isControllerSupported(definition: ProjectDefinition, task: TaskDefinition): Boolean =
+        definition.controllers.any(task::runsOn)
+
     /** null = 适用；否则给出不适用的原因文案 */
     fun checkApplicability(
         definition: ProjectDefinition,
         task: TaskDefinition,
+        controller: ControllerDefinition,
         resourceName: String?,
     ): UiText? {
-        val controllerOk = task.controllers.isEmpty() ||
-            task.controllers.any {
-                it.equals(definition.controller.type, ignoreCase = true) ||
-                    it.equals(definition.controller.name, ignoreCase = true)
+        if (!task.runsOn(controller)) {
+            val candidates = definition.controllers.filter(task::runsOn)
+            return if (candidates.isEmpty()) {
+                UnavailableReasons.controllerMismatch()
+            } else {
+                UnavailableReasons.controllerSwitchRequired(candidates.map { it.label })
             }
-        if (!controllerOk) return UnavailableReasons.controllerMismatch(task.controllers)
+        }
         val resourceOk = task.resources.isEmpty() ||
             (resourceName != null && task.resources.any { it == resourceName })
         if (!resourceOk) return UnavailableReasons.resourceMismatch(task.resources)
@@ -209,6 +248,7 @@ object ConfigurationResolver {
 
     private fun buildTaskCatalog(
         definition: ProjectDefinition,
+        controller: ControllerDefinition,
         resourceName: String?,
     ): List<TaskCatalogGroup> {
         return definition.groups.map { group ->
@@ -216,7 +256,7 @@ object ConfigurationResolver {
                 if (group.isUngrouped) task.groups.isEmpty()
                 else group.name in task.groups
             }.map { task ->
-                val reason = checkApplicability(definition, task, resourceName)
+                val reason = checkApplicability(definition, task, controller, resourceName)
                 TaskCatalogItem(
                     taskName = task.name,
                     label = task.label,
@@ -225,6 +265,7 @@ object ConfigurationResolver {
                     unavailableReason = reason,
                     defaultChecked = task.defaultCheck,
                     icon = task.icon,
+                    unsupported = !isControllerSupported(definition, task),
                 )
             }
             TaskCatalogGroup(
@@ -242,6 +283,7 @@ object ConfigurationResolver {
         definition: ProjectDefinition,
         optionNames: List<String>,
         values: Map<String, OptionValue>,
+        controller: ControllerDefinition,
         resourceName: String?,
         depth: Int = 0,
         visited: Set<String> = emptySet(),
@@ -250,10 +292,10 @@ object ConfigurationResolver {
         return optionNames.mapNotNull { name ->
             if (name in visited) return@mapNotNull null
             val option = definition.options[name] ?: return@mapNotNull null
-            if (!option.applicability.matches(definition.controller.name, resourceName)) {
+            if (!option.applicability.matches(controller.name, resourceName)) {
                 return@mapNotNull null
             }
-            buildOptionEditor(definition, option, values, resourceName, depth, visited + name)
+            buildOptionEditor(definition, option, values, controller, resourceName, depth, visited + name)
         }
     }
 
@@ -261,6 +303,7 @@ object ConfigurationResolver {
         definition: ProjectDefinition,
         option: OptionDefinition,
         values: Map<String, OptionValue>,
+        controller: ControllerDefinition,
         resourceName: String?,
         depth: Int,
         visited: Set<String>,
@@ -278,7 +321,7 @@ object ConfigurationResolver {
                     kind = if (option is OptionDefinition.Select) OptionKind.Select else OptionKind.Switch,
                     depth = depth,
                     value = value,
-                    cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, resourceName, depth, visited),
+                    cases = buildCaseStates(definition, option.cases, setOfNotNull(selected), values, controller, resourceName, depth, visited),
                     inputs = emptyList(),
                     icon = option.icon,
                 )
@@ -294,9 +337,11 @@ object ConfigurationResolver {
                     kind = OptionKind.Checkbox,
                     depth = depth,
                     value = value,
-                    cases = buildCaseStates(definition, option.cases, selected.toSet(), values, resourceName, depth, visited),
+                    cases = buildCaseStates(definition, option.cases, selected.toSet(), values, controller, resourceName, depth, visited),
                     inputs = emptyList(),
                     icon = option.icon,
+                    minCount = option.minCount,
+                    maxCount = option.maxCount,
                 )
             }
 
@@ -320,11 +365,32 @@ object ConfigurationResolver {
                             verify = field.verify,
                             patternMessage = field.patternMessage,
                             description = field.description,
+                            password = field.password,
                         )
                     },
                     icon = option.icon,
                 )
             }
+        }
+    }
+
+    /** 分区直接取全局选项的投影：不适用的 option 在那边已被滤掉，这里跟着不出现 */
+    private fun buildSettingSections(
+        definition: ProjectDefinition,
+        globalOptions: List<OptionEditorState>,
+    ): List<OptionSectionState> {
+        val byName = globalOptions.associateBy { it.name }
+        return definition.settingSections.mapNotNull { section ->
+            val options = section.optionNames.mapNotNull(byName::get)
+            if (options.isEmpty()) return@mapNotNull null
+            OptionSectionState(
+                name = section.name,
+                label = section.label,
+                description = section.description,
+                icon = section.icon,
+                defaultExpand = section.defaultExpand,
+                options = options,
+            )
         }
     }
 
@@ -334,6 +400,7 @@ object ConfigurationResolver {
         cases: List<OptionCaseDefinition>,
         selected: Set<String>,
         values: Map<String, OptionValue>,
+        controller: ControllerDefinition,
         resourceName: String?,
         depth: Int,
         visited: Set<String>,
@@ -346,7 +413,7 @@ object ConfigurationResolver {
             icon = case.icon,
             active = active,
             children = if (active) {
-                buildOptionEditors(definition, case.childOptionNames, values, resourceName, depth + 1, visited)
+                buildOptionEditors(definition, case.childOptionNames, values, controller, resourceName, depth + 1, visited)
             } else {
                 emptyList()
             },

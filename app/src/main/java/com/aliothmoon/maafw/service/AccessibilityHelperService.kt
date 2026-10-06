@@ -1,6 +1,9 @@
 package com.aliothmoon.maafw.service
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.aliothmoon.maafw.BuildConfig
@@ -12,10 +15,10 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 
 /**
- * 只为一件事存在：前台模式下同时按音量 ± 唤起控制面板
- *
- * 前台模式把屏幕让给了目标应用，没有这条快捷键就只剩悬浮球一条路，而悬浮球会挡住画面。
- * 不读窗口内容（`canRetrieveWindowContent=false`），只过滤按键
+ * 两件事：
+ * - 前台模式下同时按音量 ± 唤起控制面板。前台模式把屏幕让给了目标应用，没有这条快捷键
+ *   就只剩悬浮球一条路，而悬浮球会挡住画面
+ * - InputText 里按键打不出来的文本经 [AccessibilityTextWriter] 写进输入框
  *
  * 服务本身不认识执行状态，收到组合键就调 [onVolumeUpDownPressed]，由
  * [com.aliothmoon.maafw.overlay.OverlayController] 决定做什么
@@ -30,6 +33,9 @@ class AccessibilityHelperService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
+        // 连上之前就可能已经装了监听，按当前状态补一次
+        applyKeyFiltering()
         _isConnected.value = true
         Timber.d("Accessibility service connected")
     }
@@ -54,6 +60,33 @@ class AccessibilityHelperService : AccessibilityService() {
             }
         }
         return super.onKeyEvent(event)
+    }
+
+    /**
+     * 只在有人监听组合键时才让系统把按键先交给本服务；没人监听时按键根本不经过这里
+     *
+     * 常开的话，服务一启用所有物理按键都要先绕本服务一圈，哪怕最后原样放行
+     */
+    private fun applyKeyFiltering() {
+        val wanted = onVolumeUpDownPressed.get() != null
+        if (!wanted) resetCombo()
+        val info = serviceInfo ?: return
+        val filtering = info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0
+        if (filtering == wanted) return
+        info.flags = if (wanted) {
+            info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        } else {
+            info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
+        }
+        serviceInfo = info
+        Timber.d("Key event filtering %s", if (wanted) "on" else "off")
+    }
+
+    /** 过滤关掉时半截的组合状态不能留到下次打开 */
+    private fun resetCombo() {
+        volumeUpPressTime = 0L
+        volumeDownPressTime = 0L
+        triggered = false
     }
 
     private inline fun recordAndCheck(record: (Long) -> Unit): Boolean {
@@ -84,6 +117,7 @@ class AccessibilityHelperService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
         _isConnected.value = false
         Timber.d("Accessibility service disconnected")
     }
@@ -98,8 +132,23 @@ class AccessibilityHelperService : AccessibilityService() {
         val SERVICE_ID: String =
             BuildConfig.APPLICATION_ID + "/" + AccessibilityHelperService::class.java.name
 
-        /** 由 OverlayController 装卸；null 表示当前不需要拦截 */
-        val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()
+        @Volatile
+        var instance: AccessibilityHelperService? = null
+            private set
+
+        private val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()
+
+        private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+
+        /**
+         * 由 OverlayController 装卸；null 表示当前不需要拦截，按键过滤随之关掉
+         *
+         * 切到主线程改 serviceInfo：组合键状态只在主线程的 onKeyEvent 里读写
+         */
+        fun setVolumeComboListener(listener: (() -> Unit)?) {
+            onVolumeUpDownPressed.set(listener)
+            mainHandler.post { instance?.applyKeyFiltering() }
+        }
 
         private val _isConnected = MutableStateFlow(false)
 
