@@ -1,14 +1,25 @@
 package com.aliothmoon.maafw.di
 
+import android.app.KeyguardManager
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.config.passwordPlaintexts
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.runner.AutoSleepHook
+import com.aliothmoon.maafw.runner.BackgroundModePrecheck
 import com.aliothmoon.maafw.runner.CloseTargetAppHook
 import com.aliothmoon.maafw.runner.CountdownHook
+import com.aliothmoon.maafw.runner.DisplayHazardNoticeHook
+import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
+import com.aliothmoon.maafw.runner.DisplayHazardProbe
 import com.aliothmoon.maafw.runner.FocusContentResolver
 import com.aliothmoon.maafw.runner.FocusDispatcher
+import com.aliothmoon.maafw.runner.GameFpsHook
+import com.aliothmoon.maafw.runner.GameFpsWatcher
+import com.aliothmoon.maafw.runner.RemoteGameFpsReader
 import com.aliothmoon.maafw.telemetry.TelemetryController
+import com.aliothmoon.maafw.telemetry.TelemetryHook
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
@@ -16,6 +27,7 @@ import com.aliothmoon.maafw.runner.NotificationHook
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
 import com.aliothmoon.maafw.runner.RemotePreviewPort
+import com.aliothmoon.maafw.runner.RunDurationLimitHook
 import com.aliothmoon.maafw.runner.RunKeepAlive
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunJournal
@@ -25,11 +37,15 @@ import com.aliothmoon.maafw.runner.RunScreenSaver
 import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.runner.ScreenSaverHook
 import com.aliothmoon.maafw.runner.SessionLogHook
+import com.aliothmoon.maafw.runner.SystemDisplayHazardProbe
+import com.aliothmoon.maafw.schedule.UnlockGestureStore
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.runner.WakeUnlockHook
 import com.aliothmoon.maafw.runner.WatchdogNoticeHook
+import com.aliothmoon.maafw.service.AccessibilityTextInputSink
 import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -43,11 +59,20 @@ val runnerModule = module {
             apkPath = context.applicationInfo.sourceDir,
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
             runMode = get<AppSettingsManager>().runMode::value,
-            resolutionPreference = get<AppSettingsManager>().resolutionPreference::value,
+            resolutionPreset = get<AppSettingsManager>().resolutionPreset::value,
             forceRestartApp = get<AppSettingsManager>().forceRestartApp::value,
             debugMode = get<AppSettingsManager>().debugMode::value,
+            saveOnError = get<AppSettingsManager>().saveOnError::value,
             scope = get(named<AppCoroutineScope>()),
             servicePort = get(),
+            textInputSink = { get<AccessibilityTextInputSink>() },
+        )
+    }
+
+    single {
+        AccessibilityTextInputSink(
+            journal = get(),
+            activeExecutionId = { get<RunnerPort>().state.value.activeExecution?.executionId },
         )
     }
 
@@ -69,13 +94,14 @@ val runnerModule = module {
     }
 
     single {
+        val configurationStore = get<UserConfigurationStore>()
         TelemetryController(
             context = androidContext(),
             projectRepository = get(),
             settings = get(),
-            focusDispatcher = get(),
             runnerPort = get(),
             scope = get(named<AppCoroutineScope>()),
+            secrets = { configurationStore.data.first().passwordPlaintexts() },
         )
     }
 
@@ -83,7 +109,6 @@ val runnerModule = module {
 
     single {
         RunLogRecorder(
-            runnerPort = get(),
             focusDispatcher = get(),
             store = get(),
             renderText = get<LocalizedTextRenderer>()::render,
@@ -92,6 +117,14 @@ val runnerModule = module {
         )
     }
     single<RunJournal> { get<RunLogRecorder>() }
+
+    single {
+        GameFpsWatcher(
+            reader = RemoteGameFpsReader(get()),
+            journal = get(),
+            scope = get(named<AppCoroutineScope>()),
+        )
+    }
 
     single<PreviewPort> {
         RemotePreviewPort(
@@ -111,31 +144,44 @@ val runnerModule = module {
         }
     }
 
+    single<DisplayHazardProbe> { SystemDisplayHazardProbe(androidContext(), get()) }
+
     single {
         RunLauncher(
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            prechecks = listOf(ForegroundModePrecheck),
+            prechecks = listOf(ForegroundModePrecheck, BackgroundModePrecheck(), DisplayHazardPrecheck(get())),
             hooks = listOf(
                 SessionLogHook(get()),
+                TelemetryHook(get()),
                 NotificationHook(get()),
                 AutoSleepHook(get()),
-                WakeUnlockHook(get(), get<AppSettingsManager>()),
+                WakeUnlockHook(get(), get<AppSettingsManager>(), get<UnlockGestureStore>()) {
+                    androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+                },
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,
                 KeepAliveHook(get()),
+                GameFpsHook(get()),
+                DisplayHazardNoticeHook(get(), get()),
                 WatchdogNoticeHook(
                     watchdogState = get<PermissionGateway>().watchdogState,
                     servicePort = get(),
                     journal = get(),
                     scope = get(named<AppCoroutineScope>()),
                 ),
+                RunDurationLimitHook(
+                    settings = get<AppSettingsManager>(),
+                    runnerPort = get(),
+                    scope = get(named<AppCoroutineScope>()),
+                ),
             ),
             runMode = get<AppSettingsManager>().runMode::value,
             scope = get(named<AppCoroutineScope>()),
             journal = get(),
+            renderText = get<LocalizedTextRenderer>()::render,
         )
     }
 }

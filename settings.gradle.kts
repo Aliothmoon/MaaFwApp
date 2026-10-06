@@ -36,3 +36,5 @@ include(":ksp-processor")
 include(":semi-icons")
 // 真机性能测量；只有 benchmark 变体，跑的是 .benchmark 后缀那个包
 include(":macrobenchmark")
+// 端到端测试的靶子：横屏输入框页，主 app 在真机上用临时 PI 驱动它，验 InputText 等控制链路
+include(":testapp")

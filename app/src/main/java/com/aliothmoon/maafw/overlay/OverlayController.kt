@@ -23,6 +23,7 @@ import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.theme.MaaFwTheme
+import com.aliothmoon.maafw.theme.ProvideUiScale
 import com.petterp.floatingx.FloatingX
 import com.petterp.floatingx.assist.FxDisplayMode
 import com.petterp.floatingx.assist.FxGravity
@@ -196,22 +197,25 @@ class OverlayController(
         panelLayout?.let { layoutParams = ViewGroup.LayoutParams(it.first, it.second) }
         setContent {
             val themeStyle by appSettings.themeStyle.collectAsState()
-            MaaFwTheme(themeStyle = themeStyle) {
-                // 不用 collectAsStateWithLifecycle：悬浮窗隐藏时 owner 停在 CREATED，
-                // 那样收不到运行态变化，再显示出来就是过期数据
-                val state by sessionViewModel.uiState.collectAsState()
-                val logEntries by sessionViewModel.runLog.collectAsState()
-                val locked by isPanelLocked.collectAsState()
-                OverlayPanel(
-                    state = state,
-                    logEntries = { logEntries },
-                    isLocked = locked,
-                    onIntent = sessionViewModel::onIntent,
-                    onBackToApp = ::bringAppToFront,
-                    onExportLog = ::requestExportLog,
-                    onLockToggle = { setPanelLocked(it) },
-                    onHide = ::onPanelClosed,
-                )
+            val uiScale by appSettings.uiScale.collectAsState()
+            ProvideUiScale(uiScale, overlay = true) {
+                MaaFwTheme(themeStyle = themeStyle) {
+                    // 不用 collectAsStateWithLifecycle：悬浮窗隐藏时 owner 停在 CREATED，
+                    // 那样收不到运行态变化，再显示出来就是过期数据
+                    val state by sessionViewModel.uiState.collectAsState()
+                    val logEntries by sessionViewModel.runLog.collectAsState()
+                    val locked by isPanelLocked.collectAsState()
+                    OverlayPanel(
+                        state = state,
+                        logEntries = { logEntries },
+                        isLocked = locked,
+                        onIntent = sessionViewModel::onIntent,
+                        onBackToApp = ::bringAppToFront,
+                        onExportLog = ::requestExportLog,
+                        onLockToggle = { setPanelLocked(it) },
+                        onHide = ::onPanelClosed,
+                    )
+                }
             }
         }
     }
@@ -219,9 +223,12 @@ class OverlayController(
     private fun createBallView(): ComposeView = newComposeView().apply {
         setContent {
             val themeStyle by appSettings.themeStyle.collectAsState()
-            MaaFwTheme(themeStyle = themeStyle) {
-                val state by runnerPort.state.collectAsState()
-                FloatBall(phase = state.phase, onClick = ::onBallClick)
+            val uiScale by appSettings.uiScale.collectAsState()
+            ProvideUiScale(uiScale, overlay = true) {
+                MaaFwTheme(themeStyle = themeStyle) {
+                    val state by runnerPort.state.collectAsState()
+                    FloatBall(phase = state.phase, onClick = ::onBallClick)
+                }
             }
         }
     }
@@ -338,11 +345,11 @@ class OverlayController(
     }
 
     private fun registerVolumeKeyListener() {
-        AccessibilityHelperService.onVolumeUpDownPressed.set { scope.launch { togglePanel() } }
+        AccessibilityHelperService.setVolumeComboListener { scope.launch { togglePanel() } }
     }
 
     private fun unregisterVolumeKeyListener() {
-        AccessibilityHelperService.onVolumeUpDownPressed.set(null)
+        AccessibilityHelperService.setVolumeComboListener(null)
     }
 
     // ── 布局 ──

@@ -21,6 +21,9 @@ object MaaDesignTokens {
         val md: Dp = 12.dp
         val lg: Dp = 16.dp
         val xl: Dp = 20.dp
+
+        /** 自绘对话框的内边距：比 [xl] 再松一档，与 M3 弹窗的 24dp 对齐 */
+        val xxl: Dp = 24.dp
     }
 
     /**
@@ -98,6 +101,9 @@ object MaaDesignTokens {
 
         /** 行首的主图标底 */
         val md: Dp = 32.dp
+
+        /** 行内图标按钮的可视区，与 M3 IconButton 一致 */
+        val lg: Dp = 40.dp
     }
 
     /**

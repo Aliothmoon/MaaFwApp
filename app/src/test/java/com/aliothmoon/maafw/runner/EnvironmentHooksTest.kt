@@ -1,10 +1,15 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.RemoteService
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.constant.WakeUnlockResult
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
@@ -53,14 +58,21 @@ class EnvironmentHooksTest {
 
     // ── 亮屏解锁 ────────────────────────────────────────────────────
 
-    @Test
-    fun `wake unlock is skipped when the switch is off`() = runTest {
-        val service = FakePrivilegedService()
-        val settings = FakeAppSettingsGateway()
-        val hook = WakeUnlockHook(FakePrivilegedServicePort(service), settings)
+    private fun wakeHook(
+        service: FakePrivilegedService,
+        settings: FakeAppSettingsGateway,
+        gestureJson: String = "",
+        keyguardLocked: Boolean = true,
+        port: PrivilegedServicePort = FakePrivilegedServicePort(service),
+    ) = WakeUnlockHook(port, settings, { gestureJson }, { keyguardLocked })
 
-        assertTrue(hook.engage(scheduleContext()) is EngageResult.Skipped)
-        assertTrue(service.unlockCalls.isEmpty())
+    /** 没有总开关：定时到点总要亮屏，「无密码」方式传空凭证，交给特权侧 dismissKeyguard */
+    @Test
+    fun `swipe unlock runs with an empty credential`() = runTest {
+        val service = FakePrivilegedService()
+
+        assertTrue(wakeHook(service, FakeAppSettingsGateway()).engage(scheduleContext()) is EngageResult.Skipped)
+        assertEquals(listOf(""), service.unlockCalls)
     }
 
     /** 手动 Start 时用户正对着亮屏解锁的手机按按钮，解一次是空操作 */
@@ -68,14 +80,11 @@ class EnvironmentHooksTest {
     fun `wake unlock never runs for a manual trigger`() = runTest {
         val service = FakePrivilegedService()
         val settings = FakeAppSettingsGateway().apply {
-            wakeUnlockEnabled.value = true
+            wakeUnlockType.value = UnlockCredential.TYPE_PIN
             wakeCredential.value = "1234"
         }
 
-        assertTrue(
-            WakeUnlockHook(FakePrivilegedServicePort(service), settings).engage(context())
-                is EngageResult.Skipped,
-        )
+        assertTrue(wakeHook(service, settings).engage(context()) is EngageResult.Skipped)
         assertTrue(service.unlockCalls.isEmpty())
     }
 
@@ -83,24 +92,42 @@ class EnvironmentHooksTest {
     fun `wake unlock passes the configured pin through`() = runTest {
         val service = FakePrivilegedService()
         val settings = FakeAppSettingsGateway().apply {
-            wakeUnlockEnabled.value = true
+            wakeUnlockType.value = UnlockCredential.TYPE_PIN
             wakeCredential.value = "1234"
         }
-        val hook = WakeUnlockHook(FakePrivilegedServicePort(service), settings)
 
-        hook.engage(scheduleContext())
+        wakeHook(service, settings).engage(scheduleContext())
 
         assertEquals(listOf("1234"), service.unlockCalls)
+    }
+
+    @Test
+    fun `gesture unlock replays the recorded gesture`() = runTest {
+        val service = FakePrivilegedService()
+        val settings = FakeAppSettingsGateway().apply { wakeUnlockType.value = UnlockCredential.TYPE_GESTURE }
+
+        wakeHook(service, settings, gestureJson = "{\"steps\":[]}").engage(scheduleContext())
+
+        assertEquals(listOf("gesture:{\"steps\":[]}"), service.unlockCalls)
+    }
+
+    /** 选了手势却没录：退回「无密码」，至少还能把屏点亮 */
+    @Test
+    fun `gesture without a recording falls back to swipe`() = runTest {
+        val service = FakePrivilegedService()
+        val settings = FakeAppSettingsGateway().apply { wakeUnlockType.value = UnlockCredential.TYPE_GESTURE }
+
+        wakeHook(service, settings).engage(scheduleContext())
+
+        assertEquals(listOf(""), service.unlockCalls)
     }
 
     /** 没设锁屏的设备解不出东西也不算失败 */
     @Test
     fun `no keyguard counts as success`() = runTest {
         val service = FakePrivilegedService().apply { unlockResult = WakeUnlockResult.NO_KEYGUARD }
-        val settings = FakeAppSettingsGateway().apply { wakeUnlockEnabled.value = true }
-        val hook = WakeUnlockHook(FakePrivilegedServicePort(service), settings)
 
-        hook.engage(scheduleContext())
+        assertTrue(wakeHook(service, FakeAppSettingsGateway()).engage(scheduleContext()) is EngageResult.Skipped)
     }
 
     /** gating：抛出去让 RunLauncher 中止整轮，别对着锁屏跑到超时 */
@@ -110,13 +137,47 @@ class EnvironmentHooksTest {
             unlockResult = WakeUnlockResult.CREDENTIAL_REJECTED
         }
         val settings = FakeAppSettingsGateway().apply {
-            wakeUnlockEnabled.value = true
+            wakeUnlockType.value = UnlockCredential.TYPE_PIN
             wakeCredential.value = "9999"
         }
-        val hook = WakeUnlockHook(FakePrivilegedServicePort(service), settings)
+        val hook = wakeHook(service, settings)
 
         assertTrue(hook.gating)
         assertTrue(hook.engage(scheduleContext()) is EngageResult.Failed)
+    }
+
+    /** 报失败但锁屏已经不在（人脸先解开了、手机本就开着）：照常往下跑 */
+    @Test
+    fun `a failed unlock without a keyguard lets the run go on`() = runTest {
+        val service = FakePrivilegedService().apply { unlockResult = WakeUnlockResult.WAKE_FAILED }
+
+        val result = wakeHook(service, FakeAppSettingsGateway(), keyguardLocked = false).engage(scheduleContext())
+
+        assertTrue(result is EngageResult.Skipped)
+    }
+
+    /** 冷启动时服务还没连上：要先连再解，不能拿「没连接」直接把整轮拦掉 */
+    @Test
+    fun `wake unlock connects the service before unlocking`() = runTest {
+        val service = FakePrivilegedService()
+        val port = object : PrivilegedServicePort by FakePrivilegedServicePort(service) {
+            override fun serviceOrNull(): RemoteService? = null
+        }
+
+        val result = wakeHook(service, FakeAppSettingsGateway(), port = port).engage(scheduleContext())
+
+        assertTrue(result is EngageResult.Skipped)
+        assertEquals(listOf(""), service.unlockCalls)
+    }
+
+    /** 认不出的码要带进文案，不能一律说成 IPC 失败 */
+    @Test
+    fun `an unknown result code keeps the code in the failure`() = runTest {
+        val service = FakePrivilegedService().apply { unlockResult = 99 }
+
+        val result = wakeHook(service, FakeAppSettingsGateway()).engage(scheduleContext())
+
+        assertEquals(uiTextOf(R.string.wake_result_unknown, 99), (result as EngageResult.Failed).reason)
     }
 
     // ── 屏保 ────────────────────────────────────────────────────────
@@ -287,6 +348,20 @@ class EnvironmentHooksTest {
         )
 
         assertEquals(0, service.stopTargetAppCount)
+    }
+
+    /** 时长上限停的结局同样是 Cancelled，但那不是用户接手，应用照关 */
+    @Test
+    fun `target app is closed after a stop at the duration limit`() = runTest {
+        val service = FakePrivilegedService()
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
+        val ctx = scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))
+
+        val release = hook.engage(ctx).releaseOrNull()!!
+        ctx.stoppedAtLimit.set(true)
+        release(RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())))
+
+        assertEquals(1, service.stopTargetAppCount)
     }
 
     /** 特权进程断了时收尾不该反过来触发重连 */

@@ -2,7 +2,7 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
@@ -37,23 +37,38 @@ interface AppSettingsGateway {
     val forceRestartApp: StateFlow<Boolean>
     suspend fun setForceRestartApp(enabled: Boolean)
 
-    val resolutionPreference: StateFlow<ResolutionPreference>
-    suspend fun setResolutionPreference(preference: ResolutionPreference)
+    val resolutionPreset: StateFlow<ResolutionPreset>
+    suspend fun setResolutionPreset(preset: ResolutionPreset)
 
     val debugMode: StateFlow<Boolean>
     suspend fun setDebugMode(enabled: Boolean)
 
+    /** 节点出错时存现场图；每轮 setup 后现读传给特权进程 */
+    val saveOnError: StateFlow<Boolean>
+    suspend fun setSaveOnError(enabled: Boolean)
+
     val themeStyle: StateFlow<ThemeStyle>
     suspend fun setThemeStyle(style: ThemeStyle)
 
+    /** 页面缩放的存储值：[com.aliothmoon.maafw.theme.UiScale.AUTO] 或 80–110 */
+    val uiScale: StateFlow<Int>
+    suspend fun setUiScale(scale: Int)
+
     // ── 定时任务解锁；逐条规则的那几项在 ScheduleStrategy 上，不在这 ──
 
-    val wakeUnlockEnabled: StateFlow<Boolean>
-    suspend fun setWakeUnlockEnabled(enabled: Boolean)
+    /** [com.aliothmoon.maafw.domain.UnlockCredential] 的 TYPE_* 之一，读出来的永远合法 */
+    val wakeUnlockType: StateFlow<String>
+    suspend fun setWakeUnlockType(type: String)
 
     /** 纯数字 PIN；非数字会被 setter 过滤掉 */
     val wakeCredential: StateFlow<String>
     suspend fun setWakeCredential(credential: String)
+
+    val runDurationLimitEnabled: StateFlow<Boolean>
+    suspend fun setRunDurationLimitEnabled(enabled: Boolean)
+
+    val runDurationLimitMinutes: StateFlow<Int>
+    suspend fun setRunDurationLimitMinutes(minutes: Int)
 
     /** PI 声明了 telemetry 时才起作用 */
     val telemetryEnabled: StateFlow<Boolean>

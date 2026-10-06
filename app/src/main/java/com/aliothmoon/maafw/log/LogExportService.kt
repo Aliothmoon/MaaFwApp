@@ -3,14 +3,16 @@ package com.aliothmoon.maafw.log
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.util.displayName
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,15 +32,19 @@ class LogExportService(
     /** 要收的几棵目录；zip 里的路径相对 [baseDir] */
     private val baseDir: () -> File,
     private val roots: () -> List<File>,
+    /** agent 自己写在 PI 根下的日志 */
+    private val piLogs: () -> LogExportCollector.PiLogs? = { null },
     /** 调试模式下额外附一份 `getprop`：ROM 差异是排障时最先要问的 */
     private val debugMode: () -> Boolean,
     /** 设备快照文本；采集在 [DeviceInfoCollector] */
     private val deviceInfo: () -> String,
+    /** 当前保存着的 PI password 明文，打包时在文本日志里换成掩码，见 [SecretRedaction] */
+    private val secrets: suspend () -> Collection<String> = { emptyList() },
 ) {
 
     /** 返回 null = 打包失败；没有日志时也保留设备信息快照 */
     suspend fun exportZip(): File? = withContext(MaaDispatchers.IO) {
-        val files = LogExportCollector.collect(roots(), System.currentTimeMillis())
+        val files = LogExportCollector.collect(roots(), System.currentTimeMillis(), piLogs())
         if (files.isEmpty()) {
             Timber.w("no log files to export, packing device info only")
         }
@@ -48,7 +54,7 @@ class LogExportService(
             // 只留最新一份：旧包对用户没用，留着纯占空间
             dir.listFiles()?.forEach { it.delete() }
             val zip = File(dir, "maafw_logs_${STAMP.format(Date())}.zip")
-            writeZip(zip, files)
+            writeZip(zip, files, SecretRedaction.redactable(secrets()))
             zip
         }.onFailure { Timber.w(it, "export logs failed") }.getOrNull()
     }
@@ -62,25 +68,64 @@ class LogExportService(
             context.contentResolver.openOutputStream(target)?.use { out ->
                 zip.inputStream().use { it.copyTo(out) }
             } ?: return@runCatching null
-            displayName(target) ?: zip.name
+            context.contentResolver.displayName(target) ?: zip.name
         }.onFailure { Timber.w(it, "write to export target failed: %s", target) }.getOrNull()
     }
 
     fun suggestedFileName(): String = "maafw_logs_${STAMP.format(Date())}.zip"
 
-    private fun writeZip(zip: File, files: List<File>) {
+    private fun writeZip(zip: File, files: List<File>, secrets: List<String>) {
         val base = baseDir()
         ZipOutputStream(BufferedOutputStream(FileOutputStream(zip))).use { out ->
             if (debugMode()) appendDeviceProperties(out)
             appendDeviceInfo(out)
+            val skipped = mutableListOf<String>()
             files.forEach { file ->
-                val entry = ZipEntry(file.relativeTo(base).invariantSeparatorsPath)
-                entry.time = file.lastModified()
-                out.putNextEntry(entry)
-                file.inputStream().use { it.copyTo(out, BUFFER_SIZE) }
+                appendLogFile(out, file, base, secrets, skipped)
+            }
+            if (skipped.isNotEmpty()) {
+                out.putNextEntry(ZipEntry(SKIPPED_ENTRY))
+                out.write(skipped.joinToString("\n").toByteArray(Charsets.UTF_8))
                 out.closeEntry()
             }
         }
+    }
+
+    /** 提权进程写的文件可能对 App 不可读，逐个跳过，不拖垮整包 */
+    private fun appendLogFile(
+        out: ZipOutputStream,
+        file: File,
+        base: File,
+        secrets: List<String>,
+        skipped: MutableList<String>,
+    ) {
+        val name = file.relativeTo(base).invariantSeparatorsPath
+        try {
+            file.inputStream().use { input ->
+                val entry = ZipEntry(name).apply { time = file.lastModified() }
+                out.putNextEntry(entry)
+                if (secrets.isNotEmpty() && file.extension.lowercase() in TEXT_EXTENSIONS) {
+                    copyRedacted(input, out, secrets)
+                } else {
+                    input.copyTo(out, BUFFER_SIZE)
+                }
+                out.closeEntry()
+            }
+        } catch (e: IOException) {
+            Timber.w(e, "Skip unreadable log file: %s", name)
+            skipped += "$name: ${e.message ?: e::class.java.simpleName}"
+            runCatching { out.closeEntry() }
+        }
+    }
+
+    /** 逐行替换，大文件不整份读进内存，换行统一成 LF；writer 只 flush 不 close，close 会把整个 zip 流关掉 */
+    private fun copyRedacted(input: InputStream, out: ZipOutputStream, secrets: List<String>) {
+        val writer = out.bufferedWriter(Charsets.UTF_8)
+        input.bufferedReader(Charsets.UTF_8).forEachLine { line ->
+            writer.write(SecretRedaction.redact(line, secrets))
+            writer.write("\n")
+        }
+        writer.flush()
     }
 
     /** 取不到就跳过：少一份设备属性不该让整个导出失败 */
@@ -113,20 +158,14 @@ class LogExportService(
         }
     }
 
-    private fun displayName(uri: Uri): String? = runCatching {
-        context.contentResolver
-            .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { cursor ->
-                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
-            }
-    }.getOrNull()
-
     private companion object {
         const val LOG_DIR_NAME = "log"
         const val PROPERTIES_ENTRY = "properties.txt"
         const val DEVICE_INFO_ENTRY = "device_info.txt"
+        const val SKIPPED_ENTRY = "export_skipped.txt"
         const val MIME_ZIP = "application/zip"
         const val BUFFER_SIZE = 8 * 1024
+        val TEXT_EXTENSIONS = setOf("log", "txt", "json", "jsonl")
 
         val STAMP = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     }

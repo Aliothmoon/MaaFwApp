@@ -123,10 +123,12 @@ class NotificationCenter(
      *
      * 取的是 [RunLogRecorder] 的内存快照而不是会话文件：收尾这一刻文件还没冲完，
      * 读它会缺最后几行——而挂掉前的最后几行恰恰是排障时最想看的
+     *
+     * 只取进度档：收尾那一刻「全部」档的末尾多半是成串的 `Node.*` 原始回调，放进通知没法读
      */
     private fun appendLogs(body: String, current: NotificationSettings): String {
         if (!current.includeLogDetails.toPrefBoolean()) return body
-        val logs = recorder.runLog.value
+        val logs = recorder.runLog.value.progress
             .takeLast(LOG_TAIL_LINES)
             .joinToString("\n") { "[${TIME_OF_DAY.format(Date(it.atMillis))}] ${renderText(it.text)}" }
         return if (logs.isEmpty()) body else "$body\n\n$logs"
