@@ -428,7 +428,7 @@
 
     <!-- Localized text for structured domain/VM semantics (ui/i18n/DomainStrings) -->
     <string name="tasks_ungrouped">Ungrouped</string>
-    <string name="task_unavailable_missing">Task no longer exists in the project</string>
+    <string name="task_unavailable_missing">Task no longer exists in the project; you can remove it</string>
     <string name="task_unavailable_controller">Not supported</string>
     <string name="task_unavailable_controller_switch">Requires the %1$s controller</string>
     <string name="task_unavailable_resource">Unsupported resource (requires %1$s)</string>
