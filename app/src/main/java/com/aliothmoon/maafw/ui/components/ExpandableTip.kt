@@ -1,9 +1,8 @@
 package com.aliothmoon.maafw.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -14,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 
 /**
@@ -47,18 +48,23 @@ fun ExpandableTipIcon(
     }
 }
 
+/**
+ * [topSpacing] 与上方那行的间距放在动画里面：放在外层 spacedBy 里，收起后那段空白还占着，
+ * 展开时又会先一下冒出来
+ */
 @Composable
 fun ExpandableTipContent(
     visible: Boolean,
     modifier: Modifier = Modifier,
+    topSpacing: Dp = 0.dp,
     content: @Composable () -> Unit,
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = expandVertically(),
-        exit = shrinkVertically(),
+        enter = CardExpand,
+        exit = CardCollapse,
         modifier = modifier,
     ) {
-        MaaDescriptionPanel(content = content)
+        MaaDescriptionPanel(modifier = Modifier.padding(top = topSpacing), content = content)
     }
 }

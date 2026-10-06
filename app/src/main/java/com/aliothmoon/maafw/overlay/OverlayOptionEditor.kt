@@ -34,12 +34,15 @@ import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.standardSwitchCases
 import com.aliothmoon.maafw.domain.validateInputCandidate
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.options.keyboardType
+import com.aliothmoon.maafw.ui.options.visualTransformation
 
 /**
  * 悬浮窗选项树：字号 / 开关 / 描述面板都按 overlay 密度，不套任务页 OptionEditorList
@@ -158,6 +161,17 @@ private fun OverlayCheckboxCasesEditor(
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs)) {
         OverlayOptionLabel(option)
         OverlayChoiceFlow(option, locked, multiple = true, onSetOption = onSetOption)
+        option.countRule?.let { rule ->
+            Text(
+                text = rule.asString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (option.belowMinCount) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
     }
 }
 
@@ -179,7 +193,7 @@ private fun OverlayChoiceFlow(
             OverlayChoiceChip(
                 label = case.label,
                 selected = case.active,
-                enabled = !locked,
+                enabled = !locked && (!multiple || option.canToggle(case)),
                 leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
                 onClick = {
                     if (multiple) {
@@ -223,6 +237,8 @@ private fun OverlayInputEditor(
                 },
                 hint = field.label,
                 enabled = !locked,
+                visualTransformation = field.visualTransformation(),
+                keyboardType = field.keyboardType(),
                 modifier = Modifier.fillMaxWidth(),
             )
             supporting?.let {
@@ -276,14 +292,15 @@ private fun OverlayChoiceChip(
     leading: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(MaaTheme.style.radii.button)
     Surface(
-        shape = RoundedCornerShape(MaaTheme.style.radii.button),
+        shape = shape,
         color = if (selected) scheme.primaryContainer else Color.Transparent,
         border = BorderStroke(
             MaaDesignTokens.Separator.thickness,
             if (selected) scheme.primary else scheme.outline,
         ),
-        modifier = Modifier.maaClickable(enabled = enabled, onClick = onClick),
+        modifier = Modifier.maaClickable(enabled = enabled, shape = shape, onClick = onClick),
     ) {
         Row(
             modifier = Modifier.padding(

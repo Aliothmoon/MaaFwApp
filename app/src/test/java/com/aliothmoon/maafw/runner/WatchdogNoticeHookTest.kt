@@ -43,11 +43,11 @@ class WatchdogNoticeHookTest {
     private class RecordingJournal : RunJournal {
         val notes = mutableListOf<Pair<RunNote, UiText.Resource>>()
 
-        override suspend fun begin(plan: RunPlan) = Unit
+        override suspend fun begin(plan: RunPlan, executionId: String) = Unit
 
-        override suspend fun end(reason: RunEndReason) = Unit
+        override suspend fun end(executionId: String, reason: RunEndReason) = Unit
 
-        override fun note(level: RunNote, text: UiText) {
+        override fun note(executionId: String, level: RunNote, text: UiText) {
             if (text is UiText.Resource) notes += level to text
         }
     }

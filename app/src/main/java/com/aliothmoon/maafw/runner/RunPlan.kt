@@ -27,7 +27,12 @@ data class RuntimeTask(
     val pipelineOverrides: List<JsonObject>,
     /** 加载期已物化的展示名；缺省回落 [taskName] */
     val label: String = taskName,
+    /** 任务级选项的遥测摘要（[com.aliothmoon.maafw.telemetry.TelemetrySummary]），只进 Span，不下发特权进程 */
+    val telemetryOptions: Map<String, String> = emptyMap(),
 )
+
+/** 交给 MaaResourcePostBundle 的顺序：先 `resource.path[]`，再当前 controller 的 `attach_resource_path` */
+fun RunPlan.resourceBundlePaths(): List<String> = resource.paths + controller.attachResourcePaths
 
 fun RunPlan.taskLabelMap(): Map<String, String> =
     tasks.associate { it.taskName to it.label.ifBlank { it.taskName } }

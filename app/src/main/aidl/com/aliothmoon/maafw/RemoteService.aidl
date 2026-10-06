@@ -3,6 +3,7 @@ package com.aliothmoon.maafw;
 import android.view.Surface;
 import com.aliothmoon.maafw.ITouchEventCallback;
 import com.aliothmoon.maafw.IMaaRunnerCallback;
+import com.aliothmoon.maafw.ITextInputSink;
 
 /**
  * 特权进程的服务面（docs/privileged-runtime.md §6）
@@ -104,6 +105,12 @@ interface RemoteService {
     String maaVersion() = 54;
 
     /** 看门狗状态：0=IDLE / 1=WATCHING / 2=DISPLAY_DRIFT / 3=APP_DIED / 4=VIRTUAL_DISPLAY_EMPTY */
+    /**
+     * MaaGlobalOption_SaveOnError：节点出错时把现场截图落到 logDir/on_error
+     * app 每轮 setup 后现读设置再调；框架核心默认 false，不设就永远不存
+     */
+    boolean setSaveOnError(boolean enabled) = 55;
+
     int watchdogState() = 60;
 
     /** 看门狗当下盯着的包名；没有目标时为空串。运行日志要把它写进那句提示里 */
@@ -144,4 +151,40 @@ interface RemoteService {
      * 走文件不回传字节：一张 720p PNG 几百 KB，binder 事务缓冲总共才 1MB
      */
     boolean saveCachedImage(String path) = 75;
+
+    /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
+    float getGameFps() = 76;
+    /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */
+    oneway void setTextInputSink(ITextInputSink sink) = 77;
+
+    // ── 解锁手势（docs/scheduled-triggers.md）──
+    // 录制整段在特权进程里跑：要锁屏、读 /dev/input 原始触摸，app 侧那时多半已被挂起
+
+    /** 开始录制：锁屏息屏 → 亮屏 → 等用户解锁一次；立即返回，结果靠轮询取 */
+    oneway void startGestureRecord(int timeoutMs) = 78;
+
+    /** 录制状态快照，GestureRecordResult 的 JSON；终态被读走一次后回到 IDLE */
+    String pollGestureRecord() = 79;
+
+    oneway void cancelGestureRecord() = 80;
+
+    /** 按录好的手势解锁；gestureJson 是 UnlockGesture 的 JSON */
+    int unlockWithGesture(String gestureJson) = 81;
+
+    /** 设置页自测：先上锁息屏再按手势解一次 */
+    int testUnlockGesture(String gestureJson) = 82;
+
+    // ── 系统显示设置 ──
+
+    /** 荣耀「智能分辨率」是否开着（global low_resolution_switch）；开着时后台模式识别会出错 */
+    boolean isSmartResolutionEnabled() = 83;
+
+    // ── 运行通知 ──
+
+    /**
+     * 断开 / 恢复某个包的联网；只认 com.xiaomi.xmsf，别的包一律拒绝
+     *
+     * 超级岛的云端鉴权断网即放行，运行通知选「超级岛」时在进度通知期间断开它
+     */
+    boolean setPackageNetworkingEnabled(String packageName, boolean enabled) = 84;
 }

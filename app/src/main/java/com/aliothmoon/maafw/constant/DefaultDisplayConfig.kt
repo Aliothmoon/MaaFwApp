@@ -2,8 +2,8 @@ package com.aliothmoon.maafw.constant
 
 /**
  * 虚拟显示器的兜底参数
- * 实际分辨率由用户选的 [com.aliothmoon.maafw.runner.ResolutionPreference] 决定，
- * 这里只在 payload 没带上尺寸时兜底（docs/privileged-runtime.md §7）
+ * 实际分辨率与 dpi 由用户选的 [com.aliothmoon.maafw.runner.ResolutionPreset] 决定，
+ * 这里只在 payload 没带上尺寸时兜底（docs/privileged-runtime.md §7），取值同内置默认档
  */
 object DefaultDisplayConfig {
     /** 建屏时的名字，只在 dumpsys 里可见 */
@@ -13,5 +13,5 @@ object DefaultDisplayConfig {
 
     const val WIDTH = 1280
     const val HEIGHT = 720
-    const val DPI = 160
+    const val DPI = 240
 }

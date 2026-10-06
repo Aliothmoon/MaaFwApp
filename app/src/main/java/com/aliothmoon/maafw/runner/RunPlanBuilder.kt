@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.validateInputCandidate
+import com.aliothmoon.maafw.telemetry.TelemetrySummary
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -52,6 +53,7 @@ object RunPlanBuilder {
             diagnostics += runtimeError("environment", DiagnosticMessages.runtimeNoResource())
             return RunPlanResult.Invalid(diagnostics)
         }
+        val controller = definition.controller(config.activeControllerName)
 
         val runConfiguration = config.configuration(configurationId ?: config.activeConfigurationId)
             ?: return RunPlanResult.NoExecutableTasks
@@ -66,6 +68,7 @@ object RunPlanBuilder {
             optionNames = definition.globalOptionNames,
             values = config.globalOptionValues,
             scopeLabel = "global_option",
+            controllerName = controller.name,
             resourceName = resource.name,
             patches = globalPatches,
             diagnostics = globalDiagnostics,
@@ -78,9 +81,23 @@ object RunPlanBuilder {
             optionNames = resource.optionNames,
             values = config.resourceOptionValues[resource.name].orEmpty(),
             scopeLabel = "resource:${resource.name}",
+            controllerName = controller.name,
             resourceName = resource.name,
             patches = resourcePatches,
             diagnostics = resourceDiagnostics,
+        )
+
+        val controllerPatches = mutableListOf<JsonObject>()
+        val controllerDiagnostics = mutableListOf<Diagnostic>()
+        compileOptions(
+            definition = definition,
+            optionNames = controller.optionNames,
+            values = config.controllerOptionValues[controller.name].orEmpty(),
+            scopeLabel = "controller:${controller.name}",
+            controllerName = controller.name,
+            resourceName = resource.name,
+            patches = controllerPatches,
+            diagnostics = controllerDiagnostics,
         )
 
         val runtimeTasks = mutableListOf<RuntimeTask>()
@@ -96,19 +113,21 @@ object RunPlanBuilder {
                 continue
             }
             // Resolver 自动禁用供 UI；此处为运行时兜底
-            val applicable = ConfigurationResolver.checkApplicability(definition, task, resource.name) == null
+            val applicable = ConfigurationResolver.checkApplicability(definition, task, controller, resource.name) == null
             if (!configured.enabled || !applicable) continue
 
             val patches = mutableListOf<JsonObject>()
             if (task.pipelineOverride.isNotEmpty()) patches += task.pipelineOverride
-            // 协议「Option 覆盖顺序」：task 基础 → global → resource →（controller 未建模）→ task option
+            // 协议「Option 覆盖顺序」：task 基础 → global → resource → controller → task option
             patches += globalPatches
             patches += resourcePatches
+            patches += controllerPatches
             compileOptions(
                 definition = definition,
                 optionNames = task.optionNames,
                 values = configured.optionValues,
                 scopeLabel = "task:${task.name}",
+                controllerName = controller.name,
                 resourceName = resource.name,
                 patches = patches,
                 diagnostics = diagnostics,
@@ -118,6 +137,7 @@ object RunPlanBuilder {
                 entry = task.entry,
                 pipelineOverrides = patches,
                 label = task.label.ifBlank { task.name },
+                telemetryOptions = TelemetrySummary.summarize(definition, task.optionNames, configured.optionValues),
             )
         }
 
@@ -126,6 +146,7 @@ object RunPlanBuilder {
         if (runtimeTasks.isNotEmpty()) {
             diagnostics += globalDiagnostics
             diagnostics += resourceDiagnostics
+            diagnostics += controllerDiagnostics
         }
 
         if (diagnostics.any { it.severity == DiagnosticSeverity.Error }) {
@@ -137,7 +158,7 @@ object RunPlanBuilder {
             RunPlan(
                 projectName = definition.name,
                 projectVersion = definition.version,
-                controller = definition.controller,
+                controller = controller,
                 resource = resource,
                 runConfigurationId = runConfiguration.id,
                 tasks = runtimeTasks,
@@ -147,7 +168,7 @@ object RunPlanBuilder {
                 } else {
                     PiAgentEnv.build(
                         projectVersion = definition.version,
-                        controller = definition.controller,
+                        controller = controller,
                         resource = resource,
                         translations = definition.translations,
                         clientVersion = clientVersion,
@@ -164,6 +185,7 @@ object RunPlanBuilder {
         optionNames: List<String>,
         values: Map<String, OptionValue>,
         scopeLabel: String,
+        controllerName: String,
         resourceName: String,
         patches: MutableList<JsonObject>,
         diagnostics: MutableList<Diagnostic>,
@@ -174,11 +196,14 @@ object RunPlanBuilder {
             if (!processed.add(name)) return
             val option = definition.options[name]
             if (option == null) {
-                diagnostics += runtimeError(scopeLabel, DiagnosticMessages.missingReference("option", name))
+                // 有意跳过的（如 hotkey）加载时已记 warning，不能让它把整轮判成 Invalid
+                if (name !in definition.skippedOptionNames) {
+                    diagnostics += runtimeError(scopeLabel, DiagnosticMessages.missingReference("option", name))
+                }
                 return
             }
             // 见 OptionApplicability：不满足即整个跳过，且不记诊断
-            if (!option.applicability.matches(definition.controller.name, resourceName)) return
+            if (!option.applicability.matches(controllerName, resourceName)) return
             when (option) {
                 is OptionDefinition.Choice -> {
                     val value = values[name] as? OptionValue.SingleCase
@@ -212,6 +237,20 @@ object RunPlanBuilder {
                             DiagnosticMessages.selectedCaseMissing(name, it),
                         )
                     }
+                    // 协议要求不带着不满足上下限的选择启动；PI 更新后收紧了限制，旧配置也在这里拦
+                    val selectedCount = option.cases.count { it.name in selected }
+                    if (!option.acceptsCount(selectedCount)) {
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessages.checkboxCountOutOfRange(
+                                name,
+                                selectedCount,
+                                option.minCount,
+                                option.maxCount,
+                            ),
+                        )
+                        return
+                    }
                     // patch 按 definition 声明序，不按用户勾选序
                     for (case in option.cases) {
                         if (case.name !in selected) continue
@@ -232,7 +271,7 @@ object RunPlanBuilder {
                                 DiagnosticMessages.invalidInput(
                                     option = name,
                                     input = field.name,
-                                    detail = field.patternMessage ?: raw,
+                                    detail = field.patternMessage ?: field.displayValue(raw),
                                 ),
                             )
                             valid = false
@@ -294,7 +333,7 @@ object RunPlanBuilder {
         val whole = PLACEHOLDER.matchEntire(content)
         if (whole != null) {
             val (field, raw) = fields[whole.groupValues[1]] ?: return JsonPrimitive(content)
-            return typedPrimitive(field.pipelineType, raw, scopeLabel, optionName, diagnostics)
+            return typedPrimitive(field, raw, scopeLabel, optionName, diagnostics)
                 ?: JsonPrimitive(content)
         }
         val replaced = PLACEHOLDER.replace(content) { match ->
@@ -304,17 +343,17 @@ object RunPlanBuilder {
     }
 
     private fun typedPrimitive(
-        type: PipelineType,
+        field: InputFieldDefinition,
         raw: String,
         scopeLabel: String,
         optionName: String,
         diagnostics: MutableList<Diagnostic>,
-    ): JsonPrimitive? = when (type) {
+    ): JsonPrimitive? = when (field.pipelineType) {
         PipelineType.StringType -> JsonPrimitive(raw)
         PipelineType.IntType -> raw.toLongOrNull()?.let { JsonPrimitive(it) } ?: run {
             diagnostics += runtimeError(
                 scopeLabel,
-                DiagnosticMessages.integerConversionFailed(optionName, raw),
+                DiagnosticMessages.integerConversionFailed(optionName, field.displayValue(raw)),
             )
             null
         }
@@ -322,7 +361,7 @@ object RunPlanBuilder {
         PipelineType.BoolType -> raw.toBooleanStrictOrNull()?.let { JsonPrimitive(it) } ?: run {
             diagnostics += runtimeError(
                 scopeLabel,
-                DiagnosticMessages.booleanConversionFailed(optionName, raw),
+                DiagnosticMessages.booleanConversionFailed(optionName, field.displayValue(raw)),
             )
             null
         }

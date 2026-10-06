@@ -46,7 +46,7 @@ class WatchdogNoticeHook(
                 .dropWhile { it.needsNotice }
                 .distinctUntilChanged()
                 .filter { it.needsNotice }
-                .collect { state -> journal.note(RunNote.Warning, describe(state)) }
+                .collect { state -> journal.note(ctx.executionId, RunNote.Warning, describe(state)) }
         }
         return EngageResult.Engaged { job.cancel() }
     }

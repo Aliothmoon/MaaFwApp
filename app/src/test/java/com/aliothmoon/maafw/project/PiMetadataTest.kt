@@ -38,7 +38,7 @@ class PiMetadataTest {
             MapTextResolver(mapOf("welcome.body" to "欢迎使用")),
         )
 
-        assertEquals("欢迎使用", metadata.welcome)
+        assertEquals(listOf("欢迎使用"), metadata.welcome)
         assertEquals("一句话说明", metadata.description)
         assertEquals("CONTACT", metadata.contact)
         assertEquals("https://example.com/owner/repo", metadata.github)
@@ -76,28 +76,38 @@ class PiMetadataTest {
 
     /** 指纹算在原始声明上，否则切一次语言就会让同一份 welcome 再弹一次 */
     @Test
-    fun `welcome 指纹不随语言变化`() {
+    fun `welcome 原始声明不随语言变化`() {
         val source = root("""{ "version": "1.2.0", "welcome": "${'$'}welcome.body" }""")
         val zh = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "欢迎")))
         val en = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "Welcome")))
 
         assertNotEquals(zh.welcome, en.welcome)
-        assertEquals(zh.welcomeFingerprint, en.welcomeFingerprint)
+        assertEquals(zh.welcomeDeclarations, en.welcomeDeclarations)
     }
 
     @Test
-    fun `PI 版本变化时指纹跟着变`() {
-        val text = MapTextResolver(emptyMap())
-        val v1 = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": "hi" }"""), text)
-        val v2 = PiParser.parseMetadata(root("""{ "version": "1.1.0", "welcome": "hi" }"""), text)
-        assertNotEquals(v1.welcomeFingerprint, v2.welcomeFingerprint)
-    }
-
-    @Test
-    fun `没有 welcome 就没有指纹`() {
+    fun `没有 welcome 就没有声明`() {
         val metadata = PiParser.parseMetadata(root("""{ "name": "x" }"""), MapTextResolver(emptyMap()))
-        assertNull(metadata.welcome)
-        assertNull(metadata.welcomeFingerprint)
+        assertTrue(metadata.welcome.isEmpty())
+        assertTrue(metadata.welcomeDeclarations.isEmpty())
+    }
+
+    @Test
+    fun `welcome 数组按声明顺序物化`() {
+        val metadata = PiParser.parseMetadata(
+            root("""{ "welcome": ["${'$'}notice", "announcements/update.md", 3, ""] }"""),
+            MapTextResolver(mapOf("notice" to "公告")),
+        )
+
+        assertEquals(listOf("公告", "announcements/update.md"), metadata.welcome)
+        assertEquals(listOf("${'$'}notice", "announcements/update.md"), metadata.welcomeDeclarations)
+    }
+
+    @Test
+    fun `welcome 空数组视为没有`() {
+        val metadata = PiParser.parseMetadata(root("""{ "welcome": [] }"""), MapTextResolver(emptyMap()))
+        assertTrue(metadata.welcome.isEmpty())
+        assertTrue(metadata.welcomeDeclarations.isEmpty())
     }
 
     @Test
@@ -118,6 +128,7 @@ class PiMetadataTest {
                       "dsn": "https://key@example.com/1",
                       "tracing": false,
                       "traces_sample_rate": 0.25,
+                      "failure_attachments_sample_rate": 0.5,
                       "environment": "beta"
                     }
                   }
@@ -128,6 +139,7 @@ class PiMetadataTest {
         assertEquals("https://key@example.com/1", full.dsn)
         assertEquals(false, full.tracing)
         assertEquals(0.25, full.tracesSampleRate, 0.0)
+        assertEquals(0.5, full.failureAttachmentsSampleRate, 0.0)
         assertEquals("beta", full.environment)
 
         val defaults = PiParser.parseTelemetry(
@@ -135,6 +147,7 @@ class PiMetadataTest {
         )!!
         assertTrue(defaults.tracing)
         assertEquals(1.0, defaults.tracesSampleRate, 0.0)
+        assertEquals(1.0, defaults.failureAttachmentsSampleRate, 0.0)
         assertNull(defaults.environment)
     }
 

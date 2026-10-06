@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.settings
 
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.BuildConfig
@@ -24,6 +23,8 @@ import com.aliothmoon.maafw.update.UpdateSource
 import com.aliothmoon.maafw.update.message
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -56,11 +58,14 @@ class SettingsViewModel(
     private val updateDownloader: OkHttpUpdateDownloader,
     private val apkInstaller: SystemApkInstaller,
     private val currentVersion: String = BuildConfig.VERSION_NAME,
-    supportedAbis: List<String> = Build.SUPPORTED_ABIS.orEmpty().toList(),
+    /** 按安装包自己的 ABI 更新，不按设备：装 universal 的不会被换成单 ABI 包 */
+    private val abi: AndroidAbi = AndroidAbi.fromPackageAbi(BuildConfig.MAFW_PACKAGE_ABI),
 ) : ViewModel() {
 
-    private val abi = supportedAbis.firstNotNullOfOrNull(::androidAbi) ?: AndroidAbi.ANY
     private val updateOperation = MutableStateFlow(UpdatePanelState())
+
+    private val effectChannel = Channel<SettingsEffect>(Channel.BUFFERED)
+    val effects: Flow<SettingsEffect> = effectChannel.receiveAsFlow()
 
     /** 只在 CAS 抢到 downloading 位后登记，取消不会误伤没抢到位的空跑协程 */
     private var downloadJob: Job? = null
@@ -108,8 +113,18 @@ class SettingsViewModel(
         permissionGateway.state,
         updatePanel,
         appSettings.pipOnHome,
-    ) { remote, update, pipOnHome ->
-        SettingsUiState(remoteAccess = remote, update = update, pipOnHome = pipOnHome)
+        appSettings.runDurationLimitEnabled,
+        appSettings.runDurationLimitMinutes,
+    ) { remote, update, pipOnHome, durationLimitEnabled, durationLimitMinutes ->
+        SettingsUiState(
+            remoteAccess = remote,
+            update = update,
+            pipOnHome = pipOnHome,
+            runDurationLimitEnabled = durationLimitEnabled,
+            runDurationLimitMinutes = durationLimitMinutes,
+        )
+    }.combine(appSettings.uiScale) { base, uiScale ->
+        base.copy(uiScale = uiScale)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -152,6 +167,18 @@ class SettingsViewModel(
                 appSettings.setPipOnHome(intent.enabled)
             }
 
+            is SettingsIntent.SetRunDurationLimitEnabled -> viewModelScope.launch {
+                appSettings.setRunDurationLimitEnabled(intent.enabled)
+            }
+
+            is SettingsIntent.SetRunDurationLimitMinutes -> viewModelScope.launch {
+                appSettings.setRunDurationLimitMinutes(intent.minutes)
+            }
+
+            is SettingsIntent.SetUiScale -> viewModelScope.launch {
+                appSettings.setUiScale(intent.scale)
+            }
+
             SettingsIntent.CheckUpdate -> viewModelScope.launch { checkUpdate() }
             SettingsIntent.DownloadUpdate -> viewModelScope.launch { downloadUpdate() }
             SettingsIntent.CancelDownload -> downloadJob?.cancel()
@@ -162,8 +189,8 @@ class SettingsViewModel(
 
     /**
      * 启动自检：等设置读盘与 PI 就绪后查一次；VM 存活期内只跑这一回。
-     * 不写 checkResult（首页不出现结果行）；失败照弹错误窗，发现新版本按自动下载开关走
-     * 静默下载或弹「发现新版本」dialog
+     * 不写 checkResult（首页不出现结果行）；已是最新弹 Toast（与手动检查同一句），失败照弹错误窗，
+     * 发现新版本按自动下载开关走静默下载或弹「发现新版本」dialog
      */
     private suspend fun startupUpdateCheck() {
         appSettings.loaded.first { it }
@@ -188,6 +215,9 @@ class SettingsViewModel(
                 .w("startup check found no update: %s", result::class.simpleName)
             updateOperation.update {
                 it.copy(checking = false, errorPrompt = result.message()?.let(UpdateErrorPrompt::check))
+            }
+            if (result is UpdateCheckResult.UpToDate) {
+                effectChannel.trySend(SettingsEffect.ShowMessage(uiTextOf(R.string.settings_update_up_to_date)))
             }
             return
         }
@@ -224,6 +254,9 @@ class SettingsViewModel(
                 errorPrompt = result.message()?.let(UpdateErrorPrompt::check),
                 updatePrompt = result as? UpdateCheckResult.UpdateAvailable,
             )
+        }
+        if (result is UpdateCheckResult.UpToDate) {
+            effectChannel.trySend(SettingsEffect.ShowMessage(uiTextOf(R.string.settings_update_up_to_date)))
         }
     }
 
@@ -336,14 +369,6 @@ class SettingsViewModel(
 
     private fun projectMetadata(): ProjectMetadata? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition?.metadata
-
-    private fun androidAbi(raw: String): AndroidAbi? = when (raw) {
-        "arm64-v8a", "aarch64" -> AndroidAbi.ARM64
-        "x86_64", "x64" -> AndroidAbi.X86_64
-        "armeabi-v7a", "armeabi" -> AndroidAbi.ARM
-        "x86", "i386" -> AndroidAbi.X86
-        else -> null
-    }
 
     private companion object {
         const val CDK_CHECK_DEBOUNCE_MS = 1_000L
