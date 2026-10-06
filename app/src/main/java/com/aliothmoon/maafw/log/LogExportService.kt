@@ -3,9 +3,9 @@ package com.aliothmoon.maafw.log
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.util.displayName
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.BufferedOutputStream
@@ -68,7 +68,7 @@ class LogExportService(
             context.contentResolver.openOutputStream(target)?.use { out ->
                 zip.inputStream().use { it.copyTo(out) }
             } ?: return@runCatching null
-            displayName(target) ?: zip.name
+            context.contentResolver.displayName(target) ?: zip.name
         }.onFailure { Timber.w(it, "write to export target failed: %s", target) }.getOrNull()
     }
 
@@ -157,14 +157,6 @@ class LogExportService(
             flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
         }
     }
-
-    private fun displayName(uri: Uri): String? = runCatching {
-        context.contentResolver
-            .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { cursor ->
-                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getString(0) else null
-            }
-    }.getOrNull()
 
     private companion object {
         const val LOG_DIR_NAME = "log"

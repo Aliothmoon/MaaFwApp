@@ -29,6 +29,7 @@ import com.aliothmoon.maafw.domain.standardSwitchCases
 import com.aliothmoon.maafw.domain.validateInputCandidate
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
@@ -49,6 +50,8 @@ fun OptionEditorList(
     onSetOption: (String, OptionValue) -> Unit,
     modifier: Modifier = Modifier,
     carded: Boolean = false,
+    /** 设置搜索的锚点；只给顶层选项，子选项要父选项选到某支才出现，定位不到 */
+    searchAnchor: ((OptionEditorState) -> String)? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -57,10 +60,17 @@ fun OptionEditorList(
         ),
     ) {
         options.forEach { option ->
-            if (carded) {
-                CardedOptionItem(option, locked, onSetOption)
+            val item: @Composable () -> Unit = {
+                if (carded) {
+                    CardedOptionItem(option, locked, onSetOption)
+                } else {
+                    OptionEditorItem(option, locked, onSetOption)
+                }
+            }
+            if (searchAnchor != null && option.depth == 0) {
+                SettingSearchTarget(searchAnchor(option)) { item() }
             } else {
-                OptionEditorItem(option, locked, onSetOption)
+                item()
             }
         }
     }

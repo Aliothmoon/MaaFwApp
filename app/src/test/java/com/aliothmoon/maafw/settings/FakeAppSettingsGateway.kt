@@ -2,10 +2,12 @@ package com.aliothmoon.maafw.settings
 
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,10 +84,16 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         themeStyle.value = style
     }
 
-    override val wakeUnlockEnabled = MutableStateFlow(false)
+    override val uiScale = MutableStateFlow(UiScale.AUTO)
 
-    override suspend fun setWakeUnlockEnabled(enabled: Boolean) {
-        wakeUnlockEnabled.value = enabled
+    override suspend fun setUiScale(scale: Int) {
+        uiScale.value = scale
+    }
+
+    override val wakeUnlockType = MutableStateFlow(UnlockCredential.TYPE_SWIPE)
+
+    override suspend fun setWakeUnlockType(type: String) {
+        wakeUnlockType.value = type
     }
 
     override val wakeCredential = MutableStateFlow("")

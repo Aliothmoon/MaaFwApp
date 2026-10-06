@@ -1,5 +1,8 @@
 package com.aliothmoon.maafw.ui.home
 
+import com.aliothmoon.maafw.settings.search.SettingAnchors
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
+import com.aliothmoon.maafw.ui.settings.search.anchorRevealToken
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -49,6 +52,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.project.ProjectState
@@ -64,7 +68,9 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
+import com.aliothmoon.maafw.ui.components.LocalCardRowBleed
 import com.aliothmoon.maafw.ui.components.MaaCard
+import com.aliothmoon.maafw.ui.components.cardRowClickable
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaInfoRow
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
@@ -125,10 +131,13 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             OverviewCard(state, update, onSettingsIntent)
-            ResourceCard(state, onIntent)
-            ControllerCard(state, onIntent)
+            SettingSearchTarget(SettingAnchors.RESOURCE) { ResourceCard(state, onIntent) }
+            // 出不出卡得在锚点外判断：锚点的 Box 里空着也占一份 spacedBy 间距
+            state.environment?.takeIf { it.controllerCandidates.size >= 2 }?.let { environment ->
+                SettingSearchTarget(SettingAnchors.CONTROLLER) { ControllerCard(environment, state, onIntent) }
+            }
             RunModeCard(state, onIntent)
-            PermissionCard(state, onIntent)
+            SettingSearchTarget(SettingAnchors.PERMISSIONS) { PermissionCard(state, onIntent) }
             ServiceActionButtons(state, onIntent)
             ProjectDiagnosticsCard(state)
         }
@@ -327,7 +336,7 @@ private fun ExpandToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .maaClickable(onClick = onToggle)
+            .cardRowClickable(LocalCardRowBleed.current, onClick = onToggle)
             .padding(vertical = MaaDesignTokens.Spacing.xs),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -472,6 +481,18 @@ private fun ProjectDiagnosticsCard(state: SessionUiState) {
 @Composable
 private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     // 单行：左 "运行模式"，右 当前模式名 + 开关（对齐 MaaMeow）
+    if (BuildConfig.MAFW_FOREGROUND_ALLOWED) {
+        SettingSearchTarget(SettingAnchors.RUN_MODE) { RunModeSwitchCard(state, onIntent) }
+    }
+    // 这两张卡只有前台用得上；后台模式在自己建的虚拟屏上跑，主屏尺寸与控制层都不相干
+    if (state.runMode == RunMode.FOREGROUND) {
+        SettingSearchTarget(SettingAnchors.FOREGROUND_RESOLUTION) { ForegroundResolutionCard(onIntent) }
+        SettingSearchTarget(SettingAnchors.OVERLAY_MODE) { OverlayModeCard(state, onIntent) }
+    }
+}
+
+@Composable
+private fun RunModeSwitchCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
     MaaCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -507,11 +528,6 @@ private fun RunModeCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit
                 )
             }
         }
-    }
-    // 这两张卡只有前台用得上；后台模式在自己建的虚拟屏上跑，主屏尺寸与控制层都不相干
-    if (state.runMode == RunMode.FOREGROUND) {
-        ForegroundResolutionCard(onIntent)
-        OverlayModeCard(state, onIntent)
     }
 }
 
@@ -575,18 +591,22 @@ private fun OverlayModeCard(state: SessionUiState, onIntent: (SessionIntent) -> 
 }
 
 /**
- * controller 选择：PI 声明了不止一个 Adb controller 才出（如本地客户端与云游戏各一个），
+ * controller 选择：PI 声明了不止一个 Adb controller 才出（如本地客户端与云游戏各一个），调用方判断；
  * 形态与 [ResourceCard] 一致
  */
 @Composable
-private fun ControllerCard(state: SessionUiState, onIntent: (SessionIntent) -> Unit) {
-    val environment = state.environment ?: return
-    if (environment.controllerCandidates.size < 2) return
+private fun ControllerCard(
+    environment: ResolvedEnvironment,
+    state: SessionUiState,
+    onIntent: (SessionIntent) -> Unit,
+) {
     MaaCard(
         title = stringResource(R.string.settings_controller),
         collapsible = true,
         initiallyExpanded = false,
         summary = environment.controller.label,
+        // 默认收起：搜索落到这张卡时得先展开，否则只闪一下标题
+        revealToken = anchorRevealToken(SettingAnchors.CONTROLLER),
     ) {
         MaaSingleChoiceFlow(
             options = environment.controllerCandidates.map { it.name to it.label },
@@ -607,6 +627,7 @@ private fun ResourceCard(state: SessionUiState, onIntent: (SessionIntent) -> Uni
         collapsible = true,
         initiallyExpanded = false,
         summary = state.environment?.resource?.label,
+        revealToken = anchorRevealToken(SettingAnchors.RESOURCE),
     ) {
         val environment = state.environment
         val candidates = environment?.resourceCandidates.orEmpty()

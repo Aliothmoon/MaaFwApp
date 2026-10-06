@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
@@ -40,6 +41,12 @@ public final class InputControlUtils {
      */
     private static List<TouchPointerSequence.Pointer> slots = Collections.emptyList();
     private static long gestureDownTime = 0;
+    /**
+     * 解锁注入期间 >0：失败日志不带键码与坐标、不回调触控预览，PIN 与手势轨迹不能进可导出的日志；
+     * 进程级而非线程级，任务线程此刻的失败日志也会打出 slots
+     */
+    private static final AtomicInteger SENSITIVE_DEPTH = new AtomicInteger();
+    private static final String REDACTED = "<redacted>";
 
     static {
         for (int i = 0; i < TouchPointerSequence.MAX_CONTACTS; i++) {
@@ -112,9 +119,27 @@ public final class InputControlUtils {
         touchCallback = callback;
     }
 
+    /** 必须与 {@link #endSensitiveInput()} 成对，放在 try/finally 里 */
+    public static void beginSensitiveInput() {
+        SENSITIVE_DEPTH.incrementAndGet();
+    }
+
+    public static void endSensitiveInput() {
+        SENSITIVE_DEPTH.decrementAndGet();
+    }
+
+    private static boolean isSensitiveInput() {
+        return SENSITIVE_DEPTH.get() > 0;
+    }
+
+    /** 还有手指按着：可能是任务正在点，槽位是进程共享的 */
+    public static synchronized boolean hasActiveContacts() {
+        return !slots.isEmpty();
+    }
+
     private static void notifyTouchCallback(MotionEvent event, int index) {
         ITouchEventCallback callback = touchCallback;
-        if (callback == null) {
+        if (callback == null || isSensitiveInput()) {
             return;
         }
         try {
@@ -266,8 +291,8 @@ public final class InputControlUtils {
                 + " reason=" + step.getFailureReason()
                 + " kind=" + kind
                 + " contact=" + contact
-                + " x=" + x
-                + " y=" + y
+                + " x=" + (isSensitiveInput() ? REDACTED : String.valueOf(x))
+                + " y=" + (isSensitiveInput() ? REDACTED : String.valueOf(y))
                 + " displayId=" + displayId
                 + " slots=" + formatPointers(slots));
     }
@@ -295,7 +320,7 @@ public final class InputControlUtils {
         Ln.w(TAG + ": key inject failed"
                 + " stage=" + stage
                 + " action=" + (event.getAction() == KeyEvent.ACTION_DOWN ? "DOWN" : "UP")
-                + " keyCode=" + event.getKeyCode()
+                + " keyCode=" + (isSensitiveInput() ? REDACTED : String.valueOf(event.getKeyCode()))
                 + " displayId=" + displayId
                 + " eventDisplayId=" + InputManager.getDisplayIdForLog(event)
                 + " mode=" + injectModeName(mode)
@@ -307,6 +332,7 @@ public final class InputControlUtils {
      * contact 是调用方的手指编号，pointerId 是发给系统的编号，两者已解耦，都要打出来
      */
     private static String formatPointers(List<TouchPointerSequence.Pointer> pointers) {
+        boolean redact = isSensitiveInput();
         StringBuilder builder = new StringBuilder("[");
         for (int i = 0; i < pointers.size(); i++) {
             TouchPointerSequence.Pointer pointer = pointers.get(i);
@@ -314,9 +340,13 @@ public final class InputControlUtils {
                 builder.append(',');
             }
             builder.append("contact=").append(pointer.getContact())
-                    .append("/pointerId=").append(pointer.getPointerId())
-                    .append('@').append(pointer.getX())
-                    .append(',').append(pointer.getY());
+                    .append("/pointerId=").append(pointer.getPointerId());
+            if (redact) {
+                builder.append('@').append(REDACTED);
+            } else {
+                builder.append('@').append(pointer.getX())
+                        .append(',').append(pointer.getY());
+            }
         }
         return builder.append(']').toString();
     }

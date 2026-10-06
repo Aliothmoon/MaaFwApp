@@ -265,6 +265,7 @@ object PiParser {
             welcome = welcomeRaw.mapNotNull(text::description),
             welcomeDeclarations = welcomeRaw,
             description = text.description(root.string("description")),
+            icon = text.label(root.string("icon"))?.takeIf(String::isNotBlank)?.let(::normalizeProjectPath),
             contact = text.description(root.string("contact")),
             license = text.description(root.string("license")),
             github = text.label(root.string("github"))?.takeIf(::isRemoteUrl),

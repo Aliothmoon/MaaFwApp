@@ -50,6 +50,8 @@ app:
 
 图标文件必须落在白名单里，否则进不了包，界面上不会显示。agent 脚本如果放在资源仓库的 `agent/` 下，把 `agent/**` 加进 `include`。
 
+`display` 管运行在哪块屏上：`presets` 是后台模式虚拟屏的分辨率档位，缺省为内置的 720P@240dpi、1080P@280dpi；`foreground: false` 只留后台模式（Android 10 以下用不了），缺省为 `true`。
+
 ## 资源约定
 
 按桌面端习惯写即可，下面几条是 Android 上会对不上的地方：

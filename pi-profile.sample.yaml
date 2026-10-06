@@ -56,9 +56,11 @@ logs:
 update:
   mirrorchyanRid: YourPI
 
-# 后台模式虚拟屏的分辨率预设；整段可省略 = 内置 720P@240dpi、1080P@280dpi
-# 写了就整体替换内置两档，第一项是默认；只收横屏（width > height），dpi 在 120～640
+# 运行在哪块屏上；整段可省略 = 前台、后台两种模式都有，后台用内置 720P@240dpi、1080P@280dpi
 display:
+  # 是否提供前台模式；缺省 true，写 false 只留后台模式（Android 10 以下用不了）
+  foreground: true
+  # 后台模式虚拟屏的分辨率预设；写了就整体替换内置两档，第一项是默认；只收横屏（width > height），dpi 在 120～640
   presets:
     # label 可选，缺省为「短边P」
     - label: 720P

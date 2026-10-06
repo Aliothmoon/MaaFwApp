@@ -202,6 +202,35 @@ class RunLogComposerTest {
         assertEquals(false, compose(agentLine("err", fromStderr = true))!!.isEssential)
     }
 
+    /** go-service 拿不到 Context 时往 stdout 打 HTML 警告：按 focus 渲染、进关键档 */
+    @Test
+    fun `html an agent prints for the user is shown like a focus`() {
+        val warning = """<span style="color: #ff0000;">🚨 警告：分辨率不符合要求！🚨</span> <br/>任务已强制停止"""
+        val entry = compose(agentLine(warning))!!
+        assertEquals(RunLogKind.Focus, entry.kind)
+        assertEquals(UiText.Verbatim(warning), entry.text)
+        assertEquals(true, entry.isEssential)
+    }
+
+    /** 它往往正是这一轮停下来的原因，刷屏期也不能被吞 */
+    @Test
+    fun `html for the user is not swallowed by an agent flood`() {
+        repeat(AGENT_THRESHOLD) { index -> compose(agentLine("line $index"), 0) }
+        assertNull(compose(agentLine("still flooding"), 0))
+        assertEquals(RunLogKind.Focus, compose(agentLine("<b>stopped</b>"), 0)?.kind)
+    }
+
+    /** 终端日志与代码里的尖括号不算：带 ANSI 转义的、C++ 模板参数、traceback 的 `<module>` */
+    @Test
+    fun `angle brackets in logs are not mistaken for html`() {
+        assertEquals(RunLogKind.Agent, compose(agentLine("\u001B[31m<span>colored log</span>\u001B[0m"))?.kind)
+        assertEquals(RunLogKind.Agent, compose(agentLine("std::vector<int> size=3"))?.kind)
+        assertEquals(
+            RunLogKind.AgentError,
+            compose(agentLine("""  File "agent/main.py", line 1, in <module>""", fromStderr = true))?.kind,
+        )
+    }
+
     /** 编排层的 connect 成功是关键档，跟设备连接同一档；child 自己的 stderr 仍不是 */
     @Test
     fun `agent connect is an essential success line using the exec basename`() {
@@ -231,6 +260,56 @@ class RunLogComposerTest {
         assertEquals(
             UiText.Resource(R.string.run_log_agent_connected, listOf("libcpp-algo.so")),
             compose(RunnerEvent.AgentConnected(index = 1, total = 2, exec = exec, name = " "))?.text,
+        )
+    }
+
+    /** 被信号杀死的显示信号名，自己退出的显示退出码；都进关键档 */
+    @Test
+    fun `agent exit is an essential error line`() {
+        val exec = "/data/app/~~x/lib/arm64/libcpp-algo.so"
+        val signaled = compose(RunnerEvent.AgentExited(index = 1, exec = exec, exitCode = 139, name = "cpp-algo"))
+        assertEquals(RunLogKind.Error, signaled?.kind)
+        assertEquals(true, signaled?.isEssential)
+        assertEquals(
+            UiText.Resource(R.string.run_log_agent_exited_signal, listOf("cpp-algo", "SIGSEGV")),
+            signaled?.text,
+        )
+        assertEquals(
+            UiText.Resource(R.string.run_log_agent_exited_code, listOf("libcpp-algo.so", 1)),
+            compose(RunnerEvent.AgentExited(index = 1, exec = exec, exitCode = 1))?.text,
+        )
+    }
+
+    @Test
+    fun `agent exit names the saved crash report`() {
+        val entry = compose(
+            RunnerEvent.AgentExited(
+                index = 0,
+                exec = "/x/libgo-service.so",
+                exitCode = 134,
+                crashReport = "agent_20261002_222045_24507.txt",
+            ),
+        )
+        assertEquals(
+            UiText.Resource(
+                R.string.run_log_agent_crash_report,
+                listOf(
+                    UiText.Resource(R.string.run_log_agent_exited_signal, listOf("libgo-service.so", "SIGABRT")),
+                    "agent_20261002_222045_24507.txt",
+                ),
+            ),
+            entry?.text,
+        )
+    }
+
+    /** traceback 一大段刚把滑窗打满，紧跟着的「已退出」不能被一起吞掉 */
+    @Test
+    fun `agent exit is shown even while agent output is flooding`() {
+        repeat(AGENT_THRESHOLD) { compose(agentLine("trace $it", fromStderr = true), 0) }
+        assertNull(compose(agentLine("more", fromStderr = true), 0))
+        assertEquals(
+            RunLogKind.Error,
+            compose(RunnerEvent.AgentExited(index = 0, exec = "/x/libgo-service.so", exitCode = 134), 0)?.kind,
         )
     }
 

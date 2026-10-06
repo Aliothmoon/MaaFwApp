@@ -68,7 +68,7 @@ public final class DriverClass {
 
     public static boolean stopApp(String packageName, int displayId) {
         Ln.i(TAG + String.format(Locale.US, ": stopApp %s displayId=%d", packageName, displayId));
-        return ActivityUtils.stopApp(packageName);
+        return ActivityUtils.forceStop(packageName, displayId);
     }
 
     private static void logTargetAppInfo(String rawSpec, int displayId, boolean forceStop) {

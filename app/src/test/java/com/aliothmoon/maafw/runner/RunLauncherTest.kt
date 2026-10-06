@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import android.util.Log
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
 import com.aliothmoon.maafw.domain.ConfiguredTask
@@ -27,6 +28,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import timber.log.Timber
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RunLauncherTest {
@@ -90,6 +92,7 @@ class RunLauncherTest {
         runMode = { runMode },
         scope = scope,
         journal = journal,
+        renderText = { text -> (text as? UiText.Verbatim)?.value ?: "<res>" },
     )
 
     private fun fastStub(scope: CoroutineScope) = StubRunnerPort(
@@ -262,6 +265,28 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.msg_no_executable_tasks))
+
+        // 悬浮窗同样没地方弹框
+        assertTrue(launcher.launch(RunTrigger.Overlay) is RunLaunchResult.Blocked)
+    }
+
+    /** 提醒类没人可问时照跑：拦下的话定时任务会因为一个护眼开关整轮不跑 */
+    @Test
+    fun `advisory confirmation passes when nobody can answer`() = runTest(testDispatcher) {
+        val token = ConfirmToken("demo")
+        fun launcherWithAdvisory() = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            prechecks = listOf(
+                RunPrecheck {
+                    Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks), advisory = true)
+                },
+            ),
+        )
+
+        assertEquals(RunLaunchResult.Started, launcherWithAdvisory().launch(RunTrigger.Schedule("s1")))
+        assertEquals(RunLaunchResult.Started, launcherWithAdvisory().launch(RunTrigger.Overlay))
+        assertTrue(launcherWithAdvisory().launch(RunTrigger.Manual) is RunLaunchResult.NeedsConfirmation)
     }
 
     /** 检查忘了消费自己的 token 就会无限弹框；守卫把它挡成一次明确失败 */
@@ -347,9 +372,11 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Rejected)
         assertEquals(listOf("engage:env", "release:env"), log)
-        val release = hook.releaseReason as RunEndReason.NotRun
-        assertEquals(NotRunCause.Rejected, release.cause)
-        assertEquals(UiText.Verbatim("Busy"), release.reason)
+        // 收尾拿到的原因与调用方拿到的同一句：运行日志靠它写出是哪一步被拒
+        assertEquals(
+            RunEndReason.NotRun(NotRunCause.Rejected, (result as RunLaunchResult.Rejected).reason),
+            hook.releaseReason,
+        )
     }
 
     @Test
@@ -371,9 +398,12 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertEquals(listOf("engage:ok", "release:ok"), log)
-        val release = ok.releaseReason as RunEndReason.NotRun
-        assertEquals(NotRunCause.HookFailed, release.cause)
-        assertTrue(release.reason.isResource(R.string.msg_hook_failed, "bad"))
+        val notRun = ok.releaseReason as RunEndReason.NotRun
+        assertEquals(NotRunCause.HookFailed, notRun.cause)
+        assertTrue(notRun.reason!!.isResource(R.string.msg_hook_failed))
+        // engage 抛出的异常一路带到收尾与调用方，堆栈才进得了日志
+        assertEquals("解锁失败", notRun.error?.message)
+        assertEquals("解锁失败", (result as RunLaunchResult.Blocked).error?.message)
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
     }
 
@@ -413,9 +443,10 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.run_countdown_cancelled))
-        val release = recorder.releaseReason as RunEndReason.NotRun
-        assertEquals(NotRunCause.Cancelled, release.cause)
-        assertTrue(release.reason.isResource(R.string.run_countdown_cancelled))
+        assertEquals(
+            RunEndReason.NotRun(NotRunCause.Cancelled, uiTextOf(R.string.run_countdown_cancelled)),
+            recorder.releaseReason,
+        )
         assertEquals(
             listOf(
                 RunStep("env", HookOutcome.ENGAGED),
@@ -581,6 +612,53 @@ class RunLauncherTest {
 
         assertNull(hook.releaseReason)
         assertEquals(RunnerPhase.Stopping, runner.state.value.phase)
+    }
+
+    /** 界面上的提示一闪就没了，没跑起来的原因与异常都要留在 app.log */
+    @Test
+    fun `a blocked round is logged with its reason and stack`() = runTest(testDispatcher) {
+        val logs = RecordingTree()
+        Timber.plant(logs)
+        try {
+            val bad = RecordingHook(
+                "bad", Anchor.BeforeDispatch, gating = true,
+                failWith = IllegalStateException("解锁失败"),
+            )
+            val launcher = launcher(scope = backgroundScope, runner = fastStub(backgroundScope), hooks = listOf(bad))
+
+            launcher.launch(RunTrigger.Schedule("s1"))
+
+            // Timber 把堆栈拼在正文后面，堆栈里又有本用例的方法名，只能按开头认
+            val entry = logs.entries.single { it.priority == Log.WARN && it.message.startsWith("run ") }
+            assertTrue(entry.message, entry.message.startsWith("run schedule:s1 (active) blocked: "))
+            assertEquals("解锁失败", entry.error?.message)
+        } finally {
+            Timber.uproot(logs)
+        }
+    }
+
+    @Test
+    fun `a started round is not logged as a failure`() = runTest(testDispatcher) {
+        val logs = RecordingTree()
+        Timber.plant(logs)
+        try {
+            val launcher = launcher(scope = backgroundScope, runner = fastStub(backgroundScope))
+
+            assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+            assertTrue(logs.entries.none { it.priority >= Log.WARN })
+        } finally {
+            Timber.uproot(logs)
+        }
+    }
+
+    private class RecordingTree : Timber.Tree() {
+        data class Entry(val priority: Int, val message: String, val error: Throwable?)
+
+        val entries = mutableListOf<Entry>()
+
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            entries += Entry(priority, message, t)
+        }
     }
 
     private class RecordingHook(

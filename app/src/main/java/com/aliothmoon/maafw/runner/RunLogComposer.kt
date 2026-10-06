@@ -70,6 +70,8 @@ class RunLogComposer {
                 uiTextOf(R.string.run_log_agent_connected, event.label),
             )
 
+            is RunnerEvent.AgentExited -> Composed(RunLogKind.Error, agentExitedText(event))
+
             is RunnerEvent.MalformedCallback -> Composed(
                 RunLogKind.Error,
                 uiTextFromFramework(MALFORMED_LABEL),
@@ -95,6 +97,8 @@ class RunLogComposer {
      * 阈值永远踩不到，抑制器等于关掉了。两条流合起来算：刷屏就是刷屏，不分从哪条管道出来
      */
     private fun agentEntry(event: RunnerEvent.AgentOutput, atMillis: Long): Composed? {
+        // 写给用户看的按 focus 渲染、进进度档；不进洪泛滑窗：它往往正是这一轮停下来的原因，刷屏期也不能吞
+        if (event.isUserFacing) return Composed(RunLogKind.Focus, uiTextFromProject(event.line))
         while (agentTimestamps.isNotEmpty() && atMillis - agentTimestamps.first() >= AGENT_FLOOD_WINDOW_MS) {
             agentTimestamps.removeFirst()
         }
@@ -111,6 +115,18 @@ class RunLogComposer {
         }
         val kind = if (event.fromStderr) RunLogKind.AgentError else RunLogKind.Agent
         return Composed(kind, uiTextFromProject(event.line))
+    }
+
+    /** 不过洪泛滑窗：这句紧跟在 traceback 那一大段后面，正是滑窗闭嘴的时候 */
+    private fun agentExitedText(event: RunnerEvent.AgentExited): UiText {
+        val signal = event.signal
+        val exited = if (signal != null) {
+            uiTextOf(R.string.run_log_agent_exited_signal, event.label, AgentExitCode.signalName(signal))
+        } else {
+            uiTextOf(R.string.run_log_agent_exited_code, event.label, event.exitCode)
+        }
+        val report = event.crashReport?.takeIf(String::isNotBlank) ?: return exited
+        return uiTextOf(R.string.run_log_agent_crash_report, exited, report)
     }
 
     /**

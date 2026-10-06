@@ -7,7 +7,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** 谁发起的这一轮；决定「需要确认」时有没有人可问 */
 sealed interface RunTrigger {
+    /** 应用内手动开跑：有确认框可弹 */
     data object Manual : RunTrigger
+
+    /** 悬浮窗手动开跑：人在屏幕前，但悬浮窗里没有确认框 */
+    data object Overlay : RunTrigger
+
     /**
      * [options] 挂在 trigger 上而不是全局设置：这几项都是**逐条规则**的
      * （对齐 MaaMeow 定时编辑页的「高级选项」），而挂载物拿不到策略，只看得见 RunContext
