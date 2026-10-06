@@ -1,8 +1,14 @@
 package com.aliothmoon.maafw.privileged
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.domain.RemoteBackend
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
+import kotlin.time.Duration
 
 /**
  * 特权进程的连接边界
@@ -30,4 +36,14 @@ interface PrivilegedServicePort {
 
     /** 先刷新授权、必要时发起授权与重绑，再把服务面交给 [action] */
     suspend fun <R> useService(action: suspend (RemoteService) -> R): R
+}
+
+suspend fun <T : Any> PrivilegedServicePort.callWithTimeout(timeout: Duration, block: (RemoteService) -> T): T? {
+    val service = serviceOrNull() ?: return null
+    val call = CoroutineScope(MaaDispatchers.IO).async {
+        runCatching { block(service) }
+            .onFailure { Timber.w(it, "privileged call failed") }
+            .getOrNull()
+    }
+    return withTimeoutOrNull(timeout) { call.await() }
 }

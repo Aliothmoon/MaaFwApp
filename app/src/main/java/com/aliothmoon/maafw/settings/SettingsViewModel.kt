@@ -211,8 +211,7 @@ class SettingsViewModel(
         )
         val available = result as? UpdateCheckResult.UpdateAvailable
         if (available == null) {
-            Timber.tag("UpdateCheck")
-                .w("startup check found no update: %s", result::class.simpleName)
+            Timber.tag("UpdateCheck").w("startup check found no update: %s", result)
             updateOperation.update {
                 it.copy(checking = false, errorPrompt = result.message()?.let(UpdateErrorPrompt::check))
             }

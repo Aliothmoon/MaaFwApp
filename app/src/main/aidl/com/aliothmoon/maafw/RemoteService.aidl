@@ -152,6 +152,9 @@ interface RemoteService {
      */
     boolean saveCachedImage(String path) = 75;
 
+    /** 把虚拟屏帧缓冲的当前画面存成 PNG 到 [path]；不经 controller，没在跑任务也能截，帧缓冲为空返回 false */
+    boolean saveDisplayFrame(String path) = 85;
+
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;
     /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */

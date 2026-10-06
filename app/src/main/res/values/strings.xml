@@ -469,8 +469,11 @@
     <string name="virtual_display_keys_locked">按键操作已锁定</string>
     <string name="virtual_display_keys_unlocked">按键操作已解锁</string>
     <string name="virtual_display_keys_warning">使用按钮操作可能破坏任务流程</string>
+    <string name="quick_action_screenshot">截屏</string>
     <string name="quick_setting_close_app_after_task">任务自动结束时关闭目标应用</string>
     <string name="quick_setting_touch_preview">显示触摸预览</string>
+    <string name="msg_screenshot_saved">截图已保存，导出日志时会一并带上</string>
+    <string name="msg_screenshot_failed">截屏失败，请稍后重试</string>
 
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
     <string name="permission_section">权限管理</string>
@@ -688,7 +691,7 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId 指向不存在的配置</string>
     <string name="diagnostic_configured_task_missing">任务 "%1$s" 已不在项目中</string>
     <string name="diagnostic_runtime_no_resource">没有可用的 resource，无法构造运行环境</string>
-    <string name="diagnostic_enabled_task_missing_definition">已启用任务 "%1$s" 缺少 definition</string>
+    <string name="diagnostic_enabled_task_missing_definition">已启用任务 "%1$s" 在当前项目中已不存在（可能被改名或移除），请在任务列表中删除它</string>
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
     <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Nightlight
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TouchApp
@@ -226,17 +227,34 @@ internal fun TasksQuickOptionsPanel(
                         )
                     }
                 }
-                ActionTile(
-                    icon = Icons.Outlined.Refresh,
-                    label = stringResource(R.string.settings_reload_project),
-                    accent = MaterialTheme.colorScheme.secondary,
-                    enabled = !state.configurationLocked,
-                    onClick = {
-                        onDismiss()
-                        onIntent(SessionIntent.ReloadProject)
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                )
+                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                ) {
+                    ActionTile(
+                        icon = Icons.Outlined.Refresh,
+                        label = stringResource(R.string.settings_reload_project),
+                        accent = MaterialTheme.colorScheme.secondary,
+                        enabled = !state.configurationLocked,
+                        onClick = {
+                            onDismiss()
+                            onIntent(SessionIntent.ReloadProject)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (state.debugMode && state.runMode == RunMode.BACKGROUND) {
+                        ActionTile(
+                            icon = Icons.Outlined.PhotoCamera,
+                            label = stringResource(R.string.quick_action_screenshot),
+                            accent = MaterialTheme.colorScheme.secondary,
+                            onClick = {
+                                onDismiss()
+                                onIntent(SessionIntent.CaptureVirtualDisplay)
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
 
                 if (state.runMode == RunMode.BACKGROUND) {
                     GroupLabel(stringResource(R.string.virtual_display_keys_title))

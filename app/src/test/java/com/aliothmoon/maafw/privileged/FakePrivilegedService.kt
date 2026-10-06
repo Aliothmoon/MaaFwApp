@@ -37,6 +37,10 @@ open class FakePrivilegedService : RemoteService {
 
     val pressedKeys: MutableList<Int> = mutableListOf()
 
+    var saveDisplayFrameResult: Boolean = true
+    var savedFramePaths: MutableList<String> = mutableListOf()
+        private set
+
     var runnerCallback: IMaaRunnerCallback? = null
         private set
     var running: Boolean = false
@@ -164,6 +168,11 @@ open class FakePrivilegedService : RemoteService {
 
     /** 缓存帧要真 controller 才有；测试里没有可落盘的东西 */
     override fun saveCachedImage(path: String?): Boolean = false
+
+    override fun saveDisplayFrame(path: String?): Boolean {
+        savedFramePaths += path.orEmpty()
+        return saveDisplayFrameResult
+    }
 }
 
 /** [service] 为 null 即「特权进程没连上」，收尾路径要走这条 */

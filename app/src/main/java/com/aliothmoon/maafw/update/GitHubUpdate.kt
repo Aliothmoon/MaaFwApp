@@ -30,6 +30,12 @@ internal class GitHubReleasesApi(
         val prerelease: Boolean = false,
     )
 
+    internal data class Eligible(
+        val release: Release,
+        val version: Version,
+        val asset: Asset,
+    )
+
     internal data class Asset(
         val name: String,
         val downloadUrl: String,
@@ -71,16 +77,17 @@ internal class GitHubReleasesApi(
         return UpdateSourceOutcome.Ok(releases)
     }
 
-    /** 渠道过滤 + 版本解析；无一条合格返回 null */
-    fun latestEligible(releases: List<Release>, channel: UpdateChannel): Pair<Release, Version>? =
+    /** 渠道过滤 + 版本解析 + 本机能装的安装包（发版时安装包晚于 release 公开）；无一条合格返回 null */
+    fun latestEligible(releases: List<Release>, channel: UpdateChannel, abi: AndroidAbi): Eligible? =
         releases
             .mapNotNull { candidate ->
                 val version = UpdateVersion.parse(candidate.tag) ?: return@mapNotNull null
                 if (!version.allowedFor(channel)) return@mapNotNull null
                 if (channel == UpdateChannel.STABLE && candidate.prerelease) return@mapNotNull null
-                candidate to version
+                val asset = selectAsset(candidate.assets, abi) ?: return@mapNotNull null
+                Eligible(candidate, version, asset)
             }
-            .maxByOrNull { it.second }
+            .maxByOrNull { it.version }
 
     /**
      * 单 ABI 包先挑同 ABI 的变体（标记按优先级排），没拆到再回退 universal；
@@ -118,6 +125,7 @@ internal class GitHubReleasesApi(
     }
 
     private fun asset(raw: JsonObject): Asset? {
+        if (raw.string("state")?.let { it != "uploaded" } == true) return null
         val apiUrl = raw.string("url")
         val browserUrl = raw.string("browser_download_url")
         val downloadUrl = browserUrl ?: apiUrl ?: return null
@@ -202,9 +210,8 @@ internal class GitHubUpdateClient(
 
             is UpdateSourceOutcome.Ok -> outcome.value
         }
-        val candidate = api.latestEligible(releases, request.channel)
+        val (release, version) = api.latestEligible(releases, request.channel, request.abi)
             ?: return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
-        val (release, version) = candidate
         if (version <= currentVersion) {
             UpdateCheckResult.UpToDate(source, release.tag)
         } else {
@@ -233,9 +240,7 @@ internal class GitHubUpdateClient(
 
             is UpdateSourceOutcome.Ok -> outcome.value
         }
-        val (release, _) = api.latestEligible(releases, request.channel)
-            ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
-        val asset = api.selectAsset(release.assets, request.abi)
+        val (release, _, asset) = api.latestEligible(releases, request.channel, request.abi)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
         UpdateResolveResult.Resolved(
             ResolvedUpdate(

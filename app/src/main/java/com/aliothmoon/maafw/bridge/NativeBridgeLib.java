@@ -34,9 +34,7 @@ public class NativeBridgeLib {
     /** 停渲染线程并断开预览 Surface，会阻塞到线程退出；进程退出前调，否则这块 Surface 下一个特权进程接不上 */
     public static native void shutdownPreview();
 
-    /**
-     * 测试用
-     */
+    /** 帧缓冲为空返回 null */
     public static native Bitmap getFrameBufferBitmap();
 
     @FastNative
