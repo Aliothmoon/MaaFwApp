@@ -4,9 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.config.UserConfigurationStore
+import com.aliothmoon.maafw.config.passwordFields
+import com.aliothmoon.maafw.config.withPasswordFieldsMarked
+import com.aliothmoon.maafw.config.withSecretFields
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
+import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.duplicateTask
 import com.aliothmoon.maafw.domain.renameTask
 import com.aliothmoon.maafw.domain.RunConfiguration
@@ -28,22 +33,27 @@ import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.project.ResolvedWelcome
+import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
+import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
-import com.aliothmoon.maafw.runner.RunLogEntry
+import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunTrigger
+import com.aliothmoon.maafw.runner.ConfirmToken
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.focusPlainText
 import com.aliothmoon.maafw.runner.isBusy
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.theme.ThemeStyle
 import com.aliothmoon.maafw.i18n.uiTextFormatted
 import com.aliothmoon.maafw.i18n.uiTextFromProject
@@ -51,19 +61,22 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.log.LogCleanupService
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.settings.AppSettingsGateway
-import com.aliothmoon.maafw.telemetry.isDebugProjectVersion
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.AppLocales
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -73,24 +86,19 @@ private data class SettingsSnapshot(
     val runMode: RunMode,
     val overlayControlMode: OverlayControlMode,
     val screenSaverEnabled: Boolean,
-    val resolutionPreference: ResolutionPreference,
+    val resolutionPreset: ResolutionPreset,
     val debugMode: Boolean,
+    val saveOnError: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
-    val env: EnvSnapshot = EnvSnapshot(),
     val quick: QuickSnapshot = QuickSnapshot(),
 )
 
-/** 定时任务解锁那两项；单独一层只为把 combine 的元数压回上限内 */
-private data class EnvSnapshot(
-    val wakeUnlockEnabled: Boolean = false,
-    val wakeCredential: String = "",
-)
 
 /** 快捷面板「自动设置」那两项；同样只为压元数 */
 private data class QuickSnapshot(
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
-    val telemetryEnabled: Boolean = false,
+    val telemetryEnabled: Boolean = true,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -120,7 +128,11 @@ class SessionViewModel(
     private val recorder: RunLogRecorder,
     /** 诊断产物清空后必须重启，让日志管线拿到新的完整上文 */
     private val logCleanup: LogCleanupService,
+    /** 后台运行期的实时 FPS；单独转发，不并入聚合 UI 状态 */
+    private val gameFpsWatcher: GameFpsWatcher,
     private val piInstall: PiInstallCoordinator,
+    /** URL 形态的 welcome 要先拉正文才知道看没看过 */
+    private val welcomeResolver: WelcomeResolver,
 ) : ViewModel() {
 
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
@@ -137,16 +149,15 @@ class SessionViewModel(
         appSettings.runMode,
         appSettings.overlayControlMode,
         appSettings.screenSaverEnabled,
-        appSettings.resolutionPreference,
+        appSettings.resolutionPreset,
         appSettings.debugMode,
     ) { runMode, overlayMode, screenSaver, resolution, debug ->
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
     }.combine(appSettings.themeStyle) { snapshot, style ->
         snapshot.copy(themeStyle = style)
+    }.combine(appSettings.saveOnError) { snapshot, save ->
+        snapshot.copy(saveOnError = save)
     }.combine(
-        combine(appSettings.wakeUnlockEnabled, appSettings.wakeCredential, ::EnvSnapshot),
-    ) { snapshot, env -> snapshot.copy(env = env) }
-        .combine(
             combine(
                 appSettings.closeAppAfterTask,
                 appSettings.touchPreviewEnabled,
@@ -155,6 +166,16 @@ class SessionViewModel(
             ),
         ) { snapshot, quick -> snapshot.copy(quick = quick) }
 
+    /** 当前 PI 的公告正文与指纹；未就绪、在拉取或拉取失败时为 null */
+    private val resolvedWelcome = MutableStateFlow<ResolvedWelcome?>(null)
+
+    private val welcomePrompt: Flow<List<String>> =
+        combine(resolvedWelcome, configurationStore.data) { welcome, config ->
+            welcome?.bodies?.takeIf { welcome.fingerprint != config.welcomeFingerprint }.orEmpty()
+        }.distinctUntilChanged()
+
+    /** 失效的 resource 选择写回 null 后 Resolver 不再报，这条提示只留在本进程里，重开即丢 */
+    private val staleResourceNotice = MutableStateFlow<Diagnostic?>(null)
 
     val uiState: StateFlow<SessionUiState> = combine(
         projectRepository.state,
@@ -167,6 +188,15 @@ class SessionViewModel(
     }.flowOn(MaaDispatchers.Default) // resolve 属重计算，不占用主线程
         .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
         .combine(piInstall.state) { base, install -> base.copy(piInstallState = install) }
+        .combine(welcomePrompt) { base, welcome -> base.copy(welcomePrompt = welcome) }
+        .combine(staleResourceNotice) { base, notice ->
+            // 写回落定前 Resolver 自己还在报同一条，不去重会闪出两行
+            if (notice == null || base.projectState !is ProjectState.Ready || notice in base.sessionDiagnostics) {
+                base
+            } else {
+                base.copy(sessionDiagnostics = listOf(notice) + base.sessionDiagnostics)
+            }
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
@@ -179,13 +209,19 @@ class SessionViewModel(
      */
     val previewMarkers: StateFlow<List<PreviewTouchMarker>> = previewPort.markers
 
+    /** 预览面按它重建，见 [PreviewPort.surfaceEpoch] */
+    val previewSurfaceEpoch: StateFlow<Int> = previewPort.surfaceEpoch
+
+    /** FPS 每秒更新，独立成流避免整棵 UI 树跟着重组 */
+    val gameFps: StateFlow<Float?> = gameFpsWatcher.fps
+
     /**
      * 运行日志，同样单独一条流：一次长跑上千条，混进聚合态会让整棵树按日志频率重组
      *
      * 合成与落盘都在进程级的 [RunLogRecorder] 里，这里只是转发——挂在 VM 上时切语言
      * Activity 一重建日志就没了，定时触发更是压根没有 VM
      */
-    val runLog: StateFlow<List<RunLogEntry>> = recorder.runLog
+    val runLog: StateFlow<RunLogSnapshot> = recorder.runLog
 
     private val _effects = MutableSharedFlow<SessionEffect>(
         extraBufferCapacity = 64,
@@ -203,7 +239,7 @@ class SessionViewModel(
     init {
         // 解包在前、加载在后；解包没成不要 reload，半包会被当成已解包
         viewModelScope.launch {
-            if (piInstall.ensureInstalled()) projectRepository.reload()
+            if (piInstall.ensureInstalled()) projectRepository.ensureLoaded()
         }
         viewModelScope.launch {
             for (intent in intents) handle(intent)
@@ -212,13 +248,40 @@ class SessionViewModel(
             focusDispatcher.resolved.collect { focus -> dispatchFocus(focus) }
         }
         viewModelScope.launch {
+            projectRepository.state
+                .map { project ->
+                    (project as? ProjectState.Ready)?.definition?.let { it.metadata to it.version }
+                }
+                .distinctUntilChanged()
+                .collectLatest { current ->
+                    resolvedWelcome.value = null
+                    resolvedWelcome.value = current?.let { (metadata, version) ->
+                        welcomeResolver.resolve(metadata, version)
+                    }
+                }
+        }
+        viewModelScope.launch {
             combine(projectRepository.state, configurationStore.data) { p, c -> p to c }
                 .collect { (project, config) ->
-                    if (project is ProjectState.Ready && !config.initialized) {
+                    if (project !is ProjectState.Ready) return@collect
+                    val definition = project.definition
+                    val staleResource = ConfigurationResolver.staleResourceSelection(definition, config)
+                    if (!config.initialized) {
                         configurationStore.update { current ->
                             if (current.initialized) current
-                            else ConfigurationResolver.initialize(project.definition, current)
+                            else ConfigurationResolver.initialize(definition, current)
                         }
+                    } else if (staleResource != null) {
+                        // PI 更新后 resource 改名或下架：存的名字清成 null（跟随第一个），提示只留本进程
+                        Timber.w("stored resource %s is no longer declared, cleared", config.activeResourceName)
+                        staleResourceNotice.value = staleResource
+                        configurationStore.update { current ->
+                            if (ConfigurationResolver.staleResourceSelection(definition, current) == null) current
+                            else current.copy(activeResourceName = null)
+                        }
+                    } else if (config.withPasswordFieldsMarked(definition) !== config) {
+                        // PI 更新后才把某个字段改成 password：旧配置里的明文补上标记，这一次写回就加密了
+                        configurationStore.update { it.withPasswordFieldsMarked(definition) }
                     }
                 }
         }
@@ -235,9 +298,23 @@ class SessionViewModel(
      * 拿不到 VM。三档各收各的，同一条 focus 因此可能同时走三条路，这是协议本来的语义
      */
     private fun dispatchFocus(focus: FocusMessage) {
-        if (FocusChannel.Toast in focus.channels) {
-            emitEffect(SessionEffect.ShowMessage(uiTextFromProject(focus.content)))
-        }
+        if (FocusChannel.Toast !in focus.channels) return
+        // snackbar 是纯文本面；只有一张图的模板剥完记号什么都不剩，不弹空条
+        val text = focusPlainText(focus.content).ifEmpty { return }
+        emitEffect(SessionEffect.ShowMessage(uiTextFromProject(text)))
+    }
+
+    /** 写入口当场补 password 标记：等加载时的迁移去补的话，这一笔会先以明文落一次盘 */
+    private fun OptionValue.secured(optionName: String): OptionValue {
+        val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition ?: return this
+        return withSecretFields(definition.passwordFields()[optionName])
+    }
+
+    /** Android 上跑不了的任务不让加、不让勾；UI 已锁住，这里兜住所有入口 */
+    private fun isTaskSupported(taskName: String): Boolean {
+        val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition ?: return true
+        val task = definition.task(taskName) ?: return true
+        return ConfigurationResolver.isControllerSupported(definition, task)
     }
 
     // resolve 只依赖 (project, config)；runner tick 触发 combine 时复用缓存
@@ -267,6 +344,7 @@ class SessionViewModel(
             runner = runner,
             themeMode = config.themeMode,
             debugMode = settings.debugMode,
+            saveOnError = settings.saveOnError,
             themeStyle = settings.themeStyle,
             runMode = runMode,
             overlayControlMode = settings.overlayControlMode,
@@ -274,9 +352,7 @@ class SessionViewModel(
             closeAppAfterTask = settings.quick.closeAppAfterTask,
             touchPreviewEnabled = settings.quick.touchPreviewEnabled,
             telemetryEnabled = settings.quick.telemetryEnabled,
-            wakeUnlockEnabled = settings.env.wakeUnlockEnabled,
-            wakeCredential = settings.env.wakeCredential,
-            resolutionPreference = settings.resolutionPreference,
+            resolutionPreset = settings.resolutionPreset,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
             shizukuReadiness = privileged.readiness,
@@ -289,17 +365,16 @@ class SessionViewModel(
         return base.copy(
             projectMetadata = metadata,
             telemetryDeclared = project.definition.telemetry != null,
-            telemetryLockedByVersion = isDebugProjectVersion(project.definition.version),
-            welcomePrompt = metadata.welcome
-                ?.takeIf { metadata.welcomeFingerprint != config.welcomeFingerprint },
             configurationList = session.configurationList,
             activeConfiguration = session.activeConfiguration,
             taskCatalog = session.taskCatalog,
             globalOptions = session.globalOptions,
+            settingSections = session.settingSections,
             resourceOptions = session.resourceOptions,
+            controllerOptions = session.controllerOptions,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
-            previewResolution = settings.resolutionPreference.resolution,
+            previewResolution = settings.resolutionPreset.resolution,
         )
     }
 
@@ -370,7 +445,7 @@ class SessionViewModel(
 
             is SessionIntent.ConfirmAddTasks -> guarded {
                 mutateConfiguration(intent.configurationId) { configuration ->
-                    val added = intent.orderedTaskNames.map { ConfiguredTask(taskName = it) }
+                    val added = intent.orderedTaskNames.filter(::isTaskSupported).map { ConfiguredTask(taskName = it) }
                     configuration.copy(tasks = configuration.tasks + added)
                 }
             }
@@ -395,7 +470,9 @@ class SessionViewModel(
             }
 
             is SessionIntent.ToggleTask -> guarded {
-                mutateTask(intent.configurationId, intent.taskInstanceId) { it.copy(enabled = intent.enabled) }
+                mutateTask(intent.configurationId, intent.taskInstanceId) {
+                    if (intent.enabled && !isTaskSupported(it.taskName)) it else it.copy(enabled = intent.enabled)
+                }
             }
 
             is SessionIntent.MoveTask -> guarded {
@@ -410,14 +487,16 @@ class SessionViewModel(
             }
 
             is SessionIntent.SetTaskOption -> guarded {
+                val value = intent.value.secured(intent.optionName)
                 mutateTask(intent.configurationId, intent.taskInstanceId) { task ->
-                    task.copy(optionValues = task.optionValues + (intent.optionName to intent.value))
+                    task.copy(optionValues = task.optionValues + (intent.optionName to value))
                 }
             }
 
             is SessionIntent.SetGlobalOption -> guarded {
+                val value = intent.value.secured(intent.optionName)
                 configurationStore.update {
-                    it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to intent.value))
+                    it.copy(globalOptionValues = it.globalOptionValues + (intent.optionName to value))
                 }
             }
 
@@ -425,17 +504,38 @@ class SessionViewModel(
                 val known = (projectRepository.state.value as? ProjectState.Ready)
                     ?.definition?.resources?.any { it.name == intent.resourceName } == true
                 if (!known) return@guarded
+                val value = intent.value.secured(intent.optionName)
                 configurationStore.update { config ->
                     val current = config.resourceOptionValues[intent.resourceName].orEmpty()
                     config.copy(
                         resourceOptionValues = config.resourceOptionValues +
-                            (intent.resourceName to (current + (intent.optionName to intent.value))),
+                            (intent.resourceName to (current + (intent.optionName to value))),
+                    )
+                }
+            }
+
+            is SessionIntent.SetControllerOption -> guarded {
+                val known = (projectRepository.state.value as? ProjectState.Ready)
+                    ?.definition?.controllers?.any { it.name == intent.controllerName } == true
+                if (!known) return@guarded
+                val value = intent.value.secured(intent.optionName)
+                configurationStore.update { config ->
+                    val current = config.controllerOptionValues[intent.controllerName].orEmpty()
+                    config.copy(
+                        controllerOptionValues = config.controllerOptionValues +
+                            (intent.controllerName to (current + (intent.optionName to value))),
                     )
                 }
             }
 
             is SessionIntent.SelectResource -> guarded {
                 configurationStore.update { it.copy(activeResourceName = intent.resourceName) }
+                // 用户自己选过了，「已回退到 X」那句不再成立
+                staleResourceNotice.value = null
+            }
+
+            is SessionIntent.SelectController -> guarded {
+                configurationStore.update { it.copy(activeControllerName = intent.controllerName) }
             }
 
             // 展示偏好不锁配置、不改变 Definition/RunPlan
@@ -449,16 +549,12 @@ class SessionViewModel(
                 if (intent.enabled) emitEffect(SessionEffect.RestartApp)
             }
 
+            // 环境开关：每轮 setup 后现读，运行中改不影响本轮已冻结的状态
+            is SessionIntent.SetSaveOnError ->
+                appSettings.setSaveOnError(intent.enabled)
+
             is SessionIntent.SetThemeStyle ->
                 appSettings.setThemeStyle(intent.style)
-
-            // 环境开关不走 guarded：改的是下一轮的事，运行中改不影响本轮
-            // （挂载物的条件在 engage 时就冻结了）
-            is SessionIntent.SetWakeUnlockEnabled ->
-                appSettings.setWakeUnlockEnabled(intent.enabled)
-
-            is SessionIntent.SetWakeCredential ->
-                appSettings.setWakeCredential(intent.credential)
 
 
             // 运行模式在 prepare 阶段读一次就固定，运行中改会让这轮的屏与下轮的判定对不上
@@ -470,8 +566,8 @@ class SessionViewModel(
                 appSettings.setOverlayControlMode(intent.mode)
             }
 
-            is SessionIntent.SetResolutionPreference -> guarded {
-                appSettings.setResolutionPreference(intent.preference)
+            is SessionIntent.SetResolutionPreset -> guarded {
+                appSettings.setResolutionPreset(intent.preset)
             }
 
             // 以下几项都不走 guarded：改的是环境动作，与运行配置无关，
@@ -509,8 +605,7 @@ class SessionViewModel(
             }
 
             SessionIntent.DismissWelcome -> {
-                val fingerprint = (projectRepository.state.value as? ProjectState.Ready)
-                    ?.definition?.metadata?.welcomeFingerprint
+                val fingerprint = resolvedWelcome.value?.fingerprint
                 if (fingerprint != null) {
                     configurationStore.update { it.copy(welcomeFingerprint = fingerprint) }
                 }
@@ -520,7 +615,7 @@ class SessionViewModel(
                 if (piInstall.reinstall()) projectRepository.reload()
             }
 
-            is SessionIntent.Start -> start(intent.surface)
+            is SessionIntent.Start -> start(intent.surface, intent.acknowledged)
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -682,12 +777,17 @@ class SessionViewModel(
      * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
      * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
      */
-    private suspend fun start(surface: TaskSurface) {
+    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>) {
         if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
             return
         }
-        when (val result = runLauncher.launch(RunTrigger.Manual)) {
+        // 悬浮窗里弹不了确认框：提醒类照跑，由运行日志兜底
+        val trigger = when (surface) {
+            TaskSurface.InApp -> RunTrigger.Manual
+            TaskSurface.Overlay -> RunTrigger.Overlay
+        }
+        when (val result = runLauncher.launch(trigger, acknowledged)) {
             // 手动发起不传 requestId，这条到不了
             RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
 
@@ -721,10 +821,8 @@ class SessionViewModel(
             is RunLaunchResult.Blocked ->
                 emitEffect(SessionEffect.ShowMessage(result.reason))
 
-            // 确认框等第一道会问的检查落地时再补；现在没有检查产生这个分支，
-            // 先原样把问题呈出来，不做无人生产的 UI
             is RunLaunchResult.NeedsConfirmation ->
-                emitEffect(SessionEffect.ShowMessage(result.prompt))
+                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token))
         }
     }
 

@@ -14,7 +14,8 @@ import kotlin.system.exitProcess
 /**
  * 跑在独立特权进程（:logcat / :root_logcat）里的 logcat 抓取实现
  *
- * shell/root 身份自带 log 组权限，直接 `logcat -T 10 --pid=<pid>` 管道落盘；
+ * shell/root 身份自带 log 组权限，直接 `logcat -T 200 --pid=<pid>` 管道落盘；
+ * 回放 200 条：抓取是异步起的，首次还要等绑定，回放太短会漏掉开抓之前那次失败的现场；
  * 看门狗按 /proc 探活，目标进程消失即停掉它的 logcat（对齐 MaaMeow）
  */
 class LogcatCaptureServiceImpl : ILogcatService.Stub() {
@@ -62,7 +63,7 @@ class LogcatCaptureServiceImpl : ILogcatService.Stub() {
     }
 
     private fun pipeLogcat(pid: Int, outFile: File): Process {
-        val process = ProcessBuilder("logcat", "-T", "10", "--pid=$pid")
+        val process = ProcessBuilder("logcat", "-T", "200", "--pid=$pid")
             .redirectErrorStream(true)
             .start()
 

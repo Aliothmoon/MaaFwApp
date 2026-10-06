@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -27,10 +27,13 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.maaClickable
+import com.aliothmoon.maafw.ui.components.MaaCheckbox
 
 /** 悬浮窗行：inner 圆角、8/6 内边，不是任务页那张内容卡 */
 @Composable
@@ -42,9 +45,13 @@ internal fun OverlayTile(
     content: @Composable RowScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(MaaTheme.style.radii.inner)
+    // 点击挂在块本身并带同一圆角：挂在里面那行上，按下缩放连高亮一起缩，填不满圆角块
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
+        modifier = modifier
+            .fillMaxWidth()
+            .maaClickable(enabled = enabled, shape = shape, onClick = onClick),
+        shape = shape,
         color = if (selected) scheme.primaryContainer else scheme.surface,
         border = BorderStroke(
             MaaDesignTokens.Separator.thickness,
@@ -55,7 +62,6 @@ internal fun OverlayTile(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .maaClickable(enabled = enabled, onClick = onClick)
                 .padding(
                     horizontal = MaaDesignTokens.Spacing.sm,
                     vertical = MaaDesignTokens.Overlay.gap,
@@ -77,9 +83,13 @@ internal fun OverlayModeRow(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(MaaTheme.style.radii.inner)
+    // 点击挂在块本身并带同一圆角：挂在里面那行上，按下缩放连高亮一起缩，填不满圆角块
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
+        modifier = modifier
+            .fillMaxWidth()
+            .maaClickable(enabled = enabled, shape = shape, onClick = onClick),
+        shape = shape,
         color = if (selected) scheme.primary else scheme.surface,
         border = BorderStroke(
             MaaDesignTokens.Separator.thickness,
@@ -90,7 +100,6 @@ internal fun OverlayModeRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .maaClickable(enabled = enabled, onClick = onClick)
                 .padding(
                     horizontal = MaaDesignTokens.Spacing.sm,
                     vertical = MaaDesignTokens.Overlay.gap,
@@ -162,12 +171,14 @@ internal fun OverlayCheckbox(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    warning: Boolean = false,
 ) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-        Checkbox(
+        MaaCheckbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
+            warning = warning,
             modifier = modifier.size(MaaDesignTokens.Overlay.checkbox),
         )
     }
@@ -185,7 +196,7 @@ internal fun OverlayIconHit(
     Box(
         modifier = modifier
             .size(MaaDesignTokens.Overlay.iconHit)
-            .maaClickable(enabled = enabled, onClick = onClick),
+            .maaClickable(enabled = enabled, shape = CircleShape, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -207,6 +218,8 @@ internal fun OverlayField(
     hint: String = "",
     enabled: Boolean = true,
     onDone: (() -> Unit)? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardType: KeyboardType = KeyboardType.Unspecified,
 ) {
     val scheme = MaterialTheme.colorScheme
     val style: TextStyle = MaterialTheme.typography.labelSmall.copy(color = scheme.onSurface)
@@ -230,8 +243,9 @@ internal fun OverlayField(
                 singleLine = true,
                 textStyle = style,
                 cursorBrush = SolidColor(scheme.primary),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }),
+                visualTransformation = visualTransformation,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

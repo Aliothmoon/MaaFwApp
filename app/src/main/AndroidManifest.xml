@@ -24,10 +24,12 @@
     <!--
       定时任务
       USE_EXACT_ALARM 不申请：那是给闹钟类应用的，本应用不符合 Play 的准入描述
-      没有 SCHEDULE_EXACT_ALARM 时退到 setAlarmClock，见 ScheduleAlarmManager
+      没有 SCHEDULE_EXACT_ALARM 时靠电池白名单维持精确闹钟，再不行退成 inexact，见 ScheduleAlarmManager
     -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 定时触发从闹钟到投递持 CPU 锁，见 ScheduleWakeLock -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
       前台模式的控制层：屏幕让给了目标应用，没有悬浮球或音量键就没法停任务
@@ -105,7 +107,7 @@
                 android:value="Keeps the app process alive while the privileged service drives a MaaFramework run" />
         </service>
 
-        <!-- 只过滤按键，不读窗口内容；用途见 AccessibilityHelperService -->
+        <!-- 过滤音量键组合，并在 InputText 时写入输入框；用途见 AccessibilityHelperService -->
         <service
             android:name=".service.AccessibilityHelperService"
             android:exported="false"
@@ -133,6 +135,9 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
 
@@ -178,6 +183,16 @@
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <!-- 自启动引导的厂商设置页（AutoStartHelper），targetSdk 30+ 需逐包声明才可 resolveActivity -->
+        <package android:name="com.miui.securitycenter" />
+        <package android:name="com.coloros.safecenter" />
+        <package android:name="com.oppo.safe" />
+        <package android:name="com.vivo.permissionmanager" />
+        <package android:name="com.huawei.systemmanager" />
+        <package android:name="com.hihonor.systemmanager" />
+        <package android:name="com.samsung.android.lool" />
+        <package android:name="com.meizu.safe" />
+        <package android:name="com.zte.heartyservice" />
     </queries>
 
 </manifest>

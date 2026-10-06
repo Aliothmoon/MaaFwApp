@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -43,6 +44,8 @@ private const val FIXED_SIZE_DELAY_MS = 50L
 @Composable
 fun MaaPreviewSurface(
     resolution: DisplayResolution,
+    /** 变了就丢掉这个 SurfaceView 重建一个：旧 Surface 还连着上一个特权进程，新进程接不上 */
+    surfaceEpoch: Int,
     onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (Surface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
@@ -57,40 +60,42 @@ fun MaaPreviewSurface(
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Box(Modifier.aspectRatio(resolution.aspectRatio)) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    SurfaceView(context).apply {
-                        holder.setFormat(PixelFormat.RGBA_8888)
-                        holder.addCallback(object : SurfaceHolder.Callback {
-                            override fun surfaceCreated(holder: SurfaceHolder) {
-                                currentCreated()
-                                scope.launch {
-                                    delay(FIXED_SIZE_DELAY_MS)
+            key(surfaceEpoch) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        SurfaceView(context).apply {
+                            holder.setFormat(PixelFormat.RGBA_8888)
+                            holder.addCallback(object : SurfaceHolder.Callback {
+                                override fun surfaceCreated(holder: SurfaceHolder) {
+                                    currentCreated()
+                                    scope.launch {
+                                        delay(FIXED_SIZE_DELAY_MS)
+                                        val res = currentResolution
+                                        holder.setFixedSize(res.width, res.height)
+                                    }
+                                }
+
+                                override fun surfaceChanged(
+                                    holder: SurfaceHolder,
+                                    format: Int,
+                                    width: Int,
+                                    height: Int,
+                                ) {
                                     val res = currentResolution
-                                    holder.setFixedSize(res.width, res.height)
+                                    if (width == res.width && height == res.height) {
+                                        currentAvailable(holder.surface)
+                                    }
                                 }
-                            }
 
-                            override fun surfaceChanged(
-                                holder: SurfaceHolder,
-                                format: Int,
-                                width: Int,
-                                height: Int,
-                            ) {
-                                val res = currentResolution
-                                if (width == res.width && height == res.height) {
-                                    currentAvailable(holder.surface)
+                                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                    currentDestroyed()
                                 }
-                            }
-
-                            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                currentDestroyed()
-                            }
-                        })
-                    }
-                },
-            )
+                            })
+                        }
+                    },
+                )
+            }
             overlay()
         }
     }

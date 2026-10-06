@@ -258,11 +258,12 @@ private fun OverlayCompactTaskList(
                     ),
                 ) {
                     OverlayCheckbox(
-                        checked = task.enabled,
+                        checked = task.checkedForDisplay,
                         onCheckedChange = { enabled ->
                             onIntent(SessionIntent.ToggleTask(active.id, task.instanceId, enabled))
                         },
-                        enabled = !locked && !task.missingDefinition,
+                        enabled = !locked && task.toggleable,
+                        warning = task.checkedButSkipped,
                     )
                     Text(
                         text = task.label,
@@ -445,7 +446,7 @@ private fun OverlayAddPane(
             items(rows, key = { it.taskName }) { item ->
                 OverlayTile(
                     selected = item.taskName in selected,
-                    enabled = !locked,
+                    enabled = !locked && !item.unsupported,
                     onClick = { selected.setPresent(item.taskName, item.taskName !in selected) },
                 ) {
                     Text(

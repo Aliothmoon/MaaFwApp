@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.di
 
+import com.aliothmoon.maafw.settings.search.SettingSearchNavigator
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
@@ -15,6 +16,7 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.wallpaper.WallpaperStore
 import com.aliothmoon.maafw.util.HttpClientHelper
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -61,7 +63,11 @@ val coreModule = module {
     single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
 
     single { AppSettingsManager(androidContext()) }
+    // 设置搜索的定位请求要跨过 tab 切换与子页面推入，挂在哪个页面的 VM 上都活不到那一头
+    single { SettingSearchNavigator() }
     single<AppSettingsGateway> { get<AppSettingsManager>() }
+    // 背景图解码一次，主界面与设置页共用同一张位图
+    single { WallpaperStore(androidContext(), get()) }
 
     single { LocalizedTextRenderer(androidContext()) }
-}
+}

@@ -2,10 +2,13 @@ package com.aliothmoon.maafw.notification
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import timber.log.Timber
 
 /**
  * [NotificationSettings] 的唯一读写入口
@@ -18,8 +21,15 @@ import kotlinx.coroutines.flow.first
 class NotificationSettingsManager(private val context: Context) {
 
     companion object {
+        // 文件坏了不兜就抛 CorruptionException，每次推送都在这里失败；回落默认值
         private val Context.notificationDataStore: DataStore<Preferences> by
-        preferencesDataStore(name = "notification_settings")
+        preferencesDataStore(
+            name = "notification_settings",
+            corruptionHandler = ReplaceFileCorruptionHandler {
+                Timber.e(it, "Notification settings file corrupted; resetting to defaults")
+                emptyPreferences()
+            },
+        )
     }
 
     val settings: Flow<NotificationSettings> =

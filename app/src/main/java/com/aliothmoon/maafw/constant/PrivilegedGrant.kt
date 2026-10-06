@@ -28,6 +28,10 @@ object PrivilegedGrant {
     /** 存储访问（OP_MANAGE_EXTERNAL_STORAGE；旧版回退读写外部存储） */
     const val STORAGE = 1 shl 5
 
+    /** specialUse 前台服务的 AppOps 放行；Android 14+ 上被 ROM 或管控工具拒绝时 FGS 起不来 */
+    const val FGS_SPECIAL_USE = 1 shl 6
+
     /** 全集；特权进程上线即全代授，对齐 MaaMeow */
-    const val ALL = NOTIFICATION or BATTERY or BACKGROUND or OVERLAY or ACCESSIBILITY or STORAGE
+    const val ALL = NOTIFICATION or BATTERY or BACKGROUND or OVERLAY or ACCESSIBILITY or
+            STORAGE or FGS_SPECIAL_USE
 }

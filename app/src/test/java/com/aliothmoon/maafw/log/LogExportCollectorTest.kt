@@ -86,4 +86,62 @@ class LogExportCollectorTest {
         // debug/ 压根没建过：没开过特权进程的设备就是这样
         assertEquals(listOf("log/app.log"), collect())
     }
+
+    private fun collectPi(vararg include: String): List<String> =
+        LogExportCollector.collect(emptyList(), now, LogExportCollector.PiLogs(File(base, "pi"), include.toList()))
+            .map { it.relativeTo(base).invariantSeparatorsPath }
+
+    /** agent 自己的日志：默认按 MaaFramework 的 debug/ 约定收，截图、录制这类非日志文件不带 */
+    @Test
+    fun `agent logs under the pi root are picked by glob`() {
+        write("pi/debug/go-service.log")
+        write("pi/debug/cpp-algo/debug/maafw.log")
+        write("pi/debug/cpp-algo/debug/maafw.bak.2026.09.29-04.38.30.303.log")
+        write("pi/debug/vision/draw_0.png")
+        write("pi/debug/record/rec.jsonl")
+        write("pi/resource/pipeline/a.json")
+
+        assertEquals(
+            setOf(
+                "pi/debug/go-service.log",
+                "pi/debug/cpp-algo/debug/maafw.log",
+                "pi/debug/cpp-algo/debug/maafw.bak.2026.09.29-04.38.30.303.log",
+            ),
+            collectPi("debug/**/*.log").toSet(),
+        )
+    }
+
+    /** 外壳管不了 agent 日志的轮转，一律只收近 7 天 */
+    @Test
+    fun `agent logs past the window are dropped`() {
+        write("pi/debug/new.log", ageDays = 1)
+        write("pi/debug/old.log", ageDays = 30)
+
+        assertEquals(listOf("pi/debug/new.log"), collectPi("debug/**/*.log"))
+    }
+
+    @Test
+    fun `an empty include or a missing pi root exports nothing from it`() {
+        write("pi/debug/go-service.log")
+
+        assertEquals(emptyList<String>(), collectPi())
+        base.resolve("pi").deleteRecursively()
+        assertEquals(emptyList<String>(), collectPi("debug/**/*.log"))
+    }
+
+    @Test
+    fun `glob keeps star and question mark inside one directory`() {
+        val star = LogExportCollector.globToRegex("logs/*.log")
+        assertTrue(star.matches("logs/a.log"))
+        assertFalse(star.matches("logs/sub/a.log"))
+
+        assertTrue(LogExportCollector.globToRegex("logs/**").matches("logs/sub/a.log"))
+
+        val question = LogExportCollector.globToRegex("a?.log")
+        assertTrue(question.matches("ab.log"))
+        assertFalse(question.matches("a/.log"))
+
+        // 点号按字面量匹配
+        assertFalse(LogExportCollector.globToRegex("a.log").matches("aXlog"))
+    }
 }
