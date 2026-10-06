@@ -25,6 +25,10 @@ internal fun Project.configureAndroidCommon(extension: CommonExtension) {
     extension.compileOptions.sourceCompatibility = JAVA_VERSION
     extension.compileOptions.targetCompatibility = JAVA_VERSION
 
+    // Unset = AGP's default NDK, which is what CI uses. A machine that keeps a different NDK
+    // pins it here; ndk.dir alone fails because AGP checks it against this version
+    textSetting("build.ndkVersion", "BUILD_NDK_VERSION")?.let { extension.ndkVersion = it }
+
     // Without this an android.os.Trace section anywhere under test blows up with "not mocked".
     // The alternative is stubbing the platform per test, which buys nothing: the tests that care
     // about platform behaviour are instrumented ones anyway

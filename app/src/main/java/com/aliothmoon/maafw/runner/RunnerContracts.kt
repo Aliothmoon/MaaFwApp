@@ -8,12 +8,20 @@ import kotlinx.coroutines.flow.StateFlow
 /** 与 MaaFramework 的唯一执行边界；隐藏 JNI / handle / callback */
 interface RunnerPort {
     val state: StateFlow<RunnerState>
-    val events: Flow<RunnerEvent>
+    val events: Flow<RunnerEventEnvelope>
 
-    suspend fun start(plan: RunPlan): RunnerCommandResult
+    /** [executionId] 由编排层先生成：会话日志在 start 之前就要按它开文件 */
+    suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult
     suspend fun stop(): RunnerCommandResult
     suspend fun acknowledgeModalFocus(focusId: String): Boolean
 }
+
+/** 轮次与任务名在收到回调时冻下：日志异步消费，那时 state 可能已进下一个任务甚至下一轮 */
+data class RunnerEventEnvelope(
+    val executionId: String,
+    val taskLabel: String?,
+    val event: RunnerEvent,
+)
 
 data class RunnerState(
     val phase: RunnerPhase = RunnerPhase.Idle,
@@ -66,10 +74,29 @@ sealed interface ExecutionResult {
 
 /** 旁路观测（日志/进度）；不参与状态机判定 */
 sealed interface RunnerEvent {
+    /** 只给观察者对账用的节点，本身不成行；日志、屏保这类展示面一律跳过 */
+    sealed interface Marker : RunnerEvent
+
+    /**
+     * 一轮的最后一个事件，带着这一轮的结局；会话日志等它被消费到再关文件
+     *
+     * 结局随事件走而不是让消费方回头看 state：marker 先于 phase 收回 Idle 发出，
+     * 回头看的那一刻 state 可能还没翻过来，也可能已经是下一轮
+     */
+    data class ExecutionFinished(val result: ExecutionResult) : Marker
+
     /** 外壳自产的一句话，不是 MaaFramework 的原话 */
     data class Log(val message: String) : RunnerEvent
 
     data class Progress(val taskName: String, val completed: Int, val total: Int) : RunnerEvent
+
+    /**
+     * 一个任务跑完，[index] 与开跑时那条 [Progress.completed] 相同
+     *
+     * 与 [Progress]、[ExecutionFinished] 同走这一条有序流：遥测按它收任务 Span，
+     * 看 state 里的 taskResults 会与事件乱序，看框架的 `Tasker.Task.*` 又可能晚于整轮终局
+     */
+    data class TaskFinished(val index: Int, val success: Boolean) : Marker
 
     /**
      * MaaFramework 的一条原样通知
@@ -100,18 +127,47 @@ sealed interface RunnerEvent {
      *
      * [exec] 是特权进程真正 exec 的那条路径（来自 `agent-runtime.json`），不是 PI 的 child_exec：
      * 后者按桌面端整条命令行写，设备上根本没跑那个东西，显示出来只会误导排障
+     *
+     * [name] 来自配方 `agent.runtimes[].name`，写了就优先显示
      */
-    data class AgentConnected(val index: Int, val total: Int, val exec: String) : RunnerEvent {
-        val label: String
-            get() = exec.substringAfterLast('/').substringAfterLast('\\')
-                .ifBlank { "agent[$index]" }
+    data class AgentConnected(val index: Int, val total: Int, val exec: String, val name: String? = null) : RunnerEvent {
+        val label: String get() = agentLabel(name, exec, index)
     }
 
-    /** PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]） */
-    data class Focus(val focus: FocusMessage) : RunnerEvent
+    /**
+     * 一个 agent child 没被要求退出却退了：崩溃、被系统杀掉、或自己提前退出
+     *
+     * 特权进程等在 child 上得来的事实，不靠 MaaFramework 报——框架要到下一次 custom 调用超时才知道对端没了
+     *
+     * [crashReport] 是 `log/crash/` 下的现场文件名，只有被 debuggerd 接管的信号（SIGSEGV、SIGABRT 这些）才有
+     */
+    data class AgentExited(
+        val index: Int,
+        val exec: String,
+        val exitCode: Int,
+        val crashReport: String? = null,
+        val name: String? = null,
+    ) : RunnerEvent {
+        val label: String get() = agentLabel(name, exec, index)
+
+        val signal: Int? get() = AgentExitCode.signalOf(exitCode)
+    }
+
+    /**
+     * PI 声明的消息模板，唯一一条不是原始转储的事件（见 [FocusMessage]）
+     *
+     * [details] 是同一条回调的原始详情：遥测要从 `node_details` 里分出失败阶段，展示侧不用它
+     */
+    data class Focus(val focus: FocusMessage, val details: String = "") : RunnerEvent
 }
+
+/** 配方 `agent.runtimes[].name` 写了就用它，否则取可执行体的文件名 */
+private fun agentLabel(name: String?, exec: String, index: Int): String =
+    name?.takeIf(String::isNotBlank)
+        ?: exec.substringAfterLast('/').substringAfterLast('\\').ifBlank { "agent[$index]" }
 
 sealed interface RunnerCommandResult {
     data object Accepted : RunnerCommandResult
-    data class Rejected(val reason: UiText) : RunnerCommandResult
+    /** [error] 是外壳这一侧接住的异常；特权进程里的失败只回一个 false，现场在调试模式抓的 logcat 里 */
+    data class Rejected(val reason: UiText, val error: Throwable? = null) : RunnerCommandResult
 }

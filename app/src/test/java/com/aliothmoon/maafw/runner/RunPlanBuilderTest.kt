@@ -3,6 +3,8 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ConfiguredTask
+import com.aliothmoon.maafw.domain.ControllerDefinition
+import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.domain.OptionDefinition
@@ -104,6 +106,18 @@ class RunPlanBuilderTest {
         )
         assertTrue("应编译成功: $result", result is RunPlanResult.Success)
         assertTrue((result as RunPlanResult.Success).plan.agents.isEmpty())
+    }
+
+    @Test
+    fun `引用被跳过的 option 不阻断编译`() {
+        val withHotkey = definition.copy(
+            tasks = definition.tasks.map {
+                if (it.name == "启动游戏") it.copy(optionNames = it.optionNames + "Keymap") else it
+            },
+            skippedOptionNames = setOf("Keymap"),
+        )
+        val result = RunPlanBuilder.build(withHotkey, configWith(ConfiguredTask("启动游戏")))
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
     }
 
     @Test
@@ -222,4 +236,46 @@ class RunPlanBuilderTest {
         this["CombatStageGate"]!!.jsonObject["recognition"]!!.jsonObject["param"]!!
             .jsonObject["custom_recognition_param"]!!.jsonObject["expression"]!!.jsonPrimitive.content
     }.getOrNull()
+    /** 选中的 controller 决定追加的资源、controller option，以及哪些限定了 controller 的任务能进计划 */
+    @Test
+    fun `selected controller drives attach paths, controller options and task filtering`() {
+        val cloudPatch = JsonObject(mapOf("StartUpGame" to JsonObject(mapOf("enabled" to JsonPrimitive(true)))))
+        val withCloud = definition.copy(
+            controllers = listOf(
+                ControllerDefinition(name = "ADB", type = "Adb", attachResourcePaths = listOf("resource_adb")),
+                ControllerDefinition(
+                    name = "CloudADB",
+                    type = "Adb",
+                    attachResourcePaths = listOf("resource_adb", "resource_cloud_adb"),
+                    optionNames = listOf("CloudClient"),
+                ),
+            ),
+            options = definition.options + (
+                "CloudClient" to OptionDefinition.Select(
+                    name = "CloudClient",
+                    label = "CloudClient",
+                    description = null,
+                    cases = listOf(OptionCaseDefinition("Cloud", "Cloud", null, cloudPatch, emptyList())),
+                    defaultCase = "Cloud",
+                )
+            ),
+            // 夹具的启动游戏只写了 ADB；这里放开到两个，另起一条只限 ADB 的
+            tasks = definition.tasks.map {
+                if (it.name == "启动游戏") it.copy(controllers = listOf("ADB", "CloudADB")) else it
+            } + definition.task("启动游戏")!!.copy(name = "仅本地", controllers = listOf("ADB")),
+        )
+        val config = configWith(ConfiguredTask("启动游戏"), ConfiguredTask("仅本地"))
+            .copy(activeControllerName = "CloudADB")
+
+        val plan = (RunPlanBuilder.build(withCloud, config) as RunPlanResult.Success).plan
+        assertEquals("CloudADB", plan.controller.name)
+        assertEquals(listOf("resource_adb", "resource_cloud_adb"), plan.controller.attachResourcePaths)
+        assertEquals(listOf("启动游戏"), plan.tasks.map { it.taskName })
+        assertTrue(cloudPatch in plan.tasks.single().pipelineOverrides)
+
+        val local = (RunPlanBuilder.build(withCloud, config.copy(activeControllerName = null)) as RunPlanResult.Success).plan
+        assertEquals("ADB", local.controller.name)
+        assertEquals(listOf("启动游戏", "仅本地"), local.tasks.map { it.taskName })
+        assertTrue(local.tasks.none { cloudPatch in it.pipelineOverrides })
+    }
 }

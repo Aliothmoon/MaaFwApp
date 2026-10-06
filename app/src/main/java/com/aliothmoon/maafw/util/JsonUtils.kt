@@ -38,5 +38,8 @@ fun JsonObject.string(key: String): String? =
 fun JsonObject.int(key: String): Int? =
     (this[key] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
 
+fun JsonObject.long(key: String): Long? =
+    (this[key] as? JsonPrimitive)?.contentOrNull?.toLongOrNull()
+
 fun JsonObject.boolean(key: String): Boolean? =
     (this[key] as? JsonPrimitive)?.contentOrNull?.toBooleanStrictOrNull()

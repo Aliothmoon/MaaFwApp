@@ -42,6 +42,7 @@
 -keep class com.aliothmoon.maafw.RemoteService** { *; }
 -keep class com.aliothmoon.maafw.IMaaRunnerCallback** { *; }
 -keep class com.aliothmoon.maafw.ITouchEventCallback** { *; }
+-keep class com.aliothmoon.maafw.ITextInputSink** { *; }
 -keep class com.aliothmoon.maafw.ILogcatService** { *; }
 
 # hidden-api 是 compileOnly，运行时由 framework 提供，包里没有
@@ -85,3 +86,7 @@
 -dontwarn org.eclipse.angus.**
 -dontwarn jakarta.**
 -dontwarn javax.**
+
+# ── 小米焦点通知 / 超级岛 ──
+# 模板靠 kotlinx.serialization 反射字段拼 JSON，字段名就是系统认的协议键
+-keep class com.xzakota.hyper.notification.** { *; }

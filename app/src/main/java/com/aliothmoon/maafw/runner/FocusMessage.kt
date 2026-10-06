@@ -201,7 +201,8 @@ object FocusParser {
     private fun scalarFields(details: JsonObject): Map<String, String> = buildMap {
         details.forEach { (key, value) ->
             if (key == FOCUS_KEY) return@forEach
-            (value as? JsonPrimitive)?.contentOrNullIfNotString()?.let { put(key, it) }
+            // 占位符可以用数字这类 JSON 标量；只有 null 拿不出可比文本
+            (value as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.let { put(key, it) }
         }
     }
 
@@ -225,7 +226,7 @@ object FocusParser {
         }
     }
 
-    /** JSON 的 `null` 字面量也是 JsonPrimitive，直接取 content 会拿到字符串 "null" */
+    /** 非 string 的 JSON 标量不是 focus 正文；`null` 字面量也不能变成 "null" */
     private fun JsonPrimitive.contentOrNullIfNotString(): String? =
-        if (this is JsonNull) null else content
+        if (!isString) null else content
 }

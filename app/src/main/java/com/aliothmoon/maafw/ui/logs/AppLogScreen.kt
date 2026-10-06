@@ -37,6 +37,7 @@ import com.aliothmoon.maafw.log.AppLogIntent
 import com.aliothmoon.maafw.log.AppLogViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
+import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.maaClickable
 import org.koin.androidx.compose.koinViewModel
@@ -102,34 +103,23 @@ fun AppLogScreen(
             )
         },
     ) { padding ->
-        if (state.files.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(MaaDesignTokens.Spacing.lg),
-                contentAlignment = Alignment.TopStart,
-            ) {
-                Text(
-                    text = stringResource(
-                        if (state.loading) R.string.common_loading else R.string.app_log_empty,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            return@Scaffold
-        }
-
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            items(state.files, key = { it.name }) { file ->
-                AppLogFileRow(file = file, onClick = { onOpen(file.name) })
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            ) {
+                items(state.files, key = { it.name }) { file ->
+                    AppLogFileRow(file = file, onClick = { onOpen(file.name) })
+                }
+            }
+            if (state.files.isEmpty()) {
+                ListPlaceholder(if (state.loading) R.string.common_loading else R.string.app_log_empty)
             }
         }
     }
@@ -137,11 +127,15 @@ fun AppLogScreen(
 
 @Composable
 private fun AppLogFileRow(file: AppLogFileInfo, onClick: () -> Unit) {
-    MaaCardSurface(modifier = Modifier.fillMaxWidth()) {
+    // 点击挂在卡片本身并带同一圆角：挂在里面那行上，按下缩放连高亮一起缩，填不满卡片
+    MaaCardSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .maaClickable(shape = MaterialTheme.shapes.medium, onClick = onClick),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .maaClickable(onClick = onClick)
                 .padding(MaaDesignTokens.Card.innerPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {

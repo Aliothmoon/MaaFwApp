@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface StubTaskOutcome {
@@ -39,11 +38,11 @@ class StubRunnerPort(
     private val _state = MutableStateFlow(RunnerState())
     override val state: StateFlow<RunnerState> = _state.asStateFlow()
 
-    private val _events = MutableSharedFlow<RunnerEvent>(
+    private val _events = MutableSharedFlow<RunnerEventEnvelope>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
-    override val events: Flow<RunnerEvent> = _events.asSharedFlow()
+    override val events: Flow<RunnerEventEnvelope> = _events.asSharedFlow()
 
     private val commandMutex = Mutex()
 
@@ -57,11 +56,11 @@ class StubRunnerPort(
         val stopRequested = AtomicBoolean(false)
     }
 
-    override suspend fun start(plan: RunPlan): RunnerCommandResult = commandMutex.withLock {
+    override suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult = commandMutex.withLock {
         if (_state.value.phase != RunnerPhase.Idle) {
             return RunnerCommandResult.Rejected(uiTextFromFramework("Busy"))
         }
-        val context = ExecutionContext(UUID.randomUUID().toString())
+        val context = ExecutionContext(executionId)
         currentContext = context
         val execution = ActiveExecution(
             executionId = context.executionId,
@@ -94,11 +93,11 @@ class StubRunnerPort(
     }
 
     private suspend fun execute(plan: RunPlan, context: ExecutionContext) {
-        _events.tryEmit(RunnerEvent.Log("准备运行环境（${plan.resource.name}）"))
+        emit(context, RunnerEvent.Log("准备运行环境（${plan.resource.name}）"))
         delay(scenario.prepareDelayMillis)
 
         scenario.preparationFailure?.let { reason ->
-            finish(ExecutionResult.Failed(uiTextFromFramework(reason)))
+            finish(context, ExecutionResult.Failed(uiTextFromFramework(reason)))
             return
         }
 
@@ -116,9 +115,9 @@ class StubRunnerPort(
                 )
             }
             if (scenario.emitProgress) {
-                _events.tryEmit(RunnerEvent.Progress(task.taskName, index, plan.tasks.size))
+                emit(context, RunnerEvent.Progress(task.taskName, index, plan.tasks.size))
             }
-            _events.tryEmit(RunnerEvent.Log("开始任务: ${task.taskName}"))
+            emit(context, RunnerEvent.Log("开始任务: ${task.taskName}"))
             delay(scenario.taskDelayMillis)
             if (context.stopRequested.get()) break
 
@@ -128,7 +127,9 @@ class StubRunnerPort(
                 is StubTaskOutcome.Failure -> TaskResult(task.taskName, success = false, message = outcome.message)
             }
             results += result
-            _events.tryEmit(
+            emit(context, RunnerEvent.TaskFinished(index, result.success))
+            emit(
+                context,
                 RunnerEvent.Log(if (result.success) "任务完成: ${task.taskName}" else "任务失败: ${task.taskName}"),
             )
             _state.update {
@@ -146,12 +147,19 @@ class StubRunnerPort(
             results.any { !it.success } -> ExecutionResult.CompletedWithFailures(results.toList())
             else -> ExecutionResult.Completed(results.toList())
         }
-        finish(result)
+        finish(context, result)
     }
 
-    private fun finish(result: ExecutionResult) {
+    private fun finish(context: ExecutionContext, result: ExecutionResult) {
         currentContext = null
-        _events.tryEmit(RunnerEvent.Log("本轮执行结束: ${result::class.simpleName}"))
+        emit(context, RunnerEvent.Log("本轮执行结束: ${result::class.simpleName}"))
+        emit(context, RunnerEvent.ExecutionFinished(result))
         _state.update { RunnerState(phase = RunnerPhase.Idle, activeExecution = null, latestResult = result) }
+    }
+
+    private fun emit(context: ExecutionContext, event: RunnerEvent) {
+        _events.tryEmit(
+            RunnerEventEnvelope(context.executionId, _state.value.activeExecution?.currentTaskLabel, event),
+        )
     }
 }

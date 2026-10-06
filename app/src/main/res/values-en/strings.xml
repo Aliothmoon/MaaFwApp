@@ -43,6 +43,7 @@
     <!-- Runner toggle -->
     <string name="runner_start">Start tasks</string>
     <string name="runner_foreground_blocked">Foreground mode is active; switch to background mode first</string>
+    <string name="runner_background_unsupported">Background mode is unavailable below Android 10. Try another device or update the system.</string>
     <string name="runner_stop">Stop</string>
     <string name="runner_stopping">Stopping…</string>
 
@@ -87,6 +88,8 @@
     <string name="home_project_loading">Loading ProjectInterface…</string>
     <string name="home_project_load_failed">Project failed to load</string>
     <string name="home_diagnostics_summary">Diagnostics: %1$d</string>
+    <string name="home_diagnostics_expand">Show diagnostics</string>
+    <string name="home_diagnostics_collapse">Hide diagnostics</string>
     <plurals name="home_diagnostics_summary_with_errors">
         <item quantity="one">Diagnostics: %1$d (%2$d error)</item>
         <item quantity="other">Diagnostics: %1$d (%2$d errors)</item>
@@ -110,10 +113,16 @@
     <string name="result_failed">Failed: %1$s</string>
 
     <!-- Settings screen -->
-    <string name="settings_section_global_option">Task settings</string>
+    <string name="settings_group_task">Task settings</string>
+    <string name="settings_group_task_desc">Provided by the project resources and applied to every run</string>
+    <string name="settings_section_global_option">General</string>
     <string name="settings_section_resource_option">Resource settings</string>
+    <string name="settings_section_controller_option">Controller settings</string>
     <string name="settings_section_display">Display</string>
-    <string name="settings_section_schedule">Scheduled tasks</string>
+    <string name="settings_section_duration_limit">Run duration limit</string>
+    <string name="settings_duration_limit_enabled">Stop automatically after timeout</string>
+    <string name="settings_duration_limit_minutes">Maximum run duration (minutes)</string>
+    <string name="settings_duration_limit_hint">%1$d–%2$d minutes; changes while a run is in progress apply to the next run</string>
     <string name="settings_section_other">Other</string>
     <string name="settings_pip_on_home">Auto picture-in-picture while running</string>
     <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The game cannot be controlled inside the window</string>
@@ -122,6 +131,25 @@
     <string name="settings_follow_system">System default</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_pure_dark">Pure black</string>
+    <string name="settings_ui_scale">Page scale</string>
+    <string name="settings_ui_scale_desc">Scales the whole interface, spacing included. Auto picks a size from the screen width; the system font size still applies on top. Affects both the app and the floating window</string>
+    <string name="settings_ui_scale_auto_value">Auto · %1$d%%</string>
+    <string name="settings_ui_scale_use_auto">Use auto (recommended)</string>
+    <string name="wallpaper_title">Custom background</string>
+    <string name="wallpaper_desc">Use a picture as the background of the main screens and settings</string>
+    <string name="wallpaper_enable">Use a custom background</string>
+    <string name="wallpaper_pick">Pick a picture</string>
+    <string name="wallpaper_replace">Change picture</string>
+    <string name="wallpaper_remove">Remove</string>
+    <string name="wallpaper_image_alpha">Picture opacity</string>
+    <string name="wallpaper_scrim">Scrim strength</string>
+    <string name="wallpaper_blur">Blur</string>
+    <string name="wallpaper_import_failed">Couldn\'t import the picture</string>
+    <string name="wallpaper_crop_reset">Reset</string>
+    <string name="wallpaper_crop_rotate">Rotate 90°</string>
+    <string name="wallpaper_crop_save">Save background</string>
+    <string name="settings_ui_scale_preview">Preview: drag the slider and this text scales with it</string>
     <string name="settings_theme_style_default">Default</string>
     <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">Language</string>
@@ -131,17 +159,19 @@
     <string name="settings_run_mode_foreground">Foreground mode</string>
     <string name="settings_resource">Server</string>
     <string name="settings_no_resources">The project provides no selectable servers</string>
+    <string name="settings_controller">Controller</string>
     <string name="settings_reload_project">Reload project</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_version_of">%1$s version</string>
     <string name="settings_framework">MaaFramework</string>
     <string name="settings_telemetry">Help improve this project</string>
-    <string name="settings_telemetry_desc">Sends task names and run results to the project author. Screenshots, log text and anything you type are never included</string>
-    <string name="settings_project">Project</string>
+    <string name="settings_telemetry_desc">Anonymously send crash reports and task statistics; when a task fails, its run logs and error screenshots are included, to help find common issues</string>
+    <string name="settings_about_welcome">View welcome message</string>
     <string name="settings_about_contact">Contact</string>
     <string name="settings_about_license">License</string>
     <string name="settings_about_repository">Repository</string>
+    <string name="settings_about_powered_by">Powered by %1$s</string>
     <string name="settings_section_update">Updates</string>
     <string name="settings_update_source_mirror">MirrorChyan</string>
     <string name="settings_update_source_github">GitHub</string>
@@ -163,7 +193,6 @@
     <string name="settings_update_check">Check for updates</string>
     <string name="settings_update_checking">Checking…</string>
     <string name="settings_update_download">Download update</string>
-    <string name="settings_update_result">Check result</string>
     <string name="settings_update_up_to_date">You are up to date</string>
     <string name="settings_update_no_downloadable_apk">The selected update source has no downloadable APK</string>
     <string name="settings_update_auto_check">Check for updates on launch</string>
@@ -205,11 +234,12 @@
     <string name="update_install_fail_file_invalid">Package file is not usable</string>
     <string name="update_install_fail_installer_not_found">No system installer found</string>
     <string name="update_install_fail_unknown">Failed to start installation</string>
-    <string name="welcome_title">Welcome</string>
 
     <!-- Notifications -->
     <string name="notification_channel_run">Task execution</string>
     <string name="notification_channel_run_desc">Stays up while a run is in progress so the system does not reclaim the process</string>
+    <string name="notification_channel_run_island">Task execution (HyperIsland)</string>
+    <string name="notification_channel_run_island_desc">Used when the run notification style is HyperIsland; the island only floats from this channel</string>
     <string name="notification_channel_focus">Project messages</string>
     <string name="notification_channel_focus_desc">Alerts the PI project asks to push to you during a run</string>
     <string name="notification_focus_title">Project message</string>
@@ -222,7 +252,13 @@
     <string name="notification_run_stopping">Stopping</string>
 
     <!-- Foreground control layer -->
-    <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode. Only key events are filtered; screen content is never read.</string>
+    <string name="accessibility_service_description">Press volume up and down together to open the control panel in primary-display mode, and type text such as Chinese into the target app\'s input box when a task needs it. The input box is looked up only at that moment; screen content is never recorded or uploaded.</string>
+    <string name="text_input_accessibility_unavailable">The text contains characters a keyboard can\'t type, such as Chinese, which need the accessibility service, but it is not enabled. Enable this app\'s accessibility service in the system accessibility settings and try again.</string>
+    <string name="text_input_unsupported_display">Chinese text isn\'t supported below Android 11 yet. Run in foreground mode instead.</string>
+    <string name="text_input_unsupported_display_background_only">Chinese text isn\'t supported below Android 11 yet.</string>
+    <string name="text_input_no_focused_input">No focused input box was found, so the text was not written. Tap the input box before typing.</string>
+    <string name="text_input_foreign_package">The focused input box does not belong to the target app %1$s; the text was not written to avoid typing into another app.</string>
+    <string name="text_input_action_failed">The input box rejected the accessibility write; the text was not written.</string>
     <string name="overlay_tab_tasks">Tasks</string>
     <string name="overlay_tab_log">Log</string>
     <string name="overlay_hide">Hide</string>
@@ -271,9 +307,31 @@
     <string name="schedule_next_none">Incomplete rule, will not fire</string>
     <string name="schedule_disabled">Disabled</string>
     <string name="schedule_exact_alarm_blocked">Exact alarms are not allowed</string>
-    <string name="schedule_exact_alarm_hint">Schedules still fire on time, but the status bar shows an alarm icon</string>
-    <string name="schedule_exact_alarm_grant">Allow</string>
+    <string name="schedule_exact_alarm_hint">Without it, schedules may be delayed by the system or fail to start</string>
     <string name="schedule_exact_alarm_settings">Exact alarm settings</string>
+    <string name="schedule_health_title">Scheduling check</string>
+    <string name="schedule_health_fix">Fix</string>
+    <string name="schedule_health_backend">%1$s not authorized</string>
+    <string name="schedule_health_backend_desc">Waking, unlocking, launching and running a scheduled task all depend on it; grant access first</string>
+    <string name="schedule_health_battery">Not on the battery optimization whitelist</string>
+    <string name="schedule_health_battery_desc">The system may delay or block the background start when the alarm fires</string>
+    <string name="schedule_health_notification">Notifications are off</string>
+    <string name="schedule_health_notification_desc">The countdown\'s Start now / Cancel buttons and failure alerts will be invisible</string>
+    <string name="schedule_health_overlay">Overlay permission missing</string>
+    <string name="schedule_health_overlay_desc">The screen saver is on in background mode and needs the overlay permission to show</string>
+    <string name="schedule_health_wake_credential">Unlock credential not set</string>
+    <string name="schedule_health_wake_credential_desc">The device has a secure lock screen that the No password option cannot open, so the run is skipped. Record an unlock gesture or enter a PIN under Wake unlock in the schedule tab\'s top bar</string>
+    <string name="schedule_go_to_settings">Go to settings</string>
+    <string name="schedule_oem_hint_miui">MIUI/HyperOS: also set the app\'s battery saver policy to \"No restrictions\"</string>
+    <string name="schedule_oem_hint_huawei">EMUI/HarmonyOS: also switch \"App launch management\" to manual and allow auto-launch, secondary launch and background activity</string>
+    <string name="schedule_oem_hint_oppo">ColorOS: also allow background running and disable \"App freezing\" for this app</string>
+    <string name="schedule_oem_hint_vivo">OriginOS/FuntouchOS: also allow high background power consumption for this app</string>
+    <string name="schedule_oem_hint_samsung">One UI: also remove this app from the \"Deep sleeping apps\" list</string>
+    <string name="schedule_oem_hint_meizu">Flyme: also allow background running and background pop-ups for this app</string>
+    <string name="schedule_auto_start_title">Auto-start permission</string>
+    <string name="schedule_auto_start_message">Without auto-start, the system may not let a schedule bring the app up from the background, and alarms are not restored after a reboot. Allow this app to auto-start in system settings.</string>
+    <string name="schedule_auto_start_message_fallback">No vendor auto-start page was found, so the app details page will open instead. Check the auto-start and background settings there and allow this app to auto-start.</string>
+    <string name="schedule_auto_start_dont_remind">Don\'t remind again</string>
 
     <string name="schedule_edit_new">New rule</string>
     <string name="schedule_edit_existing">Edit rule</string>
@@ -285,6 +343,13 @@
     <string name="schedule_edit_days">Days</string>
     <string name="schedule_edit_times">Times</string>
     <string name="schedule_edit_add_time">Add time</string>
+    <string name="schedule_time_picker_title">Choose time</string>
+    <string name="time_picker_hour">Hour</string>
+    <string name="time_picker_minute">Minute</string>
+    <string name="time_picker_am">AM</string>
+    <string name="time_picker_pm">PM</string>
+    <string name="time_picker_format_12h">12h</string>
+    <string name="time_picker_format_24h">24h</string>
     <string name="schedule_edit_start_time">First run</string>
     <string name="schedule_edit_interval">Execution interval</string>
     <string name="schedule_edit_save">Save</string>
@@ -320,21 +385,21 @@
     <string name="run_log_screen_saver_skipped">Screen-off overlay did not show; it will not be dismissed automatically</string>
     <string name="run_log_auto_sleep_skipped_not_run">The run did not start; skip auto-sleep</string>
     <string name="run_log_auto_sleep_skipped_awake">The screen was already on at start; skip auto-sleep</string>
-    <string name="wake_unlock_need_pin">A PIN is required to unlock; add it in Settings</string>
-    <string name="wake_unlock_pin_rejected">Wrong PIN, or this lock screen does not accept injected keys</string>
-    <string name="wake_unlock_screen_off">The screen did not turn on</string>
-    <string name="wake_unlock_unsupported">Wake-and-unlock is not available on this device</string>
-    <string name="wake_unlock_failed">Wake-and-unlock failed (%1$d)</string>
-    <string name="settings_wake_unlock">Wake and unlock on scheduled triggers</string>
-    <string name="settings_wake_credential">Unlock PIN</string>
-    <string name="settings_wake_credential_hint">Numeric PIN only; stored in the clear on this device and cleared on export</string>
+    <string name="run_log_duration_limit_reached">Run duration limit reached (%1$d minutes); stopping the task</string>
+    <string name="run_log_duration_limit_stop_failed">Failed to stop at the duration limit: %1$s</string>
     <string name="schedule_edit_advanced">Advanced</string>
     <string name="schedule_edit_force_start">Force start</string>
     <string name="schedule_edit_force_start_tip">Interrupt a run already in progress and run this rule instead</string>
     <string name="schedule_edit_auto_sleep">Sleep after the task finishes</string>
+    <string name="schedule_edit_auto_sleep_tip">Turn the screen off after the scheduled task finishes to save battery</string>
     <string name="schedule_edit_skip_sleep_if_awake">Skip if the screen was already on at start</string>
+    <string name="schedule_edit_skip_sleep_if_awake_tip">If the screen is already on when the rule fires, you are probably using the phone, so it stays on after the task</string>
     <string name="schedule_edit_close_app">Close the target app after the task</string>
     <string name="schedule_edit_close_app_tip">Background mode only. If "Options → Close the target app when task ends" is already enabled, that switch takes precedence; this strategy setting applies only when it is off. Manually stopping a task will not close the app</string>
+    <string name="schedule_edit_close_app_effect_foreground">Current effect: run mode is foreground, so this option does nothing</string>
+    <string name="schedule_edit_close_app_effect_global">Current effect: the global switch in Options is on, so the target app closes when the task ends</string>
+    <string name="schedule_edit_close_app_effect_strategy">Current effect: this rule closes the target app after the task finishes</string>
+    <string name="schedule_edit_close_app_effect_inactive">Current effect: the target app is not closed when the task ends</string>
     <string name="schedule_result_failed_start">Did not start</string>
     <string name="schedule_reason_configuration_missing">The bound run configuration was deleted</string>
     <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be prepared</string>
@@ -346,6 +411,9 @@
     <string name="schedule_edit_configuration_none">No run configurations yet; create one on the Tasks page</string>
     <string name="schedule_result_failed_validation">Rule missing</string>
     <string name="schedule_result_failed_service">Service failed to start</string>
+    <string name="schedule_detail_data_unavailable_retry">Rule data could not be read; retry %1$d in 1 minute</string>
+    <string name="schedule_detail_data_unavailable_gave_up">Rule data could not be read after several attempts; this trigger was skipped</string>
+    <string name="schedule_detail_data_unavailable_waiting">Rule data could not be read after several attempts; this trigger was skipped. Checking again every 15 minutes until the rules load</string>
 
     <!-- Navigation & dialogs -->
     <string name="nav_home">Home</string>
@@ -357,11 +425,16 @@
 
     <!-- Option editor -->
     <string name="option_input_invalid">Invalid input</string>
+    <string name="option_checkbox_count_at_least">Select at least %1$d</string>
+    <string name="option_checkbox_count_at_most">Select at most %1$d</string>
+    <string name="option_checkbox_count_between">Select %1$d–%2$d</string>
+    <string name="option_checkbox_count_exactly">Select exactly %1$d</string>
 
     <!-- Localized text for structured domain/VM semantics (ui/i18n/DomainStrings) -->
     <string name="tasks_ungrouped">Ungrouped</string>
     <string name="task_unavailable_missing">Task no longer exists in the project</string>
-    <string name="task_unavailable_controller">Unsupported controller (requires %1$s)</string>
+    <string name="task_unavailable_controller">Not supported</string>
+    <string name="task_unavailable_controller_switch">Requires the %1$s controller</string>
     <string name="task_unavailable_resource">Unsupported resource (requires %1$s)</string>
     <string name="msg_locked_while_running">Cannot change configuration while running</string>
     <string name="msg_project_not_loaded">Project is not loaded yet</string>
@@ -373,6 +446,10 @@
     <string name="msg_cannot_start">Cannot start: %1$s</string>
     <string name="msg_launch_in_progress">Launch already in progress</string>
     <string name="msg_precheck_ignored_confirmation">A start check ignored the confirmation; aborted</string>
+    <string name="precheck_confirm_title">Before you start</string>
+    <string name="precheck_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off in the system display settings first. Start anyway?</string>
+    <string name="precheck_eye_protection_enabled">Eye comfort / night mode is enabled, which may affect color recognition accuracy. Start anyway?</string>
+    <string name="precheck_start_anyway">Start anyway</string>
     <string name="msg_hook_timeout">Run environment setup timed out: %1$s</string>
     <string name="msg_hook_failed">Run environment setup failed: %1$s</string>
     <string name="msg_cannot_stop">Cannot stop: %1$s</string>
@@ -447,14 +524,20 @@
     <string name="dialog_shizuku_need_auth_title">Shizuku Not Authorized</string>
     <string name="dialog_shizuku_need_auth_message">Shizuku is running but has not authorized this app yet. Please grant access. This prompt keeps showing until access is granted.</string>
     <string name="common_got_it">Got it</string>
+    <string name="common_later">Later</string>
 
     <!-- Run log -->
+    <plurals name="run_log_raw_omitted">
+        <item quantity="one">%1$d earlier raw line omitted; export the log for the full record</item>
+        <item quantity="other">%1$d earlier raw lines omitted; export the log for the full record</item>
+    </plurals>
     <plurals name="run_log_count">
         <item quantity="one">%1$d entry</item>
         <item quantity="other">%1$d entries</item>
     </plurals>
     <string name="run_log_export">Export</string>
     <string name="run_log_clear">Clear</string>
+    <string name="run_log_scroll_to_bottom">Scroll to bottom</string>
     <string name="run_log_empty">No logs</string>
     <string name="tasks_log">Log</string>
     <string name="run_log_filter_progress">Progress</string>
@@ -462,6 +545,9 @@
     <string name="run_log_connecting">Connecting to device…</string>
     <string name="run_log_connected">Device connected</string>
     <string name="run_log_agent_connected">Agent connected: %1$s</string>
+    <string name="run_log_agent_exited_signal">Agent exited unexpectedly: %1$s (%2$s)</string>
+    <string name="run_log_agent_exited_code">Agent exited unexpectedly: %1$s (exit code %2$d)</string>
+    <string name="run_log_agent_crash_report">%1$s; crash report saved to log/crash/%2$s</string>
     <string name="run_log_connect_failed">Device connection failed</string>
     <string name="run_log_resource_loading">Loading resource: %1$s</string>
     <string name="run_log_resource_loaded">Resource loaded: %1$s</string>
@@ -470,10 +556,14 @@
     <string name="run_log_task_succeeded">Task completed: %1$s</string>
     <string name="run_log_task_failed">Task failed: %1$s</string>
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
-    <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s). Try foreground mode instead.</string>
+    <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s).</string>
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
     <string name="run_log_app_unknown">unknown app</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
+    <string name="run_log_game_fps_low">The game is running at only %1$d FPS, below 30; automation may fail. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_game_fps_degraded">The game is running at %1$d FPS, below 50; battle timing may drift. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off manually in the system display settings</string>
+    <string name="run_log_eye_protection_enabled">Eye comfort / night mode is active (%1$s), which may affect normal image recognition. Please turn it off manually</string>
 
     <!-- Run history: one file per run -->
     <string name="log_archive_title">Run history</string>
@@ -519,6 +609,49 @@
     <string name="settings_log_archive_desc">View the execution log of each run</string>
     <string name="settings_log_error_desc">View the app\'s own exceptions and errors</string>
     <string name="settings_log_export_desc">Pack all logs into a ZIP file to share</string>
+    <string name="settings_section_backup">Backup &amp; restore</string>
+    <string name="config_export_title">Export configuration</string>
+    <string name="config_export_desc">Saves task configurations, schedules and app settings, without passwords, CDK or push credentials</string>
+    <string name="config_import_title">Import configuration</string>
+    <string name="config_import_desc">Accepts backups from this app, MXU config files (mxu-*.json) and txt files exported by MXU</string>
+    <string name="config_import_share_code_title">Paste an MXU share code</string>
+    <string name="config_import_share_code_desc">In MXU, right-click a tab, choose Export configuration → Export to clipboard, then paste it here</string>
+    <string name="config_share_code_hint">MXU share code</string>
+    <string name="config_share_code_paste">Paste from clipboard</string>
+    <string name="config_share_code_parse">Next</string>
+    <string name="config_export_saved">Configuration exported: %1$s</string>
+    <string name="config_export_failed">Couldn\'t export the configuration</string>
+    <string name="config_import_unreadable">Couldn\'t read the file</string>
+    <string name="config_import_unrecognized">Unrecognized configuration format</string>
+    <string name="config_import_project_mismatch">This configuration is for %1$s, not the current project %2$s</string>
+    <string name="config_import_newer">This backup was exported by a newer version of the app. Update the app first</string>
+    <string name="config_import_share_code_version">This MXU share code version isn\'t supported</string>
+    <string name="config_import_empty">There are no tasks in it that this project can use</string>
+    <string name="config_import_not_ready">The project is still loading. Try again in a moment</string>
+    <string name="config_import_failed">Couldn\'t import the configuration</string>
+    <string name="config_import_done">Configuration imported</string>
+    <string name="config_import_preview_title">Import configuration</string>
+    <string name="config_import_source_backup">Backup of %1$s, exported %2$s</string>
+    <string name="config_import_source_mxu_file">From an MXU config file</string>
+    <string name="config_import_source_mxu_share">From an MXU share code</string>
+    <string name="config_import_restore_warning">All current configurations, schedules and app settings will be overwritten. This can\'t be undone.</string>
+    <string name="config_import_restore_counts">Configurations: %1$d · Schedules: %2$d · App settings: %3$d</string>
+    <string name="config_import_secrets_kept">Passwords, CDK, unlock PIN and push credentials aren\'t imported. The ones already set on this device stay as they are.</string>
+    <string name="config_import_append_warning">These configurations will be added after your existing ones. Global, resource and controller options with the same name will be overwritten.</string>
+    <string name="config_import_configuration_item">%1$s (tasks: %2$d)</string>
+    <string name="config_import_schedules_disabled">Schedules: %1$d, imported turned off. Check their times before turning them on</string>
+    <string name="config_import_skipped_title">Not imported:</string>
+    <string name="config_import_skipped_unknown_tasks">Tasks this project doesn\'t have: %1$s</string>
+    <string name="config_import_skipped_mxu_tasks">MXU-only tasks: %1$d</string>
+    <string name="config_import_skipped_pre_actions">Pre-tasks and pre-actions: %1$d</string>
+    <string name="config_import_skipped_options">Option values that no longer match: %1$d</string>
+    <string name="config_import_skipped_schedules">Schedules with no days or times: %1$d</string>
+    <string name="config_import_mxu_secrets_kept">Passwords saved in MXU are imported too. Passwords, CDK, unlock PIN and push credentials already set on this device stay as they are.</string>
+    <string name="config_import_name_separator">", "</string>
+    <string name="config_picker_unavailable">No system file picker is available</string>
+    <string name="config_import_confirm_restore">Overwrite</string>
+    <string name="config_import_confirm_append">Import</string>
+    <string name="search_keywords_backup">backup restore import export migrate MXU share code</string>
 
     <!-- Diagnostic texts; built by DiagnosticMessages in domain/Diagnostics.kt -->
     <string name="diagnostic_severity_warning">Warning</string>
@@ -540,6 +673,12 @@
     <string name="diagnostic_description_read_failed">Failed to read description file; keeping original text: %1$s</string>
     <string name="diagnostic_default_case_missing">Option "%1$s" default_case "%2$s" is not in cases</string>
     <string name="diagnostic_input_has_no_fields">Input option "%1$s" has no usable inputs</string>
+    <string name="diagnostic_setting_option_not_global">Setting "%1$s" lists option "%2$s", which is not in global_option; hidden</string>
+    <string name="diagnostic_password_default_ignored">Option "%1$s" password input "%2$s" must not have a default; ignored</string>
+    <string name="diagnostic_preset_password_ignored">Preset "%1$s" sets a value for option "%2$s" password input "%3$s"; ignored</string>
+    <string name="diagnostic_checkbox_count_adjusted">Option "%1$s" %2$s is %3$d; using %4$d</string>
+    <string name="diagnostic_checkbox_count_ignored">Option "%1$s" %2$s is %3$d; ignored</string>
+    <string name="diagnostic_checkbox_default_count_out_of_range">Option "%1$s" default_case has %2$d items; requirement: %3$s</string>
     <string name="diagnostic_unsupported_option_type">Option "%1$s" type "%2$s" is unsupported on Android; skipped</string>
     <string name="diagnostic_invalid_option_type">Option "%1$s" has invalid type: %2$s</string>
     <string name="diagnostic_option_case_not_object">Option "%1$s" contains a case that is not an object</string>
@@ -551,6 +690,7 @@
     <string name="diagnostic_directory_enumeration_failed">Failed to enumerate %1$s directory: %2$s</string>
     <string name="diagnostic_no_available_resource">No resource is available</string>
     <string name="diagnostic_resource_selection_missing">Resource "%1$s" no longer exists; falling back to %2$s</string>
+    <string name="diagnostic_controller_selection_missing">Controller "%1$s" no longer exists; falling back to %2$s</string>
     <string name="diagnostic_none">none</string>
     <string name="diagnostic_active_configuration_missing">activeConfigurationId points to a missing configuration</string>
     <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>
@@ -559,14 +699,15 @@
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
     <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
+    <string name="diagnostic_checkbox_count_out_of_range">Option "%1$s" has %2$d selected; requirement: %3$s</string>
     <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
     <string name="diagnostic_boolean_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to a boolean</string>
     <string name="schedule_default_name">Schedule %1$d</string>
     <string name="settings_resolution">Background mode resolution</string>
-    <string name="settings_resolution_720p">720P</string>
-    <string name="settings_resolution_1080p">1080P</string>
+    <string name="settings_resolution_detail">%1$d×%2$d · %3$d dpi</string>
     <string name="settings_debug_mode">Debug mode</string>
     <string name="settings_debug_mode_desc">Records everything in the error log; detailed MaaFramework logs start on the next run</string>
+    <string name="settings_save_on_error">Save debug screenshots</string>
     <string name="dialog_enable_debug_title">Enable debug mode</string>
     <string name="dialog_enable_debug_message">Requires an app restart to take effect. Detailed MaaFramework logs plus app and privileged-process logcat will be recorded.</string>
 
@@ -587,7 +728,7 @@
     <string name="pi_reinstall_title">Extract resources again</string>
     <string name="pi_reinstall_desc">Extract the project resources again from the APK</string>
     <string name="dialog_reinstall_pi_title">Extract project resources again</string>
-    <string name="dialog_reinstall_pi_message">Extract the project resources again?\n\nThe copy on this device will be deleted and extracted again. Please do not leave the app while this runs. Run configurations and logs are unaffected.</string>
+    <string name="dialog_reinstall_pi_message">Extract the project resources again?\n\nThe copy on this device will be deleted and extracted again. Please do not leave the app while this runs. Records and logs the agents wrote into the resource directory are cleared too; run configurations and app logs are unaffected.</string>
 
     <!-- Foreground mode: primary display size and control panel -->
     <string name="foreground_resolution_title">Screen resolution</string>
@@ -604,10 +745,25 @@
 
     <!-- Settings "Notifications" group entry -->
     <string name="settings_section_notification">Notifications</string>
-    <string name="settings_notification_desc">Get told when a run ends, on this phone or elsewhere</string>
 
     <!-- Notification settings screen -->
     <string name="notification_settings_title">Notification settings</string>
+    <string name="notification_section_live">Run notification</string>
+    <string name="notification_live_style">Style</string>
+    <string name="notification_live_style_island">HyperIsland</string>
+    <string name="notification_live_style_live_update">Live Update</string>
+    <string name="notification_live_style_plain">Standard</string>
+    <string name="notification_live_note_island">HyperIsland is experimental; switch to another style if it looks wrong</string>
+    <string name="notification_live_note_live_update">Shows a progress chip in the status bar. Needs Android 16 or later with Live Updates turned on in the app\'s notification settings</string>
+    <string name="notification_live_note_plain">Keeps a single notification with a progress bar in the shade</string>
+    <string name="notification_live_permission">Notifications</string>
+    <string name="notification_live_focus">Focus notifications</string>
+    <string name="notification_live_promoted">Live Updates</string>
+    <string name="notification_live_granted">On</string>
+    <string name="notification_live_open_settings">Turn on</string>
+    <string name="notification_live_fallback">The selected style isn\'t available right now; runs will use \"%1$s\"</string>
+    <string name="notification_live_test_title">Run notification test</string>
+    <string name="notification_live_test_text">This is a test and disappears in 15 seconds</string>
     <string name="notification_section_internal">On this device</string>
     <string name="notification_enable">Notify when a run ends</string>
     <string name="notification_popup">Show as a banner</string>
@@ -719,4 +875,68 @@
     <string name="notification_err_gotify_scheme">Gotify server URL must start with http:// or https://</string>
     <string name="notification_err_webhook_url_empty">Webhook URL is empty</string>
     <string name="notification_err_webhook_body_empty">Webhook body template is empty</string>
+    <!-- 唤醒解锁（移植自 MaaMeow） -->
+    <string name="settings_wake_unlock_type">Schedule unlock method</string>
+    <string name="settings_wake_unlock_type_swipe">No password</string>
+    <string name="settings_wake_unlock_type_pin">PIN</string>
+    <string name="settings_wake_unlock_type_gesture">Manual recording</string>
+    <string name="settings_wake_swipe_desc">Turns the screen on and dismisses the lock screen directly. Works only when no password is set (no lock or swipe to enter). If a PIN, pattern or password is set, use Manual recording or PIN instead</string>
+    <string name="schedule_wake_unlock_title">Wake &amp; Unlock</string>
+    <string name="schedule_wake_unlock_desc">When a scheduled task fires while the device is locked, it unlocks using the method below. Manually started tasks are not affected.</string>
+    <string name="settings_wake_credential">PIN</string>
+    <string name="settings_wake_credential_hint">4–16 digits</string>
+    <string name="settings_wake_credential_warning">Pattern and alphanumeric passwords are not supported</string>
+    <string name="settings_wake_test_button">Test</string>
+    <string name="settings_wake_test_hint">Lock first, then auto-unlock after ~0.5s</string>
+    <string name="wake_result_ok">Wake + unlock succeeded</string>
+    <string name="wake_result_wake_failed">Screen would not turn on</string>
+    <string name="wake_result_credential_required">A PIN is required for this lock screen</string>
+    <string name="wake_result_credential_rejected">Unlock failed; stopped retrying to avoid a lockout. Check that the PIN is correct; when fingerprint unlock is enabled the system may intercept PIN entry and prevent automatic unlocking</string>
+    <string name="wake_result_no_keyguard">No lock screen set; unlocking is not needed</string>
+    <string name="wake_result_unsupported">Not supported on this system</string>
+    <string name="wake_result_lock_failed">Could not enter lock screen</string>
+    <string name="wake_result_ipc_failed">Elevated service not connected</string>
+    <string name="wake_result_unknown">Unlock failed (code %1$d)</string>
+    <string name="wake_result_gesture_empty">No unlock gesture recorded yet</string>
+    <string name="wake_result_gesture_screen_mismatch">Screen orientation or resolution differs from the recording; please record again</string>
+    <string name="wake_result_record_no_device">Cannot read the touchscreen input device on this system; use the Root backend or a PIN instead</string>
+    <string name="wake_result_record_timeout">Timed out waiting for the unlock; recording ended</string>
+    <string name="wake_result_record_cancelled">Recording cancelled</string>
+    <string name="wake_result_record_no_touch">No touch input was captured. Fingerprint and face unlock bypass the touchscreen and cannot be recorded — use your pattern or password while recording</string>
+    <string name="settings_wake_gesture_none">Not recorded yet</string>
+    <string name="settings_wake_gesture_summary">%1$d steps · %2$d×%3$d</string>
+    <string name="settings_wake_gesture_record">Start recording</string>
+    <string name="settings_wake_gesture_rerecord">Record again</string>
+    <string name="settings_wake_gesture_clear">Clear</string>
+    <string name="settings_wake_gesture_cancel">Cancel recording</string>
+    <string name="settings_wake_gesture_hint">The screen locks and then wakes automatically; just unlock once as you normally would. Recording ends automatically when the device unlocks</string>
+    <string name="settings_wake_gesture_preparing">Locking and waking the screen…</string>
+    <string name="settings_wake_gesture_waiting">Screen is on — please unlock once</string>
+    <string name="settings_wake_gesture_done">Recorded %1$d steps; run Test once to verify</string>
+    <string name="settings_wake_gesture_save_failed">Gesture recorded but could not be saved; please record again</string>
+    <string name="settings_wake_gesture_warning">Single-finger gestures only; fingerprint and face unlock are not supported. The trace is equivalent to your lock credential — it stays in the app private directory and is excluded from config export</string>
+    <string name="settings_wake_gesture_step_tap">Tap (%1$d, %2$d)</string>
+    <string name="settings_wake_gesture_step_long_press">Long press (%1$d, %2$d) %3$d ms</string>
+    <string name="settings_wake_gesture_step_swipe">Swipe (%1$d, %2$d) → (%3$d, %4$d) %5$d ms</string>
+    <string name="settings_wake_gesture_step_delay">Wait %1$d ms</string>
+    <string name="settings_wake_gesture_test_hint">Locks first, then replays the recorded gesture after ~1s</string>
+    <!-- Settings search; search_keywords_* are space separated synonyms, matched but never shown -->
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_clear">Clear search</string>
+    <string name="settings_search_empty">No matching settings</string>
+    <string name="search_keywords_update">update upgrade version auto update check</string>
+    <string name="search_keywords_wallpaper">background wallpaper picture image custom blur</string>
+    <string name="search_keywords_ui_scale">scale zoom font size text density</string>
+    <string name="search_keywords_live">hyperisland island live update status bar chip progress style focus</string>
+    <string name="search_keywords_theme">theme dark night black amoled light appearance color</string>
+    <string name="search_keywords_language">language chinese english locale</string>
+    <string name="search_keywords_duration">duration timeout time limit auto stop</string>
+    <string name="search_keywords_notification">notification push alert message telegram email bark webhook</string>
+    <string name="search_keywords_backend">startup mode backend shizuku root privilege authorization</string>
+    <string name="search_keywords_resolution">resolution size screen dpi</string>
+    <string name="search_keywords_about">about version license repository contact</string>
+    <string name="search_keywords_run_mode">run mode foreground background virtual display</string>
+    <string name="search_keywords_overlay">overlay floating ball control accessibility</string>
+    <string name="search_keywords_permissions">permission authorization overlay battery whitelist notification accessibility storage</string>
+    <string name="search_keywords_screen_saver">screen saver blackout display off power saving</string>
 </resources>

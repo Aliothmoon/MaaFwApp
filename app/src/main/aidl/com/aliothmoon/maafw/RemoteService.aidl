@@ -3,6 +3,7 @@ package com.aliothmoon.maafw;
 import android.view.Surface;
 import com.aliothmoon.maafw.ITouchEventCallback;
 import com.aliothmoon.maafw.IMaaRunnerCallback;
+import com.aliothmoon.maafw.ITextInputSink;
 
 /**
  * 特权进程的服务面（docs/privileged-runtime.md §6）
@@ -103,6 +104,12 @@ interface RemoteService {
     /** MaaFramework 版本；未加载返回 null */
     String maaVersion() = 54;
 
+    /**
+     * MaaGlobalOption_SaveOnError：节点出错时把现场截图落到 logDir/on_error
+     * app 每轮 setup 后现读设置再调；框架核心默认 false，不设就永远不存
+     */
+    boolean setSaveOnError(boolean enabled) = 55;
+
     /** 看门狗状态：0=IDLE / 1=WATCHING / 2=APP_DIED（目标 app 是否仍在虚拟屏上） */
     int watchdogState() = 60;
 
@@ -139,6 +146,41 @@ interface RemoteService {
      */
     boolean saveCachedImage(String path) = 75;
 
+    /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
+    float getGameFps() = 76;
+    /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */
+    oneway void setTextInputSink(ITextInputSink sink) = 77;
+
+    // ── 解锁手势（docs/scheduled-triggers.md）──
+    // 录制整段在特权进程里跑：要锁屏、读 /dev/input 原始触摸，app 侧那时多半已被挂起
+
+    /** 开始录制：锁屏息屏 → 亮屏 → 等用户解锁一次；立即返回，结果靠轮询取 */
+    oneway void startGestureRecord(int timeoutMs) = 78;
+
+    /** 录制状态快照，GestureRecordResult 的 JSON；终态被读走一次后回到 IDLE */
+    String pollGestureRecord() = 79;
+
+    oneway void cancelGestureRecord() = 80;
+
+    /** 按录好的手势解锁；gestureJson 是 UnlockGesture 的 JSON */
+    int unlockWithGesture(String gestureJson) = 81;
+
+    /** 设置页自测：先上锁息屏再按手势解一次 */
+    int testUnlockGesture(String gestureJson) = 82;
+
+    // ── 系统显示设置 ──
+
+    /** 荣耀「智能分辨率」是否开着（global low_resolution_switch）；开着时后台模式识别会出错 */
+    boolean isSmartResolutionEnabled() = 83;
+
+    // ── 运行通知 ──
+
+    /**
+     * 断开 / 恢复某个包的联网；只认 com.xiaomi.xmsf，别的包一律拒绝
+     *
+     * 超级岛的云端鉴权断网即放行，运行通知选「超级岛」时在进度通知期间断开它
+     */
+    boolean setPackageNetworkingEnabled(String packageName, boolean enabled) = 84;
     /** 确认特权进程里等待的 blocking modal；未知或已释放的 id 返回 false */
-    boolean acknowledgeModalFocus(String focusId) = 76;
+    boolean acknowledgeModalFocus(String focusId) = 85;
 }

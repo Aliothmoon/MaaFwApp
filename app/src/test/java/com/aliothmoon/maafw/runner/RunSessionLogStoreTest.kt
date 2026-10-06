@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -71,6 +72,19 @@ class RunSessionLogStoreTest {
         assertEquals(3, info.taskCount)
         assertEquals(START / 1000, info.startedAt / 1000)
         assertTrue(info.sizeBytes > 0)
+    }
+
+    @Test
+    fun `same-second sessions with the same task count get distinct files`() = runBlocking {
+        checkNotNull(store.open(START, listOf("a"))).close()
+        checkNotNull(store.open(START, listOf("a"))).close()
+
+        val names = sessionFiles().map { it.name }
+        assertEquals(2, names.size)
+        assertNotEquals(names[0], names[1])
+        val summaries = store.list()
+        assertEquals(listOf(START, START), summaries.map { it.startedAt })
+        assertEquals(listOf(1, 1), summaries.map { it.taskCount })
     }
 
     /** 被杀进程会留下半行；那一行跳过就是了，不该毁掉前面几百条 */

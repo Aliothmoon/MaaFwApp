@@ -267,7 +267,7 @@ class FocusDialogControllerTest {
         val DEFINITION = ProjectDefinition(
             name = "demo",
             version = "1",
-            controller = ControllerDefinition(),
+            controllers = listOf(ControllerDefinition()),
             resources = emptyList(),
             tasks = emptyList(),
             groups = emptyList(),

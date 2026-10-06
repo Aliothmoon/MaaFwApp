@@ -20,7 +20,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -30,6 +29,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.log.AppLogDetailViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.ui.components.ListPlaceholder
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -70,45 +70,34 @@ fun AppLogDetailScreen(
             )
         },
     ) { padding ->
-        if (state.lines.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(MaaDesignTokens.Spacing.lg),
-                contentAlignment = Alignment.TopStart,
-            ) {
-                Text(
-                    text = stringResource(
-                        if (state.loading) R.string.common_loading else R.string.app_log_empty,
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            return@Scaffold
-        }
-
         // 在列表外算一次：给 Text 传 fontFamily 会每行每次重组合成一份新 TextStyle
         val lineStyle = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace)
         val errorColor = MaterialTheme.colorScheme.error
         val warningColor = MaaTheme.palette.warning.content
 
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = MaaDesignTokens.Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
-            contentPadding = PaddingValues(vertical = MaaDesignTokens.Spacing.lg),
+                .padding(padding),
         ) {
-            // 行序固定（只读快照），索引就是稳定 key
-            itemsIndexed(state.lines) { _, line ->
-                Text(
-                    text = line,
-                    style = lineStyle,
-                    color = appLogLineColor(line, errorColor, warningColor),
-                )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = MaaDesignTokens.Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+                contentPadding = PaddingValues(vertical = MaaDesignTokens.Spacing.lg),
+            ) {
+                // 行序固定（只读快照），索引就是稳定 key
+                itemsIndexed(state.lines) { _, line ->
+                    Text(
+                        text = line,
+                        style = lineStyle,
+                        color = appLogLineColor(line, errorColor, warningColor),
+                    )
+                }
+            }
+            if (state.lines.isEmpty()) {
+                ListPlaceholder(if (state.loading) R.string.common_loading else R.string.app_log_empty)
             }
         }
     }
