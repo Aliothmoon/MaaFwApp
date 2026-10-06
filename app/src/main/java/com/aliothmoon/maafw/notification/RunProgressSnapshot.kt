@@ -14,6 +14,9 @@ data class RunProgressSnapshot(
     val progress: Int,
     val indeterminate: Boolean,
     val barColor: Int,
+    /** 超级岛分栏用：当前任务名与状态句各占一栏，[contentText] 是三者拼好的一行 */
+    val taskLabel: String? = null,
+    val statusLine: String? = null,
 )
 
 enum class RunProgressTitle {
@@ -60,6 +63,8 @@ object RunProgressSnapshots {
             },
             indeterminate = indeterminate,
             barColor = BAR_COLOR,
+            taskLabel = taskLabel,
+            statusLine = status,
         )
     }
 

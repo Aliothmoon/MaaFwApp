@@ -1,29 +1,37 @@
 package com.aliothmoon.maafw.remote
 
 import com.aliothmoon.maafw.IMaaRunnerCallback
+import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.ITouchEventCallback
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.bridge.InputControlUtils
 import com.aliothmoon.maafw.bridge.NativeBridgeLib
+import com.aliothmoon.maafw.bridge.TextInputDispatcher
+import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
 import com.aliothmoon.maafw.remote.internal.AppWatchdog
+import com.aliothmoon.maafw.remote.internal.GameFpsMonitor
+import com.aliothmoon.maafw.remote.internal.GestureRecorder
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.remote.internal.ScreenManager
+import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
+import com.aliothmoon.maafw.remote.internal.XmsfFirewall
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.Workarounds
 import android.view.Surface
 import android.os.Process
+import android.provider.Settings
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -44,10 +52,15 @@ class RemoteServiceImpl : RemoteService.Stub() {
     // host 的 lambda 到真正有输出时才读 runner，那会儿它早已建好
     private val runner: MaaRunner by lazy { MaaRunner(agentHost) }
     private val agentHost: ExecAgentHost by lazy {
-        ExecAgentHost { line, fromStderr ->
-            runner.onAgentLine(line, fromStderr)
-        }
+        ExecAgentHost(
+            onOutput = { line, fromStderr -> runner.onAgentLine(line, fromStderr) },
+            onExit = { runner.onAgentExited(it) },
+            crashDir = { logDir?.let { File(it, AppFiles.CRASH_DIR) } },
+        )
     }
+
+    @Volatile
+    private var logDir: String? = null
 
     init {
         RemoteBootTrace.mark("CTOR_START")
@@ -56,14 +69,18 @@ class RemoteServiceImpl : RemoteService.Stub() {
             Thread { runCatching(::cleanup) }.apply { name = "remote-shutdown-hook" }
         )
         startHeartbeatWatchdog()
+        // 上一实例可能断了 xmsf 的网没来得及恢复（被杀、崩溃），规则在 netd 里不随进程消失；
+        // 要跑 shell，挪到后台线程，构造函数不能拖
+        Thread { runCatching(XmsfFirewall::ensureRestored) }.apply { name = "xmsf-boot-restore" }.start()
         RemoteBootTrace.mark("CTOR_DONE")
     }
 
     override fun destroy() {
         if (!destroyed.compareAndSet(false, true)) return
         Ln.i("$TAG: destroy()")
-        AppWatchdog.stopWatching()
+        stopDisplayWatchers()
         InputControlUtils.setTouchCallback(null)
+        TextInputDispatcher.sink = null
         runner.destroy()
         cleanup()
         exitProcess(0)
@@ -94,21 +111,40 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun lockAndSleep(): Int = WakeUnlockController.lockAndSleep()
 
+    override fun startGestureRecord(timeoutMs: Int) = GestureRecorder.start(timeoutMs)
+
+    override fun pollGestureRecord(): String = GestureRecorder.poll()
+
+    override fun cancelGestureRecord() = GestureRecorder.cancel()
+
+    override fun unlockWithGesture(gestureJson: String?): Int =
+        WakeUnlockController.unlockWithGesture(gestureJson.orEmpty())
+
+    override fun testUnlockGesture(gestureJson: String?): Int =
+        WakeUnlockController.testUnlockGesture(gestureJson.orEmpty())
+
     override fun isScreenOn(): Boolean =
         runCatching { ServiceManager.getPowerManager().isScreenOn(0) }.getOrDefault(true)
+
+    override fun isSmartResolutionEnabled(): Boolean = try {
+        Settings.Global.getInt(FakeContext.get().contentResolver, "low_resolution_switch", 0) == 1
+    } catch (e: Exception) {
+        Ln.w("$TAG: read low_resolution_switch failed", e)
+        false
+    }
+
+    override fun setPackageNetworkingEnabled(packageName: String?, enabled: Boolean): Boolean {
+        if (packageName.isNullOrBlank()) return false
+        return XmsfFirewall.setNetworkingEnabled(packageName, enabled)
+    }
 
     override fun stopTargetApp(): Boolean {
         val target = AppWatchdog.targetPackage ?: run {
             Ln.i("$TAG: stopTargetApp skipped, watchdog never acquired a target")
             return false
         }
-        return runCatching {
-            ServiceManager.getActivityManager().forceStopPackage(target)
-            Ln.i("$TAG: force-stopped $target")
-            true
-        }.getOrElse {
-            Ln.w("$TAG: stopTargetApp failed: ${'$'}it")
-            false
+        return ActivityUtils.forceStop(target, VirtualDisplayManager.getDisplayId()).also { stopped ->
+            if (stopped) Ln.i("$TAG: force-stopped $target")
         }
     }
 
@@ -127,13 +163,20 @@ class RemoteServiceImpl : RemoteService.Stub() {
         // Android 12 起子进程会被 phantom process killer 收割，接 native 前先关掉
         // agent child 同样吃这条：它是特权进程 fork 出来的，不关就会被一起收走
         PermissionGrantHelper.disablePhantomProcessKiller()
+        runCatching(StaleAgentReaper::reapOnce).onFailure { Ln.w("$TAG: reap stale agents failed: ${it.message}") }
         // 特权进程是 shell/root 身份，app 建的目录未必可写，这里自己建一遍
         if (!logDir.isNullOrBlank() && ensureWritableDir(logDir)) {
+            this.logDir = logDir
             runner.applyGlobalOptions(logDir, isDebug)
         } else {
             Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")
         }
         Ln.i("$TAG: setup ok, piRoot=$piRoot")
+        return true
+    }
+
+    override fun setSaveOnError(enabled: Boolean): Boolean {
+        runner.setSaveOnError(enabled)
         return true
     }
 
@@ -150,6 +193,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun setVirtualDisplayMode(mode: Int): Boolean = when (mode) {
         DisplayMode.PRIMARY -> {
+            GameFpsMonitor.stop()
             VirtualDisplayManager.stop()
             virtualDisplayMode.set(mode)
             true
@@ -180,7 +224,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     override fun stopVirtualDisplay() {
-        AppWatchdog.stopWatching()
+        stopDisplayWatchers()
+        GameFpsMonitor.stop()
         when (virtualDisplayMode.get()) {
             DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
             DisplayMode.BACKGROUND -> {
@@ -198,7 +243,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun isAppOnVirtualDisplay(packageName: String): Boolean {
         val displayId = VirtualDisplayManager.getDisplayId()
         if (displayId == DefaultDisplayConfig.DISPLAY_NONE) return true
-        return ActivityUtils.isAppOnDisplay(packageName, displayId)
+        return ActivityUtils.isAppOnDisplay(packageName, displayId).also { onDisplay ->
+            if (onDisplay) GameFpsMonitor.ensureStarted(packageName)
+        }
     }
 
     override fun moveAppToVirtualDisplay(packageName: String): Boolean {
@@ -248,6 +295,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
         InputControlUtils.setTouchCallback(callback)
     }
 
+    override fun setTextInputSink(sink: ITextInputSink?) {
+        TextInputDispatcher.sink = sink
+    }
+
     // ── 预览上的手动操作；主屏模式下不接管输入 ──
 
     override fun touchDown(x: Int, y: Int, contact: Int) =
@@ -276,20 +327,31 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun startRun(runPlanJson: String?): Boolean {
         if (runPlanJson.isNullOrBlank()) return false
+        StaleFrameGuard.blankIfVacant()
         val started = runner.start(runPlanJson)
-        if (started) AppWatchdog.startWatching()
+        if (started) {
+            AppWatchdog.startWatching()
+            StaleFrameGuard.start(runner::isRunning)
+        }
         return started
     }
 
     override fun stopRun(): Boolean {
-        AppWatchdog.stopWatching()
+        stopDisplayWatchers()
         return runner.stop()
+    }
+
+    private fun stopDisplayWatchers() {
+        AppWatchdog.stopWatching()
+        StaleFrameGuard.stop()
     }
 
     override fun isRunning(): Boolean = runner.isRunning()
 
     override fun saveCachedImage(path: String?): Boolean =
         !path.isNullOrBlank() && runner.saveCachedImage(path)
+
+    override fun getGameFps(): Float = GameFpsMonitor.currentFps()
 
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
 
@@ -300,6 +362,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun grantPermissions(packageName: String?, uid: Int, permissions: Int): Int {
         if (packageName.isNullOrBlank()) return 0
         var granted = 0
+        // 结果不进返回位免改 AIDL 返回协议；放开失败由 App 侧预检兜底
+        if (permissions and PrivilegedGrant.FGS_SPECIAL_USE != 0) {
+            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName)
+        }
         if (permissions and PrivilegedGrant.NOTIFICATION != 0 &&
             PermissionGrantHelper.grantNotificationPermission(packageName, uid)
         ) {
@@ -351,14 +417,34 @@ class RemoteServiceImpl : RemoteService.Stub() {
      * 它自己按 flag 文件判要不要动手，没改过时是空操作
      */
     private fun cleanup() {
+        step("game fps") { GameFpsMonitor.stop() }
         step("screen size") { ScreenManager.destroy() }
         step("power") { PowerController.destroy() }
         step("primary display") { PrimaryDisplayManager.stop() }
         step("virtual display") { VirtualDisplayManager.stop() }
+        step("preview") { shutdownPreview() }
+        step("xmsf") { XmsfFirewall.restoreIfNeeded() }
     }
 
     private inline fun step(name: String, action: () -> Unit) {
         runCatching(action).onFailure { Ln.e("$TAG: cleanup $name failed: ${it.message}") }
+    }
+
+    /**
+     * 退出前断开预览 Surface：SurfaceView 的缓冲队列认不出 producer 进程死了，不断开的话
+     * 这块 Surface 会一直算在本进程头上，下一个特权进程 `eglCreateWindowSurface` 报 already connected
+     *
+     * 排在最后且限时：渲染线程可能正卡在 swap 上，等不到就走，不能拖住前面那几项和进程退出
+     */
+    private fun shutdownPreview() {
+        if (!NativeBridgeLib.LOADED) return
+        val worker = Thread { NativeBridgeLib.shutdownPreview() }.apply {
+            name = "preview-shutdown"
+            isDaemon = true
+            start()
+        }
+        worker.join(PREVIEW_SHUTDOWN_TIMEOUT_MS)
+        if (worker.isAlive) Ln.w("$TAG: preview shutdown still running after ${PREVIEW_SHUTDOWN_TIMEOUT_MS}ms, leaving it")
     }
 
     /**
@@ -390,5 +476,6 @@ class RemoteServiceImpl : RemoteService.Stub() {
     private companion object {
         const val TAG = "RemoteService"
         const val HEARTBEAT_INTERVAL_MS = 5_000L
+        const val PREVIEW_SHUTDOWN_TIMEOUT_MS = 1_000L
     }
 }

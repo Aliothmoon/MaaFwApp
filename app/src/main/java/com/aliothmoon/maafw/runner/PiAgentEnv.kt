@@ -22,7 +22,11 @@ object PiAgentEnv {
     /** 按哪一版协议注入这些变量；不表示外壳实现了 v2.5.0 的全部内容 */
     private const val INTERFACE_VERSION = "v2.5.0"
 
+    private const val CLIENT_NAME_KEY = "PI_CLIENT_NAME"
     private const val CLIENT_NAME = "MaaFwApp"
+
+    /** StaleAgentReaper 认孤儿的标记；改了会漏认旧版留下的 child */
+    const val CLIENT_ENV_ENTRY = "$CLIENT_NAME_KEY=$CLIENT_NAME"
 
     private val compact = Json { encodeDefaults = true }
 
@@ -35,7 +39,7 @@ object PiAgentEnv {
         clientLanguage: String?,
     ): Map<String, String> = buildMap {
         put("PI_INTERFACE_VERSION", INTERFACE_VERSION)
-        put("PI_CLIENT_NAME", CLIENT_NAME)
+        put(CLIENT_NAME_KEY, CLIENT_NAME)
         clientVersion?.takeIf(String::isNotBlank)?.let { put("PI_CLIENT_VERSION", it) }
         clientLanguage?.takeIf(String::isNotBlank)?.let { put("PI_CLIENT_LANGUAGE", it) }
         projectVersion?.takeIf(String::isNotBlank)?.let { put("PI_VERSION", it) }

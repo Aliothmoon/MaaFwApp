@@ -8,6 +8,7 @@ import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.register
+import java.util.zip.ZipFile
 
 /**
  * The chain that syncs the external PI project into a single archive; apply after
@@ -60,6 +61,11 @@ class PiAssetsConventionPlugin : Plugin<Project> {
                 destinationDirectory.set(packedDir)
                 archiveFileName.set("pi.zip")
                 includeEmptyDirs = false
+                doLast {
+                    val archive = archiveFile.get().asFile
+                    val entries = ZipFile(archive).use { it.size() }
+                    logger.lifecycle("PI archive pi.zip  ${archive.length().toSizeText()}  $entries entries")
+                }
             }
 
             tasks.named("preBuild") {

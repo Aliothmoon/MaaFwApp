@@ -38,18 +38,22 @@ fun MaaChoiceChip(
     leading: (@Composable () -> Unit)? = null,
     role: Role? = null,
 ) {
+    // 点击修饰符在 Surface 的形状裁剪之外，按下高亮要按同一形状画，否则四角露出方块
+    val shape = RoundedCornerShape(MaaTheme.style.radii.button)
     val interactionModifier = if (role == null) {
-        Modifier.maaClickable(enabled = enabled, onClick = onClick)
+        Modifier.maaClickable(enabled = enabled, shape = shape, onClick = onClick)
     } else {
         Modifier.selectable(
             selected = selected,
             enabled = enabled,
             role = role,
+            interactionSource = null,
+            indication = MaaPressIndication(shape),
             onClick = onClick,
         )
     }
     Surface(
-        shape = RoundedCornerShape(MaaTheme.style.radii.button),
+        shape = shape,
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {

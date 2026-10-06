@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,13 +27,16 @@ import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.standardSwitchCases
 import com.aliothmoon.maafw.domain.validateInputCandidate
+import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
+import com.aliothmoon.maafw.ui.components.MaaFieldLabel
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 
 /**
@@ -46,6 +50,8 @@ fun OptionEditorList(
     onSetOption: (String, OptionValue) -> Unit,
     modifier: Modifier = Modifier,
     carded: Boolean = false,
+    /** 设置搜索的锚点；只给顶层选项，子选项要父选项选到某支才出现，定位不到 */
+    searchAnchor: ((OptionEditorState) -> String)? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -54,10 +60,17 @@ fun OptionEditorList(
         ),
     ) {
         options.forEach { option ->
-            if (carded) {
-                CardedOptionItem(option, locked, onSetOption)
+            val item: @Composable () -> Unit = {
+                if (carded) {
+                    CardedOptionItem(option, locked, onSetOption)
+                } else {
+                    OptionEditorItem(option, locked, onSetOption)
+                }
+            }
+            if (searchAnchor != null && option.depth == 0) {
+                SettingSearchTarget(searchAnchor(option)) { item() }
             } else {
-                OptionEditorItem(option, locked, onSetOption)
+                item()
             }
         }
     }
@@ -145,7 +158,12 @@ private fun optionLabelStyle(depth: Int) = when {
 private fun optionIconSize(depth: Int): Dp =
     if (depth <= 2) MaaDesignTokens.IconSize.sm else MaaDesignTokens.IconSize.xs
 
-/** 选项树靠缩进对齐，无图标就不占位——补空槽反而让同层的行左缘错开 */
+/**
+ * 选项树靠缩进对齐，无图标就不占位——补空槽反而让同层的行左缘错开
+ *
+ * 这是「标签在上、选择在下」的那种：首层跟 [MaaFieldLabel] 同款（设置页「主题」那样），
+ * 按 bodyLarge 排会比同页的字段标签大一号；开关行不走这里，它和设置页的开关行同款
+ */
 @Composable
 private fun OptionLabelRow(option: OptionEditorState) {
     Row(
@@ -153,7 +171,11 @@ private fun OptionLabelRow(option: OptionEditorState) {
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
     ) {
         MaaPiIcon(option.icon, optionIconSize(option.depth), null)
-        Text(text = option.label, style = optionLabelStyle(option.depth))
+        if (option.depth <= 1) {
+            MaaFieldLabel(option.label)
+        } else {
+            Text(text = option.label, style = optionLabelStyle(option.depth))
+        }
     }
 }
 
@@ -251,22 +273,35 @@ private fun CheckboxCases(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
 ) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-    ) {
-        val activeNames = option.activeCases.map { it.name }
-        option.cases.forEach { case ->
-            MaaChoiceChip(
-                label = case.label,
-                selected = case.active,
-                enabled = !locked,
-                leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
-                onClick = {
-                    val updated = if (case.active) activeNames - case.name else activeNames + case.name
-                    // emptyList() 合法，与 Unset 区分
-                    onSetOption(option.name, OptionValue.MultipleCases(updated))
+    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs)) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            val activeNames = option.activeCases.map { it.name }
+            option.cases.forEach { case ->
+                MaaChoiceChip(
+                    label = case.label,
+                    selected = case.active,
+                    enabled = !locked && option.canToggle(case),
+                    leading = case.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.xs, null) } },
+                    onClick = {
+                        val updated = if (case.active) activeNames - case.name else activeNames + case.name
+                        // emptyList() 合法，与 Unset 区分
+                        onSetOption(option.name, OptionValue.MultipleCases(updated))
+                    },
+                )
+            }
+        }
+        option.countRule?.let { rule ->
+            Text(
+                text = rule.asString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (option.belowMinCount) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
         }
@@ -319,6 +354,8 @@ private fun InputFields(
                 isError = !valid,
                 enabled = !locked,
                 singleLine = true,
+                visualTransformation = field.visualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = field.keyboardType()),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
