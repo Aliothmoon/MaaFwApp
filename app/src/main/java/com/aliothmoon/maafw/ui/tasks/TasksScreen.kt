@@ -1,5 +1,8 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import androidx.compose.runtime.LaunchedEffect
+import com.aliothmoon.maafw.settings.search.SettingLocation
+import com.aliothmoon.maafw.ui.settings.search.pendingSearchLocation
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import android.graphics.Rect
@@ -34,7 +37,7 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.RunLogEntry
+import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
@@ -60,7 +63,7 @@ fun TasksScreen(
     isActivePage: Boolean,
     pipOnHome: Boolean,
     /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
-    runLog: () -> List<RunLogEntry>,
+    runLog: () -> RunLogSnapshot,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
@@ -116,7 +119,7 @@ private fun TasksContent(
     previewContent: (@Composable () -> Unit)?,
     isActivePage: Boolean,
     pipOnHome: Boolean,
-    runLog: () -> List<RunLogEntry>,
+    runLog: () -> RunLogSnapshot,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
@@ -126,6 +129,11 @@ private fun TasksContent(
     // 日志面板开合态提到这一层：开始运行要顺带弹起日志，启停条（RunnerToggleButton）
     // 与日志开关（ConfigurationSelectorRow）得共享同一状态，所以归 TasksContent 持有
     var showLog by rememberSaveable { mutableStateOf(false) }
+    // 设置搜索点中的是快捷面板里的项：面板是本页的局部状态，只能由本页自己打开
+    val searchLocation = pendingSearchLocation()
+    LaunchedEffect(searchLocation) {
+        if (searchLocation == SettingLocation.TasksQuickOptions) showQuickOptions = true
+    }
 
     // 小窗里只让出画面，本页其余部分照常组合——拆掉的话展开时要整页重组，
     // 列表滚动与面板开合也跟着丢

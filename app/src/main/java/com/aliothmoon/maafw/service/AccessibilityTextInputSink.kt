@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.service
 
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.constant.TextInputResult
@@ -39,10 +40,17 @@ class AccessibilityTextInputSink(
     }
 }
 
-internal fun textInputFailureMessage(result: Int, targetPackage: String): UiText? = when (result) {
+internal fun textInputFailureMessage(
+    result: Int,
+    targetPackage: String,
+    foregroundAllowed: Boolean = BuildConfig.MAFW_FOREGROUND_ALLOWED,
+): UiText? = when (result) {
     TextInputResult.OK -> null
     TextInputResult.SERVICE_UNAVAILABLE -> uiTextOf(R.string.text_input_accessibility_unavailable)
-    TextInputResult.UNSUPPORTED_DISPLAY -> uiTextOf(R.string.text_input_unsupported_display)
+    TextInputResult.UNSUPPORTED_DISPLAY -> uiTextOf(
+        if (foregroundAllowed) R.string.text_input_unsupported_display
+        else R.string.text_input_unsupported_display_background_only
+    )
     TextInputResult.NO_FOCUSED_INPUT -> uiTextOf(R.string.text_input_no_focused_input)
     TextInputResult.FOREIGN_PACKAGE -> uiTextOf(R.string.text_input_foreign_package, targetPackage)
     else -> uiTextOf(R.string.text_input_action_failed)

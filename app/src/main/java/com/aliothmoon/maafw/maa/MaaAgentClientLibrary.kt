@@ -18,6 +18,16 @@ interface MaaAgentClientLibrary : Library {
 
     fun MaaAgentClientBindResource(client: Pointer?, res: Pointer?): Byte
 
+    /**
+     * 把该对象的事件转给 agent，agent 侧 `MaaAgentServerAdd*Sink` 的监听器才收得到
+     * client 只记裸指针：再次登记、Disconnect、Destroy 都会对上一次登记的对象 remove_sink
+     */
+    fun MaaAgentClientRegisterResourceSink(client: Pointer?, res: Pointer?): Byte
+
+    fun MaaAgentClientRegisterControllerSink(client: Pointer?, ctrl: Pointer?): Byte
+
+    fun MaaAgentClientRegisterTaskerSink(client: Pointer?, tasker: Pointer?): Byte
+
     /** 阻塞直到 child 侧 StartUp 完成或超时；超时由 [MaaAgentClientSetTimeout] 决定 */
     fun MaaAgentClientConnect(client: Pointer?): Byte
 

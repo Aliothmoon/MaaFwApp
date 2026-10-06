@@ -51,6 +51,9 @@ interface PreviewPort {
     /** 注入到虚拟屏的触点，供预览叠加显示；纯视觉信号，不进 SessionUiState */
     val markers: StateFlow<List<PreviewTouchMarker>>
 
+    /** 变了就得换一块 Surface 再 [attachSurface]：手上这块交给过别的特权进程，不能再用 */
+    val surfaceEpoch: StateFlow<Int>
+
     fun attachSurface(surface: Surface)
     fun detachSurface()
 
@@ -66,8 +69,12 @@ interface PreviewPort {
 }
 
 /**
- * Surface 通常在 Start 之前就绪，那时特权进程还没绑定，因此这里缓存最后一个 Surface，
- * 每次连上（含 binder 死后重连）都补发一次；不补发的话预览会一直是黑的
+ * Surface 通常在 Start 之前就绪，那时特权进程还没绑定，因此这里缓存最后一个 Surface，连上时补发；
+ * 不补发的话预览会一直是黑的
+ *
+ * 补发只发给第一个拿到它的特权进程。换了一个进程（重载服务、binder 死后重连）就不能再发同一块：
+ * SurfaceView 的缓冲队列认不出 producer 进程死了，上一个进程的 EGL 连接会一直占着它，
+ * 新进程 `eglCreateWindowSurface` 报 already connected，预览从此不动。这时改为推进 [surfaceEpoch] 让 UI 换一块
  *
  * 触点回调与 Surface 同生共死：没有预览面时特权进程不必跨进程发这些事件。
  * [touchPreviewEnabled] 关着时同样不注册——一次滑动能连发几十条 oneway 调用，
@@ -80,6 +87,13 @@ class RemotePreviewPort(
 ) : PreviewPort {
 
     private val current = AtomicReference<Surface?>(null)
+
+    /** [current] 交给过的特权进程；按代理对象认，每次连上都是新的 */
+    private var handedTo: RemoteService? = null
+
+    private val _surfaceEpoch = MutableStateFlow(0)
+    override val surfaceEpoch: StateFlow<Int> = _surfaceEpoch.asStateFlow()
+
     private val markerId = AtomicLong(0L)
     private var cleanupJob: Job? = null
 
@@ -126,12 +140,17 @@ class RemotePreviewPort(
     }
 
     override fun attachSurface(surface: Surface) {
-        current.set(surface)
+        synchronized(this) {
+            if (current.getAndSet(surface) !== surface) handedTo = null
+        }
         push(surface)
     }
 
     override fun detachSurface() {
-        current.set(null)
+        synchronized(this) {
+            current.set(null)
+            handedTo = null
+        }
         push(null)
         clearMarkers()
     }
@@ -151,6 +170,17 @@ class RemotePreviewPort(
     /** 未绑定时静默跳过：连上时 init 里的 collect 会补发 */
     private fun push(surface: Surface?) {
         val service = servicePort.serviceOrNull() ?: return
+        synchronized(this) {
+            if (surface != null) {
+                val previous = handedTo
+                if (previous != null && previous !== service) {
+                    _surfaceEpoch.update { it + 1 }
+                    return
+                }
+                // 调用失败也记：对面可能已经连上了这块 Surface，宁可多换一块
+                handedTo = service
+            }
+        }
         runCatching {
             service.setMonitorSurface(surface)
             service.setTouchCallback(callbackFor(surface))

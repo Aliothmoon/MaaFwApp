@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.ui.notification
 
+import com.aliothmoon.maafw.settings.search.SettingAnchors
+import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -50,7 +52,7 @@ import org.koin.androidx.compose.koinViewModel
 /**
  * 通知设置（二级页面）
  *
- * 三段：内部系统通知的档位、外部推送的触发条件、逐个渠道的凭据
+ * 四段：运行通知的展示方式、内部系统通知的档位、外部推送的触发条件、逐个渠道的凭据
  *
  * 自带 SnackbarHost 而不是把反馈甩给 `AppRoot`：测试发送的逐条结果只在这一页有意义，
  * 走 `SessionEffect` 会让用户离开页面后还在收上一页的提示
@@ -102,6 +104,7 @@ fun NotificationSettingsScreen(
             contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
+            item(key = "live") { RunNotificationCard(state, viewModel::onIntent) }
             item(key = "internal") { InternalCard(state, viewModel::onIntent) }
             item(key = "triggers") { TriggerCard(state, viewModel::onIntent) }
             items(NOTIFICATION_PROVIDER_ORDER, key = { it }) { id ->
@@ -118,17 +121,19 @@ private fun InternalCard(state: NotificationUiState, onIntent: (NotificationInte
     MaaCard(title = stringResource(R.string.notification_section_internal)) {
         // 三档枚举摊成两个开关：关掉整档与「要不要弹横幅」是两个决定，
         // 摆成三选一会让「关」和「静默」看着像同一列的两种提醒方式
-        MaaSwitchRow(
-            label = stringResource(R.string.notification_enable),
-            checked = enabled,
-            onCheckedChange = {
-                onIntent(
-                    NotificationIntent.SetEventLevel(
-                        if (it) EventNotificationLevel.DEFAULT else EventNotificationLevel.OFF,
-                    ),
-                )
-            },
-        )
+        SettingSearchTarget(SettingAnchors.NOTIFY_ENABLE) {
+            MaaSwitchRow(
+                label = stringResource(R.string.notification_enable),
+                checked = enabled,
+                onCheckedChange = {
+                    onIntent(
+                        NotificationIntent.SetEventLevel(
+                            if (it) EventNotificationLevel.DEFAULT else EventNotificationLevel.OFF,
+                        ),
+                    )
+                },
+            )
+        }
         AnimatedVisibility(visible = enabled) {
             Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
                 MaaSwitchRow(
@@ -158,26 +163,34 @@ private fun InternalCard(state: NotificationUiState, onIntent: (NotificationInte
 @Composable
 private fun TriggerCard(state: NotificationUiState, onIntent: (NotificationIntent) -> Unit) {
     MaaCard(title = stringResource(R.string.notification_section_external)) {
-        MaaSwitchRow(
-            label = stringResource(R.string.notification_send_on_complete),
-            checked = state.settings.sendOnComplete.toPrefBoolean(default = true),
-            onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(sendOnComplete = value.toString()) }) },
-        )
-        MaaSwitchRow(
-            label = stringResource(R.string.notification_send_on_error),
-            checked = state.settings.sendOnError.toPrefBoolean(default = true),
-            onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(sendOnError = value.toString()) }) },
-        )
-        MaaSwitchRow(
-            label = stringResource(R.string.notification_send_on_service_died),
-            checked = state.settings.sendOnServiceDied.toPrefBoolean(),
-            onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(sendOnServiceDied = value.toString()) }) },
-        )
-        MaaSwitchRow(
-            label = stringResource(R.string.notification_include_log_details),
-            checked = state.settings.includeLogDetails.toPrefBoolean(),
-            onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(includeLogDetails = value.toString()) }) },
-        )
+        SettingSearchTarget(SettingAnchors.NOTIFY_ON_COMPLETE) {
+            MaaSwitchRow(
+                label = stringResource(R.string.notification_send_on_complete),
+                checked = state.settings.sendOnComplete.toPrefBoolean(default = true),
+                onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(sendOnComplete = value.toString()) }) },
+            )
+        }
+        SettingSearchTarget(SettingAnchors.NOTIFY_ON_ERROR) {
+            MaaSwitchRow(
+                label = stringResource(R.string.notification_send_on_error),
+                checked = state.settings.sendOnError.toPrefBoolean(default = true),
+                onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(sendOnError = value.toString()) }) },
+            )
+        }
+        SettingSearchTarget(SettingAnchors.NOTIFY_ON_SERVICE_DIED) {
+            MaaSwitchRow(
+                label = stringResource(R.string.notification_send_on_service_died),
+                checked = state.settings.sendOnServiceDied.toPrefBoolean(),
+                onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(sendOnServiceDied = value.toString()) }) },
+            )
+        }
+        SettingSearchTarget(SettingAnchors.NOTIFY_LOG_DETAILS) {
+            MaaSwitchRow(
+                label = stringResource(R.string.notification_include_log_details),
+                checked = state.settings.includeLogDetails.toPrefBoolean(),
+                onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(includeLogDetails = value.toString()) }) },
+            )
+        }
     }
 }
 

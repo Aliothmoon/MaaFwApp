@@ -2,6 +2,9 @@ package com.aliothmoon.maafw.notification
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.notification.live.LiveCapabilityProbe
+import com.aliothmoon.maafw.notification.live.RunNotificationTester
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 通知设置页的 ViewModel
@@ -22,6 +26,8 @@ class NotificationSettingsViewModel(
     private val appSettingsManager: AppSettingsManager,
     private val externalService: ExternalNotificationService,
     private val eventNotifier: RunEventNotifier,
+    private val liveProbe: LiveCapabilityProbe,
+    private val liveTester: RunNotificationTester,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotificationUiState())
@@ -47,6 +53,13 @@ class NotificationSettingsViewModel(
         viewModelScope.launch {
             appSettingsManager.eventNotificationLevel.collect { level ->
                 _uiState.update { it.copy(eventLevel = level) }
+            }
+        }
+        // 选择变了，实际生效的那一档跟着重算
+        viewModelScope.launch {
+            appSettingsManager.liveBackend.collect { preference ->
+                _uiState.update { it.copy(livePreference = preference) }
+                refreshLive()
             }
         }
         viewModelScope.launch {
@@ -88,6 +101,20 @@ class NotificationSettingsViewModel(
 
             is NotificationIntent.SendExternalTest ->
                 externalService.sendTest(intent.title, intent.body)
+
+            is NotificationIntent.SetLiveBackend -> viewModelScope.launch {
+                appSettingsManager.setLiveBackend(intent.backend)
+            }
+
+            NotificationIntent.RefreshLiveCapability -> viewModelScope.launch { refreshLive() }
+
+            is NotificationIntent.SendLiveTest -> liveTester.send(intent.title, intent.body)
         }
+    }
+
+    /** 焦点通知权限是一次 ContentProvider 往返，不在主线程读 */
+    private suspend fun refreshLive() {
+        val capability = withContext(MaaDispatchers.IO) { liveProbe.refresh() }
+        _uiState.update { it.copy(live = capability) }
     }
 }

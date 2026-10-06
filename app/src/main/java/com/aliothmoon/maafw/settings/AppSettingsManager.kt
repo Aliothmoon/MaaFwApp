@@ -3,25 +3,35 @@ package com.aliothmoon.maafw.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.domain.EventNotificationLevel
 import com.aliothmoon.maafw.domain.OverlayControlMode
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.domain.UnlockCredential
+import com.aliothmoon.maafw.notification.live.LiveBackend
+import com.aliothmoon.maafw.runner.ResolutionPreset
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.ThemeStyle
+import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.wallpaper.WallpaperSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * app 设置的唯一读写入口
@@ -38,7 +48,50 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO)
 
     companion object {
-        private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")
+        // 文件坏了不兜就抛 CorruptionException，init 里的 collect 没人接，进程每次启动都崩；
+        // 回落默认值的代价是用户要重新选一遍后端等设置
+        private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+            name = "app_settings",
+            corruptionHandler = ReplaceFileCorruptionHandler {
+                Timber.e(it, "App settings file corrupted; resetting to defaults")
+                emptyPreferences()
+            },
+            produceMigrations = { listOf(WakeUnlockTypeMigration) },
+        )
+
+        /**
+         * 随配置导出、导入的设置：和这台设备无关、也不含凭据的那些
+         *
+         * 不在列：提权后端与 Shizuku 几项（换台设备不一定有 Root / Shizuku）、虚拟屏分辨率（看屏幕）、
+         * 运行通知样式（超级岛、实时更新看 ROM）、背景图（图不进文件）、唤醒解锁、Mirror酱 CDK。
+         * 不在列的项导入时一律不碰，本机填好的不会被清掉
+         */
+        private val PORTABLE_SETTINGS: List<Pair<Preferences.Key<String>, (AppSettings) -> String>> =
+            with(AppSettingsSchema) {
+                listOf(
+                    runMode to AppSettings::runMode,
+                    overlayControlMode to AppSettings::overlayControlMode,
+                    screenSaverEnabled to AppSettings::screenSaverEnabled,
+                    closeAppAfterTask to AppSettings::closeAppAfterTask,
+                    touchPreviewEnabled to AppSettings::touchPreviewEnabled,
+                    debugMode to AppSettings::debugMode,
+                    saveOnError to AppSettings::saveOnError,
+                    themeStyle to AppSettings::themeStyle,
+                    uiScale to AppSettings::uiScale,
+                    wallpaperImageAlpha to AppSettings::wallpaperImageAlpha,
+                    wallpaperScrim to AppSettings::wallpaperScrim,
+                    wallpaperBlur to AppSettings::wallpaperBlur,
+                    eventNotificationLevel to AppSettings::eventNotificationLevel,
+                    runDurationLimitEnabled to AppSettings::runDurationLimitEnabled,
+                    runDurationLimitMinutes to AppSettings::runDurationLimitMinutes,
+                    telemetryEnabled to AppSettings::telemetryEnabled,
+                    autoCheckUpdate to AppSettings::autoCheckUpdate,
+                    autoDownloadUpdate to AppSettings::autoDownloadUpdate,
+                    updateChannel to AppSettings::updateChannel,
+                    updateSource to AppSettings::updateSource,
+                    pipOnHome to AppSettings::pipOnHome,
+                )
+            }
     }
 
     val settings: Flow<AppSettings> = with(AppSettingsSchema) { context.dataStore.flow }
@@ -86,8 +139,13 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         MutableStateFlow(parseEventNotificationLevel(defaults.eventNotificationLevel))
     val eventNotificationLevel: StateFlow<EventNotificationLevel> = _eventNotificationLevel.asStateFlow()
 
-    private val _resolutionPreference = MutableStateFlow(parseResolutionPreference(defaults.resolutionPreference))
-    override val resolutionPreference: StateFlow<ResolutionPreference> = _resolutionPreference.asStateFlow()
+    private val _liveBackend = MutableStateFlow(parseLiveBackend(defaults.liveBackend))
+
+    /** 运行通知的展示方式；null 是没选过，见 [com.aliothmoon.maafw.notification.live.LiveBackends.resolve] */
+    val liveBackend: StateFlow<LiveBackend?> = _liveBackend.asStateFlow()
+
+    private val _resolutionPreset = MutableStateFlow(ResolutionPresets.resolve(defaults.resolutionPreset))
+    override val resolutionPreset: StateFlow<ResolutionPreset> = _resolutionPreset.asStateFlow()
 
     private val _debugMode = MutableStateFlow(defaults.debugMode.toBoolean())
     override val debugMode: StateFlow<Boolean> = _debugMode.asStateFlow()
@@ -98,8 +156,14 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _themeStyle = MutableStateFlow(parseThemeStyle(defaults.themeStyle))
     override val themeStyle: StateFlow<ThemeStyle> = _themeStyle.asStateFlow()
 
-    private val _wakeUnlockEnabled = MutableStateFlow(defaults.wakeUnlockEnabled.toBoolean())
-    override val wakeUnlockEnabled: StateFlow<Boolean> = _wakeUnlockEnabled.asStateFlow()
+    private val _uiScale = MutableStateFlow(UiScale.parse(defaults.uiScale))
+    override val uiScale: StateFlow<Int> = _uiScale.asStateFlow()
+
+    private val _wallpaper = MutableStateFlow(parseWallpaper(defaults))
+    val wallpaper: StateFlow<WallpaperSettings> = _wallpaper.asStateFlow()
+
+    private val _wakeUnlockType = MutableStateFlow(parseWakeUnlockType(defaults.wakeUnlockType))
+    override val wakeUnlockType: StateFlow<String> = _wakeUnlockType.asStateFlow()
 
     private val _wakeCredential = MutableStateFlow(defaults.wakeCredential)
     override val wakeCredential: StateFlow<String> = _wakeCredential.asStateFlow()
@@ -147,12 +211,15 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _screenSaverEnabled.value = s.screenSaverEnabled.toBoolean()
                 _closeAppAfterTask.value = s.closeAppAfterTask.toBoolean()
                 _touchPreviewEnabled.value = s.touchPreviewEnabled.toBoolean()
-                _resolutionPreference.value = parseResolutionPreference(s.resolutionPreference)
+                _resolutionPreset.value = ResolutionPresets.resolve(s.resolutionPreset)
                 _debugMode.value = s.debugMode.toBoolean()
                 _saveOnError.value = s.saveOnError.toBoolean()
                 _themeStyle.value = parseThemeStyle(s.themeStyle)
+                _uiScale.value = UiScale.parse(s.uiScale)
+                _wallpaper.value = parseWallpaper(s)
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
-                _wakeUnlockEnabled.value = s.wakeUnlockEnabled.toBoolean()
+                _liveBackend.value = parseLiveBackend(s.liveBackend)
+                _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType)
                 _wakeCredential.value = s.wakeCredential
                 _runDurationLimitEnabled.value = s.runDurationLimitEnabled.toBoolean()
                 _runDurationLimitMinutes.value = RunDurationLimit.parse(s.runDurationLimitMinutes)
@@ -205,8 +272,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[touchPreviewEnabled] = enabled.toString() }
     }
 
-    override suspend fun setResolutionPreference(preference: ResolutionPreference): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[resolutionPreference] = preference.name }
+    override suspend fun setResolutionPreset(preset: ResolutionPreset): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[resolutionPreset] = preset.id }
     }
 
     override suspend fun setDebugMode(enabled: Boolean): Unit = with(AppSettingsSchema) {
@@ -221,12 +288,45 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[themeStyle] = style.name }
     }
 
+    override suspend fun setUiScale(scale: Int): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[uiScale] = UiScale.format(scale) }
+    }
+
+    /** 开关与令牌一起写：换图成功才启用，关闭时清令牌，两步分开写会让中间态去解码一张不存在的图 */
+    suspend fun setWallpaperState(enabled: Boolean, token: String) = with(AppSettingsSchema) {
+        context.dataStore.edit {
+            it[wallpaperEnabled] = enabled.toString()
+            it[wallpaperToken] = token
+        }
+    }
+
+    suspend fun setWallpaperEnabled(enabled: Boolean) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperEnabled] = enabled.toString() }
+    }
+
+    suspend fun setWallpaperImageAlpha(percent: Int) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperImageAlpha] = percent.coerceIn(0, 100).toString() }
+    }
+
+    suspend fun setWallpaperScrim(percent: Int) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperScrim] = percent.coerceIn(0, 100).toString() }
+    }
+
+    suspend fun setWallpaperBlur(percent: Int) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[wallpaperBlur] = percent.coerceIn(0, 100).toString() }
+    }
+
     suspend fun setEventNotificationLevel(level: EventNotificationLevel) = with(AppSettingsSchema) {
         context.dataStore.edit { it[eventNotificationLevel] = level.name }
     }
 
-    override suspend fun setWakeUnlockEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
-        context.dataStore.edit { it[wakeUnlockEnabled] = enabled.toString() }
+    suspend fun setLiveBackend(backend: LiveBackend?) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[liveBackend] = backend?.name.orEmpty() }
+    }
+
+    override suspend fun setWakeUnlockType(type: String): Unit = with(AppSettingsSchema) {
+        if (type !in UnlockCredential.TYPES) return
+        context.dataStore.edit { it[wakeUnlockType] = type }
     }
 
     /** 只留数字：注入按键只能打出 0-9，图案与密码锁屏的面板模拟不出来 */
@@ -271,21 +371,53 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[mirrorchyanCdk] = cdk.trim() }
     }
 
+    /** 导出配置带走的那几项，键是 DataStore 里的键名；没写过的项按默认值导出，文件里一眼看得全 */
+    suspend fun portableSettings(): Map<String, String> {
+        val current = settings.first()
+        return PORTABLE_SETTINGS.associate { (key, read) -> key.name to read(current) }
+    }
+
+    /**
+     * 恢复备份里的设置：只认 [PORTABLE_SETTINGS] 里的键，文件里没有的项不动。
+     * 值照旧以文本落盘，非法值读的时候各自回落默认，与手改 DataStore 同一套兜底
+     */
+    suspend fun importPortableSettings(values: Map<String, String>) {
+        context.dataStore.edit { prefs ->
+            PORTABLE_SETTINGS.forEach { (key, _) -> values[key.name]?.let { prefs[key] = it } }
+        }
+    }
+
+    private fun parseWallpaper(s: AppSettings) = WallpaperSettings(
+        enabled = s.wallpaperEnabled.toBoolean(),
+        token = s.wallpaperToken,
+        imageAlpha = parsePercent(s.wallpaperImageAlpha, 80),
+        scrim = parsePercent(s.wallpaperScrim, 25),
+        blur = parsePercent(s.wallpaperBlur, 0),
+    )
+
+    private fun parsePercent(raw: String, default: Int): Int = raw.toIntOrNull()?.coerceIn(0, 100) ?: default
+
     /** 盘上是历史遗留或手改的非法值时回落默认，不让设置读取本身抛异常 */
     private fun parseBackend(raw: String): RemoteBackend =
         runCatching { RemoteBackend.valueOf(raw) }.getOrDefault(RemoteBackend.SHIZUKU)
 
-    private fun parseRunMode(raw: String): RunMode =
-        runCatching { RunMode.valueOf(raw) }.getOrDefault(RunMode.BACKGROUND)
+    /**
+     * 没选过（空串）一律「无密码」，不按有没有 PIN 推断：推断值会随 PIN 输入框的增删来回跳。
+     * 老版本「开关 + PIN」的用户由 [WakeUnlockTypeMigration] 写成确定值
+     */
+    private fun parseWakeUnlockType(raw: String): String =
+        if (raw in UnlockCredential.TYPES) raw else UnlockCredential.TYPE_SWIPE
+
+    private fun parseRunMode(raw: String): RunMode = RunMode.resolve(raw, BuildConfig.MAFW_FOREGROUND_ALLOWED)
 
     private fun parseOverlayMode(raw: String): OverlayControlMode =
         runCatching { OverlayControlMode.valueOf(raw) }.getOrDefault(OverlayControlMode.FLOAT_BALL)
 
-    private fun parseResolutionPreference(raw: String): ResolutionPreference =
-        runCatching { ResolutionPreference.valueOf(raw) }.getOrDefault(ResolutionPreference.P720)
-
     private fun parseThemeStyle(raw: String): ThemeStyle =
         runCatching { ThemeStyle.valueOf(raw) }.getOrDefault(ThemeStyle.DEFAULT)
+
+    private fun parseLiveBackend(raw: String): LiveBackend? =
+        raw.takeIf(String::isNotEmpty)?.let { runCatching { LiveBackend.valueOf(it) }.getOrNull() }
 
     private fun parseEventNotificationLevel(raw: String): EventNotificationLevel =
         runCatching { EventNotificationLevel.valueOf(raw) }.getOrDefault(EventNotificationLevel.DEFAULT)

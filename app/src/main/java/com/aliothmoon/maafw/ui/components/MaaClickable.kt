@@ -3,28 +3,23 @@ package com.aliothmoon.maafw.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Indication
-import androidx.compose.foundation.IndicationNodeFactory
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
 import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
-import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DelegatingNode
 import androidx.compose.ui.node.LayoutModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
-import androidx.compose.ui.node.ObserverModifierNode
 import androidx.compose.ui.node.SemanticsModifierNode
-import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateSemantics
-import androidx.compose.ui.node.observeReads
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.disabled
@@ -33,20 +28,26 @@ import androidx.compose.ui.unit.Constraints
 import kotlinx.coroutines.launch
 
 /**
- * 卡片与行的统一点击手感：涟漪 + 按下时整块缩到 0.97
+ * 卡片与行的统一点击手感：按下高亮（[MaaPressIndication]）+ 按下时整块缩到 0.97
  *
  * 走 Modifier.Node 而非 `composed {}`：`composed` 每次组合都产出新 Modifier 实例，
  * 破坏 Modifier 相等性比较，调用点所在子树跟着失去跳过机会。
  * Node 的状态（InteractionSource、缩放动画）挂在节点上，重组只走 [ModifierNodeElement.update]
  *
- * @param indication 是否挂涟漪；卡片表头这类通栏点击区关掉——涟漪要从触点铺满整张卡的宽度，
- *   比缩放本身还抢眼，而缩放已经够表达按下了
+ * 高亮不读 LocalIndication：主题外层的 MaterialTheme 会把它换成 ripple()，
+ * 而原生 ripple 的宿主视图池会让按下反馈串到别的组件上，见 [MaaPressIndication]
+ *
+ * @param indication 是否挂按下高亮；卡片表头这类通栏点击区关掉——缩放已经够表达按下了
+ * @param shape 高亮轮廓；本修饰符在组件形状裁剪之外（卡片、胶囊）时传入同一形状，否则会露出方角
+ * @param pressScale 按下时是否缩到 0.97；铺满卡片宽度的通栏行关掉，缩了高亮就离开卡片两边
  */
 fun Modifier.maaClickable(
     enabled: Boolean = true,
     indication: Boolean = true,
+    shape: Shape = RectangleShape,
+    pressScale: Boolean = true,
     onClick: () -> Unit,
-): Modifier = this then MaaClickableElement(enabled, indication, onClick)
+): Modifier = this then MaaClickableElement(enabled, indication, shape, pressScale, onClick)
 
 private const val PressedScale = 0.97f
 
@@ -59,13 +60,15 @@ private val PressSpring = spring<Float>(
 private data class MaaClickableElement(
     val enabled: Boolean,
     val indication: Boolean,
+    val shape: Shape,
+    val pressScale: Boolean,
     val onClick: () -> Unit,
 ) : ModifierNodeElement<MaaClickableNode>() {
 
-    override fun create(): MaaClickableNode = MaaClickableNode(enabled, indication, onClick)
+    override fun create(): MaaClickableNode = MaaClickableNode(enabled, indication, shape, pressScale, onClick)
 
     override fun update(node: MaaClickableNode) {
-        node.update(enabled, indication, onClick)
+        node.update(enabled, indication, shape, pressScale, onClick)
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -78,17 +81,17 @@ private data class MaaClickableElement(
 private class MaaClickableNode(
     private var enabled: Boolean,
     private var indication: Boolean,
+    private var shape: Shape,
+    private var pressScale: Boolean,
     private var onClick: () -> Unit,
 ) : DelegatingNode(),
-    CompositionLocalConsumerModifierNode,
-    ObserverModifierNode,
     LayoutModifierNode,
     SemanticsModifierNode {
 
     private val interactionSource = MutableInteractionSource()
     private var scale = Animatable(1f)
 
-    /** 未配对 Release/Cancel 的按下；节点被复用时残留会让涟漪出现在另一张卡上 */
+    /** 未配对 Release/Cancel 的按下；节点被复用时残留会让按下高亮出现在另一张卡上 */
     private var pendingPress: PressInteraction.Press? = null
 
     // 禁用时整个撤掉指针节点，而不是在回调里判 enabled：
@@ -96,7 +99,6 @@ private class MaaClickableNode(
     private var pointerNode: SuspendingPointerInputModifierNode? = null
 
     private var indicationNode: DelegatableNode? = null
-    private var attachedIndication: Indication? = null
 
     override fun onAttach() {
         syncPointerNode()
@@ -122,10 +124,12 @@ private class MaaClickableNode(
         interactionSource.tryEmit(PressInteraction.Cancel(press))
     }
 
-    fun update(enabled: Boolean, indication: Boolean, onClick: () -> Unit) {
+    fun update(enabled: Boolean, indication: Boolean, shape: Shape, pressScale: Boolean, onClick: () -> Unit) {
         this.onClick = onClick
-        if (this.indication != indication) {
+        this.pressScale = pressScale
+        if (this.indication != indication || this.shape != shape) {
             this.indication = indication
+            this.shape = shape
             syncIndication()
         }
         if (this.enabled == enabled) return
@@ -156,7 +160,7 @@ private class MaaClickableNode(
                 // 一律另起协程：emit 与动画都会挂起，卡在这里就来不及等 tryAwaitRelease，
                 // 快速点击会被吞掉
                 coroutineScope.launch { interactionSource.emit(press) }
-                coroutineScope.launch { scale.animateTo(PressedScale, PressSpring) }
+                if (pressScale) coroutineScope.launch { scale.animateTo(PressedScale, PressSpring) }
                 val released = tryAwaitRelease()
                 // 先清标记再补发：onDetach 抢在前面时由它 tryEmit Cancel，不能两边都发
                 if (pendingPress === press) {
@@ -173,28 +177,13 @@ private class MaaClickableNode(
         )
     }
 
-    /** LocalIndication 由主题提供，可能随主题切换而变，所以经 observeReads 跟踪 */
     private fun syncIndication() {
-        if (!indication) {
-            indicationNode?.let { undelegate(it) }
-            indicationNode = null
-            attachedIndication = null
-            return
+        indicationNode?.let { undelegate(it) }
+        indicationNode = if (indication) {
+            delegate(MaaPressIndication(shape).create(interactionSource))
+        } else {
+            null
         }
-        observeReads {
-            val current = currentValueOf(LocalIndication)
-            if (current === attachedIndication) return@observeReads
-            attachedIndication = current
-            indicationNode?.let { undelegate(it) }
-            // 非 IndicationNodeFactory 的老式 Indication 无法挂进节点树，此时不画涟漪
-            indicationNode = (current as? IndicationNodeFactory)
-                ?.create(interactionSource)
-                ?.also { delegate(it) }
-        }
-    }
-
-    override fun onObservedReadsChanged() {
-        syncIndication()
     }
 
     override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {

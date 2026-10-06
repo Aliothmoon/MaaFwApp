@@ -96,14 +96,29 @@ object ActivityUtils {
     private fun componentOf(spec: String): ComponentName? =
         spec.takeIf { it.contains('/') }?.let { ComponentName.unflattenFromString(it) }
 
+    /** API < Q 读不出任务在哪块屏上，只能拿「上次是我们把它拉到这块屏上的」当它占着屏的依据 */
+    @Volatile
+    private var lastLaunched: Pair<String, Int>? = null
+
+    /**
+     * 强杀 [packageName]（可以是 component 全名）；它占着 [displayId] 时等画面停稳并把帧缓冲换成黑帧
+     *
+     * 杀的不是屏上那个应用就不碰帧缓冲：屏上是别人的静止画面，换黑了不会自己回来
+     */
     @JvmStatic
-    fun stopApp(packageName: String): Boolean {
+    fun forceStop(packageName: String, displayId: Int): Boolean {
         val targetPackage = packageNameOf(packageName)
-        return runCatching {
+        val occupiesDisplay = when (val current = getAppDisplayId(targetPackage)) {
+            null -> lastLaunched == (targetPackage to displayId)
+            else -> current == displayId
+        }
+        val stopped = runCatching {
             ServiceManager.getActivityManager().forceStopPackage(targetPackage)
         }.onFailure {
-            Ln.w("stopApp: failed to force-stop $targetPackage", it)
+            Ln.w("forceStop: failed to force-stop $targetPackage", it)
         }.getOrDefault(false)
+        if (stopped && occupiesDisplay) StaleFrameGuard.blankAfterKill(displayId, targetPackage)
+        return stopped
     }
 
     @JvmStatic
@@ -139,27 +154,50 @@ object ActivityUtils {
         }
         intent.addFlags(flag)
 
+        // force_stop 只为把主屏上的现有进程挪到目标屏；已在目标屏上运行时只拉到前台。
+        // 资源侧常在加载期反复 StartApp 等待进入游戏（ADB 下语义即"已运行则前台化"），
+        // 每次都杀会让目标永远停在启动阶段
         if (forceStop) {
-            ServiceManager.getActivityManager().forceStopPackage(targetPackage)
+            if (getAppDisplayId(targetPackage) == displayId) {
+                Ln.i("startApp: $targetPackage already on display $displayId, skip force-stop")
+            } else {
+                forceStop(targetPackage, displayId)
+            }
         }
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
 
-        return startActivity(intent, displayId)
+        return startActivity(intent, displayId).also { started ->
+            if (started) lastLaunched = targetPackage to displayId
+        }
+    }
+
+    sealed interface DisplayOccupancy {
+        data class Occupied(val topPackage: String?) : DisplayOccupancy
+        data object Empty : DisplayOccupancy
+        data object Unknown : DisplayOccupancy
     }
 
     /**
-     * 返回运行在 [displayId] 上的最顶层 app 包名；没有任务或 API 不支持时返回 null。
-     * 看门狗用它从虚拟屏反推目标 app，无需外部告知包名。
+     * [displayId] 上有没有任务。API 不支持、任务表为空、有任务读不出 displayId 都算 [DisplayOccupancy.Unknown]：
+     * [StaleFrameGuard] 拿 Empty 当「画面已经没人画了」去换黑帧，把判不出当成空了，
+     * 一张不再重绘的静止界面就会一直黑下去
      */
-    fun getTopPackageOnDisplay(displayId: Int): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
-        if (taskDisplayIdField == null) return null
+    fun probeDisplay(displayId: Int): DisplayOccupancy {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return DisplayOccupancy.Unknown
+        if (taskDisplayIdField == null) return DisplayOccupancy.Unknown
         return runCatching {
-            val am = FakeContext.get().getSystemService(ActivityManager::class.java) ?: return null
+            val am = FakeContext.get().getSystemService(ActivityManager::class.java)
+                ?: return DisplayOccupancy.Unknown
             @Suppress("DEPRECATION")
-            am.getRunningTasks(100).firstOrNull { task -> getTaskDisplayId(task) == displayId }
-                ?.topActivity?.packageName
-        }.onFailure { Ln.w("getTopPackageOnDisplay: failed", it) }.getOrNull()
+            val tasks = am.getRunningTasks(100)
+            val displayIds = tasks.map(::getTaskDisplayId)
+            val index = displayIds.indexOf(displayId)
+            when {
+                index >= 0 -> DisplayOccupancy.Occupied(tasks[index].topActivity?.packageName)
+                tasks.isEmpty() || displayIds.any { it < 0 } -> DisplayOccupancy.Unknown
+                else -> DisplayOccupancy.Empty
+            }
+        }.onFailure { Ln.w("probeDisplay: failed", it) }.getOrDefault(DisplayOccupancy.Unknown)
     }
 
     /**

@@ -22,4 +22,8 @@ class FakeProjectRepository(
     override suspend fun reload() {
         reloadCount++
     }
+
+    override suspend fun ensureLoaded() {
+        if (_state.value is ProjectState.Loading) reload()
+    }
 }

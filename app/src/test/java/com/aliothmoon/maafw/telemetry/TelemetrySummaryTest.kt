@@ -32,7 +32,7 @@ private fun field(name: String, type: PipelineType, default: String = "") = Inpu
 private fun definition(vararg options: OptionDefinition) = ProjectDefinition(
     name = "p",
     version = "1.0.0",
-    controller = ControllerDefinition(),
+    controllers = listOf(ControllerDefinition()),
     resources = emptyList(),
     tasks = emptyList(),
     groups = emptyList(),
@@ -56,7 +56,8 @@ class TelemetrySummaryTest {
             listOf("settings"),
             mapOf("settings" to OptionValue.Inputs(mapOf("account" to "user@example.com"))),
         )
-        assertEquals("account=filled,path=empty", summary.getValue("settings"))
+        assertEquals("filled", summary.getValue("settings.account"))
+        assertEquals("empty", summary.getValue("settings.path"))
     }
 
     /** 数值与布尔的取值域由 PI 定死，带不出隐私 */
@@ -69,7 +70,8 @@ class TelemetrySummaryTest {
             ),
         )
         val summary = TelemetrySummary.summarize(definition, listOf("settings"), emptyMap())
-        assertEquals("count=3,flag=false", summary.getValue("settings"))
+        assertEquals("3", summary.getValue("settings.count"))
+        assertEquals("false", summary.getValue("settings.flag"))
     }
 
     /** 纯数字 PIN 按 int 走也不能报原值 */
@@ -86,7 +88,8 @@ class TelemetrySummaryTest {
             listOf("settings"),
             mapOf("settings" to OptionValue.Inputs(mapOf("pin" to "123456"))),
         )
-        assertEquals("pin=filled,token=empty", summary.getValue("settings"))
+        assertEquals("filled", summary.getValue("settings.pin"))
+        assertEquals("empty", summary.getValue("settings.token"))
     }
 
     @Test
@@ -137,6 +140,47 @@ class TelemetrySummaryTest {
         val summary = TelemetrySummary.summarize(definition(parent, child), listOf("parent"), emptyMap())
         assertEquals("off", summary.getValue("parent"))
         assertEquals(null, summary["child"])
+    }
+
+    /** 与 MXU 一致：switch 报 true/false，不报 case 名 */
+    @Test
+    fun `switch 报布尔值`() {
+        val option = OptionDefinition.Switch(
+            name = "auto",
+            label = "auto",
+            description = null,
+            icon = null,
+            cases = listOf(case("Yes"), case("No")),
+            defaultCase = "No",
+        )
+        val summary = TelemetrySummary.summarize(
+            definition(option),
+            listOf("auto"),
+            mapOf("auto" to OptionValue.SingleCase("Yes")),
+        )
+        assertEquals("true", summary.getValue("auto"))
+    }
+
+    /** 与 MXU 一致：每个选中 case 单独一条，一个都没选报 none */
+    @Test
+    fun `checkbox 每个选中 case 一条`() {
+        val option = OptionDefinition.Checkbox(
+            name = "items",
+            label = "items",
+            description = null,
+            icon = null,
+            cases = listOf(case("a"), case("b"), case("c")),
+            defaultCases = emptyList(),
+        )
+        val picked = TelemetrySummary.summarize(
+            definition(option),
+            listOf("items"),
+            mapOf("items" to OptionValue.MultipleCases(listOf("a", "c"))),
+        )
+        assertEquals(mapOf("items.a" to "true", "items.c" to "true"), picked)
+
+        val none = TelemetrySummary.summarize(definition(option), listOf("items"), emptyMap())
+        assertEquals(mapOf("items" to "none"), none)
     }
 
     private fun case(name: String, children: List<String> = emptyList()) = OptionCaseDefinition(

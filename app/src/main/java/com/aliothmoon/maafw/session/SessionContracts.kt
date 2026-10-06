@@ -26,8 +26,10 @@ import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.project.PiInstallState
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.ConfirmToken
 import com.aliothmoon.maafw.runner.DisplayResolution
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPreset
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
 import com.aliothmoon.maafw.runner.isBusy
@@ -46,12 +48,12 @@ data class SessionUiState(
     val settingSections: List<OptionSectionState> = emptyList(),
     /** 空 = 当前 resource 没有 option[]，设置页不出「资源设置」 */
     val resourceOptions: List<OptionEditorState> = emptyList(),
+    /** 空 = 当前 controller 没有 option[]，设置页不出「控制器设置」 */
+    val controllerOptions: List<OptionEditorState> = emptyList(),
     val projectMetadata: ProjectMetadata = ProjectMetadata(),
     /** PI 声明了 telemetry；没声明时设置页不出这一行 */
     val telemetryDeclared: Boolean = false,
-    /** PI 版本是开发态：设置页不展示开关；上报仍由 TelemetryController 拦截 */
-    val telemetryLockedByVersion: Boolean = false,
-    val telemetryEnabled: Boolean = false,
+    val telemetryEnabled: Boolean = true,
     /** 非空 = 这份 welcome 还没给用户看过 */
     val welcomePrompt: List<String> = emptyList(),
     val environment: ResolvedEnvironment? = null,
@@ -68,10 +70,7 @@ data class SessionUiState(
     /** 全局的跑完关目标应用；与 ScheduleStrategy 上的同名选项并存，本项优先 */
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
-    /** 定时任务的亮屏解锁；逐条规则的收尾选项在 ScheduleStrategy 上，不在这 */
-    val wakeUnlockEnabled: Boolean = false,
-    val wakeCredential: String = "",
-    val resolutionPreference: ResolutionPreference = ResolutionPreference.P720,
+    val resolutionPreset: ResolutionPreset = ResolutionPresets.default,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
      * 前台模式即设备屏幕尺寸。项目未就绪时为 null
@@ -237,7 +236,15 @@ sealed interface SessionIntent {
         val value: OptionValue,
     ) : SessionIntent
 
+    /** 同上，按 controller name 分桶 */
+    data class SetControllerOption(
+        val controllerName: String,
+        val optionName: String,
+        val value: OptionValue,
+    ) : SessionIntent
+
     data class SelectResource(val resourceName: String) : SessionIntent
+    data class SelectController(val controllerName: String) : SessionIntent
     data class SetThemeMode(val mode: ThemeMode) : SessionIntent
     data class SetThemeStyle(val style: ThemeStyle) : SessionIntent
 
@@ -269,14 +276,10 @@ sealed interface SessionIntent {
     /** 立刻关掉目标应用：停虚拟屏，屏上的应用跟着一起没 */
     data object CloseTargetApp : SessionIntent
 
-    data class SetWakeUnlockEnabled(val enabled: Boolean) : SessionIntent
-
-    /** 非数字会被落盘那一层滤掉：注入按键只打得出 0-9 */
-    data class SetWakeCredential(val credential: String) : SessionIntent
 
 
     /** 虚拟屏分辨率偏好：720P / 1080P */
-    data class SetResolutionPreference(val preference: ResolutionPreference) : SessionIntent
+    data class SetResolutionPreset(val preset: ResolutionPreset) : SessionIntent
 
     /**
      * 开启前台模式的控制层
@@ -304,8 +307,12 @@ sealed interface SessionIntent {
      * 发起一轮执行
      *
      * [surface] 区分入口：应用内前台仍拦，悬浮窗放行。定时不走这条 Intent。
+     * [acknowledged] 是用户在 [SessionEffect.ConfirmStart] 上点过头的项，原样带回来重发
      */
-    data class Start(val surface: TaskSurface = TaskSurface.InApp) : SessionIntent
+    data class Start(
+        val surface: TaskSurface = TaskSurface.InApp,
+        val acknowledged: Set<ConfirmToken> = emptySet(),
+    ) : SessionIntent
     data object Stop : SessionIntent
 
     /**
@@ -355,6 +362,13 @@ sealed interface SessionIntent {
 sealed interface SessionEffect {
     data class ShowMessage(val message: UiText) : SessionEffect
     data class ShowDiagnostics(val diagnostics: List<Diagnostic>) : SessionEffect
+
+    /**
+     * 开跑前要用户点头；同意就带着 [acknowledged] 重发 [SessionIntent.Start]
+     *
+     * [acknowledged] 已含本次这项：几项都要问时逐个弹，前面点过的跟着累积，VM 不必记
+     */
+    data class ConfirmStart(val prompt: UiText, val acknowledged: Set<ConfirmToken>) : SessionEffect
 
     /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
     data object InstallShizuku : SessionEffect

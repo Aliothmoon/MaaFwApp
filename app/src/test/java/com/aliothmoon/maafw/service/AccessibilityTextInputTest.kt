@@ -48,4 +48,16 @@ class AccessibilityTextInputTest {
             (textInputFailureMessage(99, "pkg") as UiText.Resource).resId,
         )
     }
+
+    @Test
+    fun `虚拟屏写不进文本时按配方决定提不提前台模式`() {
+        assertEquals(
+            R.string.text_input_unsupported_display,
+            (textInputFailureMessage(TextInputResult.UNSUPPORTED_DISPLAY, "pkg", foregroundAllowed = true) as UiText.Resource).resId,
+        )
+        assertEquals(
+            R.string.text_input_unsupported_display_background_only,
+            (textInputFailureMessage(TextInputResult.UNSUPPORTED_DISPLAY, "pkg", foregroundAllowed = false) as UiText.Resource).resId,
+        )
+    }
 }

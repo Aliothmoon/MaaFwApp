@@ -58,9 +58,14 @@ data class AppSettings(
     @PrefKey(default = "true")
     val touchPreviewEnabled: String = "true",
 
-    /** [com.aliothmoon.maafw.runner.ResolutionPreference] 的 name */
-    @PrefKey(default = "P720")
-    val resolutionPreference: String = "P720",
+    /**
+     * 后台模式虚拟屏选的 [com.aliothmoon.maafw.runner.ResolutionPreset.id]；空 = 预设列表的第一项
+     *
+     * 取代旧的 `resolutionPreference`（存 720P/1080P 枚举名），换了键不做迁移：
+     * 旧值只是两档里选了哪档，丢了也只是回到默认档
+     */
+    @PrefKey(default = "")
+    val resolutionPreset: String = "",
 
     /** 调试模式：开启后给特权进程传 isDebug，记录 MaaFramework 详细日志 */
     @PrefKey(default = "false")
@@ -79,6 +84,28 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val themeStyle: String = "DEFAULT",
 
+    /** 页面缩放：`auto` 按屏幕推荐，或 80–110 的百分比；见 [com.aliothmoon.maafw.theme.UiScale] */
+    @PrefKey(default = "auto")
+    val uiScale: String = "auto",
+
+    /** 自定义背景开关；图片本身在 filesDir/backgrounds，见 [com.aliothmoon.maafw.wallpaper.WallpaperStore] */
+    @PrefKey(default = "false")
+    val wallpaperEnabled: String = "false",
+
+    /** 每次换图写一个新值，图片文件名不变，靠它触发重新解码 */
+    @PrefKey(default = "")
+    val wallpaperToken: String = "",
+
+    /** 以下三项都是 0–100 的百分比 */
+    @PrefKey(default = "80")
+    val wallpaperImageAlpha: String = "80",
+
+    @PrefKey(default = "25")
+    val wallpaperScrim: String = "25",
+
+    @PrefKey(default = "0")
+    val wallpaperBlur: String = "0",
+
     /**
      * [com.aliothmoon.maafw.domain.EventNotificationLevel] 的 name
      *
@@ -88,9 +115,21 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val eventNotificationLevel: String = "DEFAULT",
 
-    /** 定时触发时是否亮屏解锁；默认关，注入 PIN 这种事要用户先点头。手动 Start 不走这条 */
-    @PrefKey(default = "false")
-    val wakeUnlockEnabled: String = "false",
+    /**
+     * 运行通知的展示方式：[com.aliothmoon.maafw.notification.live.LiveBackend] 的 name；
+     * 空串是没选过，按超级岛 > 实时更新 > 标准通知栏取第一档可用的
+     */
+    @PrefKey(default = "")
+    val liveBackend: String = "",
+
+    /**
+     * 定时触发时的解锁方式：swipe / gesture / pin（见 [com.aliothmoon.maafw.domain.UnlockCredential]）
+     *
+     * 没有总开关：定时到点总要亮屏解锁（对齐 MaaMeow）。空串是「还没选过」，按「无密码」处理；
+     * 老版本开过 PIN 解锁的用户由 WakeUnlockTypeMigration 迁成 pin，升级后不用重选
+     */
+    @PrefKey(default = "")
+    val wakeUnlockType: String = "",
 
     /**
      * 解锁用的纯数字 PIN，**明文存在本 DataStore 里**
@@ -109,14 +148,9 @@ data class AppSettings(
     @PrefKey(default = "${RunDurationLimit.DEFAULT_MINUTES}")
     val runDurationLimitMinutes: String = RunDurationLimit.DEFAULT_MINUTES.toString(),
 
-    /**
-     * PI 声明了 `telemetry.sentry` 时才有意义；默认关
-     *
-     * 与 MXU 的默认开相反：DSN 是 PI 作者的，外壳这一侧没有隐私说明的位置，
-     * 上报与否交给用户先点头
-     */
-    @PrefKey(default = "false")
-    val telemetryEnabled: String = "false",
+    /** PI 声明了 `telemetry.sentry` 时才有意义；默认开，与 MXU 一致，用户可随时关闭 */
+    @PrefKey(default = "true")
+    val telemetryEnabled: String = "true",
 
     /** 启动时自动检查更新；只控启动自检，设置页手动检查不受它影响 */
     @PrefKey(default = "true")

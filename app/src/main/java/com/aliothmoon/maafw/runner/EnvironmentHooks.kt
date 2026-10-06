@@ -1,14 +1,21 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.WakeUnlockResult
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.schedule.UnlockGestureReader
+import com.aliothmoon.maafw.schedule.WakeResult
 import com.aliothmoon.maafw.settings.AppSettingsGateway
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
@@ -26,6 +33,32 @@ private inline fun <R> PrivilegedServicePort.callOrDefault(
     return runCatching { action(service) }
         .onFailure { Timber.w(it, "%s failed", name) }
         .getOrDefault(default)
+}
+
+/**
+ * 投递前的环境动作：先把服务连上再调，连不上或抛了才用 [default]
+ *
+ * 定时冷启动时特权进程多半还在连，只看现成连接会拿到默认值：解锁因此把整轮拦掉，
+ * 自动熄屏也采不到真实的亮屏状态。runner 投递时本来就要 `useService`，这里只是早一步
+ */
+private suspend fun <R> PrivilegedServicePort.callConnecting(
+    name: String,
+    default: R,
+    action: (RemoteService) -> R,
+): R = withContext(MaaDispatchers.IO) {
+    try {
+        useService { action(it) }
+    } catch (e: TimeoutCancellationException) {
+        // 等连接超时与外层 hook 超时是同一个异常类型，外层取消了就别吞
+        ensureActive()
+        Timber.w(e, "%s: service not connected in time", name)
+        default
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.w(e, "%s failed", name)
+        default
+    }
 }
 
 /**
@@ -49,6 +82,9 @@ internal object HookOrder {
     /** 排在所有环境动作之前，收尾时因此最后关：文件开着的窗口覆盖住整轮 */
     const val SESSION_LOG = -10
 
+    /** 只登记本轮计划给遥测，与会话日志同为投递前的观察者 */
+    const val TELEMETRY = -8
+
     /** 紧随会话日志：收尾时排在所有环境动作之后，播报的是环境都撤干净之后的结局 */
     const val NOTIFICATION = -5
     const val AUTO_SLEEP = 0
@@ -63,6 +99,9 @@ internal object HookOrder {
     /** 同为观察者，排在看门狗之后；收尾时先停 FPS 轮询，再看门狗 */
     const val GAME_FPS = 55
 
+    /** 只写一次日志，没有可撤的 */
+    const val DISPLAY_HAZARD_NOTICE = 57
+
     /** 收尾时最先撤计时器：别的挂载物撤到一半时它不该再到点去 stop */
     const val RUN_DURATION_LIMIT = 60
 }
@@ -70,40 +109,57 @@ internal object HookOrder {
 /**
  * 亮屏解锁
  *
- * gating：解锁不成还往下跑，就是对着锁屏识别到超时，几十分钟白烧
+ * gating：解锁不成还往下跑，就是对着锁屏识别到超时，几十分钟白烧。
+ * 但只在锁屏还在时才拦（对齐 MaaMeow）：解锁报失败而 [keyguardLocked] 已是 false——
+ * 手机本就开着、或等待期间人脸先解开了——照常往下跑
  */
 class WakeUnlockHook(
     private val servicePort: PrivilegedServicePort,
     private val settings: AppSettingsGateway,
+    private val gestures: UnlockGestureReader,
+    private val keyguardLocked: () -> Boolean,
 ) : RunEnvHook {
 
-    override val id: String = "wake-unlock"
+    override val id: String = ID
     override val anchor: Anchor = Anchor.BeforeDispatch
     override val order: Int = HookOrder.WAKE_UNLOCK
     override val gating: Boolean = true
 
+    /** 亮屏三级回退 + bouncer 等待 + 手势回放 + 5 秒确认，默认 30 秒会卡在边上 */
+    override val engageTimeoutMs: Long = ENGAGE_TIMEOUT_MS
+
     override suspend fun engage(ctx: RunContext): EngageResult {
         // 只对定时触发生效（对齐 MaaMeow 的「定时任务解锁方式」）：手动 Start 时
-        // 用户正对着亮屏解锁的手机按按钮，解一次是空操作
+        // 用户正对着亮屏解锁的手机按按钮，解一次是空操作。没有总开关：到点总要亮屏
         if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
-        if (!settings.wakeUnlockEnabled.value) return EngageResult.Skipped()
 
-        val credential = settings.wakeCredential.value
-        val code = servicePort.callOrDefault("unlock", WakeUnlockResult.IPC_FAILED) {
-            it.unlock(credential)
+        val credential = UnlockCredential.of(
+            type = settings.wakeUnlockType.value,
+            pin = settings.wakeCredential.value,
+            gestureJson = if (settings.wakeUnlockType.value == UnlockCredential.TYPE_GESTURE) {
+                gestures.readJson()
+            } else {
+                ""
+            },
+        )
+        val code = servicePort.callConnecting("unlock", WakeUnlockResult.IPC_FAILED) {
+            when (credential) {
+                UnlockCredential.Swipe -> it.unlock("")
+                is UnlockCredential.Pin -> it.unlock(credential.digits)
+                is UnlockCredential.Gesture -> it.unlockWithGesture(credential.json)
+            }
         }
-        return when (code) {
-            WakeUnlockResult.OK, WakeUnlockResult.NO_KEYGUARD -> EngageResult.Skipped()
-            else -> EngageResult.Failed(wakeFailureText(code))
-        }
+        val result = WakeResult.fromCodeOrNull(code)
+        if (result?.isUnlocked == true || !keyguardLocked()) return EngageResult.Skipped()
+        return EngageResult.Failed(result?.message ?: uiTextOf(R.string.wake_result_unknown, code))
     }
 
-    private fun wakeFailureText(code: Int): UiText = when (code) {
-        WakeUnlockResult.CREDENTIAL_REQUIRED -> uiTextOf(R.string.wake_unlock_need_pin)
-        WakeUnlockResult.CREDENTIAL_REJECTED -> uiTextOf(R.string.wake_unlock_pin_rejected)
-        WakeUnlockResult.WAKE_FAILED -> uiTextOf(R.string.wake_unlock_screen_off)
-        WakeUnlockResult.UNSUPPORTED -> uiTextOf(R.string.wake_unlock_unsupported)
-        else -> uiTextOf(R.string.wake_unlock_failed, code)
+    companion object {
+        /** 亮屏、bouncer 与确认留 60 秒，再加手势回放的上限：录制最长 90 秒，回放不会比它长 */
+        private const val ENGAGE_TIMEOUT_MS = 60_000L + 90_000L
+
+        /** 触发日志按它认出「卡在解锁这一步」，落盘了就别改 */
+        const val ID = "wake-unlock"
     }
 }
 
@@ -185,7 +241,7 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
         val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
         if (!options.autoSleepAfterTask) return EngageResult.Skipped()
 
-        val tookOverIdleDevice = !servicePort.callOrDefault("isScreenOn", true) { it.isScreenOn() }
+        val tookOverIdleDevice = !servicePort.callConnecting("isScreenOn", true) { it.isScreenOn() }
         val skipIfAwake = options.skipAutoSleepIfAwake
         // 两个采样值都在这里捕进闭包：收尾时再去读，读到的是那时的屏幕状态与开关，不是本轮开始时的
         return EngageResult.Engaged(Release { reason ->

@@ -27,6 +27,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.project.PiInstallState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.OpaqueTheme
 
 /**
  * PI 解包的阻塞弹窗
@@ -67,74 +68,76 @@ fun PiInstallDialog(
 /** 解包期间不给任何出口：中途退出留下的是半份内容，下次启动照样得重解 */
 @Composable
 private fun UnpackingDialog(state: PiInstallState.Unpacking) {
-    Dialog(
-        onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-    ) {
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = MaaDesignTokens.Spacing.xs,
+OpaqueTheme {
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(MaaDesignTokens.Spacing.xl),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = MaaDesignTokens.Spacing.xs,
             ) {
-                Text(
-                    text = stringResource(R.string.pi_install_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                if (state.total > 0) {
-                    LinearProgressIndicator(
-                        progress = { state.percent / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = MaaDesignTokens.Spacing.lg),
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(MaaDesignTokens.Spacing.xl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = stringResource(R.string.pi_install_title),
+                        style = MaterialTheme.typography.titleMedium,
                     )
-                } else {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = MaaDesignTokens.Spacing.lg),
-                    )
-                }
-                Text(
-                    text = if (state.total > 0) {
-                        stringResource(
-                            R.string.pi_install_progress,
-                            state.done,
-                            state.total,
-                            state.percent,
+                    if (state.total > 0) {
+                        LinearProgressIndicator(
+                            progress = { state.percent / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = MaaDesignTokens.Spacing.lg),
                         )
                     } else {
-                        pluralStringResource(
-                            R.plurals.pi_install_progress_count,
-                            state.done,
-                            state.done,
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = MaaDesignTokens.Spacing.lg),
                         )
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = MaaDesignTokens.Spacing.sm),
-                )
-                Text(
-                    text = state.currentPath,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.MiddleEllipsis,
-                    modifier = Modifier.padding(top = MaaDesignTokens.Spacing.xxs),
-                )
-                Text(
-                    text = stringResource(R.string.pi_install_note),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = MaaDesignTokens.Spacing.md),
-                )
+                    }
+                    Text(
+                        text = if (state.total > 0) {
+                            stringResource(
+                                R.string.pi_install_progress,
+                                state.done,
+                                state.total,
+                                state.percent,
+                            )
+                        } else {
+                            pluralStringResource(
+                                R.plurals.pi_install_progress_count,
+                                state.done,
+                                state.done,
+                            )
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = MaaDesignTokens.Spacing.sm),
+                    )
+                    Text(
+                        text = state.currentPath,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
+                        modifier = Modifier.padding(top = MaaDesignTokens.Spacing.xxs),
+                    )
+                    Text(
+                        text = stringResource(R.string.pi_install_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = MaaDesignTokens.Spacing.md),
+                    )
+                }
             }
         }
-    }
+}
 }
