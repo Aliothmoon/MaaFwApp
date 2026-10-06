@@ -9,9 +9,7 @@ import org.gradle.api.tasks.Copy
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.register
-
-/** ABIs that ship; a debug build can narrow to one via build.debugAbi to save build time */
-private val SHIPPED_ABIS = listOf("arm64-v8a", "x86_64")
+import java.io.File
 
 /** The package every build sits under; a profile only appends to it, it never replaces it */
 private const val BASE_APPLICATION_ID = "com.aliothmoon.maafw"
@@ -28,6 +26,12 @@ private val APP_ID_PATTERN = Regex("""[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*""")
  * would otherwise wipe the configurations of the build the developer is actually using
  */
 internal const val BENCHMARK_APP_ID_SUFFIX = ".benchmark"
+
+/** What the app's updater matches release assets against, see AndroidAbi.fromPackageAbi */
+internal const val UNIVERSAL_PACKAGE_ABI = "universal"
+
+/** One ABI names its own package; several make a universal one */
+internal fun packageAbi(abis: List<String>): String = abis.singleOrNull() ?: UNIVERSAL_PACKAGE_ABI
 
 /** Resource name the profile icon lands under, kept apart from the checked-in ic_launcher */
 private const val PROFILE_ICON_NAME = "ic_profile_launcher"
@@ -61,7 +65,6 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 versionCode = gitVersionCode()
                 val pinnedVersionName = textSetting("build.versionName", "BUILD_VERSION_NAME")
                 versionName = pinnedVersionName ?: gitVersionName()
-                println("Build version: applicationId=$applicationId, versionCode=$versionCode, versionName=$versionName")
 
                 // Empty string is the "nothing to show" signal, rendered app-side as a missing row
                 buildConfigField(
@@ -70,12 +73,22 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                     "\"" + (pinnedVersionName ?: gitParentVersionName()) + "\"",
                 )
                 buildConfigField("String", "MAFW_APP_VERSION", "\"" + gitOwnVersionName() + "\"")
+                // The benchmark build types start from here; debug and release set their own below
+                buildConfigField("String", "MAFW_PACKAGE_ABI", "\"$UNIVERSAL_PACKAGE_ABI\"")
                 buildConfigField("String", "MAFW_FRAMEWORK_VERSION", "\"" + maaFrameworkVersion() + "\"")
                 buildConfigField(
                     "String",
                     "MAFW_MIRRORCHYAN_RID",
                     "\"" + profile.mirrorchyanRid.orEmpty() + "\"",
                 )
+                buildConfigField("String[]", "MAFW_PI_LOG_INCLUDE", profile.piLogInclude.toJavaStringArray())
+                // Empty array = the app's built-in presets
+                buildConfigField(
+                    "String[]",
+                    "MAFW_RESOLUTION_PRESETS",
+                    profile.resolutionPresets.map { it.encode() }.toJavaStringArray(),
+                )
+                buildConfigField("boolean", "MAFW_FOREGROUND_ALLOWED", profile.foregroundAllowed.toString())
 
                 // Placeholders rather than resValue: with no profile the value stays a resource
                 // reference and the checked-in label and icon keep working untouched
@@ -136,20 +149,36 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                         tasks.matching { it.name == "assembleRelease" }
                             .configureEach { finalizedBy(verify) }
                     }
+                    // The size is what a packaging change is judged by, and otherwise needs a trip
+                    // to the outputs directory after every build
+                    val apkDir = variant.artifacts.get(SingleArtifact.APK)
+                    val apkLoader = variant.artifacts.getBuiltArtifactsLoader()
+                    val assembleName = "assemble" + variant.name.replaceFirstChar { it.uppercase() }
+                    tasks.matching { it.name == assembleName }.configureEach {
+                        doLast {
+                            apkLoader.load(apkDir.get())?.elements?.forEach { apk ->
+                                val file = File(apk.outputFile)
+                                logger.lifecycle("APK ${file.name}  ${file.length().toSizeText()}  ${file.absolutePath}")
+                            }
+                        }
+                    }
                 }
             }
 
             val debugAbis = listSetting("build.debugAbi").ifEmpty { SHIPPED_ABIS }
+            val releaseAbis = abiSetting("build.releaseAbi")
             android.buildTypes {
                 getByName("debug") {
                     ndk {
                         abiFilters += debugAbis
                     }
+                    buildConfigField("String", "MAFW_PACKAGE_ABI", "\"${packageAbi(debugAbis)}\"")
                 }
                 getByName("release") {
                     ndk {
-                        abiFilters += SHIPPED_ABIS
+                        abiFilters += releaseAbis
                     }
+                    buildConfigField("String", "MAFW_PACKAGE_ABI", "\"${packageAbi(releaseAbis)}\"")
                     // Resource shrinking stays off: it is a separate lever with its own
                     // failure mode, and nothing here has measured it yet
                     isMinifyEnabled = true
@@ -163,14 +192,28 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
                 }
             }
 
+            logger.lifecycle(
+                buildSummary(
+                    profilePath = pathSetting("pi.profile", "PI_PROFILE")?.let { rootProject.file(it).absolutePath },
+                    profile = profile,
+                    versionName = android.defaultConfig.versionName,
+                    versionCode = android.defaultConfig.versionCode,
+                    frameworkVersion = maaFrameworkVersion(),
+                    debugAbis = debugAbis,
+                    releaseAbis = releaseAbis,
+                    releaseSigned = keystorePath.isNotEmpty(),
+                ),
+            )
+
             // androidx.baselineprofile brings a pair of its own: nonMinifiedRelease to collect
             // the profile from, benchmarkRelease to measure the shipping shape with. A
             // hand-rolled `benchmark` type used to sit alongside doing the latter's job;
             // keeping both multiplied the test module's variants and let an unsuffixed one
             // through, which uninstalled the app on the developer's device
             //
-            // They keep release's full ABI set: collection needs API 33+ or a rooted adb
-            // session, so it often has to run on an emulator, and that one is x86_64.
+            // By default they keep release's full ABI set: collection needs API 33+ or a rooted adb
+            // session, so it often has to run on an emulator, and that one is x86_64. Narrowing
+            // build.releaseAbi also narrows these release-derived variants to the shipping shape.
             // configureEach rather than getByName - they do not exist yet when this runs
             android.buildTypes.configureEach {
                 if (!name.startsWith("nonMinified") && !name.startsWith("benchmarkRelease")) {

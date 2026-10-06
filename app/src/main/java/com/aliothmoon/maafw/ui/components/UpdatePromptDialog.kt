@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.update.UpdateSource
 
 /** 更新日志区的限高；超出转为内部滚动，不让长日志把按钮挤出屏幕 */
@@ -56,38 +57,40 @@ fun UpdatePromptDialog(
                 }
             }
         }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.SystemUpdate,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-                )
-                Text(
-                    text = "${stringResource(R.string.dialog_update_found_title)} ${prompt.info.version}",
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        },
-        text = releaseNotes,
-        confirmButton = {
-            TextButton(onClick = onDownload) {
-                Text(stringResource(R.string.settings_update_download))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_update_later))
-            }
-        },
-    )
+OpaqueTheme {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    )
+                    Text(
+                        text = "${stringResource(R.string.dialog_update_found_title)} ${prompt.info.version}",
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            },
+            text = releaseNotes,
+            confirmButton = {
+                TextButton(onClick = onDownload) {
+                    Text(stringResource(R.string.settings_update_download))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.dialog_update_later))
+                }
+            },
+        )
+}
 }
 
 @Composable

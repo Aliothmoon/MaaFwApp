@@ -3,6 +3,9 @@ package com.aliothmoon.maafw.gradle
 import org.gradle.api.Project
 import java.util.Properties
 
+/** Native ABIs the shell and its bundled MaaFramework/agent runtimes support. */
+internal val SHIPPED_ABIS = listOf("arm64-v8a", "x86_64")
+
 private fun Project.loadLocalProperties(): Properties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) file.inputStream().use { load(it) }
@@ -38,3 +41,19 @@ internal fun Project.listSetting(key: String): List<String> =
     (loadLocalProperties().getProperty(key) ?: "").split(',')
         .map(String::trim)
         .filter(String::isNotEmpty)
+
+/**
+ * Resolve a build-type ABI setting, preserving the historical universal default while rejecting
+ * values for which the shell does not ship native dependencies.
+ */
+internal fun Project.abiSetting(key: String): List<String> {
+    val configured = listSetting(key)
+    if (configured.isEmpty()) return SHIPPED_ABIS
+
+    val unsupported = configured.filterNot(SHIPPED_ABIS::contains).distinct()
+    require(unsupported.isEmpty()) {
+        "$key contains unsupported ABI(s): ${unsupported.joinToString()}; " +
+            "supported values are ${SHIPPED_ABIS.joinToString()}"
+    }
+    return configured.distinct()
+}

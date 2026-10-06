@@ -1,5 +1,10 @@
 package com.aliothmoon.maafw.ui
 
+import android.content.Intent
+import android.net.Uri
+import timber.log.Timber
+import com.aliothmoon.maafw.settings.search.SettingLocation
+import com.aliothmoon.maafw.settings.search.SettingSearchNavigator
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -42,6 +47,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -75,6 +81,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -86,6 +95,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.ThemeMode
 import com.aliothmoon.maafw.i18n.asString
+import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
@@ -93,15 +103,22 @@ import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
+import com.aliothmoon.maafw.schedule.ScheduleFixAction
+import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.settings.SettingsIntent
+import com.aliothmoon.maafw.settings.SettingsEffect
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaFwTheme
+import com.aliothmoon.maafw.theme.WallpaperBackdrop
+import com.aliothmoon.maafw.theme.WallpaperHost
+import com.aliothmoon.maafw.wallpaper.WallpaperStore
+import com.aliothmoon.maafw.ui.wallpaper.WallpaperScreen
 import com.aliothmoon.maafw.ui.components.MaaDiagnosticList
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
@@ -121,6 +138,9 @@ import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
+import com.aliothmoon.maafw.ui.schedule.ScheduleWakeUnlockScreen
+import com.aliothmoon.maafw.ui.settings.ConfigBackupAction
+import com.aliothmoon.maafw.ui.settings.ConfigBackupController
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
 import com.aliothmoon.maafw.ui.tasks.FullscreenPreview
 import com.aliothmoon.maafw.ui.tasks.TasksScreen
@@ -148,6 +168,13 @@ private enum class TopDestination(
     Settings(R.string.nav_settings, Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
+/** 二级页面：有自定义背景时自带一层同样的背景，随转场一起滑，盖住下面的主 tab */
+private fun NavGraphBuilder.subPage(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit,
+) = composable(route = route, arguments = arguments) { entry -> WallpaperBackdrop { content(entry) } }
+
 /** M3 NavigationBar 固定 80dp 且 padding 不可调，底栏自建成这个高度 */
 private val BottomBarHeight = 56.dp
 
@@ -156,15 +183,17 @@ private val BottomBarHeight = 56.dp
  *
  * 主 tab 那层还活着只是被盖住，不截断命中测试就能隔着二级页横滑切页、点到底栏；
  * 截断之后根部那层空白失焦也够不着了，两者必须成对出现
+ *
+ * 截断靠的是这里有个指针节点、占住命中测试（重叠的兄弟节点里只有最上面命中的那个收事件），
+ * 不能靠消费：拖动在越过 touch slop 之前每个事件都会在 Final pass 回看父节点消费了没有，
+ * 消费了就当父节点接手、整次放弃。之前这里在 Main pass 全量消费，起手慢、首个事件没过 slop
+ * 的拖动一律被掐掉，二级页的列表看着像偶发拖不动
  */
 @Composable
 private fun Modifier.subPageOverlayInput(): Modifier = this
     .pointerInput(Unit) {
         awaitPointerEventScope {
-            // Main pass 排在子节点之后，二级页自己的手势先走，这里只收剩下的
-            while (true) {
-                awaitPointerEvent().changes.forEach { it.consume() }
-            }
+            while (true) awaitPointerEvent()
         }
     }
     // 排在截断内侧，先于它拿到 Press
@@ -179,6 +208,8 @@ fun AppRoot(
     settingsViewModel: SettingsViewModel = koinViewModel(),
     overlayController: OverlayController = koinInject(),
     screenSaverManager: ScreenSaverOverlayManager = koinInject(),
+    searchNavigator: SettingSearchNavigator = koinInject(),
+    wallpaperStore: WallpaperStore = koinInject(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scheduleState by scheduleViewModel.uiState.collectAsStateWithLifecycle()
@@ -187,6 +218,8 @@ fun AppRoot(
     // 刻意不用 by 解构：在这一层读就等于让整棵树跟着触摸与日志频率重组，
     // 往下传取值函数，读推迟到真正显示它们的叶子
     val previewMarkersState = viewModel.previewMarkers.collectAsStateWithLifecycle()
+    val gameFpsState = viewModel.gameFps.collectAsStateWithLifecycle()
+    val previewSurfaceEpochState = viewModel.previewSurfaceEpoch.collectAsStateWithLifecycle()
     val runLogState = viewModel.runLog.collectAsStateWithLifecycle()
 
     // 语言重载唯一触发点：App/系统切语言都经 Activity 重建后到此
@@ -202,7 +235,7 @@ fun AppRoot(
     val darkTheme = when (state.themeMode) {
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Light -> false
-        ThemeMode.Dark -> true
+        ThemeMode.Dark, ThemeMode.PureDark -> true
     }
     LaunchedEffect(darkTheme) { onDarkThemeChanged(darkTheme) }
 
@@ -214,6 +247,8 @@ fun AppRoot(
         rememberMovablePreview(
             resolution = resolution,
             markers = { previewMarkersState.value },
+            fps = { gameFpsState.value },
+            surfaceEpoch = { previewSurfaceEpochState.value },
             // 不等 setFixedSize 那一轮：搬一次家要 50ms+ 才对上尺寸，期间遮罩会盖住刚回来的画面
             onSurfaceCreated = { previewSurfaceReady = true },
             onSurfaceAvailable = {
@@ -230,7 +265,11 @@ fun AppRoot(
         if (previewContent == null) previewFullscreen = false
     }
 
-    MaaFwTheme(themeStyle = state.themeStyle, darkTheme = darkTheme) {
+    MaaFwTheme(
+        themeStyle = state.themeStyle,
+        darkTheme = darkTheme,
+        pureBlack = state.themeMode == ThemeMode.PureDark,
+    ) {
         // 小窗与全屏同一套路数：主树原样留着，只把 movableContent 借给下面的小窗宿主
         val isInPip = LocalIsInPip.current
         // pipEligible 已排除全屏态，但 setPictureInPictureParams 要跨进程生效，
@@ -248,7 +287,32 @@ fun AppRoot(
         val pagerState = rememberPagerState(pageCount = { TopDestination.entries.size })
         val scope = rememberCoroutineScope()
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
+        var confirmStartDialog by remember { mutableStateOf<SessionEffect.ConfirmStart?>(null) }
         var exportSheetVisible by remember { mutableStateOf(false) }
+        var configBackupAction by remember { mutableStateOf<ConfigBackupAction?>(null) }
+
+        // 从触发日志过来时栈上已有日志页，再推一层；单顶避免连点叠两页
+        val openWakeUnlock: () -> Unit = {
+            navController.navigate(Routes.SCHEDULE_WAKE_UNLOCK) { launchSingleTop = true }
+        }
+        // 健康卡与保存后引导的修复入口：授权动作仍走 Session 那条路（先代授、不成再跳系统页）
+        val fixScheduleIssue: (ScheduleHealthIssue) -> Unit = { issue ->
+            when (issue) {
+                ScheduleHealthIssue.BACKEND -> viewModel.onIntent(SessionIntent.RequestRemoteAccess)
+                ScheduleHealthIssue.BATTERY -> viewModel.onIntent(
+                    SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
+                )
+                ScheduleHealthIssue.NOTIFICATION -> viewModel.onIntent(
+                    SessionIntent.RequestSystemPermission(SystemPermission.Notification),
+                )
+                ScheduleHealthIssue.OVERLAY -> viewModel.onIntent(
+                    SessionIntent.RequestSystemPermission(SystemPermission.Overlay),
+                )
+                ScheduleHealthIssue.EXACT_ALARM ->
+                    scheduleViewModel.onIntent(ScheduleIntent.RequestExactAlarmPermission)
+                ScheduleHealthIssue.WAKE_CREDENTIAL -> openWakeUnlock()
+            }
+        }
 
         val context = LocalContext.current
         // 悬浮窗面板的「导出」：先把应用拉到前面，再由这条流打开 Activity 里的导出 sheet
@@ -262,6 +326,8 @@ fun AppRoot(
                     is SessionEffect.ShowMessage -> Unit
 
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
+
+                    is SessionEffect.ConfirmStart -> confirmStartDialog = effect
 
                     // 拉起外部 Activity 要 Context，只能落在 Route 层
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
@@ -287,6 +353,15 @@ fun AppRoot(
         }
 
         LaunchedEffect(Unit) {
+            settingsViewModel.effects.collect { effect ->
+                when (effect) {
+                    is SettingsEffect.ShowMessage ->
+                        Toast.makeText(context, effect.message.resolve(context), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        LaunchedEffect(Unit) {
             scheduleViewModel.effects.collect { effect ->
                 when (effect) {
                     // 系统页还在启动，此刻重读仍是改动前的值
@@ -300,7 +375,7 @@ fun AppRoot(
         DisposableEffect(scheduleLifecycleOwner) {
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_RESUME) {
-                    scheduleViewModel.onIntent(ScheduleIntent.RefreshExactAlarmPermission)
+                    scheduleViewModel.onIntent(ScheduleIntent.RefreshEnvironment)
                 }
             }
             scheduleLifecycleOwner.lifecycle.addObserver(observer)
@@ -324,9 +399,13 @@ fun AppRoot(
             onRetry = { viewModel.onIntent(SessionIntent.ReinstallPi) },
         )
 
+        // 标题取 app 标签（profile 的 app.label），同首页标题
+        val appLabel = remember(context) {
+            context.applicationInfo.loadLabel(context.packageManager).toString()
+        }
         MaaMarkdownSheet(
-            title = stringResource(R.string.welcome_title),
-            body = state.welcomePrompt,
+            title = appLabel,
+            bodies = state.welcomePrompt,
             onDismiss = { viewModel.onIntent(SessionIntent.DismissWelcome) },
         )
 
@@ -353,6 +432,17 @@ fun AppRoot(
         // 刻意不进快照：只在测量里读写，做成 State 就是测量期写入引发的重组
         val fullWindow = remember { intArrayOf(0, 0) }
 
+        val wallpaperImage by wallpaperStore.image.collectAsStateWithLifecycle()
+        val wallpaperSettings by wallpaperStore.settings.collectAsStateWithLifecycle()
+        // 背景跟着主 tab 横移；读在 graphicsLayer 里，滑动只重铺图层不重组
+        val wallpaperParallax = remember(pagerState) {
+            {
+                val last = pagerState.pageCount - 1
+                if (last <= 0) 0f
+                else (pagerState.currentPage + pagerState.currentPageOffsetFraction) / last * 2f - 1f
+            }
+        }
+
         // 整窗的空白失焦铺在这一层；另开窗口的（sheet、Dialog）不在这棵命中树里，各自挂
         Box(
             modifier = Modifier
@@ -371,6 +461,8 @@ fun AppRoot(
                     layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
                 },
         ) {
+        // 主 tab 与二级页面共用一张背景；弹窗另开窗口，在这层之外，配色仍是不透明的
+        WallpaperHost(image = wallpaperImage, settings = wallpaperSettings, parallax = wallpaperParallax) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.background,
@@ -473,6 +565,8 @@ fun AppRoot(
                             )
                         },
                         onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
+                        onFixIssue = fixScheduleIssue,
+                        onOpenWakeUnlock = openWakeUnlock,
                         modifier = Modifier.fillMaxSize(),
                     )
 
@@ -484,7 +578,23 @@ fun AppRoot(
                         onOpenRunLogArchive = { navController.navigate(Routes.RUN_LOG_ARCHIVE) },
                         onOpenAppLog = { navController.navigate(Routes.APP_LOG) },
                         onOpenNotificationSettings = { navController.navigate(Routes.NOTIFICATION_SETTINGS) },
+                        onOpenWallpaper = { navController.navigate(Routes.WALLPAPER) },
                         onExportLogs = { exportSheetVisible = true },
+                        onConfigBackup = { configBackupAction = it },
+                        onOpenSearchResult = { entry ->
+                            // 先发请求再切页：目标页一进组合就能读到它
+                            searchNavigator.request(entry)
+                            when (val location = entry.location) {
+                                // 就在本页：锚点自己滚过去，可折叠卡自己展开
+                                is SettingLocation.Section -> Unit
+                                is SettingLocation.Page ->
+                                    navController.navigate(location.route) { launchSingleTop = true }
+                                is SettingLocation.Home ->
+                                    scope.launch { pagerState.animateScrollToPage(TopDestination.Home.ordinal) }
+                                SettingLocation.TasksQuickOptions ->
+                                    scope.launch { pagerState.animateScrollToPage(TopDestination.Tasks.ordinal) }
+                            }
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -515,7 +625,7 @@ fun AppRoot(
                 composable(Routes.TASKS) {}
                 composable(Routes.SCHEDULE) {}
                 composable(Routes.SETTINGS) {}
-                composable(
+                subPage(
                     route = Routes.SCHEDULE_EDIT,
                     arguments = listOf(
                         navArgument(Routes.SCHEDULE_EDIT_ARG) {
@@ -527,27 +637,56 @@ fun AppRoot(
                     ScheduleEditScreen(
                         strategyId = entry.arguments?.getString(Routes.SCHEDULE_EDIT_ARG),
                         onBack = { navController.popBackStack() },
+                        onSaved = { saved ->
+                            if (saved.enabled) {
+                                scheduleViewModel.onIntent(ScheduleIntent.RequestSetupWizard)
+                            }
+                        },
                     )
                 }
-                composable(Routes.SCHEDULE_TRIGGER_LOG) {
-                    ScheduleTriggerLogScreen(onBack = { navController.popBackStack() })
+                subPage(Routes.SCHEDULE_TRIGGER_LOG) {
+                    ScheduleTriggerLogScreen(
+                        onBack = { navController.popBackStack() },
+                        onFix = { action, entry ->
+                            when (action) {
+                                ScheduleFixAction.WAKE_UNLOCK_SETTINGS -> openWakeUnlock()
+                                ScheduleFixAction.BATTERY ->
+                                    if (SystemPermissionRequester.isGranted(context, SystemPermission.BatteryWhitelist)) {
+                                        // 白名单已经在了还被拦，多半是厂商自己的后台管控，开关在应用详情页里
+                                        openAppDetails(context)
+                                    } else {
+                                        viewModel.onIntent(
+                                            SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
+                                        )
+                                    }
+                                ScheduleFixAction.EDIT_RULE ->
+                                    navController.navigate(Routes.scheduleEdit(entry.strategyId))
+                            }
+                        },
+                    )
                 }
-                composable(Routes.RUN_LOG_ARCHIVE) {
+                subPage(Routes.RUN_LOG_ARCHIVE) {
                     RunLogArchiveScreen(
                         onBack = { navController.popBackStack() },
                         onOpen = { navController.navigate(Routes.runLogDetail(it)) },
                     )
                 }
-                composable(Routes.APP_LOG) {
+                subPage(Routes.APP_LOG) {
                     AppLogScreen(
                         onBack = { navController.popBackStack() },
                         onOpen = { navController.navigate(Routes.appLogDetail(it)) },
                     )
                 }
-                composable(Routes.NOTIFICATION_SETTINGS) {
+                subPage(Routes.SCHEDULE_WAKE_UNLOCK) {
+                    ScheduleWakeUnlockScreen(onBack = { navController.popBackStack() })
+                }
+                subPage(Routes.NOTIFICATION_SETTINGS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
                 }
-                composable(
+                subPage(Routes.WALLPAPER) {
+                    WallpaperScreen(onBack = { navController.popBackStack() })
+                }
+                subPage(
                     route = Routes.APP_LOG_DETAIL,
                     arguments = listOf(
                         navArgument(Routes.APP_LOG_DETAIL_ARG) { type = NavType.StringType },
@@ -558,7 +697,7 @@ fun AppRoot(
                         onBack = { navController.popBackStack() },
                     )
                 }
-                composable(
+                subPage(
                     route = Routes.RUN_LOG_DETAIL,
                     arguments = listOf(
                         navArgument(Routes.RUN_LOG_DETAIL_ARG) { type = NavType.StringType },
@@ -573,11 +712,17 @@ fun AppRoot(
         }
 
         }
+        }
 
         // 无条件挂在这一层：它注册的 SAF launcher 要活得比 sheet 的显隐久
         LogExportController(
             visible = exportSheetVisible,
             onDismiss = { exportSheetVisible = false },
+            onMessage = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
+        )
+        ConfigBackupController(
+            action = configBackupAction,
+            onActionConsumed = { configBackupAction = null },
             onMessage = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() },
         )
 
@@ -606,6 +751,23 @@ fun AppRoot(
             }
         }
 
+        // 与其它提示弹窗同形态：带标题与图标，正文 bodyLarge
+        confirmStartDialog?.let { confirm ->
+            MaaPromptDialog(
+                title = stringResource(R.string.precheck_confirm_title),
+                message = confirm.prompt.asString(),
+                icon = Icons.Outlined.WarningAmber,
+                confirmText = stringResource(R.string.precheck_start_anyway),
+                onConfirm = {
+                    confirmStartDialog = null
+                    viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
+                },
+                dismissText = stringResource(R.string.dialog_cancel),
+                onDismissRequest = { confirmStartDialog = null },
+                dismissOnOutsideClick = true,
+            )
+        }
+
         diagnosticsDialog?.let { diagnostics ->
             AlertDialog(
                 onDismissRequest = { diagnosticsDialog = null },
@@ -622,4 +784,11 @@ fun AppRoot(
             )
         }
     }
+}
+
+private fun openAppDetails(context: Context) {
+    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+        .setData(Uri.fromParts("package", context.packageName, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }.onFailure { Timber.w(it, "open app details failed") }
 }

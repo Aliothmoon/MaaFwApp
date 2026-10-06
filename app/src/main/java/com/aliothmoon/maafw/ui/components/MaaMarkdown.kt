@@ -1,9 +1,10 @@
 package com.aliothmoon.maafw.ui.components
-import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
 import android.graphics.Typeface
 import android.text.TextUtils
+import android.util.TypedValue
+import android.view.Gravity
 import android.text.style.AbsoluteSizeSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
@@ -20,16 +21,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColorInt
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.project.DescriptionFetcher
 import com.aliothmoon.maafw.project.isRemoteUrl
 import com.aliothmoon.maafw.project.normalizeProjectPath
 import io.noties.markwon.AbstractMarkwonPlugin
@@ -57,12 +63,9 @@ import org.commonmark.node.ListBlock
 import org.commonmark.node.ThematicBreak
 import org.commonmark.parser.Parser
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.Cache
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import timber.log.Timber
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * PI description 富文本渲染：Markdown 为主、HTML 子集透传（与桌面端 MXU 展示习惯同构）
@@ -81,6 +84,7 @@ fun MaaMarkdown(
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     maxLines: Int = Int.MAX_VALUE,
     linksClickable: Boolean = true,
+    textAlign: TextAlign? = null,
 ) {
     val context = LocalContext.current
     var body by remember(text) { mutableStateOf(if (isRemoteUrl(text)) null else text) }
@@ -90,7 +94,8 @@ fun MaaMarkdown(
         }
     }
 
-    val resolved = body ?: stringResource(R.string.common_loading)
+    // 文件形态的正文多半以换行收尾，纯文本路径会原样画成一行空白
+    val resolved = (body ?: stringResource(R.string.common_loading)).trimEnd()
 
     // 认不出任何记号就走 Compose Text：M9A 的 397 条 description 里 382 条是纯文本，
     // 而 AndroidView 要真 View、要跑两套 measure。必须排在建管线与解析之前，
@@ -102,6 +107,7 @@ fun MaaMarkdown(
             modifier = modifier.fillMaxWidth(),
             style = style,
             color = color,
+            textAlign = textAlign,
             maxLines = maxLines,
             overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
         )
@@ -111,9 +117,11 @@ fun MaaMarkdown(
     val onSurface = MaterialTheme.colorScheme.onSurface.toArgb()
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-    // Markwon 管线按主题色三元组进程级复用（深浅色各一份），列表项不再各建一套插件
-    val markwon = remember(onSurface, onSurfaceVariant, linkColor) {
-        cachedMarkwon(context, onSurface, onSurfaceVariant, linkColor)
+    // 列表圆点、缩进这些度量按 Compose 的 density 折算，页面缩放才管得到 TextView 里
+    val density = LocalDensity.current
+    // Markwon 管线按主题色与密度进程级复用（深浅色各一份），列表项不再各建一套插件
+    val markwon = remember(onSurface, onSurfaceVariant, linkColor, density.density) {
+        cachedMarkwon(context, onSurface, onSurfaceVariant, linkColor, density.density)
     }
     // Markdown 解析只在文本/管线变化时执行，与无关重组解耦
     val spanned = remember(markwon, resolved) {
@@ -121,7 +129,10 @@ fun MaaMarkdown(
     }
 
     val textColor = color.toArgb()
-    val fontSizeSp = if (style.fontSize.isSpecified) style.fontSize.value else 12f
+    // 字号、行高按 Compose 的 density 换成 px：view.textSize 走系统 sp，页面缩放不生效；
+    // 行高对齐 Compose 的 Text，不然富文本比同屏纯文本挤一截
+    val fontSizePx = with(density) { (if (style.fontSize.isSpecified) style.fontSize else 12.sp).toPx() }
+    val lineHeightPx = with(density) { if (style.lineHeight.isSpecified) style.lineHeight.toPx() else 0f }
 
     AndroidView(
         // 必须占满宽：表格的列宽取自 TextView 自身宽度（SpanUtils.width），而 TableRowSpan
@@ -135,7 +146,9 @@ fun MaaMarkdown(
         },
         update = { view ->
             view.setTextColor(textColor)
-            view.textSize = fontSizeSp
+            view.gravity = if (textAlign == TextAlign.Center) Gravity.CENTER_HORIZONTAL else Gravity.START
+            view.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSizePx)
+            if (lineHeightPx > 0f) view.lineHeight = lineHeightPx.roundToInt()
             view.maxLines = maxLines
             view.ellipsize = if (maxLines == Int.MAX_VALUE) null else TextUtils.TruncateAt.END
             markwon.setParsedMarkdown(view, spanned)
@@ -164,12 +177,18 @@ private fun needsRichText(text: String): Boolean =
         BARE_URL.containsMatchIn(text) ||
         RICH_LINE.containsMatchIn(text)
 
-// 组合只发生在主线程，普通 HashMap 即可；key = 主题色三元组
-private val markwonCache = HashMap<List<Int>, Markwon>()
+// 组合只发生在主线程，普通 HashMap 即可；key = 主题色三元组 + 密度
+private val markwonCache = HashMap<List<Any>, Markwon>()
 
-private fun cachedMarkwon(context: Context, onSurface: Int, onSurfaceVariant: Int, linkColor: Int): Markwon =
-    markwonCache.getOrPut(listOf(onSurface, onSurfaceVariant, linkColor)) {
-        buildMarkwon(context.applicationContext, onSurface, onSurfaceVariant, linkColor)
+private fun cachedMarkwon(
+    context: Context,
+    onSurface: Int,
+    onSurfaceVariant: Int,
+    linkColor: Int,
+    density: Float,
+): Markwon =
+    markwonCache.getOrPut(listOf(onSurface, onSurfaceVariant, linkColor, density)) {
+        buildMarkwon(context.applicationContext, onSurface, onSurfaceVariant, linkColor, density)
     }
 
 private fun buildMarkwon(
@@ -177,6 +196,7 @@ private fun buildMarkwon(
     onSurface: Int,
     onSurfaceVariant: Int,
     linkColor: Int,
+    density: Float,
 ): Markwon = Markwon.builder(context)
     .usePlugin(HtmlPlugin.create { plugin ->
         plugin.addHandler(StyledSpanTagHandler(onSurface, onSurfaceVariant))
@@ -192,12 +212,28 @@ private fun buildMarkwon(
     .usePlugin(LinkifyPlugin.create())
     .usePlugin(StrikethroughPlugin.create())
     .usePlugin(object : AbstractMarkwonPlugin() {
+        // 默认主题偏「文档」：粗黑大圆点、24dp 缩进、带下划线的链接、标题下划线，
+        // 和 app 里其余文字放一起很跳；收成 Material 的样子
         override fun configureTheme(builder: MarkwonTheme.Builder) {
+            fun px(dp: Float) = (dp * density).roundToInt()
+            val faint = ColorUtils.setAlphaComponent(onSurfaceVariant, 0x40)
             builder.linkColor(linkColor)
+                .isLinkUnderlined(false)
+                .listItemColor(onSurfaceVariant)
+                .bulletWidth(px(5f))
+                .blockMargin(px(16f))
+                .blockQuoteColor(faint)
+                .blockQuoteWidth(px(3f))
+                .headingBreakHeight(0)
+                // 默认 h1 是 2 倍，嵌在说明面板里太抢；与公告 WebView 的 CSS 同一组倍数
+                .headingTextSizeMultipliers(floatArrayOf(1.4f, 1.25f, 1.1f, 1f, 1f, 1f))
+                .thematicBreakColor(faint)
+                .codeBackgroundColor(ColorUtils.setAlphaComponent(onSurface, 0x14))
+                .codeBlockBackgroundColor(ColorUtils.setAlphaComponent(onSurface, 0x14))
         }
 
         override fun configureParser(builder: Parser.Builder) {
-            builder.enabledBlockTypes(BLOCK_TYPES)
+            builder.enabledBlockTypes(PI_BLOCK_TYPES)
         }
     })
     .build()
@@ -206,7 +242,7 @@ private fun buildMarkwon(
  * commonmark 默认块类型去掉 IndentedCodeBlock：PI 的 LICENSE 这类纯文本靠前导空格居中标题，
  * 四个空格就被当成缩进代码块，渲染成灰底等宽还照搬缩进。围栏代码块不受影响
  */
-private val BLOCK_TYPES: Set<Class<out Block>> = setOf(
+internal val PI_BLOCK_TYPES: Set<Class<out Block>> = setOf(
     Heading::class.java,
     HtmlBlock::class.java,
     ThematicBreak::class.java,
@@ -306,41 +342,5 @@ private class StyledSpanTagHandler(
             "mediumseagreen" to 0xFF3CB371.toInt(),
             "seagreen" to 0xFF2E8B57.toInt(),
         )
-    }
-}
-
-/** URL 形态 description 的拉取器：OkHttp + ETag 磁盘缓存 */
-class DescriptionFetcher private constructor(context: Context) {
-
-    private val client = OkHttpClient.Builder()
-        .cache(Cache(File(context.cacheDir, "pi_description_http"), CACHE_SIZE_BYTES))
-        .build()
-
-    /** 失败时回落返回原始 URL 文本 */
-    suspend fun fetch(url: String): String = withContext(MaaDispatchers.IO) {
-        try {
-            client.newCall(Request.Builder().url(url).build()).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Timber.w("Failed to fetch description: HTTP %d for %s", response.code, url)
-                    return@withContext url
-                }
-                response.body.string()
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to fetch description: %s", url)
-            url
-        }
-    }
-
-    companion object {
-        private const val CACHE_SIZE_BYTES = 5L * 1024 * 1024
-
-        @Volatile
-        private var instance: DescriptionFetcher? = null
-
-        fun get(context: Context): DescriptionFetcher =
-            instance ?: synchronized(this) {
-                instance ?: DescriptionFetcher(context.applicationContext).also { instance = it }
-            }
     }
 }

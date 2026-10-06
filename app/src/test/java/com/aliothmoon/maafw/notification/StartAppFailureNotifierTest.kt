@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.notification
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.runner.ActiveExecution
 import com.aliothmoon.maafw.runner.RunnerCommandResult
+import com.aliothmoon.maafw.runner.RunnerEventEnvelope
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
@@ -63,14 +64,17 @@ class StartAppFailureNotifierTest {
         private val _state = MutableStateFlow(initialState)
         override val state: StateFlow<RunnerState> = _state.asStateFlow()
 
-        private val _events = MutableSharedFlow<RunnerEvent>(extraBufferCapacity = 16)
-        override val events: Flow<RunnerEvent> = _events.asSharedFlow()
+        private val _events = MutableSharedFlow<RunnerEventEnvelope>(extraBufferCapacity = 16)
+        override val events: Flow<RunnerEventEnvelope> = _events.asSharedFlow()
 
         fun emit(event: RunnerEvent) {
-            check(_events.tryEmit(event))
+            check(_events.tryEmit(RunnerEventEnvelope("run-1", "启动应用", event)))
         }
 
-        override suspend fun start(plan: com.aliothmoon.maafw.runner.RunPlan): RunnerCommandResult =
+        override suspend fun start(
+            plan: com.aliothmoon.maafw.runner.RunPlan,
+            executionId: String,
+        ): RunnerCommandResult =
             RunnerCommandResult.Accepted
 
         override suspend fun stop(): RunnerCommandResult = RunnerCommandResult.Accepted

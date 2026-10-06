@@ -29,21 +29,34 @@ class RunLogComposer {
     private val agentTimestamps = ArrayDeque<Long>()
     private var agentFlooded = false
 
+    /** 本轮已开始 / 已成功加载的资源路径数，见 [RunLogContext.resourceBundleCount] */
+    private var resourceStarted = 0
+    private var resourceSucceeded = 0
+
     fun reset() {
         lastKind = null
         lastText = null
         agentTimestamps.clear()
         agentFlooded = false
+        resourceStarted = 0
+        resourceSucceeded = 0
     }
 
-    /** 返回 null 表示这条不展示（被去重掉，或洪泛期的 agent 输出） */
+    /** 返回 null 表示这条不展示（认不出的回调、被去重掉的，或洪泛期的 agent 输出） */
     fun compose(event: RunnerEvent, id: Long, atMillis: Long, context: RunLogContext): RunLogEntry? {
         val composed = when (event) {
+            is RunnerEvent.Marker -> return null
+
             is RunnerEvent.Log -> Composed(RunLogKind.Info, uiTextFromFramework(event.message))
 
+            // 任务名用信封里冻结的展示名（PI 的 label，已按 $i18n 物化），不用内部 name；
+            // 「名字 n/m」不随语言变，展示名本身就是 PI 本地化过的
             is RunnerEvent.Progress -> Composed(
                 RunLogKind.Info,
-                uiTextFromFramework("${event.taskName} ${event.completed}/${event.total}"),
+                uiTextFromProject(
+                    "${context.currentTaskName?.takeIf(String::isNotBlank) ?: event.taskName} " +
+                        "${event.completed}/${event.total}",
+                ),
             )
 
             // 正文已由调用方补完（$i18n 查表、{image}、文件路径），这里只负责装进条目：
@@ -57,13 +70,15 @@ class RunLogComposer {
                 uiTextOf(R.string.run_log_agent_connected, event.label),
             )
 
+            is RunnerEvent.AgentExited -> Composed(RunLogKind.Error, agentExitedText(event))
+
             is RunnerEvent.MalformedCallback -> Composed(
                 RunLogKind.Error,
                 uiTextFromFramework(MALFORMED_LABEL),
                 detail = event.raw,
             )
 
-            is RunnerEvent.Callback -> callbackEntry(event, context)
+            is RunnerEvent.Callback -> callbackEntry(event, context) ?: return null
         }
 
         // 资源多路径逐条发同样的通知，合成后文案一模一样；连着重复只留第一条
@@ -82,6 +97,8 @@ class RunLogComposer {
      * 阈值永远踩不到，抑制器等于关掉了。两条流合起来算：刷屏就是刷屏，不分从哪条管道出来
      */
     private fun agentEntry(event: RunnerEvent.AgentOutput, atMillis: Long): Composed? {
+        // 写给用户看的按 focus 渲染、进进度档；不进洪泛滑窗：它往往正是这一轮停下来的原因，刷屏期也不能吞
+        if (event.isUserFacing) return Composed(RunLogKind.Focus, uiTextFromProject(event.line))
         while (agentTimestamps.isNotEmpty() && atMillis - agentTimestamps.first() >= AGENT_FLOOD_WINDOW_MS) {
             agentTimestamps.removeFirst()
         }
@@ -100,21 +117,36 @@ class RunLogComposer {
         return Composed(kind, uiTextFromProject(event.line))
     }
 
+    /** 不过洪泛滑窗：这句紧跟在 traceback 那一大段后面，正是滑窗闭嘴的时候 */
+    private fun agentExitedText(event: RunnerEvent.AgentExited): UiText {
+        val signal = event.signal
+        val exited = if (signal != null) {
+            uiTextOf(R.string.run_log_agent_exited_signal, event.label, AgentExitCode.signalName(signal))
+        } else {
+            uiTextOf(R.string.run_log_agent_exited_code, event.label, event.exitCode)
+        }
+        val report = event.crashReport?.takeIf(String::isNotBlank) ?: return exited
+        return uiTextOf(R.string.run_log_agent_crash_report, exited, report)
+    }
+
     /**
-     * 认得出的合成人话，认不出的降级为原始转储
+     * 认得出的合成人话，认不出的丢掉（与 MXU 一致）
      *
-     * MXU 把认不出的直接丢掉；这里留成 [RunLogKind.Verbose]，「全部」档可见——
-     * 排障时对得上官方文档与源码的原文比什么都值钱
+     * `Node.*` 与点击、截图一秒几十条，只有事件名谁也看不懂；排障要的原文与 details
+     * MaaFramework 自己的 maa.log 里都有全份，这里再抄一遍只会把人要看的行埋掉
      */
-    private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed {
+    private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed? {
         // 落到 else 的 Node.* 是识别期最密的一档，它不看 details；compose 单协程，不必上锁
         val details by lazy(LazyThreadSafetyMode.NONE) { parseDetails(event.details) }
-        val verbose = Composed(RunLogKind.Verbose, uiTextFromFramework(event.message), event.details)
+
+        // 停止时框架投递的空任务（Tasker::post_stop），不是用户的任务；
+        // 它的开始 / 完成会套上当前任务名，在末尾多出一对「开始 / 完成」
+        if (event.message in TASK_MESSAGES && details.string("entry") == STOP_MARK_ENTRY) return null
 
         return when (event.message) {
             CONTROLLER_STARTING, CONTROLLER_SUCCEEDED, CONTROLLER_FAILED -> {
                 // 只讲连接；点击与截图是每帧都来的动作，讲出来就是刷屏
-                if (!details.isConnectAction()) return verbose
+                if (!details.isConnectAction()) return null
                 when (event.message) {
                     CONTROLLER_STARTING -> Composed(RunLogKind.Info, uiTextOf(R.string.run_log_connecting))
                     CONTROLLER_SUCCEEDED -> Composed(RunLogKind.Success, uiTextOf(R.string.run_log_connected))
@@ -122,15 +154,26 @@ class RunLogComposer {
                 }
             }
 
-            RESOURCE_STARTING -> Composed(
-                RunLogKind.Info,
-                uiTextOf(R.string.run_log_resource_loading, context.resourceLabel(details)),
-            )
+            // 每个路径各发一对「开始 / 成功」，交替着来，连续去重拦不住；
+            // 知道本轮几个路径就只讲第一个的开始、最后一个的成功（MXU 按 res_id 的 isFirst/isLast）
+            RESOURCE_STARTING -> {
+                resourceStarted++
+                if (context.resourceBundleCount != null && resourceStarted > 1) return null
+                Composed(
+                    RunLogKind.Info,
+                    uiTextOf(R.string.run_log_resource_loading, context.resourceLabel(details)),
+                )
+            }
 
-            RESOURCE_SUCCEEDED -> Composed(
-                RunLogKind.Success,
-                uiTextOf(R.string.run_log_resource_loaded, context.resourceLabel(details)),
-            )
+            RESOURCE_SUCCEEDED -> {
+                resourceSucceeded++
+                val total = context.resourceBundleCount
+                if (total != null && resourceSucceeded < total) return null
+                Composed(
+                    RunLogKind.Success,
+                    uiTextOf(R.string.run_log_resource_loaded, context.resourceLabel(details)),
+                )
+            }
 
             RESOURCE_FAILED -> Composed(
                 RunLogKind.Error,
@@ -162,10 +205,10 @@ class RunLogComposer {
                         event.details,
                     )
                 } else {
-                    verbose
+                    null
                 }
 
-            else -> verbose
+            else -> null
         }
     }
 
@@ -188,6 +231,13 @@ class RunLogComposer {
                 ?: details.string("name")
         }
 
+        /** MaaFramework `Tasker.cpp` 里 post_stop 的 kStopEntry */
+        const val STOP_MARK_ENTRY = "MaaTaskerPostStop"
+        val TASK_MESSAGES = setOf(TASK_STARTING, TASK_SUCCEEDED, TASK_FAILED)
+
+        const val AGENT_FLOOD_WINDOW_MS = 2_000L
+        const val AGENT_FLOOD_THRESHOLD = 15
+
         private fun parseDetails(raw: String): JsonObject? =
             runCatching { LOG_JSON.parseToJsonElement(raw) }.getOrNull() as? JsonObject
 
@@ -201,9 +251,6 @@ class RunLogComposer {
         private const val TASK_SUCCEEDED = "Tasker.Task.Succeeded"
         private const val TASK_FAILED = "Tasker.Task.Failed"
         private const val NODE_ACTION_FAILED = "Node.Action.Failed"
-
-        private const val AGENT_FLOOD_WINDOW_MS = 2_000L
-        private const val AGENT_FLOOD_THRESHOLD = 15
 
         private val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
     }
@@ -220,6 +267,8 @@ class RunLogComposer {
 data class RunLogContext(
     val currentTaskName: String? = null,
     val resourceLabel: String? = null,
+    /** 本轮交给 MaaResourcePostBundle 的路径数（resource.path 加 controller 的 attach）；null = 不知道，退回连续去重 */
+    val resourceBundleCount: Int? = null,
 ) {
     /** 拿不到当前任务名就退回 PI 的 entry：宁可显示内部名，也不显示空 */
     fun taskLabel(details: JsonObject?): String =

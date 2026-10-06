@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.notification
 
 import com.aliothmoon.maafw.runner.RunLogComposer
 import com.aliothmoon.maafw.runner.RunnerEvent
+import com.aliothmoon.maafw.runner.RunnerEventEnvelope
 import com.aliothmoon.maafw.runner.RunnerPort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -21,20 +22,20 @@ class StartAppFailureNotifier(
 
     fun setup() {
         scope.launch {
-            runnerPort.events.collect(::onEvent)
+            runnerPort.events.collect(::onEnvelope)
         }
     }
 
-    private fun onEvent(event: RunnerEvent) {
+    private fun onEnvelope(envelope: RunnerEventEnvelope) {
+        val event = envelope.event
         if (event !is RunnerEvent.Callback) return
-        val execution = runnerPort.state.value.activeExecution ?: return
-        if (notifiedExecutionId == execution.executionId) return
+        if (notifiedExecutionId == envelope.executionId) return
         if (!RunLogComposer.isStartAppFailure(event)) return
 
-        notifiedExecutionId = execution.executionId
+        notifiedExecutionId = envelope.executionId
         val taskLabel = RunLogComposer.startAppFailureTaskLabel(
             event,
-            execution.currentTaskLabel,
+            envelope.taskLabel,
         )
         notifyStartAppFailed(taskLabel)
     }

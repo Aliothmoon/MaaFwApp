@@ -1,6 +1,6 @@
 package com.aliothmoon.maafw.ui.pip
 
-import com.aliothmoon.maafw.runner.ResolutionPreference
+import com.aliothmoon.maafw.runner.ResolutionPresets
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,19 +27,12 @@ class PipAspectRatioTest {
     }
 
     @Test
-    fun `两档预览分辨率都在允许区间内`() {
-        assertWithinSystemBounds(
-            PipController.clampAspectRatio(
-                ResolutionPreference.P720.resolution.width,
-                ResolutionPreference.P720.resolution.height,
-            ),
-        )
-        assertWithinSystemBounds(
-            PipController.clampAspectRatio(
-                ResolutionPreference.P1080.resolution.width,
-                ResolutionPreference.P1080.resolution.height,
-            ),
-        )
+    fun `内置预设的预览分辨率都在允许区间内`() {
+        ResolutionPresets.builtIn.forEach { preset ->
+            assertWithinSystemBounds(
+                PipController.clampAspectRatio(preset.resolution.width, preset.resolution.height),
+            )
+        }
     }
 
     @Test
