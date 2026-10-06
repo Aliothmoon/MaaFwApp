@@ -11,16 +11,28 @@ data class ResolvedProjectSession(
     val taskCatalog: List<TaskCatalogGroup>,
     /** PI `global_option[]` 的编辑投影，按声明顺序；不随运行配置走 */
     val globalOptions: List<OptionEditorState>,
+    /** PI `setting[]` 分区：[globalOptions] 里的同一批投影，只是分了组；没有可见选项的分区不出现 */
+    val settingSections: List<OptionSectionState> = emptyList(),
     /** 当前选中 resource 的 `option[]`；换资源换这份，值按 resource name 分桶 */
     val resourceOptions: List<OptionEditorState> = emptyList(),
+    /** 当前选中 controller 的 `option[]`；同上，按 controller name 分桶 */
+    val controllerOptions: List<OptionEditorState> = emptyList(),
     val environment: ResolvedEnvironment,
     val diagnostics: List<Diagnostic>,
 )
 
 data class ResolvedEnvironment(
-    val controllerName: String,
+    val controller: ResolvedController,
     val resource: ResolvedResource?,
     val resourceCandidates: List<ResolvedResource>,
+    /** PI 里全部 Adb controller；只有一个时 UI 不出选择 */
+    val controllerCandidates: List<ResolvedController> = listOf(controller),
+)
+
+/** 匹配用内部名；UI 展示 label */
+data class ResolvedController(
+    val name: String,
+    val label: String,
 )
 
 /** 匹配用内部名；UI 展示 label */
@@ -44,8 +56,12 @@ data class ResolvedRunConfiguration(
 object UnavailableReasons {
     fun missingDefinition(): UiText = uiTextOf(R.string.task_unavailable_missing)
 
-    fun controllerMismatch(required: List<String>): UiText =
-        uiTextOf(R.string.task_unavailable_controller, required.joinToString())
+    /** 没有一个 Adb controller 能跑：Android 上永远跑不了，列出 PI 要的 controller 名对用户没有意义 */
+    fun controllerMismatch(): UiText = uiTextOf(R.string.task_unavailable_controller)
+
+    /** 换一个 Adb controller 就能跑；[required] 是那些 controller 的展示名 */
+    fun controllerSwitchRequired(required: List<String>): UiText =
+        uiTextOf(R.string.task_unavailable_controller_switch, required.joinToString())
 
     fun resourceMismatch(required: List<String>): UiText =
         uiTextOf(R.string.task_unavailable_resource, required.joinToString())
@@ -62,10 +78,25 @@ data class ResolvedConfiguredTask(
     val unavailableReason: UiText?,
     val options: List<OptionEditorState>,
     val icon: String? = null,
+    /**
+     * 没有一个 Adb controller 能跑：这种不适用不会随环境恢复，所以勾选框锁住；
+     * 旧版本里已经勾上的（任务后来不再支持 Android）按 [checkedButSkipped] 提示
+     */
+    val unsupported: Boolean = false,
 ) {
     /** 派生态，不写回；环境恢复后 enabled 意图自动生效 */
     val effectiveEnabled: Boolean get() = enabled && applicable && !missingDefinition
     val hasOptions: Boolean get() = options.isNotEmpty()
+
+    /**
+     * 勾着但这一轮不会跑：当前 controller / resource 不适用，或 Android 上没有 controller 能跑
+     * 勾选框换成不可点的警示色 i，免得用户以为它会执行
+     */
+    val checkedButSkipped: Boolean get() = enabled && !applicable && !missingDefinition
+
+    /** 勾选框的显示值与可点性 */
+    val checkedForDisplay: Boolean get() = enabled
+    val toggleable: Boolean get() = !missingDefinition && !unsupported
 }
 
 data class TaskCatalogGroup(
@@ -85,6 +116,18 @@ data class TaskCatalogItem(
     val unavailableReason: UiText?,
     val defaultChecked: Boolean,
     val icon: String? = null,
+    /** 同 [ResolvedConfiguredTask.unsupported]：目录里不可选，不能新增 */
+    val unsupported: Boolean = false,
+)
+
+/** PI v2.8.0 `setting` 分区的展示投影；选项按分区声明的顺序排 */
+data class OptionSectionState(
+    val name: String,
+    val label: String,
+    val description: String?,
+    val icon: String?,
+    val defaultExpand: Boolean,
+    val options: List<OptionEditorState>,
 )
 
 enum class OptionKind { Select, Switch, Checkbox, Input }
@@ -101,9 +144,28 @@ data class OptionEditorState(
     val cases: List<OptionCaseState>,
     val inputs: List<InputFieldState>,
     val icon: String? = null,
+    /** 仅 Checkbox 有意义，见 [OptionDefinition.Checkbox.minCount] */
+    val minCount: Int = 0,
+    val maxCount: Int? = null,
 ) {
     /** 含默认回退；Select/Switch 至多一个，Checkbox 按声明序 */
     val activeCases: List<OptionCaseState> get() = cases.filter { it.active }
+
+    val countRule: UiText? get() = checkboxCountRule(minCount, maxCount)
+
+    val belowMinCount: Boolean get() = activeCases.size < minCount
+
+    /** 选满 [maxCount] 后未选的 case 不能再点；已选的始终能取消，PI 收紧上限后旧选择才减得下来 */
+    fun canToggle(case: OptionCaseState): Boolean =
+        case.active || maxCount == null || activeCases.size < maxCount
+}
+
+/** checkbox 选择数量的要求，UI 提示与运行期诊断共用；不限时为 null */
+fun checkboxCountRule(minCount: Int, maxCount: Int?): UiText? = when {
+    maxCount == null -> if (minCount > 0) uiTextOf(R.string.option_checkbox_count_at_least, minCount) else null
+    minCount == maxCount -> uiTextOf(R.string.option_checkbox_count_exactly, minCount)
+    minCount > 0 -> uiTextOf(R.string.option_checkbox_count_between, minCount, maxCount)
+    else -> uiTextOf(R.string.option_checkbox_count_at_most, maxCount)
 }
 
 data class OptionCaseState(
@@ -135,6 +197,8 @@ data class InputFieldState(
     val verify: Regex?,
     val patternMessage: String?,
     val description: String?,
+    /** 输入框掩码，不回显原文 */
+    val password: Boolean = false,
 )
 
 /** UI 即时校验与 Builder 复验共用（docs/domain-model.md §6.6） */

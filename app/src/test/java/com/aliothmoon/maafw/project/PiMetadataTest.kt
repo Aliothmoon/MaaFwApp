@@ -1,10 +1,6 @@
 package com.aliothmoon.maafw.project
 
-import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.domain.Diagnostic
-import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.OptionDefinition
-import com.aliothmoon.maafw.i18n.isResource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
@@ -59,29 +55,6 @@ class PiMetadataTest {
     }
 
     @Test
-    fun `welcome 数组按声明顺序物化且保留 URL`() {
-        val metadata = PiParser.parseMetadata(
-            root(
-                """
-                {
-                  "welcome": [
-                    "${'$'}welcome.first",
-                    "announcements/update.md",
-                    "https://example.com/announcement.md"
-                  ]
-                }
-                """.trimIndent(),
-            ),
-            MapTextResolver(mapOf("welcome.first" to "第一条公告")),
-        )
-
-        assertEquals(
-            listOf("第一条公告", "announcements/update.md", "https://example.com/announcement.md"),
-            metadata.welcome,
-        )
-    }
-
-    @Test
     fun `github 仓库页解析出 owner repo`() {
         val metadata = PiParser.parseMetadata(
             root("""{ "github": "https://github.com/owner/repo/releases" }"""),
@@ -103,83 +76,38 @@ class PiMetadataTest {
 
     /** 指纹算在原始声明上，否则切一次语言就会让同一份 welcome 再弹一次 */
     @Test
-    fun `welcome 指纹不随语言变化`() {
+    fun `welcome 原始声明不随语言变化`() {
         val source = root("""{ "version": "1.2.0", "welcome": "${'$'}welcome.body" }""")
         val zh = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "欢迎")))
         val en = PiParser.parseMetadata(source, MapTextResolver(mapOf("welcome.body" to "Welcome")))
 
         assertNotEquals(zh.welcome, en.welcome)
-        assertEquals(zh.welcomeFingerprint, en.welcomeFingerprint)
+        assertEquals(zh.welcomeDeclarations, en.welcomeDeclarations)
     }
 
     @Test
-    fun `单字符串与单元素数组指纹相同`() {
-        val text = MapTextResolver(emptyMap())
-        val scalar = PiParser.parseMetadata(root("""{ "welcome": "hi" }"""), text)
-        val array = PiParser.parseMetadata(root("""{ "welcome": ["hi"] }"""), text)
-
-        assertEquals(scalar.welcome, array.welcome)
-        assertEquals(scalar.welcomeFingerprint, array.welcomeFingerprint)
-    }
-
-    @Test
-    fun `公告列表变化时指纹跟着变`() {
-        val text = MapTextResolver(emptyMap())
-
-        fun fingerprint(welcome: String): String? = PiParser.parseMetadata(
-            root("""{ "version": "1.0.0", "welcome": $welcome }"""),
-            text,
-        ).welcomeFingerprint
-
-        val baseline = fingerprint("""["a","b"]""")
-        assertNotEquals(baseline, fingerprint("""["a"]"""))
-        assertNotEquals(baseline, fingerprint("""["a","c"]"""))
-        assertNotEquals(baseline, fingerprint("""["b","a"]"""))
-        assertNotEquals(baseline, fingerprint("""["a","b","c"]"""))
-    }
-
-    @Test
-    fun `PI 版本变化时指纹跟着变`() {
-        val text = MapTextResolver(emptyMap())
-        val v1 = PiParser.parseMetadata(root("""{ "version": "1.0.0", "welcome": "hi" }"""), text)
-        val v2 = PiParser.parseMetadata(root("""{ "version": "1.1.0", "welcome": "hi" }"""), text)
-        assertNotEquals(v1.welcomeFingerprint, v2.welcomeFingerprint)
-    }
-
-    @Test
-    fun `没有 welcome 就没有指纹`() {
+    fun `没有 welcome 就没有声明`() {
         val metadata = PiParser.parseMetadata(root("""{ "name": "x" }"""), MapTextResolver(emptyMap()))
         assertTrue(metadata.welcome.isEmpty())
-        assertNull(metadata.welcomeFingerprint)
+        assertTrue(metadata.welcomeDeclarations.isEmpty())
     }
 
     @Test
-    fun `非法 welcome 记 Error 且不生成指纹`() {
-        listOf(
-            """{ "welcome": [] }""",
-            """{ "welcome": ["ok", 3] }""",
-            """{ "welcome": {} }""",
-            """{ "welcome": null }""",
-            """{ "welcome": 3 }""",
-            """{ "welcome": true }""",
-        ).forEach { json ->
-            val diagnostics = mutableListOf<Diagnostic>()
-            val metadata = PiParser.parseMetadata(
-                "interface.json",
-                root(json),
-                MapTextResolver(emptyMap()),
-                diagnostics,
-            )
+    fun `welcome 数组按声明顺序物化`() {
+        val metadata = PiParser.parseMetadata(
+            root("""{ "welcome": ["${'$'}notice", "announcements/update.md", 3, ""] }"""),
+            MapTextResolver(mapOf("notice" to "公告")),
+        )
 
-            assertTrue(metadata.welcome.isEmpty())
-            assertNull(metadata.welcomeFingerprint)
-            assertTrue(
-                diagnostics.any {
-                    it.severity == DiagnosticSeverity.Error &&
-                        it.message.isResource(R.string.diagnostic_welcome_invalid)
-                },
-            )
-        }
+        assertEquals(listOf("公告", "announcements/update.md"), metadata.welcome)
+        assertEquals(listOf("${'$'}notice", "announcements/update.md"), metadata.welcomeDeclarations)
+    }
+
+    @Test
+    fun `welcome 空数组视为没有`() {
+        val metadata = PiParser.parseMetadata(root("""{ "welcome": [] }"""), MapTextResolver(emptyMap()))
+        assertTrue(metadata.welcome.isEmpty())
+        assertTrue(metadata.welcomeDeclarations.isEmpty())
     }
 
     @Test
@@ -200,6 +128,7 @@ class PiMetadataTest {
                       "dsn": "https://key@example.com/1",
                       "tracing": false,
                       "traces_sample_rate": 0.25,
+                      "failure_attachments_sample_rate": 0.5,
                       "environment": "beta"
                     }
                   }
@@ -210,6 +139,7 @@ class PiMetadataTest {
         assertEquals("https://key@example.com/1", full.dsn)
         assertEquals(false, full.tracing)
         assertEquals(0.25, full.tracesSampleRate, 0.0)
+        assertEquals(0.5, full.failureAttachmentsSampleRate, 0.0)
         assertEquals("beta", full.environment)
 
         val defaults = PiParser.parseTelemetry(
@@ -217,6 +147,7 @@ class PiMetadataTest {
         )!!
         assertTrue(defaults.tracing)
         assertEquals(1.0, defaults.tracesSampleRate, 0.0)
+        assertEquals(1.0, defaults.failureAttachmentsSampleRate, 0.0)
         assertNull(defaults.environment)
     }
 

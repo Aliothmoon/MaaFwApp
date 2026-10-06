@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.runner.RunLogEntry
+import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun OverlayPanel(
     state: SessionUiState,
-    logEntries: () -> List<RunLogEntry>,
+    logEntries: () -> RunLogSnapshot,
     isLocked: Boolean,
     onIntent: (SessionIntent) -> Unit,
     onBackToApp: () -> Unit,

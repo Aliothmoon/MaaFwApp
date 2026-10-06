@@ -7,7 +7,8 @@ import com.aliothmoon.maafw.runner.MAX_PREVIEW_CONTACTS
  *
  * **从高位往低分配**：槽位表在特权进程里与 MaaFramework 的注入共用一张，而 fw 从 0 起用
  * （老版本不填 contact 时恒为 0）。同号撞上时 TouchPointerSequence 会先整体 CANCEL，
- * 把 fw 正在进行的手势一并丢掉，所以两边从两头相向取用
+ * 把 fw 正在进行的手势一并丢掉，所以两边从两头相向取用。
+ * 这些是内部 contact，不是发给游戏的 pointerId；后者由 TouchPointerSequence 从 0 分配。
  */
 class PreviewPointerSlots {
 

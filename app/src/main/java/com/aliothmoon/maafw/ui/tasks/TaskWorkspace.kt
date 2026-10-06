@@ -22,7 +22,7 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.RunLogEntry
+import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -37,7 +37,7 @@ import com.aliothmoon.maafw.ui.components.MaaEmptyState
 @Composable
 internal fun TaskWorkspace(
     state: SessionUiState,
-    runLog: () -> List<RunLogEntry>,
+    runLog: () -> RunLogSnapshot,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     showLogToggle: Boolean,
@@ -168,7 +168,7 @@ private fun TaskWorkspaceBody(
     logOpen: Boolean,
     active: ResolvedRunConfiguration?,
     locked: Boolean,
-    runLog: () -> List<RunLogEntry>,
+    runLog: () -> RunLogSnapshot,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     onRequestAddTasks: () -> Unit,

@@ -50,6 +50,8 @@ app:
 
 图标文件必须落在白名单里，否则进不了包，界面上不会显示。agent 脚本如果放在资源仓库的 `agent/` 下，把 `agent/**` 加进 `include`。
 
+`display` 管运行在哪块屏上：`presets` 是后台模式虚拟屏的分辨率档位，缺省为内置的 720P@240dpi、1080P@280dpi；`foreground: false` 只留后台模式（Android 10 以下用不了），缺省为 `true`。
+
 ## 资源约定
 
 按桌面端习惯写即可，下面几条是 Android 上会对不上的地方：
@@ -88,6 +90,7 @@ agent:
   runtimes:
     - location: bundle
       executable: bin/python3
+      name: py-agent
       args: [-u, agent/main.py]
       env:
         PYTHONHOME: "{bundle}/prefix"
@@ -104,7 +107,19 @@ agent:
 
 identifier 一定在最后一位，工作目录是资源解包根。`{bundle}` 和 `{nativeLibs}` 是仅有的两个占位符。
 
+`name` 可选，只用于运行日志里「agent 已连接」那行的显示；不写就显示可执行体的文件名。
+
 agent 侧：读最后一个参数当 identifier，注册自定义识别 / 动作，然后 `MaaAgentServerStartUp` → `MaaAgentServerJoin`。多个 agent 同时在线时回调名不要重复。
+
+agent 自己的日志按 MaaFramework 的习惯写在工作目录的 `debug/` 下即可：用户在 App 里导出日志时，会把资源解包根下匹配配方 `logs.include` 的文件一起打进包（zip 里在 `pi/` 前缀下），只收近 7 天。缺省 `[debug/**/*.log]`，写到别处的在配方里改，写 `[]` 不收：
+
+```yaml
+logs:
+  include:            # 相对资源解包根，与 include 同一套 glob
+    - debug/**/*.log
+```
+
+agent 写在工作目录下的文件跨 App 更新保留，前提是它不落在包带来的根级条目里：更新只整体替换新包根目录下有的条目（`resource/`、`tasks/`、`agent/` 这些），其余不动。所以记录、缓存放 `debug/`、`config/` 这类包里没有的目录，别写进 `agent/`。匹配 `logs.include` 的日志在更新时会清掉 7 天前的；用户在设置里手动「重新解压资源」则连同这些文件一起清空。
 
 ### Python
 
@@ -139,7 +154,14 @@ python scripts/build_agent_bundle.py \
 ./gradlew :app:assembleRelease
 ```
 
-本地迭代可以在 `local.properties` 里写 `build.debugAbi=arm64-v8a`，debug 包就只打这一个 ABI。release 始终包含 `arm64-v8a` 和 `x86_64`。
+默认的 debug 和 release 包都包含 `arm64-v8a` 与 `x86_64`。可以在 `local.properties` 里按构建类型裁剪：
+
+```properties
+build.debugAbi=arm64-v8a
+build.releaseAbi=arm64-v8a
+```
+
+值为逗号分隔的 `arm64-v8a`、`x86_64`，未配置时仍默认包含两者。release 的 ABI 必须与铺入 `app/src/main/jniLibs` 的 MaaFramework，以及配方 `agent.abi` 声明并实际提供的 agent runtime 一致；否则 APK 会宣称支持一个缺少运行时的架构。
 
 改完配方或上游资源后，也可以只跑同步：
 

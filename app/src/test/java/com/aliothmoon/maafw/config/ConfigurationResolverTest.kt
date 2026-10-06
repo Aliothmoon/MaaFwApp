@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.isResource
+import com.aliothmoon.maafw.domain.OptionApplicability
 import com.aliothmoon.maafw.domain.OptionCaseDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionKind
@@ -34,6 +35,7 @@ class ConfigurationResolverTest {
         resources: List<String> = emptyList(),
         optionNames: List<String> = emptyList(),
         groups: List<String> = emptyList(),
+        controllers: List<String> = emptyList(),
     ) = TaskDefinition(
         name = name,
         entry = "E_$name",
@@ -42,7 +44,7 @@ class ConfigurationResolverTest {
         groups = groups,
         optionNames = optionNames,
         pipelineOverride = emptyJson,
-        controllers = emptyList(),
+        controllers = controllers,
         resources = resources,
         defaultCheck = true,
     )
@@ -55,10 +57,11 @@ class ConfigurationResolverTest {
             ResourceDefinition("官服", listOf("./base")),
             ResourceDefinition("B服", listOf("./bili")),
         ),
+        controllers: List<ControllerDefinition> = listOf(ControllerDefinition()),
     ) = ProjectDefinition(
         name = "demo",
         version = "1",
-        controller = ControllerDefinition(),
+        controllers = controllers,
         resources = resources,
         tasks = tasks,
         groups = listOf(TaskGroupDefinition(name = "ungrouped", isUngrouped = true)),
@@ -151,6 +154,64 @@ class ConfigurationResolverTest {
         val task = session.activeConfiguration!!.tasks.single()
         assertFalse(task.applicable)
         assertTrue(task.unavailableReason.isResource(R.string.task_unavailable_resource))
+    }
+
+    /**
+     * controller 不匹配在 Android 上不会恢复：勾选框锁住、已勾的按警示显示，目录里也不能再加；
+     * resource 不匹配同样保留勾选意图并警示
+     */
+    @Test
+    fun `controller mismatch is unsupported while resource mismatch keeps intent`() {
+        val def = definition(tasks = listOf(task("PC", controllers = listOf("Win32")), task("T2", resources = listOf("B服"))))
+        val session = ConfigurationResolver.resolve(
+            def,
+            UserConfiguration(
+                initialized = true,
+                activeResourceName = "官服",
+                configurations = listOf(
+                    RunConfiguration(
+                        id = RunConfigurationId("c1"),
+                        name = "A",
+                        tasks = listOf(ConfiguredTask("PC", instanceId = "i1"), ConfiguredTask("T2", instanceId = "i2")),
+                    ),
+                ),
+                activeConfigurationId = RunConfigurationId("c1"),
+            ),
+        )
+        val (pc, bili) = session.activeConfiguration!!.tasks
+        assertTrue(pc.unsupported)
+        assertTrue(pc.checkedForDisplay)
+        assertTrue(pc.checkedButSkipped)
+        assertFalse(pc.toggleable)
+        assertTrue(pc.unavailableReason.isResource(R.string.task_unavailable_controller))
+        assertFalse(bili.unsupported)
+        assertTrue(bili.checkedForDisplay)
+        assertTrue(bili.checkedButSkipped)
+        assertTrue(bili.toggleable)
+
+        val catalog = session.taskCatalog.flatMap { it.tasks }.associateBy { it.taskName }
+        assertTrue(catalog.getValue("PC").unsupported)
+        assertFalse(catalog.getValue("T2").unsupported)
+    }
+
+    @Test
+    fun `createFromTemplate leaves unsupported tasks unchecked`() {
+        val def = definition(
+            tasks = listOf(task("T1"), task("PC", controllers = listOf("Win32"))),
+            templates = listOf(
+                ConfigurationTemplate(
+                    name = "Daily",
+                    label = "日常",
+                    description = null,
+                    tasks = listOf(
+                        TemplateTask("T1", enabled = true, optionValues = emptyMap()),
+                        TemplateTask("PC", enabled = true, optionValues = emptyMap()),
+                    ),
+                ),
+            ),
+        )
+        val created = ConfigurationResolver.createFromTemplate(def, "Daily")!!
+        assertEquals(listOf("T1" to true, "PC" to false), created.tasks.map { it.taskName to it.enabled })
     }
 
     @Test
@@ -252,6 +313,94 @@ class ConfigurationResolverTest {
     fun `checkApplicability accepts empty resource filter`() {
         val def = definition()
         val t = def.task("T1")!!
-        assertNull(ConfigurationResolver.checkApplicability(def, t, "官服"))
+        assertNull(ConfigurationResolver.checkApplicability(def, t, def.controller(null), "官服"))
+    }
+
+    private val localAndCloud = listOf(
+        ControllerDefinition(name = "ADB", type = "Adb", label = "安卓端"),
+        ControllerDefinition(name = "CloudADB", type = "Adb", label = "云游戏", optionNames = listOf("CloudOnly")),
+    )
+
+    private fun selecting(controllerName: String?, vararg tasks: ConfiguredTask): UserConfiguration {
+        val id = RunConfigurationId("c")
+        return UserConfiguration(
+            initialized = true,
+            activeResourceName = "官服",
+            activeControllerName = controllerName,
+            configurations = listOf(RunConfiguration(id, "配置", tasks.toList())),
+            activeConfigurationId = id,
+        )
+    }
+
+    /** 换个 controller 就能跑的任务保留勾选意图、不锁勾选框；一个都跑不了的才锁 */
+    @Test
+    fun `task limited to another Adb controller waits for a switch instead of being unsupported`() {
+        val def = definition(
+            tasks = listOf(
+                task("Local", controllers = listOf("ADB")),
+                task("Both", controllers = listOf("ADB", "CloudADB")),
+                task("PC", controllers = listOf("Win32")),
+            ),
+            controllers = localAndCloud,
+        )
+        val session = ConfigurationResolver.resolve(
+            def,
+            selecting("CloudADB", ConfiguredTask("Local"), ConfiguredTask("Both"), ConfiguredTask("PC")),
+        )
+        assertEquals("CloudADB", session.environment.controller.name)
+        assertEquals(listOf("ADB", "CloudADB"), session.environment.controllerCandidates.map { it.name })
+
+        val tasks = session.activeConfiguration!!.tasks.associateBy { it.taskName }
+        val local = tasks.getValue("Local")
+        assertFalse(local.applicable)
+        assertFalse(local.unsupported)
+        assertTrue(local.checkedForDisplay)
+        assertTrue(local.unavailableReason.isResource(R.string.task_unavailable_controller_switch, "安卓端"))
+        assertTrue(tasks.getValue("Both").applicable)
+        assertTrue(tasks.getValue("PC").unsupported)
+
+        // 切回本地客户端就恢复
+        val back = ConfigurationResolver.resolve(def, selecting("ADB", ConfiguredTask("Local")))
+        assertTrue(back.activeConfiguration!!.tasks.single().applicable)
+    }
+
+    @Test
+    fun `controller options and controller-scoped task options follow the selection`() {
+        fun select(name: String, controllers: List<String>) = OptionDefinition.Select(
+            name = name,
+            label = name,
+            description = null,
+            cases = listOf(OptionCaseDefinition("a", "A", null, emptyJson, emptyList())),
+            defaultCase = null,
+            applicability = OptionApplicability(controllers = controllers),
+        )
+        val def = definition(
+            tasks = listOf(task("T1", optionNames = listOf("LocalOnly", "CloudOnly"))),
+            options = mapOf(
+                "LocalOnly" to select("LocalOnly", listOf("ADB")),
+                "CloudOnly" to select("CloudOnly", listOf("CloudADB")),
+            ),
+            controllers = localAndCloud,
+        )
+        val cloud = ConfigurationResolver.resolve(def, selecting("CloudADB", ConfiguredTask("T1")))
+        assertEquals(listOf("CloudOnly"), cloud.controllerOptions.map { it.name })
+        assertEquals(listOf("CloudOnly"), cloud.activeConfiguration!!.tasks.single().options.map { it.name })
+
+        val local = ConfigurationResolver.resolve(def, selecting(null, ConfiguredTask("T1")))
+        assertEquals("ADB", local.environment.controller.name)
+        assertTrue(local.controllerOptions.isEmpty())
+        assertEquals(listOf("LocalOnly"), local.activeConfiguration!!.tasks.single().options.map { it.name })
+    }
+
+    @Test
+    fun `controller selection falls back to the first with a warning when missing`() {
+        val session = ConfigurationResolver.resolve(
+            definition(controllers = localAndCloud),
+            selecting("Gone"),
+        )
+        assertEquals("ADB", session.environment.controller.name)
+        assertTrue(
+            session.diagnostics.any { it.message.isResource(R.string.diagnostic_controller_selection_missing) },
+        )
     }
 }

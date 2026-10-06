@@ -7,9 +7,11 @@ import com.aliothmoon.maafw.domain.Diagnostic.Companion.error
 import com.aliothmoon.maafw.domain.Diagnostic.Companion.warning
 import com.aliothmoon.maafw.domain.DiagnosticMessages
 import com.aliothmoon.maafw.domain.OptionDefinition
+import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.ProjectMetadata
 import com.aliothmoon.maafw.domain.ResourceDefinition
+import com.aliothmoon.maafw.domain.SettingSectionDefinition
 import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.casesOrEmpty
@@ -44,6 +46,8 @@ class ProjectLoader(
         val templates = mutableListOf<ConfigurationTemplate>()
         val declaredGroups = mutableListOf<TaskGroupDefinition>()
         val globalOptionNames = mutableListOf<String>()
+        val settingSections = mutableListOf<SettingSectionDefinition>()
+        val skippedOptionNames = mutableSetOf<String>()
     }
 
     fun load(): ProjectLoadResult {
@@ -108,7 +112,9 @@ class ProjectLoader(
             state.tasks,
             state.globalOptionNames,
             pi.resources,
+            pi.controllers.filter(::isAdb),
             state.options,
+            state.skippedOptionNames,
             diagnostics,
         )
         detectOptionCycles(state.options, diagnostics)
@@ -126,7 +132,8 @@ class ProjectLoader(
             template.copy(
                 tasks = template.tasks.map {
                     it.copy(
-                        label = taskLabels[it.taskName] ?: it.taskName
+                        label = taskLabels[it.taskName] ?: it.taskName,
+                        optionValues = withoutPresetPasswords(template.name, it.optionValues, state.options, diagnostics),
                     )
                 },
             )
@@ -135,7 +142,7 @@ class ProjectLoader(
         val definition = ProjectDefinition(
             name = pi.name ?: source.projectName,
             version = pi.version,
-            controller = resolveController(pi, diagnostics),
+            controllers = resolveControllers(pi, text, state.options, diagnostics),
             resources = pi.resources
                 .map {
                     ResourceDefinition(
@@ -154,11 +161,11 @@ class ProjectLoader(
             options = state.options,
             // 引用不存在的项已在上面报 Error；这里过滤掉，免得 builder 再报一遍同一件事
             globalOptionNames = state.globalOptionNames.filter { it in state.options },
+            settingSections = resolveSettingSections(state, diagnostics),
+            skippedOptionNames = state.skippedOptionNames.toSet(),
             templates = templates,
             agents = pi.agents,
-            metadata = pi.root?.let {
-                PiParser.parseMetadata(INTERFACE_JSON, it, text, diagnostics)
-            } ?: ProjectMetadata(),
+            metadata = pi.root?.let { PiParser.parseMetadata(it, text) } ?: ProjectMetadata(),
             telemetry = pi.root?.let(PiParser::parseTelemetry),
             translations = translations,
         )
@@ -166,30 +173,59 @@ class ProjectLoader(
     }
 
     /**
-     * Android 外壳只驱动 Adb controller，从 PI 声明里取该项的真实 name
+     * 协议要求 preset 不写 password 字段：interface.json 随资源分发，写进去的就是人人可见的明文。
+     * 放在合并之后做，是因为 preset 与它引用的 option 可以分在不同的 import 分片里
+     */
+    private fun withoutPresetPasswords(
+        preset: String,
+        values: Map<String, OptionValue>,
+        options: Map<String, OptionDefinition>,
+        diagnostics: MutableList<Diagnostic>,
+    ): Map<String, OptionValue> = values.mapValues { (optionName, value) ->
+        val inputs = value as? OptionValue.Inputs ?: return@mapValues value
+        val passwords = (options[optionName] as? OptionDefinition.Input)?.fields
+            ?.filter { it.password && it.name in inputs.values }
+            .orEmpty()
+        passwords.forEach {
+            diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.presetPasswordIgnored(preset, optionName, it.name))
+        }
+        if (passwords.isEmpty()) value else inputs.copy(values = inputs.values - passwords.map { it.name }.toSet())
+    }
+
+    /**
+     * Android 外壳只驱动 Adb controller；PI 可以声明好几个（本地客户端、云游戏各一个），全留下由用户选
      * task 的 controller[] 引用的是 controller 名，写死名字会让换一个 PI 后全部任务被判不适用
      * 未声明 Adb 说明该 PI 不面向 Android：记 warning 并回落默认，不阻断加载
      */
-    private fun resolveController(
+    private fun resolveControllers(
         pi: PiInterfaceContent,
+        text: PiTextResolver,
+        options: Map<String, OptionDefinition>,
         diagnostics: MutableList<Diagnostic>,
-    ): ControllerDefinition {
-        val adb = pi.controllers
-            .firstOrNull { it.type.equals(ADB_CONTROLLER_TYPE, ignoreCase = true) }
-
-        if (adb == null) {
+    ): List<ControllerDefinition> {
+        val adb = pi.controllers.filter(::isAdb)
+        if (adb.isEmpty()) {
             diagnostics += warning(INTERFACE_JSON, DiagnosticMessages.noAdbController())
-            return ControllerDefinition()
+            return listOf(ControllerDefinition())
         }
-        return ControllerDefinition(
-            name = adb.name,
-            type = adb.type,
-            displayShortSide = adb.displayShortSide,
-            displayLongSide = adb.displayLongSide,
-            displayRaw = adb.displayRaw,
-            raw = adb.raw,
-        )
+        return adb.map {
+            ControllerDefinition(
+                name = it.name,
+                type = it.type,
+                label = text.label(it.label) ?: it.name,
+                displayShortSide = it.displayShortSide,
+                displayLongSide = it.displayLongSide,
+                displayRaw = it.displayRaw,
+                attachResourcePaths = it.attachResourcePaths,
+                // 引用不存在的项已在 validateOptionReferences 报 Error
+                optionNames = it.optionNames.filter { name -> name in options },
+                raw = it.raw,
+            )
+        }
     }
+
+    private fun isAdb(controller: PiControllerContent): Boolean =
+        controller.type.equals(ADB_CONTROLLER_TYPE, ignoreCase = true)
 
     /** 分片内容合并进累计状态：task/option 重名 → error，preset/group 重名 → warning，一律先定义优先 */
     private fun mergeContent(
@@ -199,6 +235,7 @@ class ProjectLoader(
         diagnostics: MutableList<Diagnostic>,
     ) {
         diagnostics += parsed.diagnostics
+        state.skippedOptionNames += parsed.skippedOptionNames
         for (task in parsed.tasks) {
             if (!state.taskNames.add(task.name)) {
                 diagnostics += error(
@@ -230,6 +267,13 @@ class ProjectLoader(
         // 按声明顺序追加、去重即可（对齐 MXU 的 import 合并）
         for (name in parsed.globalOptionNames) {
             if (name !in state.globalOptionNames) state.globalOptionNames += name
+        }
+        for (section in parsed.settingSections) {
+            if (state.settingSections.any { it.name == section.name }) {
+                diagnostics += warning(file, DiagnosticMessages.duplicateDeclaration("setting", section.name))
+            } else {
+                state.settingSections += section
+            }
         }
         for (group in parsed.groups) {
             if (state.declaredGroups.any { it.name == group.name }) {
@@ -340,6 +384,42 @@ class ProjectLoader(
         return normalized to groups
     }
 
+    /**
+     * setting 分区只给 global_option 分组：不存在的键记 Error，存在但不在 global_option 里的记 warning，都剔除。
+     * 后者 MXU 照样渲染，但编译只认 global_option，控件改了不起作用，这边宁可不显示
+     */
+    private fun resolveSettingSections(
+        state: MergeState,
+        diagnostics: MutableList<Diagnostic>,
+    ): List<SettingSectionDefinition> {
+        val globalNames = state.globalOptionNames.toSet()
+        return state.settingSections.map { section ->
+            section.copy(
+                optionNames = section.optionNames.filter { ref ->
+                    when {
+                        // 跳过时已记 warning，这里只剔除
+                        ref in state.skippedOptionNames -> false
+
+                        ref !in state.options -> {
+                            diagnostics += error("setting", DiagnosticMessages.missingReference("option", ref))
+                            false
+                        }
+
+                        ref !in globalNames -> {
+                            diagnostics += warning(
+                                "setting",
+                                DiagnosticMessages.settingOptionNotGlobal(section.name, ref),
+                            )
+                            false
+                        }
+
+                        else -> true
+                    }
+                },
+            )
+        }
+    }
+
     /** 合成「未分组」兜底组：消费方按 isUngrouped 标记判定，不依赖显示名 */
     private fun ungroupedGroup() = TaskGroupDefinition(UNGROUPED, isUngrouped = true)
 
@@ -347,11 +427,15 @@ class ProjectLoader(
         tasks: List<TaskDefinition>,
         globalOptionNames: List<String>,
         resources: List<PiResourceContent>,
+        controllers: List<PiControllerContent>,
         options: Map<String, OptionDefinition>,
+        skipped: Set<String>,
         diagnostics: MutableList<Diagnostic>,
     ) {
+        // 有意跳过的 option 已在解析时记过 warning，引用它们不再重复报悬空
+        fun missing(ref: String) = ref !in options && ref !in skipped
         for (ref in globalOptionNames) {
-            if (ref !in options) {
+            if (missing(ref)) {
                 diagnostics += error(
                     "global_option",
                     DiagnosticMessages.missingReference("option", ref)
@@ -360,7 +444,7 @@ class ProjectLoader(
         }
         for (resource in resources) {
             for (ref in resource.optionNames) {
-                if (ref !in options) {
+                if (missing(ref)) {
                     diagnostics += error(
                         "resource:${resource.name}",
                         DiagnosticMessages.missingReference("option", ref),
@@ -368,9 +452,19 @@ class ProjectLoader(
                 }
             }
         }
+        for (controller in controllers) {
+            for (ref in controller.optionNames) {
+                if (missing(ref)) {
+                    diagnostics += error(
+                        "controller:${controller.name}",
+                        DiagnosticMessages.missingReference("option", ref),
+                    )
+                }
+            }
+        }
         for (task in tasks) {
             for (ref in task.optionNames) {
-                if (ref !in options) {
+                if (missing(ref)) {
                     diagnostics += error(
                         "task:${task.name}",
                         DiagnosticMessages.missingReference("option", ref),
@@ -381,7 +475,7 @@ class ProjectLoader(
         for (option in options.values) {
             for (case in option.casesOrEmpty()) {
                 for (child in case.childOptionNames) {
-                    if (child !in options) {
+                    if (missing(child)) {
                         diagnostics += error(
                             "option:${option.name}/case:${case.name}",
                             DiagnosticMessages.missingReference("option", child),

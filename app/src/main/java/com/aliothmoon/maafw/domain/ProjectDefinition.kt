@@ -6,13 +6,19 @@ import kotlinx.serialization.json.JsonObject
 data class ProjectDefinition(
     val name: String,
     val version: String?,
-    val controller: ControllerDefinition,
+    /**
+     * PI 里全部 `type=Adb` 的 controller，按声明顺序，首项是缺省
+     * 一个都没有时是一个内置默认，所以永远不为空
+     */
+    val controllers: List<ControllerDefinition> = listOf(ControllerDefinition()),
     val resources: List<ResourceDefinition>,
     val tasks: List<TaskDefinition>,
     val groups: List<TaskGroupDefinition>,
     val options: Map<String, OptionDefinition>,
     /** PI v2.3.0 `global_option[]`：参与每个任务的 override，优先级最低，且不依赖任何选择 */
     val globalOptionNames: List<String> = emptyList(),
+    /** PI v2.8.0 `setting[]`：只给 [globalOptionNames] 在设置页分区，不参与编译 */
+    val settingSections: List<SettingSectionDefinition> = emptyList(),
     val templates: List<ConfigurationTemplate>,
     /** 顶层 agent 声明，按 PI 里的顺序；无 agent 的 PI 为空 */
     val agents: List<AgentDefinition> = emptyList(),
@@ -26,8 +32,17 @@ data class ProjectDefinition(
      * `focus` 模板——那是运行期才随回调到达的正文，查表只能推迟到那时候
      */
     val translations: Map<String, String> = emptyMap(),
+    /**
+     * 外壳有意跳过的 option（如 hotkey）：加载时已记 warning 且不在 [options] 里，
+     * 引用它们的地方静默忽略，不再按悬空引用报错
+     */
+    val skippedOptionNames: Set<String> = emptySet(),
 ) {
     fun task(taskName: String): TaskDefinition? = taskIndex[taskName]
+
+    /** 用户选的那个；没选或对不上（PI 更新后删了它）回落首项 */
+    fun controller(name: String?): ControllerDefinition =
+        controllers.firstOrNull { it.name == name } ?: controllers.first()
 
     private val taskIndex: Map<String, TaskDefinition> by lazy { tasks.associateBy { it.name } }
 }
@@ -37,16 +52,22 @@ data class TelemetryDefinition(
     val dsn: String,
     val tracing: Boolean = true,
     val tracesSampleRate: Double = 1.0,
+    /** 失败事件带出错截图的比例；事件本身与日志不受它影响 */
+    val failureAttachmentsSampleRate: Double = 1.0,
     val environment: String? = null,
 )
 
-/**
- * [welcomeFingerprint] 算在物化前的完整有序声明上：算在正文上的话，切一次语言换了译文就会重弹
- */
 data class ProjectMetadata(
+    /** 按 PI 声明顺序排好的公告正文，已物化；空表示没有 welcome */
     val welcome: List<String> = emptyList(),
-    val welcomeFingerprint: String? = null,
+    /**
+     * 物化前的原始声明，只用来算指纹：算在译文上的话，切一次语言就会重弹。
+     * 其中 URL 项由 [com.aliothmoon.maafw.project.WelcomeResolver] 换成拉到的正文再算
+     */
+    val welcomeDeclarations: List<String> = emptyList(),
     val description: String? = null,
+    /** PI 根上的 `icon`（可走 i18n），相对 PI 根目录 */
+    val icon: String? = null,
     val contact: String? = null,
     val license: String? = null,
     val github: String? = null,
@@ -62,10 +83,19 @@ data class ProjectMetadata(
 data class ControllerDefinition(
     val name: String = "Android",
     val type: String = "ADB",
+    /** $i18n 已物化；匹配/持久化仍用 [name] */
+    val label: String = name,
     /** 三者互斥，都缺省时由 Runner 按默认分辨率兜底 */
     val displayShortSide: Int? = null,
     val displayLongSide: Int? = null,
     val displayRaw: Boolean = false,
+    /**
+     * PI v2.2.0 `attach_resource_path`：在 `resource.path[]` 全部加载之后按序追加加载，
+     * 对齐 MaaPiCli 的 `Configurator::generate_runtime`
+     */
+    val attachResourcePaths: List<String> = emptyList(),
+    /** PI v2.3.0 `controller[].option`：当前选中这个时参与每个任务的 override */
+    val optionNames: List<String> = emptyList(),
     /**
      * PI 里这一条的原样对象，供 `PI_CONTROLLER` 整条透传（见 PiAgentEnv）
      * 投影只留外壳用得上的字段，而协议要求交给 agent 的是完整条目；空对象表示该条不是 PI 声明的
@@ -104,7 +134,10 @@ data class TaskDefinition(
     val resources: List<String>,
     val defaultCheck: Boolean,
     val icon: String? = null,
-)
+) {
+    /** 协议里 task 的 `controller[]` 引用的是 controller 名；不按 type 比，否则同为 Adb 的几项就分不开了 */
+    fun runsOn(controller: ControllerDefinition): Boolean = controllers.isEmpty() || controller.name in controllers
+}
 
 /** PI v2.4.0 顶层 group[]；label 缺省回落 name */
 data class TaskGroupDefinition(
@@ -115,6 +148,21 @@ data class TaskGroupDefinition(
     val defaultExpand: Boolean = true,
     /** 加载器合成的未分组兜底；用标记判定，避免与真实同名 group 冲突 */
     val isUngrouped: Boolean = false,
+)
+
+/**
+ * PI v2.8.0 顶层 setting[] 的一个分区；label 缺省回落 name
+ *
+ * 协议把它定为展示层元数据：值照旧存 globalOptionValues，编译只认 global_option
+ */
+data class SettingSectionDefinition(
+    val name: String,
+    val label: String = name,
+    val description: String? = null,
+    val icon: String? = null,
+    /** 按声明顺序；加载期已剔除不存在的与不在 global_option 里的键 */
+    val optionNames: List<String> = emptyList(),
+    val defaultExpand: Boolean = true,
 )
 
 /**
@@ -186,7 +234,13 @@ sealed interface OptionDefinition {
         val defaultCases: List<String>,
         override val icon: String? = null,
         override val applicability: OptionApplicability = OptionApplicability.Unrestricted,
-    ) : OptionDefinition
+        /** v2.10.1；解析期已收敛到 0..cases.size，且不大于 [maxCount] */
+        val minCount: Int = 0,
+        /** null = 不限 */
+        val maxCount: Int? = null,
+    ) : OptionDefinition {
+        fun acceptsCount(count: Int): Boolean = count >= minCount && (maxCount == null || count <= maxCount)
+    }
 
     data class Input(
         override val name: String,
@@ -227,7 +281,18 @@ data class InputFieldDefinition(
     val description: String?,
     /** $i18n 已物化；placeholder 仍用 [name] */
     val label: String = name,
-)
+    /**
+     * v2.10.0：界面掩码、日志与遥测不带原文、落盘加密（见 UserConfigurationSerializer）；
+     * 为 true 时 [default] 恒为空，PI 写了也在解析期丢掉
+     */
+    val password: Boolean = false,
+) {
+    /** 要进诊断、日志的输入值一律过这里：password 字段只给掩码 */
+    fun displayValue(raw: String): String = if (password) SECRET_MASK else raw
+}
+
+/** 诊断、日志与导出文件里代替 password 原文的占位 */
+const val SECRET_MASK = "***"
 
 /** PI preset 一次性模板；name 标识，label 展示 */
 data class ConfigurationTemplate(

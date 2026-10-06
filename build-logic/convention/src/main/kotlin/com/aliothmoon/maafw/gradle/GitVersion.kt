@@ -38,26 +38,35 @@ internal fun Project.gitVersionCode(): Int {
     }.standardOutput.asText.get().trim().toInt()
 }
 
+internal fun Project.gitVersionName(workingDir: File): String =
+    versionNameFromDescribe(
+        providers.exec {
+            workingDir(workingDir)
+            commandLine("git", "describe", "--tags", "--always")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim(),
+    )
+
 /**
- * A tag on HEAD gives x.y.z, keeping any prerelease suffix; a tag further back bumps patch by one
- * and appends alpha.<distance>. A describe output that does not match degrades to itself instead
- * of blocking the build, so a repository without a single tag versions itself by short hash
+ * A tag on HEAD gives x.y.z, keeping any prerelease suffix. Past a release tag, patch is bumped by
+ * one and alpha.<distance> appended. Past a prerelease tag the distance is appended to that
+ * prerelease instead: the build still leads up to x.y.z, and bumping patch there would sort it
+ * above the release, so the update check would never offer it. A describe output that does not
+ * match degrades to itself instead of blocking the build, so a repository without a single tag
+ * versions itself by short hash
  */
-internal fun Project.gitVersionName(workingDir: File): String {
-    val desc = providers.exec {
-        workingDir(workingDir)
-        commandLine("git", "describe", "--tags", "--always")
-        isIgnoreExitValue = true
-    }.standardOutput.asText.get().trim()
-    val match = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?(?:-(\d+)-g[0-9a-f]+)?$""")
-        .matchEntire(desc) ?: return desc.removePrefix("v").ifEmpty { "0.0.0-dev" }
+internal fun versionNameFromDescribe(desc: String): String {
+    val match = DESCRIBE.matchEntire(desc) ?: return desc.removePrefix("v").ifEmpty { "0.0.0-dev" }
     val (major, minor, patch, pre, distance) = match.destructured
     return when {
-        distance.isNotEmpty() -> "$major.$minor.${patch.toInt() + 1}-alpha.$distance"
-        pre.isNotEmpty() -> "$major.$minor.$patch-$pre"
-        else -> "$major.$minor.$patch"
+        distance.isEmpty() && pre.isEmpty() -> "$major.$minor.$patch"
+        distance.isEmpty() -> "$major.$minor.$patch-$pre"
+        pre.isEmpty() -> "$major.$minor.${patch.toInt() + 1}-alpha.$distance"
+        else -> "$major.$minor.$patch-$pre.$distance"
     }
 }
+
+private val DESCRIBE = Regex("""^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?(?:-(\d+)-g[0-9a-f]+)?$""")
 
 internal fun Project.gitVersionName(): String = gitVersionName(versionGitWorkingDir())
 

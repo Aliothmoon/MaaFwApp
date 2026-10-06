@@ -95,6 +95,13 @@ class AgentRuntimeConventionPlugin : Plugin<Project> {
                 } else {
                     from(emptyAgentSource)
                 }
+                doLast {
+                    destinationDir.listFiles().orEmpty().filter { it.isDirectory }.sortedBy { it.name }.forEach { abi ->
+                        val libs = abi.listFiles().orEmpty().filter { it.isFile }.sortedBy { it.name }
+                            .joinToString { "${it.name} ${it.length().toSizeText()}" }
+                        logger.lifecycle("Agent ${abi.name}  $libs")
+                    }
+                }
             }
 
             val writeAgentIndex = tasks.register("writeAgentIndex") {

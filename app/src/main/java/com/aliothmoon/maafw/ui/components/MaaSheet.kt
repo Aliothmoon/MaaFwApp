@@ -38,6 +38,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.theme.OpaqueTheme
 
 private const val SheetEnterMs = 100
 private const val SheetScrimAlpha = 0.4f
@@ -64,40 +65,42 @@ fun MaaModalSheet(
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) { progress.animateTo(1f, tween(SheetEnterMs, easing = FastOutSlowInEasing)) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            // 遮罩：alpha 读在 drawBehind，只重绘不重组；点空白处关
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .drawBehind { drawRect(Color.Black, alpha = SheetScrimAlpha * progress.value) }
-                    .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
-            )
-            // 抽屉：translationY 读在 graphicsLayer，只重铺层不重组
-            // 顶角走风格 large（DEFAULT 12 / Semi modal 12；不用静态 pill，否则 Semi 主题顶角过圆）
-            val topRadius = MaaTheme.style.radii.large
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .fillMaxHeight(MaaDesignTokens.Sheet.heightFraction)
-                    .graphicsLayer { translationY = (1f - progress.value) * sheetHeightPx },
-                shape = RoundedCornerShape(topStart = topRadius, topEnd = topRadius),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-            ) {
-                content(
+    OpaqueTheme {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                // 遮罩：alpha 读在 drawBehind，只重绘不重组；点空白处关
+                Box(
                     Modifier
                         .fillMaxSize()
-                        // 另开的窗口，主窗口根部那层空白失焦的命中树够不到这里
-                        .clearFocusOnBlankTap()
-                        .padding(horizontal = MaaDesignTokens.Spacing.lg)
-                        .padding(top = MaaDesignTokens.Spacing.sm)
-                        .navigationBarsPadding()
-                        .imePadding(),
+                        .drawBehind { drawRect(Color.Black, alpha = SheetScrimAlpha * progress.value) }
+                        .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
                 )
+                // 抽屉：translationY 读在 graphicsLayer，只重铺层不重组
+                // 顶角走风格 large（DEFAULT 12 / Semi modal 12；不用静态 pill，否则 Semi 主题顶角过圆）
+                val topRadius = MaaTheme.style.radii.large
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight(MaaDesignTokens.Sheet.heightFraction)
+                        .graphicsLayer { translationY = (1f - progress.value) * sheetHeightPx },
+                    shape = RoundedCornerShape(topStart = topRadius, topEnd = topRadius),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                ) {
+                    content(
+                        Modifier
+                            .fillMaxSize()
+                            // 另开的窗口，主窗口根部那层空白失焦的命中树够不到这里
+                            .clearFocusOnBlankTap()
+                            .padding(horizontal = MaaDesignTokens.Spacing.lg)
+                            .padding(top = MaaDesignTokens.Spacing.sm)
+                            .navigationBarsPadding()
+                            .imePadding(),
+                    )
+                }
             }
         }
     }
