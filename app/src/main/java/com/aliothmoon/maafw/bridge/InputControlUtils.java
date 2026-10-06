@@ -278,6 +278,7 @@ public final class InputControlUtils {
     private static void logTouchFailure(MotionEvent event, List<TouchPointerSequence.Pointer> pointers,
                                         int reportIndex, int displayId, int mode, String stage,
                                         long injectNanos) {
+        String eventSnapshot = motionEventSnapshot(event);
         Ln.w(TAG + ": touch inject failed"
                 + " stage=" + stage
                 + " action=" + actionName(event.getActionMasked())
@@ -286,12 +287,17 @@ public final class InputControlUtils {
                 + " eventDisplayId=" + InputManager.getDisplayIdForLog(event)
                 + " mode=" + injectModeName(mode)
                 + elapsedSuffix(injectNanos)
+                + " event=" + eventSnapshot
                 + " pointers=" + formatPointers(pointers)
                 + " slots=" + formatPointers(slots)
                 + displaySnapshot(displayId));
+        if (STAGE_INJECT.equals(stage)) {
+            InputInjectionDiagnostics.capture("touch", eventSnapshot, stage, displayId);
+        }
     }
 
     private static void logKeyFailure(KeyEvent event, int displayId, int mode, String stage, long injectNanos) {
+        String eventSnapshot = keyEventSnapshot(event);
         Ln.w(TAG + ": key inject failed"
                 + " stage=" + stage
                 + " action=" + (event.getAction() == KeyEvent.ACTION_DOWN ? "DOWN" : "UP")
@@ -300,7 +306,11 @@ public final class InputControlUtils {
                 + " eventDisplayId=" + InputManager.getDisplayIdForLog(event)
                 + " mode=" + injectModeName(mode)
                 + elapsedSuffix(injectNanos)
+                + " event=" + eventSnapshot
                 + displaySnapshot(displayId));
+        if (STAGE_INJECT.equals(stage)) {
+            InputInjectionDiagnostics.capture("key", eventSnapshot, stage, displayId);
+        }
     }
 
     /**
@@ -319,6 +329,65 @@ public final class InputControlUtils {
                     .append(',').append(pointer.getY());
         }
         return builder.append(']').toString();
+    }
+
+    private static String motionEventSnapshot(MotionEvent event) {
+        StringBuilder pointers = new StringBuilder("[");
+        for (int i = 0; i < event.getPointerCount(); i++) {
+            if (i > 0) {
+                pointers.append(',');
+            }
+            MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
+            MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+            event.getPointerProperties(i, properties);
+            event.getPointerCoords(i, coords);
+            pointers.append("{id=").append(properties.id)
+                    .append(",toolType=").append(toolTypeName(properties.toolType))
+                    .append(",x=").append(coords.x)
+                    .append(",y=").append(coords.y)
+                    .append(",pressure=").append(coords.pressure)
+                    .append(",size=").append(coords.size)
+                    .append(",orientation=").append(coords.orientation)
+                    .append('}');
+        }
+        return "{downTime=" + event.getDownTime()
+                + ",eventTime=" + event.getEventTime()
+                + ",action=0x" + Integer.toHexString(event.getAction())
+                + ",actionMasked=" + actionName(event.getActionMasked())
+                + ",actionIndex=" + event.getActionIndex()
+                + ",pointerCount=" + event.getPointerCount()
+                + ",deviceId=" + event.getDeviceId()
+                + ",source=0x" + Integer.toHexString(event.getSource())
+                + ",flags=0x" + Integer.toHexString(event.getFlags())
+                + ",edgeFlags=0x" + Integer.toHexString(event.getEdgeFlags())
+                + ",buttonState=0x" + Integer.toHexString(event.getButtonState())
+                + ",xPrecision=" + event.getXPrecision()
+                + ",yPrecision=" + event.getYPrecision()
+                + ",pointers=" + pointers.append(']')
+                + "}";
+    }
+
+    private static String keyEventSnapshot(KeyEvent event) {
+        return "{downTime=" + event.getDownTime()
+                + ",eventTime=" + event.getEventTime()
+                + ",action=" + event.getAction()
+                + ",keyCode=" + event.getKeyCode()
+                + ",repeatCount=" + event.getRepeatCount()
+                + ",metaState=0x" + Integer.toHexString(event.getMetaState())
+                + ",deviceId=" + event.getDeviceId()
+                + ",source=0x" + Integer.toHexString(event.getSource())
+                + ",flags=0x" + Integer.toHexString(event.getFlags())
+                + "}";
+    }
+
+    private static String toolTypeName(int toolType) {
+        switch (toolType) {
+            case MotionEvent.TOOL_TYPE_FINGER: return "FINGER";
+            case MotionEvent.TOOL_TYPE_STYLUS: return "STYLUS";
+            case MotionEvent.TOOL_TYPE_MOUSE: return "MOUSE";
+            case MotionEvent.TOOL_TYPE_ERASER: return "ERASER";
+            default: return "UNKNOWN_" + toolType;
+        }
     }
 
     /**
