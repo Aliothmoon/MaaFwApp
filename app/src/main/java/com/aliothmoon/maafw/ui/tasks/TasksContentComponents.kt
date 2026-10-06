@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
+import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.MaaEmptyState
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSelectableCard
@@ -163,29 +164,31 @@ internal fun TaskList(
         var name by remember(task.instanceId) {
             mutableStateOf(TextFieldValue(task.label, TextRange(0, task.label.length)))
         }
-        AlertDialog(
-            onDismissRequest = { renamingTask = null },
-            title = { Text(stringResource(R.string.tasks_rename_dialog_title)) },
-            text = {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.tasks_rename_label)) },
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onIntent(SessionIntent.RenameTask(active.id, task.instanceId, name.text.trim()))
-                    renamingTask = null
-                }) { Text(stringResource(R.string.common_save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { renamingTask = null }) {
-                    Text(stringResource(R.string.dialog_cancel))
-                }
-            },
-        )
+    OpaqueTheme {
+            AlertDialog(
+                onDismissRequest = { renamingTask = null },
+                title = { Text(stringResource(R.string.tasks_rename_dialog_title)) },
+                text = {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.tasks_rename_label)) },
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onIntent(SessionIntent.RenameTask(active.id, task.instanceId, name.text.trim()))
+                        renamingTask = null
+                    }) { Text(stringResource(R.string.common_save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { renamingTask = null }) {
+                        Text(stringResource(R.string.dialog_cancel))
+                    }
+                },
+            )
+    }
     }
 }
 

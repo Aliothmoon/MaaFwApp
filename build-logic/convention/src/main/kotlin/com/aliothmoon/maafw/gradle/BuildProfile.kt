@@ -25,8 +25,17 @@ private val DEFAULT_PI_INCLUDE = listOf(
     "LICENSE",
 )
 
+/**
+ * Where agents keep their own logs, relative to the PI root they run in; debug/ is the MaaFramework habit
+ * (its own logger and MaaPiCli write there), so a PI that follows it needs no logs section at all
+ */
+private val DEFAULT_PI_LOG_INCLUDE = listOf("debug/**/*.log")
+
 /** Where an executable lands; the two values are what AgentRuntimeLocation deserializes */
 private val AGENT_LOCATIONS = setOf("nativeLibs", "bundle")
+
+/** Densities outside this band either blur the game's UI or shrink it past what recognition was tuned for */
+private val PRESET_DPI_RANGE = 120..640
 
 /** Pretty printed because it ends up in the APK where anyone debugging an agent will read it */
 private val descriptorJson = Json { prettyPrint = true }
@@ -37,11 +46,27 @@ private val descriptorJson = Json { prettyPrint = true }
  * script that knows nothing about how a PI wants its agents launched, so the file was hand written
  * anyway and belongs with the rest of the recipe
  */
+/**
+ * One background virtual display option; the app turns the list into ResolutionPresets
+ * Landscape only: MaaFramework pipelines and the games they drive are all authored against landscape frames
+ */
+internal data class ResolutionPresetSpec(
+    val label: String,
+    val width: Int,
+    val height: Int,
+    val dpi: Int,
+) {
+    /** One BuildConfig array element; ResolutionPresets.parse on the app side splits it back */
+    fun encode(): String = "$label|$width|$height|$dpi"
+}
+
 internal data class AgentRuntime(
     val location: String,
     val executable: String,
     val args: List<String>,
     val env: Map<String, String>,
+    /** What the run log calls this agent; left out, the app shows the executable's file name */
+    val name: String?,
 )
 
 /**
@@ -67,6 +92,11 @@ internal data class BuildProfile(
     val appIcon: File?,
     /** Wins over the PI's own mirrorchyan_rid: the packager knows where this build is published */
     val mirrorchyanRid: String?,
+    /** Globs relative to the unpacked PI that a log export picks up, for what the agents write themselves */
+    val piLogInclude: List<String>,
+    /** Empty means the app's built-in presets; a non-empty list replaces them and its first entry is the default */
+    val resolutionPresets: List<ResolutionPresetSpec>,
+    val foregroundAllowed: Boolean,
 )
 
 /** Nothing configured at all: the package ships without a PI, see the soft failure on syncPiAssets */
@@ -81,6 +111,9 @@ private val NO_PROFILE = BuildProfile(
     appLabel = null,
     appIcon = null,
     mirrorchyanRid = null,
+    piLogInclude = DEFAULT_PI_LOG_INCLUDE,
+    resolutionPresets = emptyList(),
+    foregroundAllowed = true,
 )
 
 /**
@@ -105,6 +138,8 @@ private fun File.readProfile(): BuildProfile {
     val agent = root.child("agent")
     val app = root.child("app")
     val update = root.child("update")
+    val logs = root.child("logs")
+    val display = root.child("display")
 
     val agentSourceDir = agent?.text("sourceDir")?.let { base.resolvePath(it).absolutePath }
     val agentRuntimes = agent?.children("runtimes")?.map { it.toAgentRuntime() }.orEmpty()
@@ -128,7 +163,48 @@ private fun File.readProfile(): BuildProfile {
         appLabel = app?.text("label"),
         appIcon = app?.text("icon")?.let { base.resolvePath(it) },
         mirrorchyanRid = update?.text("mirrorchyanRid")?.requireMirrorchyanRid(),
+        piLogInclude = logs?.textList("include")?.map { it.requireLogPattern() } ?: DEFAULT_PI_LOG_INCLUDE,
+        resolutionPresets = display?.resolutionPresets().orEmpty(),
+        foregroundAllowed = display?.foregroundAllowed() ?: true,
     )
+}
+
+private fun Map<*, *>.foregroundAllowed(): Boolean? {
+    if (keys.none { it == "foreground" }) return null
+    val raw = text("foreground")
+    return requireNotNull(raw?.toBooleanStrictOrNull()) { "display.foreground must be true or false, got ${raw ?: "nothing"}" }
+}
+
+/** Written but empty is a mistake, not a request for the defaults: leaving the key out already means that */
+private fun Map<*, *>.resolutionPresets(): List<ResolutionPresetSpec>? {
+    if (keys.none { it == "presets" }) return null
+    val entries = requireNotNull(children("presets")?.takeIf { it.isNotEmpty() }) {
+        "display.presets must be a non-empty list of presets, leave it out to use the built-in ones"
+    }
+    val presets = entries.map { it.toResolutionPreset() }
+    // Size and density together are what the app persists as the selection, so two equal entries could never be told apart
+    val duplicate = presets.groupBy { Triple(it.width, it.height, it.dpi) }.values.firstOrNull { it.size > 1 }
+    require(duplicate == null) {
+        "display.presets declares ${duplicate!!.first().let { "${it.width}x${it.height}@${it.dpi}" }} more than once"
+    }
+    return presets
+}
+
+private fun Map<*, *>.toResolutionPreset(): ResolutionPresetSpec {
+    fun int(key: String): Int = requireNotNull(text(key)?.toIntOrNull()?.takeIf { it > 0 }) {
+        "display.presets[].$key must be a positive integer, got ${text(key) ?: "nothing"}"
+    }
+    val width = int("width")
+    val height = int("height")
+    val dpi = int("dpi")
+    require(width > height) { "display.presets[] must be landscape, got ${width}x$height" }
+    require(dpi in PRESET_DPI_RANGE) { "display.presets[].dpi must be within $PRESET_DPI_RANGE, got $dpi" }
+    val label = text("label") ?: "${height}P"
+    // The label is one field of a pipe separated BuildConfig string literal
+    require(label.none { it == '"' || it == '|' || it.code == 92 || it.isISOControl() }) {
+        "display.presets[].label must not contain quotes, pipes, backslashes or control characters: $label"
+    }
+    return ResolutionPresetSpec(label, width, height, dpi)
 }
 
 private fun Map<*, *>.toAgentRuntime(): AgentRuntime {
@@ -143,6 +219,7 @@ private fun Map<*, *>.toAgentRuntime(): AgentRuntime {
         env = child("env")?.entries
             ?.associate { (key, value) -> key.toString() to value.scalar().orEmpty() }
             .orEmpty(),
+        name = text("name"),
     )
 }
 
@@ -155,6 +232,7 @@ internal fun List<AgentRuntime>.toDescriptorJson(): String = descriptorJson.enco
                 addJsonObject {
                     put("location", runtime.location)
                     put("executable", runtime.executable)
+                    runtime.name?.let { put("name", it) }
                     if (runtime.args.isNotEmpty()) {
                         putJsonArray("args") { runtime.args.forEach { add(it) } }
                     }
@@ -192,6 +270,24 @@ private fun String.requireMirrorchyanRid(): String {
     }
     return this
 }
+
+/**
+ * Relative to the PI root and never climbing out of it: the export walks the device's private storage,
+ * and each pattern ends up in a BuildConfig string literal
+ */
+private fun String.requireLogPattern(): String {
+    require(!startsWith("/") && !contains(':') && split('/').none { it == ".." }) {
+        "logs.include must stay inside the PI root: $this"
+    }
+    require(none { it == '"' || it.code == 92 || it.isISOControl() }) {
+        "logs.include must not contain quotes, backslashes or control characters: $this"
+    }
+    return this
+}
+
+/** Java source for a String[] BuildConfig field */
+internal fun List<String>.toJavaStringArray(): String =
+    joinToString(prefix = "new String[]{", postfix = "}") { "\"$it\"" }
 
 private fun Map<*, *>.child(key: String): Map<*, *>? = this[key] as? Map<*, *>
 

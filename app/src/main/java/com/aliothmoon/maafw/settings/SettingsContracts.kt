@@ -5,6 +5,8 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.runner.RunDurationLimit
+import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
@@ -20,6 +22,10 @@ data class SettingsUiState(
     val remoteAccess: RemoteAccessState = RemoteAccessState(),
     val update: UpdatePanelState = UpdatePanelState(),
     val pipOnHome: Boolean = true,
+    val runDurationLimitEnabled: Boolean = false,
+    val runDurationLimitMinutes: Int = RunDurationLimit.DEFAULT_MINUTES,
+    /** 页面缩放的存储值；[com.aliothmoon.maafw.theme.UiScale.AUTO] 为自动 */
+    val uiScale: Int = UiScale.AUTO,
 )
 
 data class UpdatePanelState(
@@ -50,6 +56,12 @@ data class UpdatePanelState(
         get() = checkResult as? UpdateCheckResult.UpdateAvailable
 }
 
+/** 一次性 Effect，不进 UiState */
+sealed interface SettingsEffect {
+    /** 轻提示；结果不值得在卡片里占一行（如「已是最新版本」） */
+    data class ShowMessage(val message: UiText) : SettingsEffect
+}
+
 sealed interface SettingsIntent {
     /** 切换 Shizuku / Root 后端；落到 AppSettings.startupBackend 并断开当前特权进程 */
     data class SetBackend(val backend: RemoteBackend) : SettingsIntent
@@ -62,6 +74,9 @@ sealed interface SettingsIntent {
     data class SetAutoCheckUpdate(val enabled: Boolean) : SettingsIntent
     data class SetAutoDownloadUpdate(val enabled: Boolean) : SettingsIntent
     data class SetPipOnHome(val enabled: Boolean) : SettingsIntent
+    data class SetRunDurationLimitEnabled(val enabled: Boolean) : SettingsIntent
+    data class SetRunDurationLimitMinutes(val minutes: Int) : SettingsIntent
+    data class SetUiScale(val scale: Int) : SettingsIntent
     data object CheckUpdate : SettingsIntent
     data object DownloadUpdate : SettingsIntent
     data object CancelDownload : SettingsIntent

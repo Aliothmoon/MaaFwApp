@@ -175,7 +175,7 @@ internal fun AddTasksContent(
                             CatalogRow(
                                 item = item,
                                 checked = item.taskName in selected,
-                                enabled = !locked,
+                                enabled = !locked && !item.unsupported,
                                 onCheckedChange = { toggleTask(item.taskName, it) },
                             )
                         }
@@ -203,7 +203,7 @@ internal fun AddTasksContent(
                             CatalogRow(
                                 item = item,
                                 checked = item.taskName in selected,
-                                enabled = !locked,
+                                enabled = !locked && !item.unsupported,
                                 onCheckedChange = { toggleTask(item.taskName, it) },
                             )
                         }

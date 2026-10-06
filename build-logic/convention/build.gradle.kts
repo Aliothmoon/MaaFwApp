@@ -26,6 +26,9 @@ dependencies {
     // JSON 侧只用 buildJsonObject 那套运行时 API，不碰 @Serializable，因此不需要序列化编译器插件
     implementation(libs.snakeyaml.engine)
     implementation(libs.kotlinx.serialization.json)
+    testImplementation(libs.junit)
+    // 排序断言用 app 更新检查那同一个 SemVer 实现，版本名排错了更新就不提示
+    testImplementation(libs.semver)
 }
 
 gradlePlugin {
@@ -37,6 +40,10 @@ gradlePlugin {
         register("androidLibrary") {
             id = "maafw.android.library"
             implementationClass = "com.aliothmoon.maafw.gradle.AndroidLibraryConventionPlugin"
+        }
+        register("androidTestApp") {
+            id = "maafw.android.testapp"
+            implementationClass = "com.aliothmoon.maafw.gradle.AndroidTestAppConventionPlugin"
         }
         register("androidBenchmark") {
             id = "maafw.android.benchmark"

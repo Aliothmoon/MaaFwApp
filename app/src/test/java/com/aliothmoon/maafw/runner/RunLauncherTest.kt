@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import android.util.Log
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
 import com.aliothmoon.maafw.domain.ConfiguredTask
@@ -13,6 +14,7 @@ import com.aliothmoon.maafw.domain.TaskDefinition
 import com.aliothmoon.maafw.domain.TaskGroupDefinition
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.i18n.isResource
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -26,6 +28,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import timber.log.Timber
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RunLauncherTest {
@@ -40,7 +43,7 @@ class RunLauncherTest {
     private val definition = ProjectDefinition(
         name = "demo",
         version = "1",
-        controller = ControllerDefinition(),
+        controllers = listOf(ControllerDefinition()),
         resources = listOf(ResourceDefinition("官服", listOf("./base"))),
         tasks = listOf(
             TaskDefinition(
@@ -79,6 +82,7 @@ class RunLauncherTest {
         project: ProjectState = ProjectState.Ready(definition, emptyList()),
         configurationStore: InMemoryUserConfigurationStore = store(),
         runMode: RunMode = RunMode.BACKGROUND,
+        journal: RunJournal = DiscardingRunJournal,
     ) = RunLauncher(
         projectRepository = FakeProjectRepository(project),
         configurationStore = configurationStore,
@@ -87,7 +91,8 @@ class RunLauncherTest {
         hooks = hooks,
         runMode = { runMode },
         scope = scope,
-        journal = DiscardingRunJournal,
+        journal = journal,
+        renderText = { text -> (text as? UiText.Verbatim)?.value ?: "<res>" },
     )
 
     private fun fastStub(scope: CoroutineScope) = StubRunnerPort(
@@ -119,6 +124,24 @@ class RunLauncherTest {
 
         assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
         assertEquals(1, keepAlive.startCount)
+    }
+
+    @Test
+    fun `journal and runner receive the same generated execution id`() = runTest(testDispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val journal = RecordingRunJournal()
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = runner,
+            hooks = listOf(SessionLogHook(journal)),
+            journal = journal,
+        )
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+
+        val executionId = journal.begins.singleOrNull()?.second
+        assertTrue(executionId != null && executionId.isNotBlank())
+        assertEquals(listOf(executionId), runner.startedExecutionIds)
     }
 
     /** 保活是执行的一部分：没受理就拉，前台服务会因为读到非 busy 而当场自停 */
@@ -264,6 +287,28 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.msg_no_executable_tasks))
+
+        // 悬浮窗同样没地方弹框
+        assertTrue(launcher.launch(RunTrigger.Overlay) is RunLaunchResult.Blocked)
+    }
+
+    /** 提醒类没人可问时照跑：拦下的话定时任务会因为一个护眼开关整轮不跑 */
+    @Test
+    fun `advisory confirmation passes when nobody can answer`() = runTest(testDispatcher) {
+        val token = ConfirmToken("demo")
+        fun launcherWithAdvisory() = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            prechecks = listOf(
+                RunPrecheck {
+                    Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks), advisory = true)
+                },
+            ),
+        )
+
+        assertEquals(RunLaunchResult.Started, launcherWithAdvisory().launch(RunTrigger.Schedule("s1")))
+        assertEquals(RunLaunchResult.Started, launcherWithAdvisory().launch(RunTrigger.Overlay))
+        assertTrue(launcherWithAdvisory().launch(RunTrigger.Manual) is RunLaunchResult.NeedsConfirmation)
     }
 
     /** 检查忘了消费自己的 token 就会无限弹框；守卫把它挡成一次明确失败 */
@@ -349,7 +394,11 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Rejected)
         assertEquals(listOf("engage:env", "release:env"), log)
-        assertEquals(RunEndReason.NotRun(NotRunCause.Rejected), hook.releaseReason)
+        // 收尾拿到的原因与调用方拿到的同一句：运行日志靠它写出是哪一步被拒
+        assertEquals(
+            RunEndReason.NotRun(NotRunCause.Rejected, (result as RunLaunchResult.Rejected).reason),
+            hook.releaseReason,
+        )
     }
 
     @Test
@@ -371,8 +420,24 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertEquals(listOf("engage:ok", "release:ok"), log)
-        assertEquals(RunEndReason.NotRun(NotRunCause.HookFailed), ok.releaseReason)
+        val notRun = ok.releaseReason as RunEndReason.NotRun
+        assertEquals(NotRunCause.HookFailed, notRun.cause)
+        assertTrue(notRun.reason!!.isResource(R.string.msg_hook_failed))
+        // engage 抛出的异常一路带到收尾与调用方，堆栈才进得了日志
+        assertEquals("解锁失败", notRun.error?.message)
+        assertEquals("解锁失败", (result as RunLaunchResult.Blocked).error?.message)
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+    }
+
+    @Test
+    fun `a full scheduled countdown is not cut off by the engage timeout`() = runTest(testDispatcher) {
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            hooks = listOf(CountdownHook()),
+        )
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Schedule("s1")))
     }
 
     @Test
@@ -400,7 +465,10 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.run_countdown_cancelled))
-        assertEquals(RunEndReason.NotRun(NotRunCause.Cancelled), recorder.releaseReason)
+        assertEquals(
+            RunEndReason.NotRun(NotRunCause.Cancelled, uiTextOf(R.string.run_countdown_cancelled)),
+            recorder.releaseReason,
+        )
         assertEquals(
             listOf(
                 RunStep("env", HookOutcome.ENGAGED),
@@ -568,6 +636,53 @@ class RunLauncherTest {
         assertEquals(RunnerPhase.Stopping, runner.state.value.phase)
     }
 
+    /** 界面上的提示一闪就没了，没跑起来的原因与异常都要留在 app.log */
+    @Test
+    fun `a blocked round is logged with its reason and stack`() = runTest(testDispatcher) {
+        val logs = RecordingTree()
+        Timber.plant(logs)
+        try {
+            val bad = RecordingHook(
+                "bad", Anchor.BeforeDispatch, gating = true,
+                failWith = IllegalStateException("解锁失败"),
+            )
+            val launcher = launcher(scope = backgroundScope, runner = fastStub(backgroundScope), hooks = listOf(bad))
+
+            launcher.launch(RunTrigger.Schedule("s1"))
+
+            // Timber 把堆栈拼在正文后面，堆栈里又有本用例的方法名，只能按开头认
+            val entry = logs.entries.single { it.priority == Log.WARN && it.message.startsWith("run ") }
+            assertTrue(entry.message, entry.message.startsWith("run schedule:s1 (active) blocked: "))
+            assertEquals("解锁失败", entry.error?.message)
+        } finally {
+            Timber.uproot(logs)
+        }
+    }
+
+    @Test
+    fun `a started round is not logged as a failure`() = runTest(testDispatcher) {
+        val logs = RecordingTree()
+        Timber.plant(logs)
+        try {
+            val launcher = launcher(scope = backgroundScope, runner = fastStub(backgroundScope))
+
+            assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+            assertTrue(logs.entries.none { it.priority >= Log.WARN })
+        } finally {
+            Timber.uproot(logs)
+        }
+    }
+
+    private class RecordingTree : Timber.Tree() {
+        data class Entry(val priority: Int, val message: String, val error: Throwable?)
+
+        val entries = mutableListOf<Entry>()
+
+        override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+            entries += Entry(priority, message, t)
+        }
+    }
+
     private class RecordingHook(
         override val id: String,
         override val anchor: Anchor,
@@ -587,5 +702,17 @@ class RunLauncherTest {
                 log += "release:$id"
             })
         }
+    }
+
+    private class RecordingRunJournal : RunJournal {
+        val begins = mutableListOf<Pair<RunPlan, String>>()
+
+        override suspend fun begin(plan: RunPlan, executionId: String) {
+            begins += plan to executionId
+        }
+
+        override suspend fun end(executionId: String, reason: RunEndReason) = Unit
+
+        override fun note(executionId: String, level: RunNote, text: UiText) = Unit
     }
 }

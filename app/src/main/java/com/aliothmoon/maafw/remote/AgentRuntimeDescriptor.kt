@@ -4,6 +4,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.util.zip.ZipFile
 
 /** 可执行体的落点；两种形态的取舍见 docs/privileged-runtime.md 的 agent 一节 */
 enum class AgentRuntimeLocation {
@@ -28,6 +29,8 @@ data class AgentRuntimeEntry(
     val args: List<String> = emptyList(),
     /** 值里可用 {bundle} 与 {nativeLibs} 两个占位符，别的一律原样 */
     val env: Map<String, String> = emptyMap(),
+    /** 运行日志里显示的名字；不写就用可执行体的文件名 */
+    val name: String? = null,
 )
 
 /**
@@ -52,6 +55,12 @@ data class AgentRuntimeDescriptor(
         }
 
         fun parse(content: String): AgentRuntimeDescriptor = json.decodeFromString(content)
+
+        /** 从 APK 里直接读，不依赖 Context：特权进程与 app 进程都用它。没带这份描述返回 null，内容坏了照抛 */
+        fun readFromApk(apkPath: String): AgentRuntimeDescriptor? = ZipFile(apkPath).use { zip ->
+            val entry = zip.getEntry("assets/$ASSET_PATH") ?: return null
+            parse(zip.getInputStream(entry).use { it.readBytes().toString(Charsets.UTF_8) })
+        }
     }
 }
 

@@ -36,6 +36,8 @@ sealed interface EngageResult {
     data class Failed(
         val reason: UiText,
         val notRun: NotRunCause = NotRunCause.HookFailed,
+        /** engage 崩了时编排层接住的那个异常，随拒绝原因进运行日志与 app.log */
+        val error: Throwable? = null,
     ) : EngageResult
 }
 
@@ -65,18 +67,30 @@ interface RunEnvHook {
     val gating: Boolean
 
     /**
-     * 覆盖「单个挂载物 engage」的兜底超时；null = 用 [RunLauncher] 的通用超时。
+     * engage 的超时；本身就要等一段的挂载物得按自己的时长放宽，
      * 会主动等到某个截止时刻的挂载物（倒计时）应给足自己的窗口，别被通用 30s 误杀
      */
-    val engageTimeoutMillis: Long? get() = null
+    val engageTimeoutMs: Long get() = DEFAULT_ENGAGE_TIMEOUT_MS
 
     suspend fun engage(ctx: RunContext): EngageResult
+
+    companion object {
+        const val DEFAULT_ENGAGE_TIMEOUT_MS = 30_000L
+    }
 }
 
 /** 收尾理由；投递之后的结局直接复用 [ExecutionResult]，不另造一套平行分类 */
 sealed interface RunEndReason {
-    /** 没投出去就结束，撤销栈里只有 [Anchor.BeforeDispatch] 那批 */
-    data class NotRun(val cause: NotRunCause) : RunEndReason
+    /**
+     * 没投出去就结束，撤销栈里只有 [Anchor.BeforeDispatch] 那批
+     *
+     * [reason] 与界面上那句提示同源，[error] 是外壳接住的异常；两者都可能没有（投递前被取消）
+     */
+    data class NotRun(
+        val cause: NotRunCause,
+        val reason: UiText? = null,
+        val error: Throwable? = null,
+    ) : RunEndReason
 
     /** 投出去了；手动 Stop 落在 [ExecutionResult.Cancelled] */
     data class Ran(val result: ExecutionResult) : RunEndReason

@@ -6,9 +6,11 @@ import com.aliothmoon.maafw.log.RunLogArchiveViewModel
 import com.aliothmoon.maafw.log.RunLogDetailViewModel
 import com.aliothmoon.maafw.notification.NotificationSettingsViewModel
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
+import com.aliothmoon.maafw.schedule.ScheduleWakeUnlockViewModel
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.ui.SessionMessagePresenter
+import com.aliothmoon.maafw.wallpaper.WallpaperViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModel
@@ -22,6 +24,7 @@ val viewModelModule = module {
     viewModelOf(::AppLogViewModel)
     viewModelOf(::AppLogDetailViewModel)
     viewModelOf(::NotificationSettingsViewModel)
+    viewModelOf(::WallpaperViewModel)
     singleOf(::SessionViewModel)
     single {
         SessionMessagePresenter(
@@ -31,6 +34,7 @@ val viewModelModule = module {
         )
     }
     viewModelOf(::ScheduleViewModel)
+    viewModelOf(::ScheduleWakeUnlockViewModel)
 
     viewModel {
         SettingsViewModel(
