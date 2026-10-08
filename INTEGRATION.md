@@ -74,6 +74,8 @@ app:
 
 声明了却没带运行时，开始任务时会明确失败，不会默默跳过。
 
+出包前会按 `agent.runtimes` 逐条检查 `agent.abi` 的每一项：`bundle` 条目要在 `agent.sourceDir` 下匹配到 `<abi>/bundle/**` 文件，`nativeLibs` 条目要匹配到 `<abi>/jniLibs/**`；匹配到的每个 ABI 下还得有这一条的 `executable`（`<abi>/bundle/<executable>` 或 `<abi>/jniLibs/<executable>`）。缺一样构建就失败，编译和单测不受影响。检查只看 `agent.abi` 写了什么，不看 APK 实际打哪些 ABI；`agent.abi` 缺省的 `*` 只要求至少一个 ABI 有内容，要逐个把关就显式列出。
+
 载荷（`agent/main.py` 等）跟资源走，靠 `include` 进包。解释器或编译好的 ELF 走配方的 `agent.sourceDir`。怎么启动写在 `agent.runtimes`，条数必须和 PI 的 `agent[]` 相同、按顺序一一对应。
 
 ```text
@@ -167,7 +169,7 @@ build.releaseAbi=arm64-v8a
 
 ```bash
 ./gradlew :app:syncPiAssets
-./gradlew :app:packAgentBundles :app:syncAgentJniLibs :app:writeAgentIndex
+./gradlew :app:syncAgentAssets :app:syncAgentJniLibs
 ```
 
 ## 装上之后
@@ -184,7 +186,9 @@ build.releaseAbi=arm64-v8a
 | 能安装，一点开始就加载 native 失败 | 没跑 `setup_maa_framework.py`，或 ABI 不对 |
 | 构建直接报 `agent.sourceDir` / `runtimes` | 两个必须一起写；没有 agent 就把整段删掉 |
 | `runtimes` 条数对不上 | 必须和 PI 的 `agent[]` 按序一一对应 |
-| 开始任务提示未带 agent 运行时 | PI 声明了 agent，配方没配 |
+| 构建直接报 `executable of a nativeLibs entry must be a lib*.so file name` | `nativeLibs` 条目的入口必须叫 `lib*.so` 且不带目录：Android 装机只解压这种名字，别的到设备上就不存在 |
+| 开始任务提示「Agent 启动失败: <名字>」 | 具体原因只在特权进程的 logcat：`adb logcat -s MaaFw` 里 `MaaRunner: prepare failed: agent[n]:` 那行。在设置里打开调试模式后重试，这份 logcat 会存进日志导出包的 `debug/logcat/core/`。最常见的是 PI 声明了 agent、配方没配 |
+| 出包时报 `the agent runtimes in the profile do not match …` | 下面逐条列出缺的东西：`no <abi>/<bundle 或 jniLibs>/** files` 是 dist 没出全或 `agent.abi` 多写了一项，`… is missing` 是 `executable` 写错或那个 ABI 漏了入口文件。`runtimes[n]` 从 0 数 |
 | 图标不显示 | 文件没进 `include`，或不是 png / webp |
 | 换了资源重装，设备还是旧内容 | 只换资源、没改本仓库时版本号不变，清应用数据或再交一次提交 |
 

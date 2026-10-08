@@ -2,11 +2,13 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
@@ -96,6 +98,7 @@ class MaaFrameworkRunnerPortTest {
         servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(service),
         saveOnError: () -> Boolean = { true },
         resolutionPreset: () -> ResolutionPreset = { ResolutionPresets.builtIn.first() },
+        debugMode: () -> Boolean = { false },
     ): Pair<MaaFrameworkRunnerPort, FakePrivilegedServicePort> {
         val installer = mockk<PiInstaller>()
         every { installer.installedDir() } returns temp.newFolder("pi")
@@ -105,7 +108,7 @@ class MaaFrameworkRunnerPortTest {
             nativeLibraryDir = "/lib",
             runMode = { RunMode.BACKGROUND },
             resolutionPreset = resolutionPreset,
-            debugMode = { false },
+            debugMode = debugMode,
             saveOnError = saveOnError,
             scope = scope.backgroundScope,
             servicePort = servicePort,
@@ -271,6 +274,37 @@ class MaaFrameworkRunnerPortTest {
         assertEquals(RunnerPhase.Running, phaseAtMarker)
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
         assertEquals(listOf("e1"), events.filter { it.event is RunnerEvent.ExecutionFinished }.map { it.executionId })
+    }
+
+    /** 测试用的 APK 路径读不到描述，名字退到 agent[n] */
+    @Test
+    fun `an agent launch failure names the agent and points at debug mode`() = runTest(dispatcher) {
+        val (runner, _) = port(this)
+        val (callbacks, _) = recordCallbacks(runner)
+
+        runner.start(plan(), "e1")
+        callbacks.single().onFinished(RunOutcome.AGENT_LAUNCH_FAILED, "1")
+
+        assertEquals(
+            uiTextOf(R.string.msg_fail_debug_hint, uiTextOf(R.string.msg_fail_agent_launch, "agent[1]")),
+            (runner.state.value.latestResult as ExecutionResult.Failed).reason,
+        )
+    }
+
+    @Test
+    fun `an agent launch failure drops the hint once debug mode is on`() = runTest(dispatcher) {
+        var debug = false
+        val (runner, _) = port(this, debugMode = { debug })
+        val (callbacks, _) = recordCallbacks(runner)
+
+        runner.start(plan(), "e1")
+        debug = true
+        callbacks.single().onFinished(RunOutcome.AGENT_LAUNCH_FAILED, "")
+
+        assertEquals(
+            uiTextOf(R.string.msg_fail_agent_launch_any),
+            (runner.state.value.latestResult as ExecutionResult.Failed).reason,
+        )
     }
 
     @Test

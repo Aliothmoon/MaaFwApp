@@ -163,6 +163,10 @@ class RunLogRecorder(
         ) {
             Timber.w("session log drain timed out: %s", executionId)
         }
+        // 等过 marker 再记，原因才排在本轮所有事件之后
+        ((reason as? RunEndReason.Ran)?.result as? ExecutionResult.Failed)?.let {
+            noteFailed(executionId, session, it)
+        }
         sessions.remove(executionId)
         session.flushLoop?.cancel()
         val writer = session.writer ?: return
@@ -199,6 +203,19 @@ class RunLogRecorder(
             session = session,
             current = isCurrent(executionId),
             writeDetail = true,
+        )
+    }
+
+    private fun noteFailed(executionId: String, session: Session, result: ExecutionResult.Failed) {
+        publish(
+            RunLogEntry(
+                id = nextId.incrementAndGet(),
+                atMillis = clock(),
+                kind = RunLogKind.Error,
+                text = result.reason,
+            ),
+            session = session,
+            current = isCurrent(executionId),
         )
     }
 

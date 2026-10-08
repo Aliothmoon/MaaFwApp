@@ -161,7 +161,7 @@ sealed interface RunnerEvent {
 }
 
 /** 配方 `agent.runtimes[].name` 写了就用它，否则取可执行体的文件名 */
-private fun agentLabel(name: String?, exec: String, index: Int): String =
+internal fun agentLabel(name: String?, exec: String, index: Int): String =
     name?.takeIf(String::isNotBlank)
         ?: exec.substringAfterLast('/').substringAfterLast('\\').ifBlank { "agent[$index]" }
 

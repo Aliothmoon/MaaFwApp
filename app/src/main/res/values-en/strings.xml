@@ -452,6 +452,9 @@
 
     <!-- Runner reject/failure reasons: reason is now UiText, no longer interpolated as %s -->
     <string name="msg_fail_default">Run failed</string>
+    <string name="msg_fail_agent_launch">Agent failed to start: %1$s</string>
+    <string name="msg_fail_agent_launch_any">Agent failed to start</string>
+    <string name="msg_fail_debug_hint">%1$s. Turn on Debug mode in Settings and try again to record the cause</string>
     <string name="msg_fail_privileged_exited">Privileged process exited</string>
     <string name="msg_fail_privileged_reported_finished">Privileged process reported the run already finished</string>
     <string name="msg_reject_already_running">A run is already in progress</string>

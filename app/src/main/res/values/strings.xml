@@ -445,6 +445,9 @@
 
     <!-- Runner 拒绝/失败原因：reason 现为 UiText，不再当 %s 拼接 -->
     <string name="msg_fail_default">执行失败</string>
+    <string name="msg_fail_agent_launch">Agent 启动失败: %1$s</string>
+    <string name="msg_fail_agent_launch_any">Agent 启动失败</string>
+    <string name="msg_fail_debug_hint">%1$s。在设置里打开调试模式后重试，可记录失败原因</string>
     <string name="msg_fail_privileged_exited">特权进程已退出</string>
     <string name="msg_fail_privileged_reported_finished">特权进程报告本轮已结束</string>
     <string name="msg_reject_already_running">已有执行在进行中</string>
