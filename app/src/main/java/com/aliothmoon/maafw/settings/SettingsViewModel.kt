@@ -12,6 +12,7 @@ import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
+import com.aliothmoon.maafw.update.TransferRateMeter
 import com.aliothmoon.maafw.update.UpdateCheckFailure
 import com.aliothmoon.maafw.update.UpdateCheckRequest
 import com.aliothmoon.maafw.update.UpdateCheckResult
@@ -38,6 +39,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -60,6 +63,7 @@ class SettingsViewModel(
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     /** 按安装包自己的 ABI 更新，不按设备：装 universal 的不会被换成单 ABI 包 */
     private val abi: AndroidAbi = AndroidAbi.fromPackageAbi(BuildConfig.MAFW_PACKAGE_ABI),
+    private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ViewModel() {
 
     private val updateOperation = MutableStateFlow(UpdatePanelState())
@@ -268,12 +272,25 @@ class SettingsViewModel(
             downloading = true,
             downloadedBytes = -1L,
             totalBytes = -1L,
+            bytesPerSecond = -1L,
             errorMessage = null,
         )
         return if (updateOperation.compareAndSet(current, claimed)) requested else null
     }
 
     private fun updateSettingsLocked(): Boolean = updateOperation.value.downloading
+
+    /** 定时看一眼已下载字节数：网络卡住时下载器不回调，靠这里速度才会掉下来 */
+    private suspend fun sampleDownloadSpeed() {
+        // 头一次进度回来之前没东西可量
+        updateOperation.first { it.downloadedBytes >= 0 }
+        val meter = TransferRateMeter()
+        while (true) {
+            val rate = meter.sample(clockMillis(), updateOperation.value.downloadedBytes)
+            updateOperation.update { it.copy(bytesPerSecond = rate) }
+            delay(SPEED_SAMPLE_INTERVAL_MS)
+        }
+    }
 
     private suspend fun downloadUpdate() {
         // 二次触发（连点、启动自检与手动并发）不上错，CAS 抢不到位就静默快速返回
@@ -324,14 +341,21 @@ class SettingsViewModel(
                 }
             }
 
-            val result = updateDownloader.download(
-                update = update,
-                onProgress = { downloaded, total ->
-                    updateOperation.update {
-                        it.copy(downloadedBytes = downloaded, totalBytes = total)
-                    }
-                },
-            )
+            val result = coroutineScope {
+                val speedSampler = launch { sampleDownloadSpeed() }
+                try {
+                    updateDownloader.download(
+                        update = update,
+                        onProgress = { downloaded, total ->
+                            updateOperation.update {
+                                it.copy(downloadedBytes = downloaded, totalBytes = total)
+                            }
+                        },
+                    )
+                } finally {
+                    speedSampler.cancel()
+                }
+            }
             when (result) {
                 is UpdateDownloadResult.Downloaded -> install(result)
                 is UpdateDownloadResult.Failed -> updateOperation.update {
@@ -371,5 +395,6 @@ class SettingsViewModel(
 
     private companion object {
         const val CDK_CHECK_DEBOUNCE_MS = 1_000L
+        const val SPEED_SAMPLE_INTERVAL_MS = 500L
     }
 }

@@ -32,7 +32,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -451,6 +453,38 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `download speed is sampled while downloading and drops when it stalls`() = runTest {
+        val viewModel = viewModel(
+            downloader = mockk {
+                coEvery { download(any(), any()) } coAnswers {
+                    val onProgress = secondArg<(Long, Long) -> Unit>()
+                    for (step in 0..8) {
+                        onProgress(step * 256L * 1024, 64L * 1024 * 1024)
+                        delay(250)
+                    }
+                    awaitCancellation()
+                }
+            },
+            settings = FakeAppSettingsGateway().also { it.updateSource.value = UpdateSource.GITHUB },
+            clockMillis = { testScheduler.currentTime },
+        )
+        viewModel.onIntent(SettingsIntent.CheckUpdate)
+        advanceUntilIdle()
+        viewModel.onIntent(SettingsIntent.DownloadUpdate)
+
+        // 采样一直在跑，不能 advanceUntilIdle
+        advanceTimeBy(2_100)
+        assertTrue(latestPanel(viewModel).bytesPerSecond > 0)
+
+        advanceTimeBy(4_000)
+        assertEquals(0L, latestPanel(viewModel).bytesPerSecond)
+
+        viewModel.onIntent(SettingsIntent.CancelDownload)
+        advanceUntilIdle()
+        assertFalse(latestPanel(viewModel).downloading)
+    }
+
+    @Test
     fun `update settings are locked while downloading`() = runTest {
         val settings = FakeAppSettingsGateway().also { it.updateSource.value = UpdateSource.GITHUB }
         val viewModel = viewModel(
@@ -521,6 +555,7 @@ class SettingsViewModelTest {
             )
         },
         settings: AppSettingsGateway = FakeAppSettingsGateway(),
+        clockMillis: () -> Long = { 0L },
     ): SettingsViewModel {
         val definition = ProjectDefinition(
             name = "demo",
@@ -547,6 +582,7 @@ class SettingsViewModelTest {
             },
             currentVersion = "1.0.0",
             abi = AndroidAbi.ARM64,
+            clockMillis = clockMillis,
         )
     }
 }

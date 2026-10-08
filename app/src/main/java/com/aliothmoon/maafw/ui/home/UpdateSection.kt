@@ -68,6 +68,7 @@ import com.aliothmoon.maafw.ui.components.horizontalBleed
 import com.aliothmoon.maafw.ui.components.updateSourceLabel
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.update.formatSpeed
 import timber.log.Timber
 
 /** source 让 MirrorChyan 认出访问来自本应用 */
@@ -361,6 +362,13 @@ private fun DownloadProgressRow(
         } else {
             // 总长未知：不确定进度条，没有可算的百分比
             LinearProgressIndicator(modifier = Modifier.weight(1f))
+        }
+        if (update.bytesPerSecond >= 0) {
+            Text(
+                text = formatSpeed(update.bytesPerSecond),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         IconButton(
             onClick = { onSettingsIntent(SettingsIntent.CancelDownload) },
