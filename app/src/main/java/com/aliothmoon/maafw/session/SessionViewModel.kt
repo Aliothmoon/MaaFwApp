@@ -8,6 +8,8 @@ import com.aliothmoon.maafw.config.passwordFields
 import com.aliothmoon.maafw.config.withPasswordFieldsMarked
 import com.aliothmoon.maafw.config.withSecretFields
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
@@ -30,6 +32,7 @@ import com.aliothmoon.maafw.privileged.ServiceBindResult
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
+import com.aliothmoon.maafw.privileged.callWithTimeout
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -79,6 +82,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
 /** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
 private data class SettingsSnapshot(
@@ -592,6 +600,7 @@ class SessionViewModel(
             SessionIntent.ApplyForegroundResolution -> applyForegroundResolution()
             SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
+            SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
             // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
             // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
             SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
@@ -644,6 +653,33 @@ class SessionViewModel(
 
             SessionIntent.ClearRunLog -> recorder.clear()
         }
+    }
+
+    private suspend fun captureVirtualDisplay() {
+        if (!appSettings.debugMode.value || appSettings.runMode.value != RunMode.BACKGROUND) {
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_screenshot_failed)))
+            return
+        }
+
+        val dir = File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR)
+        val target = File(dir, "manual_${SCREENSHOT_STAMP.format(Date())}.png")
+        val saved = servicePort.callWithTimeout(CAPTURE_TIMEOUT) {
+            it.saveDisplayFrame(target.absolutePath).also { pruneManualScreenshots(dir) }
+        } == true
+
+        emitEffect(
+            SessionEffect.ShowMessage(
+                uiTextOf(if (saved) R.string.msg_screenshot_saved else R.string.msg_screenshot_failed),
+            ),
+        )
+    }
+
+    private fun pruneManualScreenshots(dir: File) {
+        dir.listFiles()
+            ?.filter { it.isFile }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(MANUAL_SCREENSHOT_KEEP)
+            ?.forEach { it.delete() }
     }
 
     /** Screen 禁用之外的第二层写锁：写入前再读 RunnerState */
@@ -828,5 +864,12 @@ class SessionViewModel(
             is RunnerCommandResult.Rejected ->
                 emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_stop, command.reason)))
         }
+    }
+
+    private companion object {
+        // 整帧 PNG 编码在特权进程里做，高分辨率下要几百毫秒
+        val CAPTURE_TIMEOUT = 5.seconds
+        const val MANUAL_SCREENSHOT_KEEP = 20
+        val SCREENSHOT_STAMP = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
     }
 }

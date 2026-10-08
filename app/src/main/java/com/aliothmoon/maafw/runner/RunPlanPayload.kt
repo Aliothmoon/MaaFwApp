@@ -65,6 +65,9 @@ object RunOutcome {
     const val COMPLETED_WITH_FAILURES = 1
     const val CANCELLED = 2
     const val FAILED = 3
+
+    /** reason 只带失败 agent 的序号：细节是带设备路径的排障字面量，只进特权进程 logcat，不当用户文案 */
+    const val AGENT_LAUNCH_FAILED = 4
 }
 
 /** 线格式的编解码；宽容未知字段，便于 app 与特权进程版本短暂不一致时不至于直接崩 */

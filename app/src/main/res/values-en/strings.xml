@@ -432,7 +432,7 @@
 
     <!-- Localized text for structured domain/VM semantics (ui/i18n/DomainStrings) -->
     <string name="tasks_ungrouped">Ungrouped</string>
-    <string name="task_unavailable_missing">Task no longer exists in the project</string>
+    <string name="task_unavailable_missing">Task no longer exists in the project; you can remove it</string>
     <string name="task_unavailable_controller">Not supported</string>
     <string name="task_unavailable_controller_switch">Requires the %1$s controller</string>
     <string name="task_unavailable_resource">Unsupported resource (requires %1$s)</string>
@@ -456,6 +456,9 @@
 
     <!-- Runner reject/failure reasons: reason is now UiText, no longer interpolated as %s -->
     <string name="msg_fail_default">Run failed</string>
+    <string name="msg_fail_agent_launch">Agent failed to start: %1$s</string>
+    <string name="msg_fail_agent_launch_any">Agent failed to start</string>
+    <string name="msg_fail_debug_hint">%1$s. Turn on Debug mode in Settings and try again to record the cause</string>
     <string name="msg_fail_privileged_exited">Privileged process exited</string>
     <string name="msg_fail_privileged_reported_finished">Privileged process reported the run already finished</string>
     <string name="msg_reject_already_running">A run is already in progress</string>
@@ -473,8 +476,11 @@
     <string name="quick_settings_title">Automation</string>
     <string name="quick_action_screen_saver">Screen off</string>
     <string name="quick_action_close_app">Close target app</string>
+    <string name="quick_action_screenshot">Screenshot</string>
     <string name="quick_setting_close_app_after_task">Close the target app when task ends</string>
     <string name="quick_setting_touch_preview">Show touch preview</string>
+    <string name="msg_screenshot_saved">Screenshot saved. It will be included when you export logs</string>
+    <string name="msg_screenshot_failed">Screenshot failed. Try again later</string>
 
     <!-- Privileged access (home permission card + Shizuku guidance) -->
     <string name="permission_section">Permissions</string>
@@ -562,6 +568,7 @@
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
     <string name="run_log_game_fps_low">The game is running at only %1$d FPS, below 30; automation may fail. Enable high frame rate mode in the game and disable power saving mode</string>
     <string name="run_log_game_fps_degraded">The game is running at %1$d FPS, below 50; battle timing may drift. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_task_skipped">Skipped task "%1$s": %2$s</string>
     <string name="run_log_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off manually in the system display settings</string>
     <string name="run_log_eye_protection_enabled">Eye comfort / night mode is active (%1$s), which may affect normal image recognition. Please turn it off manually</string>
 
@@ -695,7 +702,6 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId points to a missing configuration</string>
     <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>
     <string name="diagnostic_runtime_no_resource">No resource is available to build the runtime environment</string>
-    <string name="diagnostic_enabled_task_missing_definition">Enabled task "%1$s" has no definition</string>
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
     <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>

@@ -24,8 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -65,6 +63,7 @@ import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
@@ -347,7 +346,7 @@ private fun ExpandToggle(
             color = tint,
         )
         Icon(
-            imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+            imageVector = if (expanded) MaaIcons.ChevronUp else MaaIcons.ChevronDown,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(MaaDesignTokens.IconSize.sm),

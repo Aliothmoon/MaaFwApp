@@ -44,17 +44,17 @@ class GitHubUpdateTest {
     )
 
     @Test
-    fun `check picks highest channel eligible release and ignores assets`() = runBlocking {
+    fun `check picks highest channel eligible release with an apk for the abi`() = runBlocking {
         val gateway = RecordingHttpClientHelper(
             FakeHttpResponse(
                 200,
                 releases(
-                    release("v2.0.0-beta.1", prerelease = true),
+                    release("v2.0.0-beta.1", prerelease = true, assets = assets(asset("app.apk"))),
                     release(
                         "v1.5.0",
-                        assets = assets(asset("app-x86_64.apk", "https://example.com/x86_64")),
+                        assets = assets(asset("app-arm64-v8a.apk", "https://example.com/arm64")),
                     ),
-                    release("v1.2.0"),
+                    release("v1.2.0", assets = assets(asset("app.apk"))),
                 ),
             ),
         )
@@ -84,6 +84,7 @@ class GitHubUpdateTest {
                 releases(
                     release(
                         "v1.5.0",
+                        assets = assets(asset("app.apk")),
                         body = """<!-- downloads:start -->\r\n\r\n| Arch | Android |\r\n| --- | --- |\r\n\r\n""" +
                             """<!-- downloads:end -->\r\n\r\n## 1.5.0\r\n\r\n- Fixed things""",
                     ),
@@ -156,6 +157,60 @@ class GitHubUpdateTest {
                 UpdateCheckFailure.NO_MATCHING_ASSET,
             ),
             client(gateway).check(checkRequest()),
+        )
+    }
+
+    @Test
+    fun `release without an apk yet is not offered and check falls back`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
+                200,
+                releases(
+                    release("v1.6.0"),
+                    release("v1.5.0", assets = assets(asset("app-arm64-v8a.apk", "https://example.com/arm64"))),
+                ),
+            ),
+        )
+
+        assertEquals(
+            "v1.5.0",
+            (client(gateway).check(checkRequest()) as UpdateCheckResult.UpdateAvailable).info.version,
+        )
+    }
+
+    @Test
+    fun `release whose apk is only for another abi is skipped by check and resolve`() = runBlocking {
+        val body = releases(
+            release("v1.6.0", assets = assets(asset("app-x86_64.apk", "https://example.com/x86_64"))),
+            release("v1.5.0", assets = assets(asset("app-arm64-v8a.apk", "https://example.com/arm64"))),
+        )
+
+        assertEquals(
+            UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "v1.5.0"),
+            client(RecordingHttpClientHelper(FakeHttpResponse(200, body))).check(checkRequest(currentVersion = "1.5.0")),
+        )
+        assertEquals(
+            "v1.5.0",
+            (client(RecordingHttpClientHelper(FakeHttpResponse(200, body))).resolve(resolveRequest())
+                as UpdateResolveResult.Resolved).update.version,
+        )
+    }
+
+    @Test
+    fun `asset still uploading is ignored`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(
+                200,
+                releases(
+                    release("v1.6.0", assets = assets(asset("app-arm64-v8a.apk", state = "open"))),
+                    release("v1.5.0", assets = assets(asset("app-arm64-v8a.apk", state = "uploaded"))),
+                ),
+            ),
+        )
+
+        assertEquals(
+            "v1.5.0",
+            (client(gateway).resolve(resolveRequest()) as UpdateResolveResult.Resolved).update.version,
         )
     }
 
@@ -392,9 +447,11 @@ class GitHubUpdateTest {
         name: String,
         url: String = "https://api.github.com/repos/maaxyz/example/releases/assets/1",
         digest: String? = null,
-    ): String = if (digest == null) {
-        """{"name":"$name","url":"$url","browser_download_url":"https://example.com/$name"}"""
-    } else {
-        """{"name":"$name","url":"$url","browser_download_url":"https://example.com/$name","digest":"$digest"}"""
+        state: String? = null,
+    ): String = buildString {
+        append("""{"name":"$name","url":"$url","browser_download_url":"https://example.com/$name"""")
+        digest?.let { append(""","digest":"$it"""") }
+        state?.let { append(""","state":"$it"""") }
+        append("}")
     }
 }

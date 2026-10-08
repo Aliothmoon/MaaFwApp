@@ -301,6 +301,10 @@ sealed interface SessionIntent {
 
     /** 不等运行开始，立刻盖上屏保；同样要 Application 上下文 */
     data object ShowScreenSaver : SessionIntent
+
+    /** 存一张虚拟屏当前画面到 log/manual/，随日志导出带走 */
+    data object CaptureVirtualDisplay : SessionIntent
+
     data object ReloadProject : SessionIntent
 
     data object DismissWelcome : SessionIntent

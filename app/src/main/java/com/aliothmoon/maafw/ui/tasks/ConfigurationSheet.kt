@@ -57,8 +57,11 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TemplateTask
+import com.aliothmoon.maafw.domain.UnavailableReasons
 import com.aliothmoon.maafw.session.SessionUiState
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.i18n.uiTextPlural
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -74,6 +77,7 @@ import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import com.aliothmoon.maafw.ui.components.MaaSelectionMarker
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.MaaSkipReason
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.MaaIconButton
@@ -181,6 +185,7 @@ internal fun ConfigurationSheet(
                     } else {
                         TemplatePreviewPage(
                             template = template,
+                            catalog = state.taskCatalog,
                             existingNames = existingNames,
                             writeEnabled = !locked,
                             onBack = { page = ConfigSheetPage.Home },
@@ -286,6 +291,7 @@ private fun ConfigSheetHomePage(
 @Composable
 private fun TemplatePreviewPage(
     template: ConfigurationTemplate,
+    catalog: List<TaskCatalogGroup>,
     existingNames: List<String>,
     writeEnabled: Boolean,
     onBack: () -> Unit,
@@ -293,6 +299,7 @@ private fun TemplatePreviewPage(
     onCreate: (name: String, taskNames: List<String>) -> Unit,
 ) {
     val templateTasks = remember(template) { template.distinctTasks }
+    val catalogItems = remember(catalog) { catalog.flatMap { it.tasks }.associateBy { it.taskName } }
     var name by rememberSaveable(template.name) {
         mutableStateOf(uniqueConfigurationName(template.label, existingNames))
     }
@@ -337,8 +344,11 @@ private fun TemplatePreviewPage(
             contentPadding = PaddingValues(bottom = MaaDesignTokens.Spacing.xs),
         ) {
             items(templateTasks, key = { it.taskName }) { task ->
+                val item = catalogItems[task.taskName]
                 TemplateTaskRow(
                     task = task,
+                    // 目录覆盖全部任务，查不到就是 preset 引用了已不存在的任务
+                    unavailableReason = if (item == null) UnavailableReasons.missingDefinition() else item.unavailableReason,
                     checked = task.taskName in included,
                     writeEnabled = writeEnabled,
                     onToggle = { checked -> included.setPresent(task.taskName, checked) },
@@ -363,6 +373,7 @@ private fun TemplatePreviewPage(
 @Composable
 private fun TemplateTaskRow(
     task: TemplateTask,
+    unavailableReason: UiText?,
     checked: Boolean,
     writeEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
@@ -372,6 +383,12 @@ private fun TemplateTaskRow(
         checked = checked,
         enabled = writeEnabled,
         onToggle = onToggle,
+        labelColor = if (unavailableReason == null) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        belowLabel = unavailableReason?.let { reason -> { MaaSkipReason(reason.asString()) } },
         trailing = if (!task.enabled) {
             {
                 MaaToneBadge(

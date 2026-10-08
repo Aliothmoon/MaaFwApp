@@ -344,6 +344,23 @@ class RunLogRecorderTest {
         assertNull(line.detail)
     }
 
+    @Test
+    fun `a failed round writes why after its last event`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+        val failed = ExecutionResult.Failed(UiText.Verbatim("本包未带 agent 运行时"))
+
+        recorder.begin(planOf("清体力"), ID)
+        runner.emit(RunnerEvent.Log("跑起来了"))
+        runner.emit(RunnerEvent.ExecutionFinished(failed))
+        recorder.end(ID, RunEndReason.Ran(failed))
+
+        val records = sessionRecords()
+        assertEquals(listOf("跑起来了", "本包未带 agent 运行时"), records.lineTexts())
+        assertEquals(RunLogKind.Error, (records[records.size - 2] as RunSessionRecord.Line).kind)
+        assertEquals(RunSessionOutcome.FAILED, (records.last() as RunSessionRecord.Footer).outcome)
+    }
+
     /** 认不出的回调调试模式也不留，屏上与文件都没有：maa.log 里连 details 都有全份 */
     @Test
     fun `raw callbacks are neither shown nor written`() = runTest(dispatcher) {
