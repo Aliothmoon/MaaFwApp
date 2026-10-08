@@ -131,6 +131,53 @@ class LogExportCollectorTest {
         assertEquals(emptyList<String>(), collectPi("debug/**/*.log"))
     }
 
+    /** 备份日志、截图和按次堆的文件份数没有上限，交给导出按预算装 */
+    @Test
+    fun `unbounded files are budgeted newest first across dirs`() {
+        val files = listOf(
+            write("log/app.log"),
+            write("log/maafw.log"),
+            write("log/maafw.bak.2026.10.08-10.34.10.978.log", ageDays = 3),
+            write("log/maafw.bak.2026.10.08-10.43.35.511.log", ageDays = 2),
+            write("pi/debug/maafw.log"),
+            write("pi/debug/maafw.bak.2026.10.07-16.39.02.842.log", ageDays = 1),
+            write("log/on_error/a.png", ageDays = 1),
+            write("log/on_error/b.png"),
+            write("log/focus/c.jpg", ageDays = 5),
+            write("log/run/run_a.jsonl", ageDays = 6),
+        )
+
+        val plan = LogExportCollector.plan(files)
+        fun List<File>.names() = map { it.relativeTo(base).invariantSeparatorsPath }
+
+        assertEquals(listOf("log/app.log", "log/maafw.log", "pi/debug/maafw.log"), plan.required.names())
+        assertEquals(
+            listOf(
+                "log/on_error/b.png",
+                "pi/debug/maafw.bak.2026.10.07-16.39.02.842.log",
+                "log/maafw.bak.2026.10.08-10.43.35.511.log",
+                "log/focus/c.jpg",
+                "log/run/run_a.jsonl",
+                "log/on_error/a.png",
+                "log/maafw.bak.2026.10.08-10.34.10.978.log",
+            ),
+            plan.optional.names(),
+        )
+    }
+
+    @Test
+    fun `nested include prefixes list a file once`() {
+        write("pi/debug/go-service.log")
+        write("pi/debug/cpp-algo/maafw.log")
+        write("pi/resource/notes.log")
+
+        val found = LogExportCollector.piLogFiles(
+            LogExportCollector.PiLogs(File(base, "pi"), listOf("debug/**/*.log", "debug/cpp-algo/*.log")),
+        ).map { it.relativeTo(base).invariantSeparatorsPath }.toList()
+
+        assertEquals(listOf("pi/debug/cpp-algo/maafw.log", "pi/debug/go-service.log"), found.sorted())
+    }
+
     @Test
     fun `glob keeps star and question mark inside one directory`() {
         val star = LogExportCollector.globToRegex("logs/*.log")

@@ -137,12 +137,48 @@ class LogExportServiceTest {
         assertTrue(unreadable.exists())
     }
 
-    private fun service(secrets: List<String> = emptyList()) = LogExportService(
+    /** 必带的不看预算 */
+    @Test
+    fun `backups and images past the size budget are dropped and listed`() = runTest {
+        File(base, "log/maafw.log").apply {
+            parentFile!!.mkdirs()
+            writeText("current")
+        }
+        File(base, "log/maafw.bak.2026.10.08-10.34.10.978.log").writeText("older")
+        File(base, "log/on_error/shot.png").apply {
+            parentFile!!.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3))
+        }
+
+        ZipFile(service(maxZipBytes = 1).exportZip()!!).use { archive ->
+            assertEquals(
+                listOf("device_info.txt", "log/maafw.log", "export_skipped.txt"),
+                archive.entries().toList().map { it.name },
+            )
+            assertEquals(
+                setOf(
+                    "log/maafw.bak.2026.10.08-10.34.10.978.log: over export size budget",
+                    "log/on_error/shot.png: over export size budget",
+                ),
+                archive.getInputStream(archive.getEntry("export_skipped.txt")).readBytes().decodeToString().lines().toSet(),
+            )
+        }
+
+        ZipFile(service().exportZip()!!).use { archive ->
+            assertEquals(
+                setOf("device_info.txt", "log/maafw.log", "log/maafw.bak.2026.10.08-10.34.10.978.log", "log/on_error/shot.png"),
+                archive.entries().toList().map { it.name }.toSet(),
+            )
+        }
+    }
+
+    private fun service(secrets: List<String> = emptyList(), maxZipBytes: Long = Long.MAX_VALUE) = LogExportService(
         context = mockk<Context>(),
         baseDir = { base },
         roots = { listOf(File(base, "log"), File(base, "debug")) },
         debugMode = { false },
         deviceInfo = { "device snapshot" },
         secrets = { secrets },
+        maxZipBytes = maxZipBytes,
     )
 }

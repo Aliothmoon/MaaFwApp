@@ -12,7 +12,11 @@ object LogExportCollector {
 
     const val EXPORT_DIR_NAME = "export"
 
-    /** 会无限长的那几个目录只留近 7 天；其余（app.log、maa.log、触发日志）本身就有上限，全带 */
+    /**
+     * 会无限长的那几个目录只留近 7 天；其余（app.log、maa.log、触发日志）本身就有上限，全带
+     *
+     * 份数没上限的还要过体积预算，见 [plan]
+     */
     const val ROLLING_KEEP_DAYS = 7
 
     private const val MS_PER_DAY = 24L * 60 * 60 * 1000
@@ -31,6 +35,37 @@ object LogExportCollector {
      */
     data class PiLogs(val root: File, val include: List<String>)
 
+    /** MaaFramework 轮转出的备份，份数不设上限 */
+    private val MAAFW_BACKUP = Regex("""maafw\.bak\..+\.log""")
+
+    private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg")
+
+    /**
+     * 一次导出怎么装：[required] 全带；[optional] 按体积预算从头装，装不下的丢
+     *
+     * [optional] 已排好：各目录轮流出最新一份，免得一个目录挤掉别的
+     */
+    data class Plan(val required: List<File>, val optional: List<File>)
+
+    /** 当前的 `maafw.log` 算必带：失败现场在它的尾巴上，刚轮转完的话在最新那份备份里 */
+    fun plan(files: List<File>): Plan {
+        val (optional, required) = files.partition { file ->
+            isRolling(file.invariantSeparatorsPath) ||
+                MAAFW_BACKUP.matches(file.name) ||
+                file.extension.lowercase() in IMAGE_EXTENSIONS
+        }
+        return Plan(required, newestFirstAcrossDirs(optional))
+    }
+
+    private fun newestFirstAcrossDirs(files: List<File>): List<File> {
+        val modified = files.associateWith { it.lastModified() }
+        val newest = compareByDescending<File> { modified.getValue(it) }
+        return files.groupBy { it.parentFile }.values
+            .flatMap { it.sortedWith(newest).withIndex() }
+            .sortedWith(compareBy<IndexedValue<File>> { it.index }.thenBy(newest) { it.value })
+            .map { it.value }
+    }
+
     fun collect(roots: List<File>, now: Long, piLogs: PiLogs? = null): List<File> {
         val rollingCutoff = now - ROLLING_KEEP_DAYS * MS_PER_DAY
         val own = roots.asSequence()
@@ -38,27 +73,40 @@ object LogExportCollector {
             .flatMap { it.walkTopDown() }
             .filter { it.isFile }
             .filter { shouldExport(it, rollingCutoff) }
-        return (own + piLogFiles(piLogs, rollingCutoff)).toList()
+        val agents = piLogs?.let(::piLogFiles).orEmpty().filter { it.lastModified() >= rollingCutoff }
+        return (own + agents).toList()
     }
 
     private fun shouldExport(file: File, rollingCutoff: Long): Boolean {
         val path = file.invariantSeparatorsPath
         // 上一次导出的 zip 不能再打进这一次，否则每导一次体积翻一倍
         if (path.contains("/$EXPORT_DIR_NAME/")) return false
-        if (ROLLING_MARKERS.none { path.contains(it) }) return true
+        if (!isRolling(path)) return true
         return file.lastModified() >= rollingCutoff
     }
 
-    private fun piLogFiles(piLogs: PiLogs?, rollingCutoff: Long): Sequence<File> {
-        if (piLogs == null || piLogs.include.isEmpty() || !piLogs.root.isDirectory) return emptySequence()
+    private fun isRolling(path: String): Boolean = ROLLING_MARKERS.any { path.contains(it) }
+
+    /** 从各 glob 里不含通配符的那段目录开始走：PI 根下的资源文件成千上万 */
+    fun piLogFiles(piLogs: PiLogs): Sequence<File> {
+        if (piLogs.include.isEmpty() || !piLogs.root.isDirectory) return emptySequence()
         val patterns = piLogs.include.map(::globToRegex)
-        return piLogs.root.walkTopDown()
-            .filter { it.isFile && it.lastModified() >= rollingCutoff }
+        val prefixes = piLogs.include.map(::staticPrefix).distinct()
+        // 套在别的前缀里面的不再单走，免得同一棵子树走两遍
+        val starts = prefixes.filterNot { p -> prefixes.any { q -> q != p && (q.isEmpty() || p.startsWith("$q/")) } }
+        return starts.asSequence()
+            .map { File(piLogs.root, it) }
+            .filter { it.isDirectory }
+            .flatMap { it.walkTopDown() }
             .filter { file ->
                 val relative = file.relativeTo(piLogs.root).invariantSeparatorsPath
                 patterns.any { it.matches(relative) }
             }
+            .filter { it.isFile }
     }
+
+    internal fun staticPrefix(glob: String): String =
+        glob.split('/').dropLast(1).takeWhile { '*' !in it && '?' !in it }.joinToString("/")
 
     /** 与配方 `include` 同一套写法：`**` 跨目录，`*`、`?` 不跨 `/` */
     internal fun globToRegex(glob: String): Regex {

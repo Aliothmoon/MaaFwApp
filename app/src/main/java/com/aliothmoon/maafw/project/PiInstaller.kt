@@ -156,15 +156,9 @@ class PiInstaller(
      * 再早的留着也没人看得到。只动配方点名的日志，记录文件不碰
      */
     private fun pruneStaleLogs(root: File) {
-        if (logInclude.isEmpty() || !root.isDirectory) return
-        val patterns = logInclude.map(LogExportCollector::globToRegex)
         val cutoff = now() - TimeUnit.DAYS.toMillis(LogExportCollector.ROLLING_KEEP_DAYS.toLong())
-        root.walkTopDown()
-            .filter { it.isFile && it.lastModified() < cutoff }
-            .filter { file ->
-                val relative = file.relativeTo(root).invariantSeparatorsPath
-                patterns.any { it.matches(relative) }
-            }
+        LogExportCollector.piLogFiles(LogExportCollector.PiLogs(root, logInclude))
+            .filter { it.lastModified() < cutoff }
             .toList()
             .forEach { it.delete() }
     }

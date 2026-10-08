@@ -332,7 +332,7 @@ internal class EvidenceSource(
          */
         fun of(logDir: File, piRoot: File, piLogInclude: List<String>): List<EvidenceSource> {
             val shell = EvidenceSource(root = logDir, skipDirs = SHELL_LOG_SKIP_DIRS, images = true)
-            val agents = piLogInclude.groupBy(::staticPrefix).map { (prefix, globs) ->
+            val agents = piLogInclude.groupBy(LogExportCollector::staticPrefix).map { (prefix, globs) ->
                 val patterns = globs.map(LogExportCollector::globToRegex)
                 val base = if (prefix.isEmpty()) "" else "$prefix/"
                 EvidenceSource(
@@ -343,9 +343,6 @@ internal class EvidenceSource(
             }
             return listOf(shell) + agents
         }
-
-        private fun staticPrefix(glob: String): String =
-            glob.split('/').dropLast(1).takeWhile { '*' !in it && '?' !in it }.joinToString("/")
     }
 }
 

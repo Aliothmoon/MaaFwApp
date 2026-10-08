@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.remote
 
+import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.ITouchEventCallback
@@ -22,6 +23,8 @@ import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.remote.internal.ScreenManager
 import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
 import com.aliothmoon.maafw.constant.PrivilegedGrant
+import com.aliothmoon.maafw.log.LogExportCollector
+import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
 import com.aliothmoon.maafw.remote.internal.XmsfFirewall
@@ -172,8 +175,20 @@ class RemoteServiceImpl : RemoteService.Stub() {
         } else {
             Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")
         }
+        pruneMaafwBackups()
         Ln.i("$TAG: setup ok, piRoot=$piRoot")
         return true
+    }
+
+    /** 外壳每轮开跑前都会先 setup，借这一下每轮收一次：跑一轮就能滚出上百 MB */
+    private fun pruneMaafwBackups() {
+        val shellLogDir = logDir?.let(::File)
+        val piLogs = piRoot?.let { LogExportCollector.PiLogs(File(it), BuildConfig.MAFW_PI_LOG_INCLUDE.toList()) }
+        Thread {
+            runCatching { MaafwLogRetention.prune(shellLogDir, piLogs) }
+                .onSuccess { if (it > 0) Ln.i("$TAG: pruned $it old maafw log backups") }
+                .onFailure { Ln.w("$TAG: prune maafw log backups failed: ${it.message}") }
+        }.apply { name = "maafw-log-prune"; isDaemon = true }.start()
     }
 
     override fun setSaveOnError(enabled: Boolean): Boolean {
