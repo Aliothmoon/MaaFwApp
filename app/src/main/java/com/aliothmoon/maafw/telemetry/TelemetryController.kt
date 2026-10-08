@@ -15,6 +15,7 @@ import io.sentry.Attachment
 import io.sentry.Hint
 import io.sentry.Sentry
 import io.sentry.SentryAttributes
+import io.sentry.SentryEvent
 import io.sentry.SentryOptions
 import io.sentry.android.core.SentryAndroid
 import io.sentry.logger.SentryLogParameters
@@ -35,7 +36,8 @@ import java.io.File
  * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
  * 任务与节点的结果（[RunTracer]）、任务终态失败的事件（[TaskFailure]）。
  * 任务失败时另带这个任务期间新写的日志尾巴与 `on_error/` 出错截图（[TaskEvidence]），
- * 日志里的 PI password 先换成掩码；任务没失败就不碰日志和截图，focus 正文任何时候都不带
+ * 日志里的 PI password 先换成掩码；任务没失败就不碰日志和截图，focus 正文任何时候都不带。
+ * 另有 agent 异常退出的事件（[AgentExitReporter]），与 SDK 自带的未捕获异常、ANR、原生崩溃
  */
 class TelemetryController(
     private val context: Context,
@@ -71,6 +73,12 @@ class TelemetryController(
         },
         secrets = secrets,
         send = ::sendFailure,
+    )
+    private val agentExits = AgentExitReporter(
+        scope = scope,
+        crashDir = { File(AppPaths.LOG_DIR, AppFiles.CRASH_DIR) },
+        secrets = secrets,
+        send = ::sendAgentExit,
     )
 
     /** 取值不随 DSN 变，重新初始化不必再查一遍 ActivityManager */
@@ -108,10 +116,15 @@ class TelemetryController(
             runnerPort.events.collect { envelope ->
                 synchronized(lock) {
                     // 不看 tracing：它关着时采样率是 0，事务不发，失败事件照发，与 MXU 一致
-                    if (active != null) {
-                        if (envelope.event is RunnerEvent.Progress) reporter.onTaskStarted()
-                        tracer.onEvent(envelope.executionId, envelope.event)
+                    val telemetry = active ?: return@synchronized
+                    when (val event = envelope.event) {
+                        is RunnerEvent.Progress -> reporter.onTaskStarted()
+                        is RunnerEvent.AgentOutput -> agentExits.onOutput(event)
+                        is RunnerEvent.AgentExited ->
+                            agentExits.report(event, envelope.executionId, envelope.taskLabel, telemetry.appName)
+                        else -> Unit
                     }
+                    tracer.onEvent(envelope.executionId, envelope.event)
                 }
             }
         }
@@ -149,6 +162,11 @@ class TelemetryController(
         }
         // 与设备 ID 那行同理：凭它能从用户的日志直接找到 Sentry 里的这条事件
         Timber.i("[telemetry] task failure event_id=%s run_id=%s task=%s", eventId, failure.runId, failure.task)
+    }
+
+    private fun sendAgentExit(event: SentryEvent, attachments: List<Attachment>) {
+        val eventId = Sentry.captureEvent(event, Hint.withAttachments(attachments))
+        Timber.i("[telemetry] agent exit event_id=%s %s", eventId, event.message?.formatted)
     }
 
     /** 由 [TelemetryHook] 在投递前调用 */
@@ -193,13 +211,15 @@ class TelemetryController(
             options.logs.beforeSend = SentryOptions.Logs.BeforeSendLogCallback { it.apply { bindDiagnosticTrace() } }
             // Session（Release Health）与 MXU 一样开着，日活与 crash-free 率靠它
             options.isEnableAutoSessionTracking = true
-            // 其余自动采集面全部关掉，只留本类显式发出的事件
-            options.isAnrEnabled = false
+            // 自动采集只开未捕获异常、ANR 与原生崩溃，生命周期面包屑补上「当时在哪个界面」
+            options.isAnrEnabled = true
+            options.isAttachAnrThreadDump = true
+            options.isTombstoneEnabled = true
+            options.isEnableActivityLifecycleBreadcrumbs = true
             options.isAttachScreenshot = false
             options.isAttachViewHierarchy = false
             options.isEnableUserInteractionBreadcrumbs = false
             options.isEnableUserInteractionTracing = false
-            options.isEnableActivityLifecycleBreadcrumbs = false
             options.isEnableAutoActivityLifecycleTracing = false
         }
         Sentry.setUser(User().apply { id = TelemetryUserId.get(context) })
