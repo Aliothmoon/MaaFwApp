@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.log
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -12,6 +13,7 @@ import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -45,7 +47,14 @@ class LogExportServiceTest {
 
         assertNotNull(zip)
         ZipFile(zip).use { archive ->
-            assertEquals(listOf("device_info.txt"), archive.entries().toList().map { it.name })
+            assertEquals(
+                listOf(
+                    "device_info.txt",
+                    "settings_snapshot.json",
+                    "pi_config_snapshot.json",
+                ),
+                archive.entries().toList().map { it.name },
+            )
             assertEquals("device snapshot", archive.getInputStream(archive.getEntry("device_info.txt")).readBytes().decodeToString())
         }
     }
@@ -62,7 +71,15 @@ class LogExportServiceTest {
         assertNotNull(zip)
         ZipFile(zip).use { archive ->
             val names = archive.entries().toList().map { it.name }
-            assertEquals(listOf("device_info.txt", "log/app.log"), names)
+            assertEquals(
+                listOf(
+                    "device_info.txt",
+                    "settings_snapshot.json",
+                    "pi_config_snapshot.json",
+                    "log/app.log",
+                ),
+                names,
+            )
             assertEquals("device snapshot", archive.getInputStream(archive.getEntry("device_info.txt")).readBytes().decodeToString())
             assertEquals("app log", archive.getInputStream(archive.getEntry("log/app.log")).readBytes().decodeToString())
         }
@@ -94,6 +111,23 @@ class LogExportServiceTest {
     }
 
     @Test
+    fun `password plaintexts stay in debug mode text logs`() = runTest {
+        File(base, "log/maafw.log").apply {
+            parentFile!!.mkdirs()
+            writeText("override={\"pin\":\"secret12\"}\n")
+        }
+
+        val zip = service(debugMode = true, secrets = listOf("secret12")).exportZip()
+
+        ZipFile(zip!!).use { archive ->
+            assertEquals(
+                "override={\"pin\":\"secret12\"}\n",
+                archive.getInputStream(archive.getEntry("log/maafw.log")).readBytes().decodeToString(),
+            )
+        }
+    }
+
+    @Test
     fun `unreadable log file is skipped without failing export`() = runTest {
         assumeTrue(
             Files.getFileStore(base.toPath())
@@ -115,7 +149,16 @@ class LogExportServiceTest {
             assertNotNull(zip)
             ZipFile(zip).use { archive ->
                 val names = archive.entries().toList().map { it.name }
-                assertEquals(listOf("device_info.txt", "log/app.log", "export_skipped.txt"), names)
+                assertEquals(
+                    listOf(
+                        "device_info.txt",
+                        "settings_snapshot.json",
+                        "pi_config_snapshot.json",
+                        "log/app.log",
+                        "export_skipped.txt",
+                    ),
+                    names,
+                )
                 assertEquals(
                     "app log",
                     archive.getInputStream(archive.getEntry("log/app.log")).readBytes().decodeToString()
@@ -137,12 +180,37 @@ class LogExportServiceTest {
         assertTrue(unreadable.exists())
     }
 
-    private fun service(secrets: List<String> = emptyList()) = LogExportService(
+    @Test
+    fun `export fails instead of silently omitting snapshots`() = runTest {
+        val zip = service(settingsSnapshot = { throw IllegalStateException("settings unavailable") }).exportZip()
+
+        assertNull(zip)
+        assertEquals(emptyList<File>(), File(base, "log/export").listFiles()?.toList().orEmpty())
+    }
+
+    @Test
+    fun `export cancellation propagates to caller`() = runTest {
+        val service = service(settingsSnapshot = { throw CancellationException("export canceled") })
+
+        val result = runCatching { service.exportZip() }
+
+        assertTrue(result.exceptionOrNull() is CancellationException)
+        assertEquals(emptyList<File>(), File(base, "log/export").listFiles()?.toList().orEmpty())
+    }
+
+    private fun service(
+        debugMode: Boolean = false,
+        secrets: List<String> = emptyList(),
+        settingsSnapshot: suspend () -> String = { """{"snapshotVersion":1}""" },
+        piConfigSnapshot: suspend () -> String = { """{"snapshotVersion":1}""" },
+    ) = LogExportService(
         context = mockk<Context>(),
         baseDir = { base },
         roots = { listOf(File(base, "log"), File(base, "debug")) },
-        debugMode = { false },
+        debugMode = { debugMode },
         deviceInfo = { "device snapshot" },
+        settingsSnapshot = settingsSnapshot,
+        piConfigSnapshot = piConfigSnapshot,
         secrets = { secrets },
     )
 }
