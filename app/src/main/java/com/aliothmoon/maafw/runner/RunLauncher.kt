@@ -82,7 +82,7 @@ class RunLauncher(
     /** 收尾要守着整轮，活得比 launch 的调用方久 */
     private val scope: CoroutineScope,
     private val journal: RunJournal,
-    /** 没跑起来的原因要写进 app.log；那份文件给人读，资源 id 得先渲染 */
+    /** 没跑起来与整轮失败的原因要写进 app.log；那份文件给人读，资源 id 得先渲染 */
     private val renderText: (UiText) -> String,
 ) {
 
@@ -183,7 +183,8 @@ class RunLauncher(
             // 返回 Accepted 之前就置了 Preparing，屏障不会当场看到 Idle 就退
             val pending = engaged.toList()
             engaged.clear()
-            scope.launch { awaitSettledThenFinalize(pending) }
+            val label = logLabel(trigger, configurationId)
+            scope.launch { awaitSettledThenFinalize(pending, label) }
             return RunLaunchResult.Started
         } catch (cancellation: CancellationException) {
             finalize(engaged, RunEndReason.NotRun(NotRunCause.Cancelled))
@@ -198,6 +199,23 @@ class RunLauncher(
      * 定时触发更是没人看。拿到异常就带上堆栈
      */
     private fun logOutcome(trigger: RunTrigger, configurationId: RunConfigurationId?, result: RunLaunchResult) {
+        val label = logLabel(trigger, configurationId)
+        when (result) {
+            RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
+            is RunLaunchResult.NeedsConfirmation ->
+                Timber.i("run %s awaits confirmation: %s", label, renderText(result.prompt))
+            is RunLaunchResult.Rejected ->
+                Timber.w(result.error, "run %s rejected: %s", label, renderText(result.reason))
+            is RunLaunchResult.Blocked ->
+                Timber.w(result.error, "run %s blocked: %s", label, renderText(result.reason))
+            is RunLaunchResult.Invalid ->
+                Timber.w("run %s not started: %d plan diagnostics", label, result.diagnostics.size)
+            RunLaunchResult.ProjectNotReady, RunLaunchResult.NoExecutableTasks, RunLaunchResult.ConfigurationMissing ->
+                Timber.w("run %s not started: %s", label, result)
+        }
+    }
+
+    private fun logLabel(trigger: RunTrigger, configurationId: RunConfigurationId?): String {
         val config = configurationId?.value ?: "active"
         // Schedule 自带整条规则的选项，toString 一长串；日志里认得出是哪条就够
         val source = when (trigger) {
@@ -205,19 +223,7 @@ class RunLauncher(
             RunTrigger.Overlay -> "overlay"
             is RunTrigger.Schedule -> "schedule:${trigger.strategyId}"
         }
-        when (result) {
-            RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
-            is RunLaunchResult.NeedsConfirmation ->
-                Timber.i("run %s (%s) awaits confirmation: %s", source, config, renderText(result.prompt))
-            is RunLaunchResult.Rejected ->
-                Timber.w(result.error, "run %s (%s) rejected: %s", source, config, renderText(result.reason))
-            is RunLaunchResult.Blocked ->
-                Timber.w(result.error, "run %s (%s) blocked: %s", source, config, renderText(result.reason))
-            is RunLaunchResult.Invalid ->
-                Timber.w("run %s (%s) not started: %d plan diagnostics", source, config, result.diagnostics.size)
-            RunLaunchResult.ProjectNotReady, RunLaunchResult.NoExecutableTasks, RunLaunchResult.ConfigurationMissing ->
-                Timber.w("run %s (%s) not started: %s", source, config, result)
-        }
+        return "$source ($config)"
     }
 
     private fun remember(requestId: RunRequestId) {
@@ -304,11 +310,14 @@ class RunLauncher(
     /**
      * 等待任务结束直到
      */
-    private suspend fun awaitSettledThenFinalize(pending: List<Release>) {
+    private suspend fun awaitSettledThenFinalize(pending: List<Release>, label: String) {
         val settled = runnerPort.state.first { !it.phase.isBusy }
         val result = settled.latestResult ?: run {
             Timber.e("runner became idle without a result, synthesizing Failed")
             ExecutionResult.Failed(uiTextOf(R.string.msg_fail_default))
+        }
+        if (result is ExecutionResult.Failed) {
+            Timber.e("run %s failed: %s", label, renderText(result.reason))
         }
         finalize(ArrayDeque(pending), RunEndReason.Ran(result))
     }

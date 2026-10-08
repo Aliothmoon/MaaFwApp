@@ -2,15 +2,16 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.callWithTimeout
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.project.isFilePath
 import com.aliothmoon.maafw.project.normalizeProjectPath
 import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * focus 模板正文里的 `{image}` 占位符
@@ -64,12 +65,7 @@ class PrivilegedFocusContentResolver(
     /** 拿不到就替换成空串，与桌面端 MXU 一致：留着占位符更难看 */
     private suspend fun captureImageUri(): String {
         val target = File(AppPaths.FOCUS_DIR, "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
-        val saved = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
-            // 用 serviceOrNull 而不是 useService：一条日志不值得为它发起重连与授权请求
-            runCatching { servicePort.serviceOrNull()?.saveCachedImage(target.absolutePath) }
-                .onFailure { Timber.w(it, "focus {image}: failed to fetch cached frame") }
-                .getOrNull()
-        }
+        val saved = servicePort.callWithTimeout(CAPTURE_TIMEOUT) { it.saveCachedImage(target.absolutePath) }
         if (saved != true) return ""
         // Markwon 的 FileSchemeHandler 认这个 scheme；带上 mtime 防它按 URL 命中旧图的缓存
         return "file://${target.absolutePath}?t=${target.lastModified()}"
@@ -89,6 +85,6 @@ class PrivilegedFocusContentResolver(
         const val IMAGE_SLOTS = 8
 
         /** 缓存帧是现成的，慢只可能是 binder 排队；等太久不如不显示这张图 */
-        const val CAPTURE_TIMEOUT_MS = 3_000L
+        val CAPTURE_TIMEOUT = 3.seconds
     }
 }

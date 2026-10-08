@@ -168,9 +168,6 @@ object DiagnosticMessages {
 
     fun runtimeNoResource(): UiText = uiTextOf(R.string.diagnostic_runtime_no_resource)
 
-    fun enabledTaskMissingDefinition(task: String): UiText =
-        uiTextOf(R.string.diagnostic_enabled_task_missing_definition, task)
-
     fun optionUnsetWithoutDefault(option: String): UiText =
         uiTextOf(R.string.diagnostic_option_unset_without_default, option)
 

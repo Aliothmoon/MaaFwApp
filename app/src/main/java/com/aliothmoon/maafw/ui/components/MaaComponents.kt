@@ -27,7 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
@@ -70,6 +69,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
@@ -139,7 +139,7 @@ fun MaaCard(
                         label = "chevron",
                     )
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
+                        imageVector = MaaIcons.ChevronDown,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -642,6 +642,17 @@ fun MaaInfoRow(label: String, value: String) {
             modifier = Modifier.weight(1f),
         )
     }
+}
+
+/** 任务这一轮跑不了的原因；跳过不算出错，用警示色不用 error */
+@Composable
+fun MaaSkipReason(reason: String, modifier: Modifier = Modifier) {
+    Text(
+        text = reason,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaaTheme.palette.warning.content,
+        modifier = modifier,
+    )
 }
 
 @Composable

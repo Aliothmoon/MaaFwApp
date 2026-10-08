@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.domain.DiagnosticMessages
+import com.aliothmoon.maafw.domain.UnavailableReasons
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.domain.InputFieldDefinition
 import com.aliothmoon.maafw.domain.OptionDefinition
@@ -101,20 +102,24 @@ object RunPlanBuilder {
         )
 
         val runtimeTasks = mutableListOf<RuntimeTask>()
+        val skippedTasks = mutableListOf<SkippedTask>()
         for (configured in runConfiguration.tasks) {
+            if (!configured.enabled) continue
+            // 已不在项目里的任务也只跳过不报错：勾选框已锁，拦下整轮用户只能去删
             val task = definition.task(configured.taskName)
             if (task == null) {
-                if (configured.enabled) {
-                    diagnostics += runtimeError(
-                        "task:${configured.taskName}",
-                        DiagnosticMessages.enabledTaskMissingDefinition(configured.taskName),
-                    )
-                }
+                skippedTasks += SkippedTask(
+                    configured.customLabel ?: configured.taskName,
+                    UnavailableReasons.missingDefinition(),
+                )
                 continue
             }
             // Resolver 自动禁用供 UI；此处为运行时兜底
-            val applicable = ConfigurationResolver.checkApplicability(definition, task, controller, resource.name) == null
-            if (!configured.enabled || !applicable) continue
+            val unavailable = ConfigurationResolver.checkApplicability(definition, task, controller, resource.name)
+            if (unavailable != null) {
+                skippedTasks += SkippedTask(configured.customLabel ?: task.label.ifBlank { task.name }, unavailable)
+                continue
+            }
 
             val patches = mutableListOf<JsonObject>()
             if (task.pipelineOverride.isNotEmpty()) patches += task.pipelineOverride
@@ -175,6 +180,7 @@ object RunPlanBuilder {
                         clientLanguage = clientLanguage,
                     )
                 },
+                skippedTasks = skippedTasks,
             ),
         )
     }

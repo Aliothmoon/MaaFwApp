@@ -22,7 +22,7 @@ object LogExportCollector {
      *
      * 加新目录时记得往这里补一条，否则一年后的导出包会有上千个文件
      */
-    private val ROLLING_MARKERS = listOf("/run/", "/focus/", "/logcat/", "/crash/")
+    private val ROLLING_MARKERS = listOf("/run/", "/focus/", "/manual/", "/logcat/", "/crash/")
 
     /**
      * agent 以 PI 根为工作目录，日志写在它下面；外壳不知道这些文件会不会轮转，一律只收近 7 天

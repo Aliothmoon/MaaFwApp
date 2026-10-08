@@ -78,25 +78,17 @@ data class ResolvedConfiguredTask(
     val unavailableReason: UiText?,
     val options: List<OptionEditorState>,
     val icon: String? = null,
-    /**
-     * 没有一个 Adb controller 能跑：这种不适用不会随环境恢复，所以勾选框锁住；
-     * 旧版本里已经勾上的（任务后来不再支持 Android）按 [checkedButSkipped] 提示
-     */
-    val unsupported: Boolean = false,
 ) {
-    /** 派生态，不写回；环境恢复后 enabled 意图自动生效 */
-    val effectiveEnabled: Boolean get() = enabled && applicable && !missingDefinition
-    val hasOptions: Boolean get() = options.isNotEmpty()
+    /** 这一轮跑不了，与勾没勾无关；保存的 enabled 不动，环境恢复后照旧 */
+    val skipped: Boolean get() = !applicable || missingDefinition
 
-    /**
-     * 勾着但这一轮不会跑：当前 controller / resource 不适用，或 Android 上没有 controller 能跑
-     * 勾选框换成不可点的警示色 i，免得用户以为它会执行
-     */
-    val checkedButSkipped: Boolean get() = enabled && !applicable && !missingDefinition
+    /** 派生态，不写回；环境恢复后 enabled 意图自动生效 */
+    val effectiveEnabled: Boolean get() = enabled && !skipped
+    val hasOptions: Boolean get() = options.isNotEmpty()
 
     /** 勾选框的显示值与可点性 */
     val checkedForDisplay: Boolean get() = enabled
-    val toggleable: Boolean get() = !missingDefinition && !unsupported
+    val toggleable: Boolean get() = !skipped
 }
 
 data class TaskCatalogGroup(
@@ -116,7 +108,7 @@ data class TaskCatalogItem(
     val unavailableReason: UiText?,
     val defaultChecked: Boolean,
     val icon: String? = null,
-    /** 同 [ResolvedConfiguredTask.unsupported]：目录里不可选，不能新增 */
+    /** 没有一个 Adb controller 能跑：不会随环境恢复，目录里不可选、不能新增 */
     val unsupported: Boolean = false,
 )
 

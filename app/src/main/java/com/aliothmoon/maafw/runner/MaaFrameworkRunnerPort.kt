@@ -16,6 +16,7 @@ import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.remote.AgentRuntimeDescriptor
+import com.aliothmoon.maafw.remote.AgentRuntimeEntry
 import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -75,11 +76,22 @@ class MaaFrameworkRunnerPort(
      * 配方给 agent 起的显示名，按序号对应；与特权进程读的是同一个 APK 里的同一份描述
      * 在 app 侧就地查而不经 binder 传：回调的签名一改，挺过升级的旧特权进程就会解错参数
      */
-    private val agentNames: List<String?> by lazy {
-        runCatching { AgentRuntimeDescriptor.readFromApk(apkPath)?.runtimes?.map { it.name } }
+    private val agentRuntimes: List<AgentRuntimeEntry> by lazy {
+        runCatching { AgentRuntimeDescriptor.readFromApk(apkPath)?.runtimes }
             .onFailure { Timber.w(it, "agent runtime descriptor unreadable, agent names fall back to executables") }
             .getOrNull()
             .orEmpty()
+    }
+
+    private fun agentName(index: Int): String? = agentRuntimes.getOrNull(index)?.name
+
+    /** 细节所在的特权进程 logcat 只有调试模式才落盘，没开就提示去打开 */
+    private fun agentLaunchFailure(index: Int?): UiText {
+        val failed = index?.let {
+            val entry = agentRuntimes.getOrNull(it)
+            uiTextOf(R.string.msg_fail_agent_launch, agentLabel(entry?.name, entry?.executable.orEmpty(), it))
+        } ?: uiTextOf(R.string.msg_fail_agent_launch_any)
+        return if (debugMode()) failed else uiTextOf(R.string.msg_fail_debug_hint, failed)
     }
 
     init {
@@ -205,11 +217,11 @@ class MaaFrameworkRunnerPort(
         }
 
         fun onAgentConnected(index: Int, total: Int, exec: String?) {
-            emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty(), agentNames.getOrNull(index)))
+            emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty(), agentName(index)))
         }
 
         fun onAgentExited(index: Int, exec: String?, exitCode: Int, crashReport: String?) {
-            emit(RunnerEvent.AgentExited(index, exec.orEmpty(), exitCode, crashReport, agentNames.getOrNull(index)))
+            emit(RunnerEvent.AgentExited(index, exec.orEmpty(), exitCode, crashReport, agentName(index)))
         }
 
         // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂
@@ -239,6 +251,7 @@ class MaaFrameworkRunnerPort(
                 RunOutcome.COMPLETED -> ExecutionResult.Completed(results)
                 RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
                 RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
+                RunOutcome.AGENT_LAUNCH_FAILED -> ExecutionResult.Failed(agentLaunchFailure(reason?.toIntOrNull()), results)
                 else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
             }
             emit(RunnerEvent.ExecutionFinished(result))

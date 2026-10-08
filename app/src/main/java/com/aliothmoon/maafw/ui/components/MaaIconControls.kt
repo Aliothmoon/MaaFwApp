@@ -57,13 +57,10 @@ fun MaaCheckbox(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    /**
-     * 勾着但不会生效（如任务这一轮会被跳过）：不画勾选框，同一位置换成警示色的 i，
-     * 只作提示、不可点；执行时本来就会过滤掉它
-     */
-    warning: Boolean = false,
+    /** 不画勾选框，同一位置换成警示色的跳过标记，不可点 */
+    skipped: Boolean = false,
 ) {
-    val toggle = if (onCheckedChange != null && !warning) {
+    val toggle = if (onCheckedChange != null && !skipped) {
         Modifier.toggleable(
             value = checked,
             enabled = enabled,
@@ -81,12 +78,12 @@ fun MaaCheckbox(
             .then(toggle),
         contentAlignment = Alignment.Center,
     ) {
-        if (warning) {
+        if (skipped) {
             Icon(
-                imageVector = MaaIcons.InfoFilled,
+                imageVector = MaaIcons.Skipped,
                 contentDescription = null,
                 tint = MaaTheme.palette.warning.content,
-                modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                modifier = Modifier.size(MaaDesignTokens.IconSize.checkboxMark),
             )
         } else {
             Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
