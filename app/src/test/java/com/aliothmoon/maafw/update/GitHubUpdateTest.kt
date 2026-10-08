@@ -15,7 +15,11 @@ class GitHubUpdateTest {
 
     private fun api(gateway: RecordingHttpClientHelper) = GitHubReleasesApi(gateway.mock)
 
-    private fun client(gateway: RecordingHttpClientHelper) = GitHubUpdateClient(api(gateway))
+    private fun client(gateway: RecordingHttpClientHelper, mirror: MirrorChyanLatestApi.Latest? = null) =
+        GitHubUpdateClient(api(gateway)) { _, _, _, _ -> mirror }
+
+    private fun mirror(version: String) =
+        MirrorChyanLatestApi.Latest(version = version, url = null, sha256 = null, releaseNote = "From Mirror")
 
     private fun checkRequest(
         repository: String? = "maaxyz/example",
@@ -423,6 +427,62 @@ class GitHubUpdateTest {
 
     private fun page(firstTag: Int): String =
         releases(*(0 until 100).map { release("${firstTag + it + 1}.0.0") }.toTypedArray())
+
+    @Test
+    fun `check takes the mirror version without calling github`() = runBlocking {
+        val gateway = RecordingHttpClientHelper()
+
+        assertEquals(
+            UpdateCheckResult.UpdateAvailable(
+                UpdateSource.GITHUB,
+                UpdateInfo(
+                    version = "v1.6.0",
+                    releaseNotesUrl = "https://github.com/maaxyz/example/releases",
+                    releaseNotes = "From Mirror",
+                ),
+            ),
+            client(gateway, mirror("v1.6.0")).check(checkRequest()),
+        )
+        assertEquals(
+            UpdateCheckResult.UpToDate(UpdateSource.GITHUB, "v1.0.0"),
+            client(gateway, mirror("v1.0.0")).check(checkRequest()),
+        )
+        assertTrue(gateway.requests.isEmpty())
+    }
+
+    @Test
+    fun `an unparsable mirror version falls back to github`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, releases(release("v1.5.0", assets = assets(asset("app-arm64-v8a.apk"))))),
+        )
+
+        val result = client(gateway, mirror("nightly")).check(checkRequest())
+
+        assertEquals("v1.5.0", (result as UpdateCheckResult.UpdateAvailable).info.version)
+    }
+
+    @Test
+    fun `resolve downloads the mirror version even when github has a newer one`() = runBlocking {
+        val body = releases(
+            release("v1.6.0", assets = assets(asset("app-arm64-v8a.apk"))),
+            release("v1.5.0", assets = assets(asset("app-arm64-v8a.apk"))),
+        )
+
+        val result = client(RecordingHttpClientHelper(FakeHttpResponse(200, body)), mirror("1.5.0"))
+            .resolve(resolveRequest())
+
+        assertEquals("v1.5.0", (result as UpdateResolveResult.Resolved).update.version)
+    }
+
+    @Test
+    fun `resolve reports no matching asset when github lacks the mirror version`() = runBlocking {
+        val body = releases(release("v1.6.0", assets = assets(asset("app-arm64-v8a.apk"))))
+
+        assertEquals(
+            UpdateResolveResult.Failed(UpdateSource.GITHUB, UpdateCheckFailure.NO_MATCHING_ASSET),
+            client(RecordingHttpClientHelper(FakeHttpResponse(200, body)), mirror("v1.7.0")).resolve(resolveRequest()),
+        )
+    }
 
     private fun releases(vararg values: String): String = "[${values.joinToString(",")}]"
 

@@ -3,8 +3,9 @@ package com.aliothmoon.maafw.update
 import timber.log.Timber
 
 /**
- * 更新源分发：检查与下载地址解析都只打指定的单一源，不兜底、不交叉核对，
- * 源失败原样返回，由文案引导用户自己切源
+ * 更新源分发：按所选源检查与解析，源失败原样返回，由文案引导用户自己切源
+ *
+ * 唯一的交叉是 GitHub 源先问一次 Mirror酱 定版本号，见 [GitHubUpdateClient]
  */
 class UpdateService(
     clients: Collection<UpdateSourceClient>,

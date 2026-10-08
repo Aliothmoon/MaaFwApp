@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -358,5 +359,28 @@ class MirrorChyanUpdateTest {
         client(gateway).check(checkRequest(abi = AndroidAbi.UNIVERSAL))
 
         assertEquals(1, gateway.requests.size)
+    }
+
+    @Test
+    fun `precheck asks for the latest release anonymously`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(FakeHttpResponse(200, apkPayload))
+
+        val latest = client(gateway).latestRelease("rid", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0")
+
+        assertEquals("v1.1.0", latest?.version)
+        assertNull(gateway.requests.single().first.toHttpUrl().queryParameter("cdk"))
+    }
+
+    @Test
+    fun `precheck gives up quietly`() = runBlocking {
+        val notFound = RecordingHttpClientHelper(FakeHttpResponse(404, """{"code":8001,"msg":"resource not found"}"""))
+        assertNull(client(notFound).latestRelease("rid", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0"))
+
+        val broken = RecordingHttpClientHelper()
+        assertNull(client(broken).latestRelease("rid", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0"))
+
+        val noRid = RecordingHttpClientHelper()
+        assertNull(client(noRid).latestRelease(" ", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0"))
+        assertTrue(noRid.requests.isEmpty())
     }
 }

@@ -89,6 +89,15 @@ internal class GitHubReleasesApi(
             }
             .maxByOrNull { it.version }
 
+    /** tag 有没有 `v` 前缀都认；不看渠道 */
+    fun releaseFor(releases: List<Release>, version: Version, abi: AndroidAbi): Eligible? =
+        releases.firstNotNullOfOrNull { candidate ->
+            if (UpdateVersion.parse(candidate.tag) != version) return@firstNotNullOfOrNull null
+            selectAsset(candidate.assets, abi)?.let { Eligible(candidate, version, it) }
+        }
+
+    fun releasesPageUrl(repository: String): String = "https://github.com/$repository/releases"
+
     /**
      * 单 ABI 包先挑同 ABI 的变体（标记按优先级排），没拆到再回退 universal；
      * universal 包只挑 universal（不带任何 ABI 标记的单个 apk），不换成单 ABI 包。
@@ -186,8 +195,18 @@ internal class GitHubReleasesApi(
     }
 }
 
+/**
+ * 项目接了 Mirror酱 就以它的版本号为准，GitHub 只管下载：Mirror酱 检查不用 CDK，
+ * 也躲开了国内连不上 GitHub API 与匿名限流；没接入或没问到才自己挑最新版
+ */
 internal class GitHubUpdateClient(
     private val api: GitHubReleasesApi,
+    private val mirrorRelease: suspend (
+        rid: String?,
+        channel: UpdateChannel,
+        abi: AndroidAbi,
+        currentVersion: String,
+    ) -> MirrorChyanLatestApi.Latest? = { _, _, _, _ -> null },
 ) : UpdateSourceClient {
 
     override val source: UpdateSource = UpdateSource.GITHUB
@@ -201,6 +220,20 @@ internal class GitHubUpdateClient(
             )
         val repository = api.parseRepository(request.githubRepository)
             ?: return UpdateCheckResult.SourceFailed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
+        mirrorPinned(request.mirrorchyanRid, request.channel, request.abi, request.currentVersion)?.let { (latest, version) ->
+            return if (version <= currentVersion) {
+                UpdateCheckResult.UpToDate(source, latest.version)
+            } else {
+                UpdateCheckResult.UpdateAvailable(
+                    source,
+                    UpdateInfo(
+                        version = latest.version,
+                        releaseNotesUrl = api.releasesPageUrl(repository),
+                        releaseNotes = latest.releaseNote,
+                    ),
+                )
+            }
+        }
         val releases = when (val outcome = api.releases(repository)) {
             is UpdateSourceOutcome.Failed -> return UpdateCheckResult.SourceFailed(
                 source,
@@ -231,6 +264,7 @@ internal class GitHubUpdateClient(
     override suspend fun resolve(request: UpdateResolveRequest): UpdateResolveResult = try {
         val repository = api.parseRepository(request.githubRepository)
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.MISSING_CONFIGURATION)
+        val pinned = mirrorPinned(request.mirrorchyanRid, request.channel, request.abi, request.currentVersion)?.second
         val releases = when (val outcome = api.releases(repository)) {
             is UpdateSourceOutcome.Failed -> return UpdateResolveResult.Failed(
                 source,
@@ -240,7 +274,13 @@ internal class GitHubUpdateClient(
 
             is UpdateSourceOutcome.Ok -> outcome.value
         }
-        val (release, _, asset) = api.latestEligible(releases, request.channel, request.abi)
+        // Mirror酱 定的版本 GitHub 上没有或挑不出包，就报找不到，不退回别的版本
+        val eligible = if (pinned != null) {
+            api.releaseFor(releases, pinned, request.abi)
+        } else {
+            api.latestEligible(releases, request.channel, request.abi)
+        }
+        val (release, _, asset) = eligible
             ?: return UpdateResolveResult.Failed(source, UpdateCheckFailure.NO_MATCHING_ASSET)
         UpdateResolveResult.Resolved(
             ResolvedUpdate(
@@ -256,5 +296,18 @@ internal class GitHubUpdateClient(
         // 非业务异常一律按网络错误给用户，真实原因只进日志
         Timber.tag("UpdateResolve").w(e, "%s resolve failed", source)
         UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
+    }
+
+    /** Mirror酱 给的版本号解析不了也当没问到 */
+    private suspend fun mirrorPinned(
+        rid: String?,
+        channel: UpdateChannel,
+        abi: AndroidAbi,
+        currentVersion: String,
+    ): Pair<MirrorChyanLatestApi.Latest, Version>? {
+        val latest = mirrorRelease(rid, channel, abi, currentVersion) ?: return null
+        val version = UpdateVersion.parse(latest.version) ?: return null
+        Timber.tag("UpdateCheck").i("%s pinned to MirrorChyan version %s", source, latest.version)
+        return latest to version
     }
 }
