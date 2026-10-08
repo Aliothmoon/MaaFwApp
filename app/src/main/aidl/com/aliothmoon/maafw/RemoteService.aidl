@@ -146,8 +146,42 @@ interface RemoteService {
      */
     boolean saveCachedImage(String path) = 75;
 
+    /** 把虚拟屏帧缓冲的当前画面存成 PNG 到 [path]；不经 controller，没在跑任务也能截，帧缓冲为空返回 false */
+    boolean saveDisplayFrame(String path) = 85;
+
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;
     /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */
     oneway void setTextInputSink(ITextInputSink sink) = 77;
+
+    // ── 解锁手势（docs/scheduled-triggers.md）──
+    // 录制整段在特权进程里跑：要锁屏、读 /dev/input 原始触摸，app 侧那时多半已被挂起
+
+    /** 开始录制：锁屏息屏 → 亮屏 → 等用户解锁一次；立即返回，结果靠轮询取 */
+    oneway void startGestureRecord(int timeoutMs) = 78;
+
+    /** 录制状态快照，GestureRecordResult 的 JSON；终态被读走一次后回到 IDLE */
+    String pollGestureRecord() = 79;
+
+    oneway void cancelGestureRecord() = 80;
+
+    /** 按录好的手势解锁；gestureJson 是 UnlockGesture 的 JSON */
+    int unlockWithGesture(String gestureJson) = 81;
+
+    /** 设置页自测：先上锁息屏再按手势解一次 */
+    int testUnlockGesture(String gestureJson) = 82;
+
+    // ── 系统显示设置 ──
+
+    /** 荣耀「智能分辨率」是否开着（global low_resolution_switch）；开着时后台模式识别会出错 */
+    boolean isSmartResolutionEnabled() = 83;
+
+    // ── 运行通知 ──
+
+    /**
+     * 断开 / 恢复某个包的联网；只认 com.xiaomi.xmsf，别的包一律拒绝
+     *
+     * 超级岛的云端鉴权断网即放行，运行通知选「超级岛」时在进度通知期间断开它
+     */
+    boolean setPackageNetworkingEnabled(String packageName, boolean enabled) = 84;
 }

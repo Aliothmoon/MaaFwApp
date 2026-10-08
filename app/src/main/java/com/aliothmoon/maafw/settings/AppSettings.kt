@@ -84,6 +84,28 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val themeStyle: String = "DEFAULT",
 
+    /** 页面缩放：`auto` 按屏幕推荐，或 80–110 的百分比；见 [com.aliothmoon.maafw.theme.UiScale] */
+    @PrefKey(default = "auto")
+    val uiScale: String = "auto",
+
+    /** 自定义背景开关；图片本身在 filesDir/backgrounds，见 [com.aliothmoon.maafw.wallpaper.WallpaperStore] */
+    @PrefKey(default = "false")
+    val wallpaperEnabled: String = "false",
+
+    /** 每次换图写一个新值，图片文件名不变，靠它触发重新解码 */
+    @PrefKey(default = "")
+    val wallpaperToken: String = "",
+
+    /** 以下三项都是 0–100 的百分比 */
+    @PrefKey(default = "80")
+    val wallpaperImageAlpha: String = "80",
+
+    @PrefKey(default = "25")
+    val wallpaperScrim: String = "25",
+
+    @PrefKey(default = "0")
+    val wallpaperBlur: String = "0",
+
     /**
      * [com.aliothmoon.maafw.domain.EventNotificationLevel] 的 name
      *
@@ -93,9 +115,21 @@ data class AppSettings(
     @PrefKey(default = "DEFAULT")
     val eventNotificationLevel: String = "DEFAULT",
 
-    /** 定时触发时是否亮屏解锁；默认关，注入 PIN 这种事要用户先点头。手动 Start 不走这条 */
-    @PrefKey(default = "false")
-    val wakeUnlockEnabled: String = "false",
+    /**
+     * 运行通知的展示方式：[com.aliothmoon.maafw.notification.live.LiveBackend] 的 name；
+     * 空串是没选过，按超级岛 > 实时更新 > 标准通知栏取第一档可用的
+     */
+    @PrefKey(default = "")
+    val liveBackend: String = "",
+
+    /**
+     * 定时触发时的解锁方式：swipe / gesture / pin（见 [com.aliothmoon.maafw.domain.UnlockCredential]）
+     *
+     * 没有总开关：定时到点总要亮屏解锁（对齐 MaaMeow）。空串是「还没选过」，按「无密码」处理；
+     * 老版本开过 PIN 解锁的用户由 WakeUnlockTypeMigration 迁成 pin，升级后不用重选
+     */
+    @PrefKey(default = "")
+    val wakeUnlockType: String = "",
 
     /**
      * 解锁用的纯数字 PIN，**明文存在本 DataStore 里**

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,13 +24,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleRow
 import com.aliothmoon.maafw.schedule.ScheduleUiState
@@ -37,7 +38,6 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
-import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaEmptyState
 import com.aliothmoon.maafw.ui.components.MaaSwitch
@@ -56,8 +56,22 @@ fun ScheduleScreen(
     onIntent: (ScheduleIntent) -> Unit,
     onEdit: (String?) -> Unit,
     onOpenLog: () -> Unit,
+    onFixIssue: (ScheduleHealthIssue) -> Unit,
+    onOpenWakeUnlock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    ScheduleSetupWizard(
+        pending = state.setupWizard,
+        backend = state.backend,
+        onFix = onFixIssue,
+        onDismiss = { onIntent(ScheduleIntent.DismissSetupWizard) },
+    )
+    state.autoStartPrompt?.let { target ->
+        ScheduleAutoStartPrompt(
+            target = target,
+            onDismiss = { never -> onIntent(ScheduleIntent.DismissAutoStartPrompt(never)) },
+        )
+    }
     // 编辑与日志都进二级页面（NavHost 推入），草稿与日志快照归各自的页面管
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -69,7 +83,7 @@ fun ScheduleScreen(
                 )
             },
             actions = {
-                // 与「系统未允许精确闹钟」卡片上那个按钮同一条路；那张卡片只在被关掉时出现，
+                // 与健康卡上「系统未允许精确闹钟」那一项同一条路；那一项只在被关掉时出现，
                 // 允许之后就没别的地方能回到系统开关页了
                 if (state.exactAlarmConfigurable) {
                     IconButton(
@@ -82,6 +96,13 @@ fun ScheduleScreen(
                             ),
                         )
                     }
+                }
+                // 解锁方式只对定时生效，放这里而不是设置页（对齐 MaaMeow）
+                IconButton(onClick = onOpenWakeUnlock) {
+                    Icon(
+                        imageVector = Icons.Outlined.LockOpen,
+                        contentDescription = stringResource(R.string.schedule_wake_unlock_title),
+                    )
                 }
                 IconButton(onClick = onOpenLog) {
                     Icon(
@@ -103,17 +124,6 @@ fun ScheduleScreen(
                 actionIconContentColor = MaterialTheme.colorScheme.primary,
             ),
         )
-        // 空状态靠 fillParentMaxSize 居中，卡片不能再进列表
-        if (!state.exactAlarmAllowed) {
-            ExactAlarmCard(
-                onGrant = { onIntent(ScheduleIntent.RequestExactAlarmPermission) },
-                modifier = Modifier.padding(
-                    start = MaaDesignTokens.Spacing.lg,
-                    end = MaaDesignTokens.Spacing.lg,
-                    bottom = MaaDesignTokens.Spacing.md,
-                ),
-            )
-        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(
@@ -123,9 +133,28 @@ fun ScheduleScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
+            // 有没有规则都进列表：五六项加厂商提示在矮屏 / 横屏上超出一屏，放列表外就被截掉
+            if (state.healthIssues.isNotEmpty()) {
+                item(key = "health") {
+                    ScheduleHealthCard(
+                        issues = state.healthIssues,
+                        backend = state.backend,
+                        onFix = onFixIssue,
+                    )
+                }
+            }
             if (state.rows.isEmpty()) {
-                // 撑满视口才有多余高度可分；item 默认包裹内容，MaaEmptyState 的居中就无从谈起
-                item(key = "empty") { ScheduleEmptyState(Modifier.fillParentMaxSize()) }
+                item(key = "empty") {
+                    ScheduleEmptyState(
+                        // 独占时撑满视口才有多余高度可分，item 默认包裹内容，居中无从谈起；
+                        // 跟在健康卡后面再撑满会被挤出一屏，只留上下余白
+                        if (state.healthIssues.isEmpty()) {
+                            Modifier.fillParentMaxSize()
+                        } else {
+                            Modifier.padding(vertical = MaaDesignTokens.Spacing.xl)
+                        },
+                    )
+                }
             } else {
                 items(state.rows, key = { it.strategy.id }) { row ->
                     ScheduleRowCard(
@@ -138,20 +167,6 @@ fun ScheduleScreen(
         }
     }
 
-}
-
-@Composable
-private fun ExactAlarmCard(onGrant: () -> Unit, modifier: Modifier = Modifier) {
-    MaaCard(modifier = modifier, title = stringResource(R.string.schedule_exact_alarm_blocked)) {
-        Text(
-            text = stringResource(R.string.schedule_exact_alarm_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        TextButton(onClick = onGrant) {
-            Text(stringResource(R.string.schedule_exact_alarm_grant))
-        }
-    }
 }
 
 @Composable

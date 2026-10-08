@@ -50,6 +50,8 @@ app:
 
 图标文件必须落在白名单里，否则进不了包，界面上不会显示。agent 脚本如果放在资源仓库的 `agent/` 下，把 `agent/**` 加进 `include`。
 
+`display` 管运行在哪块屏上：`presets` 是后台模式虚拟屏的分辨率档位，缺省为内置的 720P@240dpi、1080P@280dpi；`foreground: false` 只留后台模式（Android 10 以下用不了），缺省为 `true`。
+
 ## 资源约定
 
 按桌面端习惯写即可，下面几条是 Android 上会对不上的地方：
@@ -64,7 +66,7 @@ app:
 | 热更新资源 | 资源随 APK 绑定，换资源重新出包 |
 | 调试期改完资源刷新即可 | 重装或清数据。版本号在独立 checkout 时跟本仓库提交走、作为 submodule 时跟最外层主仓库走；版本号未变时设备可能继续用旧解包 |
 
-`welcome`、`description`、`contact`、`license`、`github`、`telemetry` 会进首启弹窗和设置页「关于」。正文支持 `$i18n`、相对文件、URL 或直接文本。
+`welcome`、`description`、`contact`、`license`、`github`、`telemetry` 会进首启弹窗和设置页「关于」。正文支持 `$i18n`、相对文件、URL 或直接文本。PI v2.10.2 起 `welcome` 还支持非空字符串数组，多条公告会按声明顺序展示。
 
 ## Agent
 

@@ -3,6 +3,8 @@ package com.aliothmoon.maafw.notification
 import androidx.compose.runtime.Immutable
 import com.aliothmoon.maafw.domain.EventNotificationLevel
 import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.notification.live.LiveBackend
+import com.aliothmoon.maafw.notification.live.LiveCapability
 
 /**
  * 通知设置页的聚合态
@@ -15,6 +17,10 @@ data class NotificationUiState(
     val settings: NotificationSettings = NotificationSettings(),
     val enabledProviders: Set<String> = emptySet(),
     val eventLevel: EventNotificationLevel = EventNotificationLevel.DEFAULT,
+    /** 运行通知：本机能力与实际生效的方式；首次读出来之前为 null */
+    val live: LiveCapability? = null,
+    /** 运行通知：用户选的方式；null 是没选过 */
+    val livePreference: LiveBackend? = null,
 )
 
 sealed interface NotificationIntent {
@@ -31,6 +37,14 @@ sealed interface NotificationIntent {
 
     /** 投给全部已启用渠道，逐条回结果 */
     data class SendExternalTest(val title: String, val body: String) : NotificationIntent
+
+    data class SetLiveBackend(val backend: LiveBackend) : NotificationIntent
+
+    /** 从系统设置回来时重读：焦点通知、实时更新、通知权限都可能刚改过 */
+    data object RefreshLiveCapability : NotificationIntent
+
+    /** 按当前生效的方式发一条假进度 */
+    data class SendLiveTest(val title: String, val body: String) : NotificationIntent
 }
 
 sealed interface NotificationEffect {

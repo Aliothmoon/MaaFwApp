@@ -130,9 +130,26 @@ sealed interface RunnerEvent {
      * [name] 来自配方 `agent.runtimes[].name`，写了就优先显示
      */
     data class AgentConnected(val index: Int, val total: Int, val exec: String, val name: String? = null) : RunnerEvent {
-        val label: String
-            get() = name?.takeIf(String::isNotBlank)
-                ?: exec.substringAfterLast('/').substringAfterLast('\\').ifBlank { "agent[$index]" }
+        val label: String get() = agentLabel(name, exec, index)
+    }
+
+    /**
+     * 一个 agent child 没被要求退出却退了：崩溃、被系统杀掉、或自己提前退出
+     *
+     * 特权进程等在 child 上得来的事实，不靠 MaaFramework 报——框架要到下一次 custom 调用超时才知道对端没了
+     *
+     * [crashReport] 是 `log/crash/` 下的现场文件名，只有被 debuggerd 接管的信号（SIGSEGV、SIGABRT 这些）才有
+     */
+    data class AgentExited(
+        val index: Int,
+        val exec: String,
+        val exitCode: Int,
+        val crashReport: String? = null,
+        val name: String? = null,
+    ) : RunnerEvent {
+        val label: String get() = agentLabel(name, exec, index)
+
+        val signal: Int? get() = AgentExitCode.signalOf(exitCode)
     }
 
     /**
@@ -143,7 +160,13 @@ sealed interface RunnerEvent {
     data class Focus(val focus: FocusMessage, val details: String = "") : RunnerEvent
 }
 
+/** 配方 `agent.runtimes[].name` 写了就用它，否则取可执行体的文件名 */
+private fun agentLabel(name: String?, exec: String, index: Int): String =
+    name?.takeIf(String::isNotBlank)
+        ?: exec.substringAfterLast('/').substringAfterLast('\\').ifBlank { "agent[$index]" }
+
 sealed interface RunnerCommandResult {
     data object Accepted : RunnerCommandResult
-    data class Rejected(val reason: UiText) : RunnerCommandResult
+    /** [error] 是外壳这一侧接住的异常；特权进程里的失败只回一个 false，现场在调试模式抓的 logcat 里 */
+    data class Rejected(val reason: UiText, val error: Throwable? = null) : RunnerCommandResult
 }

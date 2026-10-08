@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.session
 
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
+import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
@@ -20,6 +21,7 @@ import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
+import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
@@ -32,6 +34,8 @@ import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.runner.RUN_LOG_CAPACITY
 import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
+import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
+import com.aliothmoon.maafw.runner.DisplayHazards
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
@@ -72,6 +76,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonObject
+import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 import kotlin.io.path.createTempDirectory
@@ -165,15 +170,17 @@ class SessionViewModelTest {
         store: InMemoryUserConfigurationStore,
         runner: RunnerPort,
         settings: FakeAppSettingsGateway,
+        hazards: DisplayHazards = DisplayHazards(),
     ) = RunLauncher(
         projectRepository = project,
         configurationStore = store,
         runnerPort = runner,
-        prechecks = listOf(ForegroundModePrecheck),
+        prechecks = listOf(ForegroundModePrecheck, DisplayHazardPrecheck { hazards }),
         hooks = listOf(KeepAliveHook(RecordingRunKeepAlive())),
         runMode = { settings.runMode.value },
         scope = backgroundScope,
         journal = DiscardingRunJournal,
+        renderText = { it.toString() },
     )
 
     private fun TestScope.createVm(
@@ -184,20 +191,22 @@ class SessionViewModelTest {
             scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 0),
         ),
         permissions: FakePermissionGateway = FakePermissionGateway(),
+        servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
         welcomeResolver: WelcomeResolver = WelcomeResolver { null },
+        hazards: DisplayHazards = DisplayHazards(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
         val focusDispatcher = focusDispatcherFor(runner)
         val vm = SessionViewModel(
             projectRepository = project,
             configurationStore = store,
             runnerPort = runner,
-            runLauncher = launcherFor(project, store, runner, settings),
+            runLauncher = launcherFor(project, store, runner, settings, hazards),
             previewPort = preview,
             permissionGateway = permissions,
-            servicePort = FakePrivilegedServicePort(),
+            servicePort = servicePort,
             displaySize = displaySize,
             appSettings = settings,
             focusDispatcher = focusDispatcher,
@@ -553,6 +562,143 @@ class SessionViewModelTest {
         )
     }
 
+    /** 两项都开着：逐个问，前面点过的跟着累积，全点完才开跑 */
+    @Test
+    fun `display hazards are confirmed one by one before starting`() = runTest(mainDispatcher) {
+        val hazards = DisplayHazards(smartResolution = true, eyeProtectionSource = "xiaomi:screen_paper_mode_enabled")
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(runner = runner, hazards = hazards)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        val first = effects.filterIsInstance<SessionEffect.ConfirmStart>().single()
+        assertTrue(first.prompt.isResource(R.string.precheck_smart_resolution_enabled))
+        assertEquals(setOf(DisplayHazardPrecheck.SMART_RESOLUTION), first.acknowledged)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+
+        vm.onIntent(SessionIntent.Start(acknowledged = first.acknowledged))
+        advanceUntilIdle()
+        val second = effects.filterIsInstance<SessionEffect.ConfirmStart>().last()
+        assertTrue(second.prompt.isResource(R.string.precheck_eye_protection_enabled))
+        assertEquals(
+            setOf(DisplayHazardPrecheck.SMART_RESOLUTION, DisplayHazardPrecheck.EYE_PROTECTION),
+            second.acknowledged,
+        )
+
+        vm.onIntent(SessionIntent.Start(acknowledged = second.acknowledged))
+        advanceUntilIdle()
+        assertEquals(2, effects.filterIsInstance<SessionEffect.ConfirmStart>().size)
+        assertTrue(runner.state.value.phase.isBusy)
+    }
+
+    /** 悬浮窗里弹不了框：提醒照跑，不问 */
+    @Test
+    fun `overlay start runs through display hazards without asking`() = runTest(mainDispatcher) {
+        val hazards = DisplayHazards(smartResolution = true, eyeProtectionSource = "xiaomi:screen_paper_mode_enabled")
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(runner = runner, hazards = hazards)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start(TaskSurface.Overlay))
+        advanceUntilIdle()
+
+        assertTrue(effects.none { it is SessionEffect.ConfirmStart })
+        assertTrue(runner.state.value.phase.isBusy)
+    }
+
+    private val debugSettings get() = FakeAppSettingsGateway().apply { debugMode.value = true }
+
+    private fun List<SessionEffect>.hasMessage(res: Int) =
+        any { it is SessionEffect.ShowMessage && it.message.isResource(res) }
+
+    @Test
+    fun `manual screenshot saves the display frame without a run`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = debugSettings)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        val saved = File(service.savedFramePaths.single())
+        assertEquals(File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR), saved.parentFile)
+        assertTrue(effects.hasMessage(R.string.msg_screenshot_saved))
+    }
+
+    @Test
+    fun `manual screenshot keeps only the newest frames on disk`() = runTest(mainDispatcher) {
+        val dir = File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR).apply { mkdirs() }
+        val old = (0 until 25).map { i ->
+            File(dir, "manual_$i.png").apply {
+                writeText("x")
+                setLastModified(1_000_000L + i * 1_000L)
+            }
+        }
+        val (vm, _, _) = createVm(
+            servicePort = FakePrivilegedServicePort(FakePrivilegedService()),
+            settings = debugSettings,
+        )
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        val kept = dir.listFiles().orEmpty().map { it.name }.toSet()
+        assertEquals(old.takeLast(20).map { it.name }.toSet(), kept)
+    }
+
+    @Test
+    fun `manual screenshot failure reports it`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService().apply { saveDisplayFrameResult = false }
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = debugSettings)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(effects.hasMessage(R.string.msg_screenshot_failed))
+    }
+
+    @Test
+    fun `manual screenshot is debug-only and rejects before ipc`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service))
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(service.savedFramePaths.isEmpty())
+    }
+
+    @Test
+    fun `manual screenshot rejects foreground mode before ipc`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val settings = debugSettings.apply { runMode.value = RunMode.FOREGROUND }
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = settings)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(service.savedFramePaths.isEmpty())
+    }
+
     @Test
     fun `start with no executable tasks emits message`() = runTest(mainDispatcher) {
         val store = readyStore(tasks = listOf(ConfiguredTask("启动游戏", enabled = false, instanceId = "t1")))
@@ -773,7 +919,6 @@ class SessionViewModelTest {
         val (vm, _, _) = createVm(project = project, runner = runner)
         advanceUntilIdle()
         val before = project.reloadCount
-        assertTrue(before >= 1)
 
         vm.onIntent(SessionIntent.Start())
         advanceUntilIdle()

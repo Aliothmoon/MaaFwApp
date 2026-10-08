@@ -4,6 +4,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -255,6 +256,11 @@ val LocalMaaStyleTokens = staticCompositionLocalOf { DefaultStyleTokens }
 
 val LocalThemeStyle = staticCompositionLocalOf { ThemeStyle.DEFAULT }
 
+/**
+ * 套玻璃配色之前的不透明配色，供 [OpaqueTheme] 在弹窗里恢复；由 [MaaFwTheme] 下发
+ */
+val LocalOpaqueColorScheme = staticCompositionLocalOf<ColorScheme?> { null }
+
 /** 主题扩展读取入口；Screen 不直接碰 DataStore / ThemeStyle 分支 */
 object MaaTheme {
     val palette: MaaPalette
@@ -288,10 +294,32 @@ private fun shapesOf(tokens: MaaStyleTokens): Shapes = Shapes(
     extraLarge = RoundedCornerShape(tokens.radii.large),
 )
 
-private fun colorSchemeOf(style: ThemeStyle, dark: Boolean): ColorScheme = when (style) {
-    ThemeStyle.DEFAULT -> if (dark) BlueDark else BlueLight
-    ThemeStyle.SEMI_DESIGN -> if (dark) SemiDark else SemiLight
+internal fun colorSchemeOf(style: ThemeStyle, dark: Boolean, pureBlack: Boolean = false): ColorScheme {
+    val scheme = when (style) {
+        ThemeStyle.DEFAULT -> if (dark) BlueDark else BlueLight
+        ThemeStyle.SEMI_DESIGN -> if (dark) SemiDark else SemiLight
+    }
+    return if (dark && pureBlack) scheme.toPureBlack() else scheme
 }
+
+private val PureBlack = Color(0xFF000000)
+private val PureBlackRaised = Color(0xFF121212)
+
+/**
+ * 纯黑（OLED）：页面底、卡片、sheet 底压成纯黑，卡片靠 outline 描边分层（对齐 MaaMeow 的 PURE_DARK）
+ *
+ * 只动「铺满大面积」的几档；对话框与菜单用的 surfaceContainerHigh/Highest 保持原深灰，
+ * 浮在纯黑上才看得出是一层
+ */
+private fun ColorScheme.toPureBlack(): ColorScheme = copy(
+    background = PureBlack,
+    surface = PureBlack,
+    surfaceDim = PureBlack,
+    surfaceContainerLowest = PureBlack,
+    surfaceContainerLow = PureBlack,
+    surfaceVariant = PureBlackRaised,
+    surfaceContainer = PureBlackRaised,
+)
 
 private fun paletteOf(style: ThemeStyle, dark: Boolean): MaaPalette = when (style) {
     ThemeStyle.DEFAULT -> if (dark) DarkMaaPalette else LightMaaPalette
@@ -302,16 +330,19 @@ private fun paletteOf(style: ThemeStyle, dark: Boolean): MaaPalette = when (styl
 fun MaaFwTheme(
     themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
     darkTheme: Boolean = isSystemInDarkTheme(),
+    /** 只在 [darkTheme] 时生效 */
+    pureBlack: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val styleTokens = styleTokensOf(themeStyle)
-    val colorScheme = colorSchemeOf(themeStyle, darkTheme)
+    val colorScheme = colorSchemeOf(themeStyle, darkTheme, pureBlack)
     val palette = paletteOf(themeStyle, darkTheme)
 
     CompositionLocalProvider(
         LocalMaaPalette provides palette,
         LocalMaaStyleTokens provides styleTokens,
         LocalThemeStyle provides themeStyle,
+        LocalOpaqueColorScheme provides colorScheme,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
@@ -323,5 +354,57 @@ fun MaaFwTheme(
             // 不再借原生 ripple 的宿主视图池（按下反馈会串到别的组件上，见 MaaPressIndication）
             CompositionLocalProvider(LocalIndication provides MaaPressIndication(), content = content)
         }
+    }
+}
+
+/** 有自定义背景时卡片与各级 surface 的不透明度 */
+const val GLASS_SURFACE_ALPHA = 0.82f
+
+/**
+ * 玻璃配色（移植自 MaaMeow）：页面底透明露出背景图，各级 surface 半透，前景 on* 色保持不透明
+ */
+fun ColorScheme.toGlass(surfaceAlpha: Float = GLASS_SURFACE_ALPHA): ColorScheme = copy(
+    background = Color.Transparent,
+    surface = surface.copy(alpha = surfaceAlpha),
+    surfaceVariant = surfaceVariant.copy(alpha = surfaceAlpha),
+    surfaceBright = surfaceBright.copy(alpha = surfaceAlpha),
+    surfaceDim = surfaceDim.copy(alpha = surfaceAlpha),
+    surfaceContainer = surfaceContainer.copy(alpha = surfaceAlpha),
+    surfaceContainerLowest = surfaceContainerLowest.copy(alpha = surfaceAlpha),
+    surfaceContainerLow = surfaceContainerLow.copy(alpha = surfaceAlpha),
+    surfaceContainerHigh = surfaceContainerHigh.copy(alpha = surfaceAlpha),
+    surfaceContainerHighest = surfaceContainerHighest.copy(alpha = surfaceAlpha),
+)
+
+/**
+ * 在玻璃作用域里恢复不透明配色
+ *
+ * 弹窗与 sheet 另开窗口，底下是别的页面而不是背景图，半透只会把下层文字透出来。
+ * 不在玻璃作用域里时是无副作用的透传
+ */
+@Composable
+fun OpaqueTheme(content: @Composable () -> Unit) {
+    val opaque = LocalOpaqueColorScheme.current
+    if (opaque == null || opaque === MaterialTheme.colorScheme) {
+        content()
+    } else {
+        ProvideColorScheme(opaque, content)
+    }
+}
+
+/**
+ * 换一套配色重新套 MaterialTheme，排版与形状照旧
+ *
+ * MaterialTheme 会把 LocalIndication 换回 ripple，这里要再压回 [MaaPressIndication]；
+ * 内容色同步成新配色的 onSurface
+ */
+@Composable
+fun ProvideColorScheme(scheme: ColorScheme, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography, shapes = MaterialTheme.shapes) {
+        CompositionLocalProvider(
+            LocalIndication provides MaaPressIndication(),
+            LocalContentColor provides scheme.onSurface,
+            content = content,
+        )
     }
 }

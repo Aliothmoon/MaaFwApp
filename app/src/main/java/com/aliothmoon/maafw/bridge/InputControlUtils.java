@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 /**
@@ -33,6 +34,13 @@ public final class InputControlUtils {
             new MotionEvent.PointerCoords[TouchPointerSequence.MAX_CONTACTS];
     private static final String STAGE_SET_DISPLAY_ID = "SET_DISPLAY_ID";
     private static final String STAGE_INJECT = "INJECT_INPUT_EVENT";
+
+    /**
+     * DROPPED：目标 display 还在，系统却没收下事件，多是目标窗口这一刻不收触摸（加载、联网遮罩）；
+     * FAILED：注入通路本身不可用（display 已回收、设不上 displayId、contact 越界）
+     */
+    public enum TouchResult { DELIVERED, DROPPED, FAILED }
+
     private static InputManager manager;
     private static volatile ITouchEventCallback touchCallback;
     /**
@@ -40,6 +48,12 @@ public final class InputControlUtils {
      */
     private static List<TouchPointerSequence.Pointer> slots = Collections.emptyList();
     private static long gestureDownTime = 0;
+    /**
+     * 解锁注入期间 >0：失败日志不带键码与坐标、不回调触控预览，PIN 与手势轨迹不能进可导出的日志；
+     * 进程级而非线程级，任务线程此刻的失败日志也会打出 slots
+     */
+    private static final AtomicInteger SENSITIVE_DEPTH = new AtomicInteger();
+    private static final String REDACTED = "<redacted>";
 
     static {
         for (int i = 0; i < TouchPointerSequence.MAX_CONTACTS; i++) {
@@ -88,21 +102,23 @@ public final class InputControlUtils {
     /**
      * reportIndex 为本次事件发生变化的手指，触控预览只上报这一根；pointers 是 event 的来源，只用于失败日志
      */
-    private static boolean inject(MotionEvent event, List<TouchPointerSequence.Pointer> pointers, int displayId,
-                                  int mode, int reportIndex) {
+    private static TouchResult inject(MotionEvent event, List<TouchPointerSequence.Pointer> pointers,
+                                      int displayId, int mode, int reportIndex) {
         try {
             if (!setDisplayId(event, displayId)) {
-                logTouchFailure(event, pointers, reportIndex, displayId, mode, STAGE_SET_DISPLAY_ID, -1);
-                return false;
+                logTouchFailure(event, pointers, reportIndex, displayId, mode, STAGE_SET_DISPLAY_ID, -1,
+                        TouchResult.FAILED);
+                return TouchResult.FAILED;
             }
             notifyTouchCallback(event, reportIndex);
             long start = SystemClock.elapsedRealtimeNanos();
-            boolean injected = getManager().injectInputEvent(event, mode);
-            if (!injected) {
-                logTouchFailure(event, pointers, reportIndex, displayId, mode, STAGE_INJECT,
-                        SystemClock.elapsedRealtimeNanos() - start);
+            if (getManager().injectInputEvent(event, mode)) {
+                return TouchResult.DELIVERED;
             }
-            return injected;
+            long injectNanos = SystemClock.elapsedRealtimeNanos() - start;
+            TouchResult result = isDisplayPresent(displayId) ? TouchResult.DROPPED : TouchResult.FAILED;
+            logTouchFailure(event, pointers, reportIndex, displayId, mode, STAGE_INJECT, injectNanos, result);
+            return result;
         } finally {
             event.recycle();
         }
@@ -112,9 +128,27 @@ public final class InputControlUtils {
         touchCallback = callback;
     }
 
+    /** 必须与 {@link #endSensitiveInput()} 成对，放在 try/finally 里 */
+    public static void beginSensitiveInput() {
+        SENSITIVE_DEPTH.incrementAndGet();
+    }
+
+    public static void endSensitiveInput() {
+        SENSITIVE_DEPTH.decrementAndGet();
+    }
+
+    private static boolean isSensitiveInput() {
+        return SENSITIVE_DEPTH.get() > 0;
+    }
+
+    /** 还有手指按着：可能是任务正在点，槽位是进程共享的 */
+    public static synchronized boolean hasActiveContacts() {
+        return !slots.isEmpty();
+    }
+
     private static void notifyTouchCallback(MotionEvent event, int index) {
         ITouchEventCallback callback = touchCallback;
-        if (callback == null) {
+        if (callback == null || isSensitiveInput()) {
             return;
         }
         try {
@@ -154,7 +188,7 @@ public final class InputControlUtils {
         slots = Collections.emptyList();
     }
 
-    private static boolean injectStep(TouchPointerSequence.Step step, int displayId) {
+    private static TouchResult injectStep(TouchPointerSequence.Step step, int displayId) {
         if (step.getCancelFirst()) {
             cancelGesture(displayId);
         }
@@ -174,7 +208,7 @@ public final class InputControlUtils {
                 : masked == TouchPointerSequence.ACTION_POINTER_UP ? without(pointers, index) : pointers;
 
         // DOWN 必须 WAIT_FOR_FINISH，确保起始状态被系统接收
-        boolean ok = inject(
+        TouchResult result = inject(
                 obtainEvent(pointers, now, encodeAction(masked, index), isUp ? index : -1),
                 pointers,
                 displayId,
@@ -182,35 +216,35 @@ public final class InputControlUtils {
                         : InputManager.INJECT_INPUT_EVENT_MODE_ASYNC,
                 index);
         // 未送达则槽位不动；之后同 contact 再按下会先整体 CANCEL 自愈
-        if (ok) {
+        if (result == TouchResult.DELIVERED) {
             slots = next;
         }
-        return ok;
+        return result;
     }
 
-    private static synchronized boolean apply(TouchPointerSequence.Kind kind, int x, int y, int contact,
-                                              int displayId) {
+    private static synchronized TouchResult apply(TouchPointerSequence.Kind kind, int x, int y, int contact,
+                                                  int displayId) {
         TouchPointerSequence.Step step = TouchPointerSequence.INSTANCE.plan(kind, slots, contact, x, y);
         if (!step.getOk()) {
             logPlanFailure(step, kind, x, y, contact, displayId);
-            return false;
+            return TouchResult.FAILED;
         }
         if (step.getNoop()) {
-            return true;
+            return TouchResult.DELIVERED;
         }
         return injectStep(step, displayId);
     }
 
-    public static boolean down(int x, int y, int contact, int displayId) {
+    public static TouchResult down(int x, int y, int contact, int displayId) {
         return apply(TouchPointerSequence.Kind.Down, x, y, contact, displayId);
     }
 
     public static boolean move(int x, int y, int contact, int displayId) {
-        return apply(TouchPointerSequence.Kind.Move, x, y, contact, displayId);
+        return apply(TouchPointerSequence.Kind.Move, x, y, contact, displayId) == TouchResult.DELIVERED;
     }
 
     public static boolean up(int x, int y, int contact, int displayId) {
-        return apply(TouchPointerSequence.Kind.Up, x, y, contact, displayId);
+        return apply(TouchPointerSequence.Kind.Up, x, y, contact, displayId) == TouchResult.DELIVERED;
     }
 
     public static boolean keyDown(int keyCode, int displayId) {
@@ -266,8 +300,8 @@ public final class InputControlUtils {
                 + " reason=" + step.getFailureReason()
                 + " kind=" + kind
                 + " contact=" + contact
-                + " x=" + x
-                + " y=" + y
+                + " x=" + (isSensitiveInput() ? REDACTED : String.valueOf(x))
+                + " y=" + (isSensitiveInput() ? REDACTED : String.valueOf(y))
                 + " displayId=" + displayId
                 + " slots=" + formatPointers(slots));
     }
@@ -277,8 +311,9 @@ public final class InputControlUtils {
      */
     private static void logTouchFailure(MotionEvent event, List<TouchPointerSequence.Pointer> pointers,
                                         int reportIndex, int displayId, int mode, String stage,
-                                        long injectNanos) {
+                                        long injectNanos, TouchResult result) {
         Ln.w(TAG + ": touch inject failed"
+                + " result=" + result
                 + " stage=" + stage
                 + " action=" + actionName(event.getActionMasked())
                 + " changingIndex=" + reportIndex
@@ -295,7 +330,7 @@ public final class InputControlUtils {
         Ln.w(TAG + ": key inject failed"
                 + " stage=" + stage
                 + " action=" + (event.getAction() == KeyEvent.ACTION_DOWN ? "DOWN" : "UP")
-                + " keyCode=" + event.getKeyCode()
+                + " keyCode=" + (isSensitiveInput() ? REDACTED : String.valueOf(event.getKeyCode()))
                 + " displayId=" + displayId
                 + " eventDisplayId=" + InputManager.getDisplayIdForLog(event)
                 + " mode=" + injectModeName(mode)
@@ -307,6 +342,7 @@ public final class InputControlUtils {
      * contact 是调用方的手指编号，pointerId 是发给系统的编号，两者已解耦，都要打出来
      */
     private static String formatPointers(List<TouchPointerSequence.Pointer> pointers) {
+        boolean redact = isSensitiveInput();
         StringBuilder builder = new StringBuilder("[");
         for (int i = 0; i < pointers.size(); i++) {
             TouchPointerSequence.Pointer pointer = pointers.get(i);
@@ -314,11 +350,32 @@ public final class InputControlUtils {
                 builder.append(',');
             }
             builder.append("contact=").append(pointer.getContact())
-                    .append("/pointerId=").append(pointer.getPointerId())
-                    .append('@').append(pointer.getX())
-                    .append(',').append(pointer.getY());
+                    .append("/pointerId=").append(pointer.getPointerId());
+            if (redact) {
+                builder.append('@').append(REDACTED);
+            } else {
+                builder.append('@').append(pointer.getX())
+                        .append(',').append(pointer.getY());
+            }
         }
         return builder.append(']').toString();
+    }
+
+    /** 查不到 display 列表时按不在算，宁可报失败也不把通路故障当成点击被吞 */
+    private static boolean isDisplayPresent(int displayId) {
+        if (displayId == 0) {
+            return true;
+        }
+        try {
+            for (int id : ServiceManager.getDisplayManager().getDisplayIds()) {
+                if (id == displayId) {
+                    return true;
+                }
+            }
+        } catch (RuntimeException | AssertionError e) {
+            Ln.w(TAG + ": getDisplayIds failed: " + e.getClass().getSimpleName());
+        }
+        return false;
     }
 
     /**

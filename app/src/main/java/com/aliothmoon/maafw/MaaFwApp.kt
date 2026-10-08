@@ -21,6 +21,7 @@ import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.schedule.resyncScheduleAlarms
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.telemetry.TelemetryController
 import kotlinx.coroutines.CoroutineScope
@@ -67,9 +68,15 @@ class MaaFwApp : Application() {
         // PermissionManager 在 postCreate 里才建，但它的授权观察器构造期就可能 bind()，
         // 连接器的 context 必须先行注入（backendProvider 依赖设置加载，只能在 postCreate 里给）
         RemoteServiceManager.initializeConnectors(this)
-        koin.get<CoroutineScope>(named<AppCoroutineScope>()).launch {
+        val appScope = koin.get<CoroutineScope>(named<AppCoroutineScope>())
+        appScope.launch {
             settings.loaded.first { it }
             withContext(Dispatchers.Main) { postCreate(koin) }
+        }
+        // 每次进程启动都重排一遍：不少 ROM 不给没开自启的 app 发开机广播，撤销精确闹钟权限
+        // 也会杀进程、清闹钟。只靠 ScheduleBootReceiver，这些情况下定时会一直哑到下次覆盖安装
+        appScope.launch {
+            resyncScheduleAlarms(koin.get(), koin.get(), reason = "process start")
         }
     }
 

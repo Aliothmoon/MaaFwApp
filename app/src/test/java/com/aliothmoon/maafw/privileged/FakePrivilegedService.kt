@@ -34,6 +34,10 @@ open class FakePrivilegedService : RemoteService {
     var stopTargetAppCount: Int = 0
         private set
 
+    var saveDisplayFrameResult: Boolean = true
+    var savedFramePaths: MutableList<String> = mutableListOf()
+        private set
+
     var runnerCallback: IMaaRunnerCallback? = null
         private set
     var running: Boolean = false
@@ -66,6 +70,18 @@ open class FakePrivilegedService : RemoteService {
     override fun isScreenOn(): Boolean = screenOn
 
     override fun getGameFps(): Float = currentGameFps
+
+    var smartResolution: Boolean = false
+
+    override fun isSmartResolutionEnabled(): Boolean = smartResolution
+
+    /** 记下每次断 / 复网的请求，按顺序 */
+    val networkingCalls = mutableListOf<Pair<String, Boolean>>()
+
+    override fun setPackageNetworkingEnabled(packageName: String?, enabled: Boolean): Boolean {
+        networkingCalls += packageName.orEmpty() to enabled
+        return true
+    }
 
     // ── 其余：本测试用不到，保持无副作用的零值 ──
 
@@ -128,11 +144,26 @@ open class FakePrivilegedService : RemoteService {
     override fun isRunning(): Boolean = running
     override fun maaVersion(): String = "fake"
     override fun testUnlock(credential: String?): Int = unlockResult
+
+    /** 手势解锁也记进 [unlockCalls]，加前缀区分走的是哪条 */
+    override fun unlockWithGesture(gestureJson: String?): Int {
+        unlockCalls += "gesture:" + gestureJson.orEmpty()
+        return unlockResult
+    }
+    override fun testUnlockGesture(gestureJson: String?): Int = unlockResult
+    override fun startGestureRecord(timeoutMs: Int) = Unit
+    override fun pollGestureRecord(): String = ""
+    override fun cancelGestureRecord() = Unit
     override fun watchdogState(): Int = 0
     override fun watchdogTargetPackage(): String = ""
 
     /** 缓存帧要真 controller 才有；测试里没有可落盘的东西 */
     override fun saveCachedImage(path: String?): Boolean = false
+
+    override fun saveDisplayFrame(path: String?): Boolean {
+        savedFramePaths += path.orEmpty()
+        return saveDisplayFrameResult
+    }
 }
 
 /** [service] 为 null 即「特权进程没连上」，收尾路径要走这条 */

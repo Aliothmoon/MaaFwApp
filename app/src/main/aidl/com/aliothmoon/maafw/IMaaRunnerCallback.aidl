@@ -20,4 +20,10 @@ oneway interface IMaaRunnerCallback {
 
     /** 一个 agent child 已 connect（含本轮复用已在线的）；[exec] 是真正拉起的可执行体，不是 PI 的 child_exec */
     void onAgentConnected(int index, int total, String exec) = 6;
+
+    /**
+     * 一个 agent child 没被要求退出却退了；exitCode 被信号杀死时为 128 + 信号号，
+     * crashReport 是 log/crash/ 下的现场文件名，没捞到为 null
+     */
+    void onAgentExited(int index, String exec, int exitCode, String crashReport) = 7;
 }

@@ -45,9 +45,13 @@ internal fun OverlayTile(
     content: @Composable RowScope.() -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(MaaTheme.style.radii.inner)
+    // 点击挂在块本身并带同一圆角：挂在里面那行上，按下缩放连高亮一起缩，填不满圆角块
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
+        modifier = modifier
+            .fillMaxWidth()
+            .maaClickable(enabled = enabled, shape = shape, onClick = onClick),
+        shape = shape,
         color = if (selected) scheme.primaryContainer else scheme.surface,
         border = BorderStroke(
             MaaDesignTokens.Separator.thickness,
@@ -58,7 +62,6 @@ internal fun OverlayTile(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .maaClickable(enabled = enabled, onClick = onClick)
                 .padding(
                     horizontal = MaaDesignTokens.Spacing.sm,
                     vertical = MaaDesignTokens.Overlay.gap,
@@ -80,9 +83,13 @@ internal fun OverlayModeRow(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(MaaTheme.style.radii.inner)
+    // 点击挂在块本身并带同一圆角：挂在里面那行上，按下缩放连高亮一起缩，填不满圆角块
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(MaaTheme.style.radii.inner),
+        modifier = modifier
+            .fillMaxWidth()
+            .maaClickable(enabled = enabled, shape = shape, onClick = onClick),
+        shape = shape,
         color = if (selected) scheme.primary else scheme.surface,
         border = BorderStroke(
             MaaDesignTokens.Separator.thickness,
@@ -93,7 +100,6 @@ internal fun OverlayModeRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .maaClickable(enabled = enabled, onClick = onClick)
                 .padding(
                     horizontal = MaaDesignTokens.Spacing.sm,
                     vertical = MaaDesignTokens.Overlay.gap,
@@ -165,14 +171,14 @@ internal fun OverlayCheckbox(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    warning: Boolean = false,
+    skipped: Boolean = false,
 ) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
         MaaCheckbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled,
-            warning = warning,
+            skipped = skipped,
             modifier = modifier.size(MaaDesignTokens.Overlay.checkbox),
         )
     }

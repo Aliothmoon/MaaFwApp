@@ -66,6 +66,8 @@ data class ProjectMetadata(
      */
     val welcomeDeclarations: List<String> = emptyList(),
     val description: String? = null,
+    /** PI 根上的 `icon`（可走 i18n），相对 PI 根目录 */
+    val icon: String? = null,
     val contact: String? = null,
     val license: String? = null,
     val github: String? = null,

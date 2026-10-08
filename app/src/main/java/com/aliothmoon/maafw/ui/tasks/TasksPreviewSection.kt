@@ -85,6 +85,7 @@ internal fun rememberMovablePreview(
     /** 传取值而不是值：一次滑动几十个触点，在 AppRoot 那层读会把整棵树按触摸频率重组 */
     markers: () -> List<PreviewTouchMarker>,
     fps: () -> Float?,
+    surfaceEpoch: () -> Int,
     onSurfaceCreated: () -> Unit,
     onSurfaceAvailable: (PlatformSurface) -> Unit,
     onSurfaceDestroyed: () -> Unit,
@@ -92,6 +93,7 @@ internal fun rememberMovablePreview(
     val currentResolution by rememberUpdatedState(resolution)
     val currentMarkers by rememberUpdatedState(markers)
     val currentFps by rememberUpdatedState(fps)
+    val currentSurfaceEpoch by rememberUpdatedState(surfaceEpoch)
     val currentCreated by rememberUpdatedState(onSurfaceCreated)
     val currentAvailable by rememberUpdatedState(onSurfaceAvailable)
     val currentDestroyed by rememberUpdatedState(onSurfaceDestroyed)
@@ -100,6 +102,7 @@ internal fun rememberMovablePreview(
         movableContentOf {
             MaaPreviewSurface(
                 resolution = currentResolution,
+                surfaceEpoch = currentSurfaceEpoch(),
                 onSurfaceCreated = { currentCreated() },
                 onSurfaceAvailable = { surface ->
                     // surfaceChanged 会重复触发，同一个 Surface 不重复跨进程上报
@@ -177,7 +180,11 @@ internal fun LivePreview(
             MaaCardSurface(modifier = cardModifier.then(boundsReporting)) { LivePreviewIdleArt() }
             return@Box
         }
-        MaaCardSurface(modifier = cardModifier.then(boundsReporting).maaClickable(onClick = onEnterFullscreen)) {
+        // 点击挂在 Surface 外层，高亮不归它的圆角裁，得带上同一形状
+        MaaCardSurface(
+            modifier = cardModifier.then(boundsReporting)
+                .maaClickable(shape = MaterialTheme.shapes.medium, onClick = onEnterFullscreen),
+        ) {
             Box(Modifier.fillMaxSize()) {
                 content()
                 PreviewStatusMask(surfaceReady = surfaceReady, running = running)

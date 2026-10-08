@@ -42,11 +42,11 @@ class RunPlanBuilderTest {
         }
     }
 
-    private fun configWith(vararg tasks: ConfiguredTask): UserConfiguration {
+    private fun configWith(vararg tasks: ConfiguredTask, resource: String = "官服"): UserConfiguration {
         val id = RunConfigurationId("test")
         return UserConfiguration(
             initialized = true,
-            activeResourceName = "官服",
+            activeResourceName = resource,
             configurations = listOf(RunConfiguration(id, "测试", tasks.toList())),
             activeConfigurationId = id,
         )
@@ -121,6 +121,26 @@ class RunPlanBuilderTest {
     }
 
     @Test
+    fun `项目里已不存在的启用任务被跳过`() {
+        val result = RunPlanBuilder.build(
+            definition,
+            configWith(ConfiguredTask("已删除的任务"), ConfiguredTask("启动游戏")),
+        )
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(listOf("启动游戏"), plan.tasks.map { it.taskName })
+        val skipped = plan.skippedTasks.single()
+        assertEquals("已删除的任务", skipped.label)
+        assertTrue(skipped.reason.isResource(R.string.task_unavailable_missing))
+    }
+
+    @Test
+    fun `只剩已不存在的任务映射为 NoExecutableTasks`() {
+        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("已删除的任务")))
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
     fun `全部禁用映射为 NoExecutableTasks`() {
         val result = RunPlanBuilder.build(
             definition,
@@ -185,6 +205,28 @@ class RunPlanBuilderTest {
         )
         val result = RunPlanBuilder.build(definition, config)
         assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
+    fun `勾着但不适用的任务带原因记进 skippedTasks，没勾的不记`() {
+        val config = configWith(
+            ConfiguredTask("切换账号", customLabel = "换号"),
+            ConfiguredTask("已删除的任务", enabled = false),
+            ConfiguredTask("启动游戏"),
+            resource = "B 服",
+        )
+        val plan = (RunPlanBuilder.build(definition, config) as RunPlanResult.Success).plan
+        val skipped = plan.skippedTasks.single()
+        assertEquals("换号", skipped.label)
+        assertEquals(
+            ConfigurationResolver.checkApplicability(
+                definition,
+                definition.task("切换账号")!!,
+                plan.controller,
+                "B 服",
+            ),
+            skipped.reason,
+        )
     }
 
     @Test
