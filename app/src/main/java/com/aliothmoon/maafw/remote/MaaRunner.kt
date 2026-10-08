@@ -89,6 +89,9 @@ class MaaRunner(private val agentHost: AgentHost) {
     /** 换 controller 时退下来的旧对象，等 agent 改登记到新对象上之后再拆 */
     private class RetiredHandles(val controller: Pointer?, val tasker: Pointer?)
 
+    /** [detail] 只进 logcat，过 binder 的是 [outcome] 与 [reason] */
+    private class PrepareFailure(val detail: String, val outcome: Int = RunOutcome.FAILED, val reason: String = detail)
+
     fun setProjectRoot(path: String) {
         projectRoot = path
     }
@@ -252,11 +255,12 @@ class MaaRunner(private val agentHost: AgentHost) {
             }
             val prepared = prepare(lib, payload)
             if (prepared != null) {
-                Ln.e("MaaRunner: prepare failed: $prepared")
-                reason = prepared
                 if (isStopRequested()) {
                     outcome = RunOutcome.CANCELLED
-                    reason = ""
+                } else {
+                    Ln.e("MaaRunner: prepare failed: ${prepared.detail}")
+                    outcome = prepared.outcome
+                    reason = prepared.reason
                 }
                 return
             }
@@ -324,34 +328,34 @@ class MaaRunner(private val agentHost: AgentHost) {
     }
 
     /** 返回 null 表示就绪，否则返回失败原因 */
-    private fun prepare(lib: MaaFrameworkLibrary, payload: RunPlanPayload): String? {
+    private fun prepare(lib: MaaFrameworkLibrary, payload: RunPlanPayload): PrepareFailure? {
         // bridge 必须先 System.loadLibrary 进本进程，控制单元按名 dlopen 才能命中同一份
         if (!NativeBridgeLib.LOADED) {
-            return "libbridge.so 未加载，无法建立 native controller"
+            return PrepareFailure("libbridge.so 未加载，无法建立 native controller")
         }
 
         val displayId = when (payload.displayMode) {
             DisplayMode.PRIMARY ->
                 if (PrimaryDisplayManager.getCaptureSize() == null) {
-                    return "主屏采集未启动"
+                    return PrepareFailure("主屏采集未启动")
                 } else {
                     PrimaryDisplayManager.DISPLAY_ID
                 }
 
             else -> VirtualDisplayManager.getDisplayId().takeIf {
                 it != DefaultDisplayConfig.DISPLAY_NONE
-            } ?: return "虚拟显示器未启动"
+            } ?: return PrepareFailure("虚拟显示器未启动")
         }
 
         if (resource == null || loadedResourcePaths != payload.resourcePaths) {
             releaseResource(lib)
-            val res = lib.MaaResourceCreate() ?: return "MaaResourceCreate 失败"
+            val res = lib.MaaResourceCreate() ?: return PrepareFailure("MaaResourceCreate 失败")
             lib.MaaResourceAddSink(res, eventSink, null)
             payload.resourcePaths.forEach { path ->
                 val id = lib.MaaResourcePostBundle(res, path)
                 if (id == INVALID_ID || lib.MaaResourceWait(res, id) != MaaStatus.SUCCEEDED) {
                     lib.MaaResourceDestroy(res)
-                    return "资源加载失败: $path"
+                    return PrepareFailure("资源加载失败: $path")
                 }
             }
             resource = res
@@ -370,7 +374,7 @@ class MaaRunner(private val agentHost: AgentHost) {
         ) {
             val config = buildControllerConfig(payload, displayId)
             val ctrl = lib.MaaAndroidNativeControllerCreate(config)
-                ?: return "MaaAndroidNativeControllerCreate 失败: $config"
+                ?: return PrepareFailure("MaaAndroidNativeControllerCreate 失败: $config")
             lib.MaaControllerAddSink(ctrl, eventSink, null)
             val ctrlId = lib.MaaControllerPostConnection(ctrl)
             if (ctrlId == INVALID_ID || lib.MaaControllerWait(
@@ -379,7 +383,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 ) != MaaStatus.SUCCEEDED
             ) {
                 lib.MaaControllerDestroy(ctrl)
-                return "controller 连接失败"
+                return PrepareFailure("controller 连接失败")
             }
             // Tasker 手里是旧 controller 的裸指针，跟着一起退
             retired = RetiredHandles(controller, takeTasker())
@@ -390,7 +394,7 @@ class MaaRunner(private val agentHost: AgentHost) {
         try {
             val needsTasker = synchronized(lifecycleLock) { tasker == null }
             if (needsTasker) {
-                val tsk = lib.MaaTaskerCreate() ?: return "MaaTaskerCreate 失败"
+                val tsk = lib.MaaTaskerCreate() ?: return PrepareFailure("MaaTaskerCreate 失败")
                 lib.MaaTaskerAddSink(tsk, eventSink, null)
                 // tasker sink 只收 Tasker.Task.*；Node.* 连同 focus 模板都走 context sink
                 lib.MaaTaskerAddContextSink(tsk, eventSink, null)
@@ -399,11 +403,11 @@ class MaaRunner(private val agentHost: AgentHost) {
                     lib.MaaTaskerInited(tsk).toInt() == 0
                 ) {
                     lib.MaaTaskerDestroy(tsk)
-                    return "Tasker 绑定失败"
+                    return PrepareFailure("Tasker 绑定失败")
                 }
                 synchronized(lifecycleLock) { tasker = tsk }
             }
-            return registerAgentSinks()
+            return registerAgentSinks()?.let { PrepareFailure(it) }
         } finally {
             // 没能改登记过去的（建 tasker 或登记失败），由 destroyTasker / destroyController 先收掉 agent
             retired?.let {
@@ -455,14 +459,14 @@ class MaaRunner(private val agentHost: AgentHost) {
      * client 绑在 resource 上，所以整批与 resource 同生命周期；child 死了也要连 client 一起重来，
      * 光重起 child 连不回已经 bind 在旧 socket 上的 client
      */
-    private fun prepareAgents(lib: MaaFrameworkLibrary, payload: RunPlanPayload): String? {
+    private fun prepareAgents(lib: MaaFrameworkLibrary, payload: RunPlanPayload): PrepareFailure? {
         if (payload.agents.isEmpty()) {
             if (agents.isNotEmpty()) releaseTasker(lib)
             releaseAgents()
             return null
         }
         val agentLib = MaaAgentClientLoader.library
-            ?: return "libMaaAgentClient.so 加载失败，无法拉起 agent"
+            ?: return agentLaunchFailed("libMaaAgentClient.so 加载失败，无法拉起 agent")
 
         val reusable = loadedAgents == payload.agents &&
             agents.size == payload.agents.size &&
@@ -476,19 +480,19 @@ class MaaRunner(private val agentHost: AgentHost) {
         releaseTasker(lib)
         releaseAgents()
 
-        val workingDir = projectRoot ?: return "PI 根未就绪，agent 无法确定工作目录"
+        val workingDir = projectRoot ?: return agentLaunchFailed("PI 根未就绪，agent 无法确定工作目录")
         val started = mutableListOf<ActiveAgent>()
         payload.agents.forEachIndexed { index, agent ->
             val client = agentLib.MaaAgentClientCreateTcp(AUTO_PORT)
-                ?: return failAgents(started, "MaaAgentClientCreateTcp 失败")
+                ?: return failAgents(started, index, "MaaAgentClientCreateTcp 失败")
             if (agentLib.MaaAgentClientBindResource(client, resource).toInt() == 0) {
                 agentLib.MaaAgentClientDestroy(client)
-                return failAgents(started, "agent 绑定 resource 失败")
+                return failAgents(started, index, "agent 绑定 resource 失败")
             }
             val identifier = readIdentifier(lib, agentLib, client)
                 ?: run {
                     agentLib.MaaAgentClientDestroy(client)
-                    return failAgents(started, "读取 agent identifier 失败")
+                    return failAgents(started, index, "读取 agent identifier 失败")
                 }
             agentLib.MaaAgentClientSetTimeout(client, AGENT_CONNECT_TIMEOUT_MILLIS)
 
@@ -506,13 +510,13 @@ class MaaRunner(private val agentHost: AgentHost) {
                 )
             } catch (e: AgentLaunchException) {
                 agentLib.MaaAgentClientDestroy(client)
-                return failAgents(started, e.message.orEmpty())
+                return failAgents(started, index, e.message.orEmpty())
             }
 
             if (agentLib.MaaAgentClientConnect(client).toInt() == 0) {
                 session.close()
                 agentLib.MaaAgentClientDestroy(client)
-                return failAgents(started, "agent 连接超时：${agent.childExec}")
+                return failAgents(started, index, "agent 连接超时：${agent.childExec}")
             }
             // 上面的超时只给连接用。留着它会卡住每次 custom 调用：识别算过 30s 就被判超时，
             // 而 agent 算完仍会回包，这个迟到的回包会被下一次同类请求当成自己的（框架不核对 req_id），
@@ -552,10 +556,13 @@ class MaaRunner(private val agentHost: AgentHost) {
         }
     }
 
-    private fun failAgents(started: List<ActiveAgent>, reason: String): String {
+    private fun failAgents(started: List<ActiveAgent>, index: Int, detail: String): PrepareFailure {
         started.forEach { releaseAgent(it) }
-        return reason
+        return agentLaunchFailed("agent[$index]: $detail", index)
     }
+
+    private fun agentLaunchFailed(detail: String, index: Int? = null) =
+        PrepareFailure(detail, RunOutcome.AGENT_LAUNCH_FAILED, index?.toString().orEmpty())
 
     private fun releaseAgents() {
         agents.forEach { releaseAgent(it) }

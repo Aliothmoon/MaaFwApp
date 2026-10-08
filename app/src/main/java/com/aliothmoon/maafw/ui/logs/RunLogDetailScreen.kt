@@ -175,15 +175,6 @@ private fun FooterBlock(footer: RunSessionRecord.Footer) {
                 },
             )
         }
-        // 单独一行，避免长原因把结局徽章挤掉
-        footer.reason?.takeIf { it.isNotBlank() }?.let { reason ->
-            Text(
-                text = reason,
-                style = MaterialTheme.typography.bodySmall,
-                color = runLogColor(RunLogKind.Error),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
     }
 }
 

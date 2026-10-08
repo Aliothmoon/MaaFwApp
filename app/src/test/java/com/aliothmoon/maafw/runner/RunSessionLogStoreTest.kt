@@ -10,7 +10,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -62,40 +61,6 @@ class RunSessionLogStoreTest {
         assertEquals(RunLogKind.Info, (records[1] as RunSessionRecord.Line).kind)
         assertEquals("""{"name":"A"}""", (records[2] as RunSessionRecord.Line).detail)
         assertEquals(RunSessionOutcome.COMPLETED, (records[3] as RunSessionRecord.Footer).outcome)
-    }
-
-    /** Footer 原因要能原样过一遍文件 */
-    @Test
-    fun `a footer reason survives the round trip`() = runBlocking {
-        val writer = checkNotNull(store.open(START, listOf("清体力")))
-        writer.write(
-            listOf(
-                RunSessionRecord.Footer(
-                    START + 1,
-                    RunSessionOutcome.FAILED,
-                    reason = "AgentLaunchException: 本包未带 agent 运行时",
-                ),
-            ),
-        )
-        writer.close()
-
-        // open() 已经写了 Header，Footer 永远是最后一条
-        val footer = store.read(sessionFiles().single().name).last() as RunSessionRecord.Footer
-        assertEquals(RunSessionOutcome.FAILED, footer.outcome)
-        assertEquals("AgentLaunchException: 本包未带 agent 运行时", footer.reason)
-    }
-
-    /** 老文件里没有 reason 这一栏，读回来必须是 null 而不是炸掉 */
-    @Test
-    fun `a footer written before this field existed still decodes`() = runBlocking {
-        val writer = checkNotNull(store.open(START, listOf("清体力")))
-        writer.close()
-        val file = sessionFiles().single()
-        file.appendText("""{"type":"footer","endedAt":$START,"outcome":"COMPLETED"}""" + "\n")
-
-        val footer = store.read(file.name).last() as RunSessionRecord.Footer
-        assertEquals(RunSessionOutcome.COMPLETED, footer.outcome)
-        assertNull(footer.reason)
     }
 
     /** 摘要全部来自文件名，列表页因此不必读内容 */

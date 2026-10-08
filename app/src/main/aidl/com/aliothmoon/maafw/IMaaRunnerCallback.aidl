@@ -13,7 +13,7 @@ oneway interface IMaaRunnerCallback {
 
     void onTaskFinished(String taskName, boolean success, String message) = 3;
 
-    /** outcome 取 RunOutcome 的取值；reason 仅在整轮失败时非空 */
+    /** outcome 取 RunOutcome 的取值；reason 仅在整轮失败时非空，AGENT_LAUNCH_FAILED 时是失败 agent 的序号 */
     void onFinished(int outcome, String reason) = 4;
 
     void onAgentOutput(String line, boolean fromStderr) = 5;

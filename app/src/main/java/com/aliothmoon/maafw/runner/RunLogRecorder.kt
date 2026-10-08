@@ -38,8 +38,6 @@ class RunLogRecorder(
     private val store: RunSessionLogStore,
     /** [UiText] → 成品文本；写入那一刻的语言被冻进文件，取舍见 [RunSessionRecord.Line] */
     private val renderText: (UiText) -> String,
-    /** 运行日志要求英文；资源文本用英文 locale 渲染，Footer 仍用用户当前语言 */
-    private val renderLogText: (UiText) -> String = renderText,
     /** 只有调试模式才把 details_json 一起落盘：它占掉文件的绝大部分体积 */
     private val includeDetails: () -> Boolean,
     private val scope: CoroutineScope,
@@ -165,11 +163,9 @@ class RunLogRecorder(
         ) {
             Timber.w("session log drain timed out: %s", executionId)
         }
-        val failureReason = reason.toSessionFailureReason()
-        val failure = failureReason?.let(renderText)
-        val logFailure = failureReason?.let(renderLogText)
-        if (logFailure != null) {
-            Timber.e("run failed: %s", logFailure)
+        // 等过 marker 再记，原因才排在本轮所有事件之后
+        ((reason as? RunEndReason.Ran)?.result as? ExecutionResult.Failed)?.let {
+            noteFailed(executionId, session, it)
         }
         sessions.remove(executionId)
         session.flushLoop?.cancel()
@@ -181,7 +177,6 @@ class RunLogRecorder(
                     RunSessionRecord.Footer(
                         endedAt = clock(),
                         outcome = reason.toSessionOutcome(),
-                        reason = failure,
                     ),
                 )
             }
@@ -208,6 +203,19 @@ class RunLogRecorder(
             session = session,
             current = isCurrent(executionId),
             writeDetail = true,
+        )
+    }
+
+    private fun noteFailed(executionId: String, session: Session, result: ExecutionResult.Failed) {
+        publish(
+            RunLogEntry(
+                id = nextId.incrementAndGet(),
+                atMillis = clock(),
+                kind = RunLogKind.Error,
+                text = result.reason,
+            ),
+            session = session,
+            current = isCurrent(executionId),
         )
     }
 
