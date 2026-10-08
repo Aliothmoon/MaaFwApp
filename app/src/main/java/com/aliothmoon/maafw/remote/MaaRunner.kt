@@ -280,13 +280,18 @@ class MaaRunner(private val agentHost: AgentHost) {
                 val taskId = lib.MaaTaskerPostTask(currentTasker, task.entry, overrides)
                 if (taskId == INVALID_ID) {
                     anyFailed = true
-                    notify { onTaskFinished(task.taskName, false, "PostTask 被拒绝") }
+                    // 上面查过之后才叫停的，Tasker 正在停，新任务投不进去
+                    val stopped = isStopRequested()
+                    notify { onTaskFinished(task.taskName, false, "PostTask 被拒绝", stopped) }
                     return@forEachIndexed
                 }
                 val status = lib.MaaTaskerWait(currentTasker, taskId)
                 val success = status == MaaStatus.SUCCEEDED
                 if (!success) anyFailed = true
-                notify { onTaskFinished(task.taskName, success, statusText(status)) }
+                // PostStop 一发，在跑的任务就带着失败从 Wait 返回：外壳叫停的不算任务自己失败。
+                // 只认外壳的 stop，pipeline 经 agent 自己 PostStop 的照旧算失败
+                val stopped = !success && isStopRequested()
+                notify { onTaskFinished(task.taskName, success, statusText(status), stopped) }
 
                 // Stop 之后 Tasker 会把剩余任务直接判失败，这里提前收尾避免刷一串假失败
                 if (lib.MaaTaskerStopping(currentTasker).toInt() != 0) {

@@ -188,8 +188,8 @@ class MaaFrameworkRunnerPort(
                 override fun onTaskStarted(taskName: String?, index: Int, total: Int) =
                     callback.onTaskStarted(taskName, index, total)
 
-                override fun onTaskFinished(taskName: String?, success: Boolean, message: String?) =
-                    callback.onTaskFinished(taskName, success, message)
+                override fun onTaskFinished(taskName: String?, success: Boolean, message: String?, cancelled: Boolean) =
+                    callback.onTaskFinished(taskName, success, message, cancelled)
 
                 override fun onFinished(outcome: Int, reason: String?) =
                     callback.onFinished(outcome, reason)
@@ -233,13 +233,13 @@ class MaaFrameworkRunnerPort(
             emit(RunnerEvent.Progress(name, index, total))
         }
 
-        fun onTaskFinished(taskName: String?, success: Boolean, message: String?) {
+        fun onTaskFinished(taskName: String?, success: Boolean, message: String?, cancelled: Boolean) {
             val result = TaskResult(taskName.orEmpty(), success, message)
             updateOwn { execution ->
                 val results = execution.taskResults + result
                 execution.copy(completedTaskCount = results.size, taskResults = results)
             }
-            emit(RunnerEvent.TaskFinished(taskIndex, success))
+            emit(RunnerEvent.TaskFinished(taskIndex, success, cancelled))
         }
 
         fun onFinished(outcome: Int, reason: String?) {

@@ -94,8 +94,10 @@ sealed interface RunnerEvent {
      *
      * 与 [Progress]、[ExecutionFinished] 同走这一条有序流：遥测按它收任务 Span，
      * 看 state 里的 taskResults 会与事件乱序，看框架的 `Tasker.Task.*` 又可能晚于整轮终局
+     *
+     * [cancelled] 为真时任务没成功是因为外壳叫停了这一轮（手动停、抢占、时长上限），不是它自己失败
      */
-    data class TaskFinished(val index: Int, val success: Boolean) : Marker
+    data class TaskFinished(val index: Int, val success: Boolean, val cancelled: Boolean = false) : Marker
 
     /**
      * MaaFramework 的一条原样通知

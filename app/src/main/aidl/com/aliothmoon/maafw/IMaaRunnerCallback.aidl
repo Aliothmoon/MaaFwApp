@@ -11,7 +11,11 @@ oneway interface IMaaRunnerCallback {
 
     void onTaskStarted(String taskName, int index, int total) = 2;
 
-    void onTaskFinished(String taskName, boolean success, String message) = 3;
+    /**
+     * cancelled：没成功是因为外壳叫停了这一轮，不是任务自己失败
+     * 放在末尾：新旧两端对不上时缺的那个读成 false，照旧按失败收
+     */
+    void onTaskFinished(String taskName, boolean success, String message, boolean cancelled) = 3;
 
     /** outcome 取 RunOutcome 的取值；reason 仅在整轮失败时非空，AGENT_LAUNCH_FAILED 时是失败 agent 的序号 */
     void onFinished(int outcome, String reason) = 4;

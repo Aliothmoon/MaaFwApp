@@ -258,6 +258,20 @@ class MaaFrameworkRunnerPortTest {
     }
 
     @Test
+    fun `a task cut short by stop is marked cancelled on its finish marker`() = runTest(dispatcher) {
+        val (runner, _) = port(this)
+        val (callbacks, events) = recordCallbacks(runner)
+
+        runner.start(twoTaskPlan(), "e1")
+        val callback = callbacks.single()
+        callback.onTaskStarted("启动游戏", 0, 2)
+        callback.onTaskFinished("启动游戏", false, "Failed", true)
+
+        val finished = events.single { it.event is RunnerEvent.TaskFinished }.event
+        assertEquals(RunnerEvent.TaskFinished(0, success = false, cancelled = true), finished)
+    }
+
+    @Test
     fun `the terminal marker is emitted before state turns idle`() = runTest(dispatcher) {
         val (runner, _) = port(this)
         val (callbacks, events) = recordCallbacks(runner)
@@ -318,7 +332,7 @@ class MaaFrameworkRunnerPortTest {
         runner.start(plan(), "e2")
 
         stale.onEvent("Tasker.Task.Failed", """{"entry":"Start"}""")
-        stale.onTaskFinished("启动游戏", false, "late")
+        stale.onTaskFinished("启动游戏", false, "late", false)
         stale.onFinished(RunOutcome.FAILED, "late")
 
         val active = runner.state.value.activeExecution

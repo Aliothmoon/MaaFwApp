@@ -119,11 +119,16 @@ internal class RunTracer(
         val task = trace.task?.takeIf { it.index == finished.index } ?: return
         trace.task = null
         task.taskId?.let(trace.lastSteps::remove)
-        finishTask(task, if (finished.success) SpanStatus.OK else SpanStatus.INTERNAL_ERROR)
-        if (!finished.success) onTaskFailure(failureOf(trace, task))
+        val status = when {
+            finished.success -> SpanStatus.OK
+            finished.cancelled -> SpanStatus.CANCELLED
+            else -> SpanStatus.INTERNAL_ERROR
+        }
+        finishTask(task, status)
+        if (status == SpanStatus.INTERNAL_ERROR) onTaskFailure(failureOf(trace, task))
     }
 
-    /** 只有终态失败才出事件，被取消或终局丢了的任务不算，与 MXU `on_task_finished` 一致 */
+    /** 只有终态失败才出事件，被叫停或终局丢了的任务不算，与 MXU `on_task_finished` 一致 */
     private fun failureOf(trace: RunTrace, task: TaskTrace) = TaskFailure(
         runId = trace.executionId,
         task = task.name,
