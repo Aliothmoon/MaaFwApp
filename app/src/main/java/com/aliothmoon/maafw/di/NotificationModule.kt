@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.notification.ExternalNotificationService
 import com.aliothmoon.maafw.notification.NotificationCenter
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.RunEventNotifier
+import com.aliothmoon.maafw.notification.StartAppFailureNotifier
 import com.aliothmoon.maafw.notification.live.FocusSequenceStore
 import com.aliothmoon.maafw.notification.live.LiveCapabilityProbe
 import com.aliothmoon.maafw.notification.live.RunNotificationFactory
@@ -36,6 +37,14 @@ val notificationModule = module {
     single { RunNotificationFactory(androidContext(), get()) }
     single { XmsfNetworkGate(androidContext(), get(), get(named<AppCoroutineScope>())) }
     single { RunNotificationTester(androidContext(), get(), get(), get(), get(named<AppCoroutineScope>())) }
+
+    single {
+        StartAppFailureNotifier(
+            runnerPort = get(),
+            notifyStartAppFailed = get<RunEventNotifier>()::notifyStartAppFailed,
+            scope = get(named<AppCoroutineScope>()),
+        )
+    }
 
     single {
         val http = get<HttpClientHelper>()
