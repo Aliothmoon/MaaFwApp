@@ -1,0 +1,10 @@
+{
+  "[kotlin]": {
+    "editor.defaultFormatter": "richardwillis.vscode-spotless-gradle",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.spotlessGradle": true
+    },
+    "spotlessGradle.diagnostics.enable": true,
+    "spotlessGradle.format.enable": true
+  }
+}

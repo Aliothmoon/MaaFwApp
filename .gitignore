@@ -5,7 +5,9 @@ local.properties
 *.jks
 *.b64
 AGENTS.md
-/.vscode/
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/extensions.json
 
 # Generated files
 bin/
