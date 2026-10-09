@@ -135,6 +135,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _touchPreviewEnabled = MutableStateFlow(defaults.touchPreviewEnabled.toBoolean())
     override val touchPreviewEnabled: StateFlow<Boolean> = _touchPreviewEnabled.asStateFlow()
 
+    private val _forceRestartApp = MutableStateFlow(defaults.forceRestartApp.toBoolean())
+    override val forceRestartApp: StateFlow<Boolean> = _forceRestartApp.asStateFlow()
+
     private val _eventNotificationLevel =
         MutableStateFlow(parseEventNotificationLevel(defaults.eventNotificationLevel))
     val eventNotificationLevel: StateFlow<EventNotificationLevel> = _eventNotificationLevel.asStateFlow()
@@ -211,6 +214,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _screenSaverEnabled.value = s.screenSaverEnabled.toBoolean()
                 _closeAppAfterTask.value = s.closeAppAfterTask.toBoolean()
                 _touchPreviewEnabled.value = s.touchPreviewEnabled.toBoolean()
+                _forceRestartApp.value = s.forceRestartApp.toBoolean()
                 _resolutionPreset.value = ResolutionPresets.resolve(s.resolutionPreset)
                 _debugMode.value = s.debugMode.toBoolean()
                 _saveOnError.value = s.saveOnError.toBoolean()
@@ -270,6 +274,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setTouchPreviewEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[touchPreviewEnabled] = enabled.toString() }
+    }
+
+    override suspend fun setForceRestartApp(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[forceRestartApp] = enabled.toString() }
     }
 
     override suspend fun setResolutionPreset(preset: ResolutionPreset): Unit = with(AppSettingsSchema) {

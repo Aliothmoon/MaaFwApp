@@ -70,6 +70,8 @@ data class SessionUiState(
     /** 全局的跑完关目标应用；与 ScheduleStrategy 上的同名选项并存，本项优先 */
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
+    /** 后台模式 StartApp 前是否无条件强停目标应用 */
+    val forceRestartApp: Boolean = true,
     val resolutionPreset: ResolutionPreset = ResolutionPresets.default,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
@@ -270,6 +272,9 @@ sealed interface SessionIntent {
 
     /** 预览上是否画注入的触点 */
     data class SetTouchPreviewEnabled(val enabled: Boolean) : SessionIntent
+
+    /** 后台模式 StartApp 前是否无条件强停目标应用；改动下一轮生效 */
+    data class SetForceRestartApp(val enabled: Boolean) : SessionIntent
 
     data class SetTelemetryEnabled(val enabled: Boolean) : SessionIntent
 

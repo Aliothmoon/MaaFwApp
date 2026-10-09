@@ -60,6 +60,7 @@ val runnerModule = module {
             nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
             runMode = get<AppSettingsManager>().runMode::value,
             resolutionPreset = get<AppSettingsManager>().resolutionPreset::value,
+            forceRestartApp = get<AppSettingsManager>().forceRestartApp::value,
             debugMode = get<AppSettingsManager>().debugMode::value,
             saveOnError = get<AppSettingsManager>().saveOnError::value,
             scope = get(named<AppCoroutineScope>()),

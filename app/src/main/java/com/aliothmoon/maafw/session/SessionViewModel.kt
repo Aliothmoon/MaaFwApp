@@ -97,6 +97,7 @@ private data class SettingsSnapshot(
     val debugMode: Boolean,
     val saveOnError: Boolean = true,
     val themeStyle: ThemeStyle = ThemeStyle.DEFAULT,
+    val forceRestartApp: Boolean = true,
     val quick: QuickSnapshot = QuickSnapshot(),
 )
 
@@ -160,6 +161,8 @@ class SessionViewModel(
         SettingsSnapshot(runMode, overlayMode, screenSaver, resolution, debug)
     }.combine(appSettings.themeStyle) { snapshot, style ->
         snapshot.copy(themeStyle = style)
+    }.combine(appSettings.forceRestartApp) { snapshot, forceRestart ->
+        snapshot.copy(forceRestartApp = forceRestart)
     }.combine(appSettings.saveOnError) { snapshot, save ->
         snapshot.copy(saveOnError = save)
     }.combine(
@@ -356,6 +359,7 @@ class SessionViewModel(
             screenSaverEnabled = settings.screenSaverEnabled,
             closeAppAfterTask = settings.quick.closeAppAfterTask,
             touchPreviewEnabled = settings.quick.touchPreviewEnabled,
+            forceRestartApp = settings.forceRestartApp,
             telemetryEnabled = settings.quick.telemetryEnabled,
             resolutionPreset = settings.resolutionPreset,
             remoteAccess = privileged.access,
@@ -588,6 +592,9 @@ class SessionViewModel(
 
             is SessionIntent.SetTouchPreviewEnabled ->
                 appSettings.setTouchPreviewEnabled(intent.enabled)
+
+            is SessionIntent.SetForceRestartApp ->
+                appSettings.setForceRestartApp(intent.enabled)
 
             SessionIntent.ShowOverlay -> openControlOverlay()
             SessionIntent.ApplyForegroundResolution -> applyForegroundResolution()

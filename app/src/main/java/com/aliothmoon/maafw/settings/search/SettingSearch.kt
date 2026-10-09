@@ -62,6 +62,7 @@ object SettingAnchors {
     const val REINSTALL_PI = "pi.reinstall"
     const val BACKEND = "other.backend"
     const val RESOLUTION = "other.resolution"
+    const val FORCE_RESTART_APP = "other.force_restart"
     const val PIP_ON_HOME = "other.pip"
     const val TELEMETRY = "other.telemetry"
     const val ABOUT = "about.project"
@@ -191,6 +192,7 @@ object SettingSearchIndex {
         entry(R.string.pi_reinstall_title, pi, SettingAnchors.REINSTALL_PI, R.string.pi_reinstall_desc),
         entry(R.string.permission_backend, other, SettingAnchors.BACKEND, keywordsRes = R.string.search_keywords_backend),
         entry(R.string.settings_resolution, other, SettingAnchors.RESOLUTION, keywordsRes = R.string.search_keywords_resolution),
+        entry(R.string.settings_force_restart_app, other, SettingAnchors.FORCE_RESTART_APP, R.string.settings_force_restart_app_desc),
         entry(R.string.settings_pip_on_home, other, SettingAnchors.PIP_ON_HOME, R.string.settings_pip_on_home_desc, condition = SearchCondition.PIP_SUPPORTED),
         entry(R.string.settings_telemetry, other, SettingAnchors.TELEMETRY, R.string.settings_telemetry_desc, condition = SearchCondition.TELEMETRY_DECLARED),
         entry(R.string.settings_about, about, SettingAnchors.ABOUT, keywordsRes = R.string.search_keywords_about),
