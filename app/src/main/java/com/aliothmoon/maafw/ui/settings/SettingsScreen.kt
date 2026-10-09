@@ -21,6 +21,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -90,6 +92,7 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaMarkdownSheet
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.MaaNavigationRow
+import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.MaaSwitchRow
@@ -338,6 +341,7 @@ private fun LogCard(
     onExportLogs: () -> Unit,
 ) {
     var showEnableConfirm by remember { mutableStateOf(false) }
+    var showCleanupConfirm by remember { mutableStateOf(false) }
     MaaCard(
         title = stringResource(R.string.settings_section_log),
         collapsible = true,
@@ -363,6 +367,31 @@ private fun LogCard(
                 description = stringResource(R.string.settings_log_export_desc),
                 onClick = onExportLogs,
             )
+        }
+        SettingSearchTarget(SettingAnchors.CLEAR_LOGS) {
+            Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                MaaSemanticOutlinedButton(
+                    onClick = { showCleanupConfirm = true },
+                    enabled = !state.configurationLocked,
+                    semantic = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(MaaDesignTokens.ButtonHeight.prominent),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.DeleteOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    )
+                    Box(Modifier.size(MaaDesignTokens.Spacing.sm))
+                    Text(stringResource(R.string.settings_log_cleanup))
+                }
+                Text(
+                    text = stringResource(R.string.settings_log_cleanup_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         // 启用走确认弹窗，确认即落盘 + 重启 App（对齐 MaaMeow）；关闭直接关
         SettingSearchTarget(SettingAnchors.DEBUG_MODE) {
@@ -417,6 +446,24 @@ OpaqueTheme {
                 },
             )
 }
+    }
+    if (showCleanupConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCleanupConfirm = false },
+            title = { Text(stringResource(R.string.settings_log_cleanup_title)) },
+            text = { Text(stringResource(R.string.settings_log_cleanup_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showCleanupConfirm = false
+                    onIntent(SessionIntent.ClearDiagnosticData)
+                }) { Text(stringResource(R.string.settings_log_cleanup_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleanupConfirm = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            },
+        )
     }
 }
 
