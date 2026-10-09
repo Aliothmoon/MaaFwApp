@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.PowerManager
 import androidx.core.content.ContextCompat
+import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
@@ -63,8 +64,11 @@ class ScheduleReceiver : BroadcastReceiver() {
                 val koin = GlobalContext.get()
                 val store: ScheduleStrategyStore = koin.get()
                 val alarms: ScheduleAlarmManager = koin.get()
+                val appSettings: AppSettingsManager = koin.get()
                 val loaded = withTimeoutOrNull(STORE_READY_TIMEOUT_MS) {
                     store.isLoaded.first { it }
+                    // 前台模式的提前量写在设置里；没等到读盘就重排会退回后台节奏
+                    appSettings.loaded.first { it }
                 }
                 if (loaded == null) {
                     // 规则读不出来算不出下一环，只能隔一会儿把这一次再投一遍；重试用尽就转慢速接链，

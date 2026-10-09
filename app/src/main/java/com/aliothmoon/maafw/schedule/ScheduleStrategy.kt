@@ -60,9 +60,8 @@ data class ScheduleStrategy(
      */
     val runConfigurationId: String = "",
     /**
-     * 到点时已有执行在跑：true 掐掉它再上，false 让这次触发落空
-     *
-     * 默认 false——半夜把用户手动起的长跑掐掉，比这条定时没跑更难解释
+     * 旧版「强制启动」遗留字段，仅保证老数据可反序列化；新版不再抢占正在运行的执行，
+     * 已有执行在跑时定时触发会直接拒绝并在通知栏报错。
      */
     val forceStart: Boolean = false,
     /** 任务结束后自动熄屏 */

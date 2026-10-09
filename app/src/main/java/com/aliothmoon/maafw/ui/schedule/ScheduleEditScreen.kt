@@ -278,12 +278,6 @@ fun ScheduleEditScreen(
             // 排在最后：这一组是「跑起来之后怎么收场」，改的频率远低于上面的时间与配置。
             // 整组是逐条规则的，不是全局设置——对齐 MaaMeow 的归属
             ScheduleSection(stringResource(R.string.schedule_edit_advanced)) {
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_force_start),
-                    tip = stringResource(R.string.schedule_edit_force_start_tip),
-                    checked = draft.forceStart,
-                    onCheckedChange = { draft = draft.copy(forceStart = it) },
-                )
                 // 子开关和父开关包成一组，间距放进子项自己的 padding：留在 Section 的 spacedBy 里，
                 // 那 8dp 会在展开开始时一下冒出来、收起结束时一下消失，看着是一跳
                 Column {

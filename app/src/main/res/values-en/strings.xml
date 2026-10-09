@@ -384,8 +384,6 @@
     <string name="run_log_duration_limit_reached">Run duration limit reached (%1$d minutes); stopping the task</string>
     <string name="run_log_duration_limit_stop_failed">Failed to stop at the duration limit: %1$s</string>
     <string name="schedule_edit_advanced">Advanced</string>
-    <string name="schedule_edit_force_start">Force start</string>
-    <string name="schedule_edit_force_start_tip">Interrupt a run already in progress and run this rule instead</string>
     <string name="schedule_edit_auto_sleep">Sleep after the task finishes</string>
     <string name="schedule_edit_auto_sleep_tip">Turn the screen off after the scheduled task finishes to save battery</string>
     <string name="schedule_edit_skip_sleep_if_awake">Skip if the screen was already on at start</string>
