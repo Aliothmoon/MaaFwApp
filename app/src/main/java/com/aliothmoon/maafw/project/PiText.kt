@@ -11,6 +11,7 @@ fun isRemoteUrl(content: String): Boolean =
 
 private val DOC_EXTENSION = Regex("""\.(md|txt|json|html|htm)$""", RegexOption.IGNORE_CASE)
 private val SIMPLE_NAME_CHARS = Regex("""^[A-Za-z0-9_\-./\\]+$""")
+private val PATH_WITH_SEPARATOR = Regex("""^[^\s/\\]+([/\\][^\s/\\]+)+$""")
 private val DIGITS_ONLY = Regex("""^\d+$""")
 private val UPPERCASE_NAME = Regex("""^[A-Z][A-Z0-9_\-]*$""")
 
@@ -28,6 +29,7 @@ fun isFilePath(content: String): Boolean {
         !DIGITS_ONLY.matches(content)
 
     if (isSimpleName && DOC_EXTENSION.containsMatchIn(content)) return true
+    if (PATH_WITH_SEPARATOR.matches(content) && DOC_EXTENSION.containsMatchIn(content)) return true
     if (isSimpleName && UPPERCASE_NAME.matches(content)) return true
     if (isSimpleName && (content.contains('/') || content.contains('\\'))) return true
     return false
