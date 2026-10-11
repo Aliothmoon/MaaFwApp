@@ -1,12 +1,12 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.callWithTimeout
 import com.aliothmoon.maafw.project.ProjectSource
 import com.aliothmoon.maafw.project.isExplicitProjectPath
 import com.aliothmoon.maafw.project.isProjectFileCandidate
-import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -74,9 +74,12 @@ class PrivilegedFocusContentResolver(
     /** 读不到回落原文：PI 作者可能本来就想显示这行字 */
     private fun readProjectFile(content: String): String {
         val result = source.tryReadText(content)
-        result.getOrNull()?.let { return it }
-        if (result.isFailure) {
-            Timber.w(result.exceptionOrNull(), "focus body read failed for file path: %s", content)
+        val body = result.getOrNull()
+        if (body != null) return body
+
+        val error = result.exceptionOrNull()
+        if (error != null) {
+            Timber.w(error, "focus body read failed for file path: %s", content)
         } else if (isExplicitProjectPath(content)) {
             Timber.w("No project file for focus body: %s", content)
         }

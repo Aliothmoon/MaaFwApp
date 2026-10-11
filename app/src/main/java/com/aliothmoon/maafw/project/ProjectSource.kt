@@ -20,7 +20,7 @@ interface ProjectSource {
     fun read(path: String): String
 
     /** 成功正文（可为空串）/ success(null) 未命中文件 / failure 文件访问失败 */
-    fun tryReadText(path: String): Result<String?> = projectTextResult { read(path) }
+    fun tryReadText(path: String): Result<String?> = catchProjectReadFailure { read(path) }
 }
 
 /** 构建期 syncPiAssets 的固定落点；外壳不认具体 PI 项目，只认这个位置 */
@@ -37,7 +37,7 @@ class DirectoryProjectSource(private val root: File) : ProjectSource {
     override fun read(path: String): String = tryReadText(path).getOrThrow()
         ?: throw FileNotFoundException("Not a project file: $path")
 
-    override fun tryReadText(path: String): Result<String?> = projectTextResult {
+    override fun tryReadText(path: String): Result<String?> = catchProjectReadFailure {
         resolveProjectFile(root, path)?.readText(Charsets.UTF_8)
     }
 }
@@ -45,9 +45,7 @@ class DirectoryProjectSource(private val root: File) : ProjectSource {
 /** 无效、越界或非文件路径返回 null；文件访问错误交给读取边界保留原因 */
 private fun resolveProjectFile(root: File, path: String): File? {
     val relative = normalizeProjectPath(path.replace('\\', '/'))
-    if (relative.contains('\u0000') || relative.startsWith('/') ||
-        File(relative).isAbsolute || WINDOWS_DRIVE.containsMatchIn(relative)
-    ) {
+    if (relative.contains('\u0000') || relative.startsWith('/') || WINDOWS_DRIVE.containsMatchIn(relative)) {
         return null
     }
     val base = root.canonicalFile
@@ -62,7 +60,7 @@ private fun resolveProjectFile(root: File, path: String): File? {
 private val WINDOWS_DRIVE = Regex("""^[A-Za-z]:""")
 
 /** 只处理可预期的文件访问和安装状态错误，不吞取消信号、程序错误或 JVM Error */
-private inline fun <T> projectTextResult(block: () -> T): Result<T> = try {
+private inline fun <T> catchProjectReadFailure(block: () -> T): Result<T> = try {
     Result.success(block())
 } catch (e: IOException) {
     Result.failure(e)
@@ -87,8 +85,8 @@ class InstalledProjectSource(private val installer: PiInstaller) : ProjectSource
 
     override fun read(path: String): String = delegate.read(path)
 
-    override fun tryReadText(path: String): Result<String?> = projectTextResult { delegate }.fold(
-        onSuccess = { it.tryReadText(path) },
-        onFailure = { Result.failure(it) },
-    )
+    override fun tryReadText(path: String): Result<String?> {
+        val source = catchProjectReadFailure { delegate }.getOrElse { return Result.failure(it) }
+        return source.tryReadText(path)
+    }
 }

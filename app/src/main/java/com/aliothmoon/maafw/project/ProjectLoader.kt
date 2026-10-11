@@ -339,13 +339,16 @@ class ProjectLoader(
             if (!isProjectFileCandidate(resolved)) return resolved
             val path = normalizeProjectPath(resolved.replace('\\', '/'))
             val result = source.tryReadText(path)
-            result.getOrNull()?.let { return it }
+            val body = result.getOrNull()
+            if (body != null) return body
+
+            val error = result.exceptionOrNull()
             // 未命中的候选可能只是正文；显式路径未命中或实际读取失败才提醒作者
-            if (isExplicitProjectPath(resolved) || result.isFailure) {
+            if (isExplicitProjectPath(resolved) || error != null) {
                 diagnostics += warning(
                     path,
                     DiagnosticMessages.descriptionReadFailed(
-                        result.exceptionOrNull()?.message ?: "Not a project file: $path"
+                        error?.message ?: "Not a project file: $path"
                     )
                 )
             }
