@@ -808,6 +808,38 @@ class ProjectLoaderWelcomeTest {
             },
         )
     }
+
+    @Test
+    fun `welcome 数组经 i18n 指向含中文的文件路径也按文件读取`() {
+        val ready = loadWithLocale(
+            "zh-CN",
+            MapProjectSource(
+                mapOf(
+                    "interface.json" to piRoot(
+                        "tasks/a.json",
+                        body = """
+                            "languages": {"zh_cn": "locales/zh_cn.json"},
+                            "welcome": ["${'$'}Welcome.1", "${'$'}Welcome.2"]
+                        """.trimIndent(),
+                    ),
+                    "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+                    "locales/zh_cn.json" to """
+                        {
+                            "Welcome.1": "resource/announcement/1.简介.md",
+                            "Welcome.2": "resource/announcement/2.多开.md"
+                        }
+                    """.trimIndent(),
+                    "resource/announcement/1.简介.md" to "# 简介",
+                    "resource/announcement/2.多开.md" to "# 多开",
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf("# 简介", "# 多开"),
+            (ready as ProjectLoadResult.Ready).definition.metadata.welcome,
+        )
+    }
 }
 
 class ProjectLoaderAgentTest {
