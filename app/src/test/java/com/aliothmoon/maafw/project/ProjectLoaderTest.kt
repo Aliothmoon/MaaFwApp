@@ -785,19 +785,20 @@ class ProjectLoaderWelcomeTest {
     }
 
     @Test
-    fun `welcome 文件读取失败保留原始路径并记 warning`() {
+    fun `welcome 显式路径读取失败才记 warning 并保留原文`() {
         val ready = load(
             mapOf(
                 "interface.json" to piRoot(
                     "tasks/a.json",
-                    body = """"welcome":["missing.md","announcements/second.md"]""",
+                    body = """"welcome":["missing.md","./missing.md","announcements/second.md"]""",
                 ),
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
                 "announcements/second.md" to "# Second",
             ),
         )
 
-        assertEquals(listOf("missing.md", "# Second"), ready.definition.metadata.welcome)
+        assertEquals(listOf("missing.md", "./missing.md", "# Second"), ready.definition.metadata.welcome)
+        assertEquals(1, ready.diagnostics.count { it.message.isResource(R.string.diagnostic_description_read_failed) })
         assertTrue(
             ready.diagnostics.any {
                 it.severity == DiagnosticSeverity.Warning &&

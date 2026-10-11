@@ -4,8 +4,9 @@ import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.callWithTimeout
 import com.aliothmoon.maafw.project.PiInstaller
-import com.aliothmoon.maafw.project.isFilePath
-import com.aliothmoon.maafw.project.normalizeProjectPath
+import com.aliothmoon.maafw.project.isExplicitProjectPath
+import com.aliothmoon.maafw.project.isProjectFileCandidate
+import com.aliothmoon.maafw.project.resolveProjectFile
 import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -40,7 +41,7 @@ interface FocusContentResolver {
  * 不为它们各起一个协程
  */
 fun focusContentNeedsIo(content: String): Boolean =
-    content.contains(FOCUS_IMAGE_PLACEHOLDER) || isFilePath(content)
+    content.contains(FOCUS_IMAGE_PLACEHOLDER) || isProjectFileCandidate(content)
 
 /**
  * 生产实现：`{image}` 找特权进程要缓存帧，文件路径形态读 PI 解包目录
@@ -74,10 +75,12 @@ class PrivilegedFocusContentResolver(
     /** 读不到回落原文：PI 作者可能本来就想显示这行字 */
     private fun readProjectFile(content: String): String = runCatching {
         val root = installer.installedDir()
-        val file = File(root, normalizeProjectPath(content))
+        val file = resolveProjectFile(root, content)
         if (file.isFile) file.readText() else content
     }.getOrElse {
-        Timber.w(it, "focus body read failed for file path: %s", content)
+        if (isExplicitProjectPath(content)) {
+            Timber.w(it, "focus body read failed for file path: %s", content)
+        }
         content
     }
 

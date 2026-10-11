@@ -336,15 +336,18 @@ class ProjectLoader(
 
         override fun description(raw: String?): String? {
             val resolved = raw?.let(::i18n) ?: return null
-            if (!isFilePath(resolved)) return resolved
-            val path = normalizeProjectPath(resolved)
+            if (!isProjectFileCandidate(resolved)) return resolved
+            val path = normalizeProjectPath(resolved.replace('\\', '/'))
             return try {
                 source.read(path)
             } catch (e: Exception) {
-                diagnostics += warning(
-                    path,
-                    DiagnosticMessages.descriptionReadFailed(e.message.orEmpty())
-                )
+                // 候选也可能只是正文；只有显式路径读取失败才需要提醒作者
+                if (isExplicitProjectPath(resolved)) {
+                    diagnostics += warning(
+                        path,
+                        DiagnosticMessages.descriptionReadFailed(e.message.orEmpty())
+                    )
+                }
                 resolved
             }
         }
