@@ -139,6 +139,23 @@ class ProjectTextFileTest {
     }
 
     @Test
+    fun `默认 tryReadText 把 FileNotFoundException 当未命中 其他 IO 错误仍是失败`() {
+        val error = IOException("disk error")
+        val source = object : ProjectSource {
+            override val projectName = "pi"
+            override fun list(path: String) = emptyList<String>()
+            override fun read(path: String): String = when (path) {
+                "intro.md" -> "# 简介"
+                "broken.md" -> throw error
+                else -> throw FileNotFoundException(path)
+            }
+        }
+        assertEquals("# 简介", source.tryReadText("intro.md").getOrThrow())
+        assertNull(source.tryReadText("missing.md").getOrThrow())
+        assertSame(error, source.tryReadText("broken.md").exceptionOrNull())
+    }
+
+    @Test
     fun `规范化的 IO 错误保留原始原因`() {
         val root = mockk<File>()
         val error = IOException("cannot resolve root")

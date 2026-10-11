@@ -16,11 +16,17 @@ interface ProjectSource {
     /** 列出目录直接子项（文件与子目录名）；目录不存在返回空列表 */
     fun list(path: String): List<String>
 
-    /** 必需配置读取失败由 Loader 转成加载错误；可选正文使用 [tryReadText] */
+    /** 未命中抛 [FileNotFoundException]；必需配置读取失败由 Loader 转成加载错误，可选正文使用 [tryReadText] */
     fun read(path: String): String
 
     /** 成功正文（可为空串）/ success(null) 未命中文件 / failure 文件访问失败 */
-    fun tryReadText(path: String): Result<String?> = catchProjectReadFailure { read(path) }
+    fun tryReadText(path: String): Result<String?> = catchProjectReadFailure {
+        try {
+            read(path)
+        } catch (_: FileNotFoundException) {
+            null
+        }
+    }
 }
 
 /** 构建期 syncPiAssets 的固定落点；外壳不认具体 PI 项目，只认这个位置 */
