@@ -338,18 +338,18 @@ class ProjectLoader(
             val resolved = raw?.let(::i18n) ?: return null
             if (!isProjectFileCandidate(resolved)) return resolved
             val path = normalizeProjectPath(resolved.replace('\\', '/'))
-            return try {
-                source.read(path)
-            } catch (e: Exception) {
-                // 候选也可能只是正文；只有显式路径读取失败才需要提醒作者
-                if (isExplicitProjectPath(resolved)) {
-                    diagnostics += warning(
-                        path,
-                        DiagnosticMessages.descriptionReadFailed(e.message.orEmpty())
+            val result = source.tryReadText(path)
+            result.getOrNull()?.let { return it }
+            // 未命中的候选可能只是正文；显式路径未命中或实际读取失败才提醒作者
+            if (isExplicitProjectPath(resolved) || result.isFailure) {
+                diagnostics += warning(
+                    path,
+                    DiagnosticMessages.descriptionReadFailed(
+                        result.exceptionOrNull()?.message ?: "Not a project file: $path"
                     )
-                }
-                resolved
+                )
             }
+            return resolved
         }
     }
 

@@ -3,10 +3,9 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.callWithTimeout
-import com.aliothmoon.maafw.project.PiInstaller
+import com.aliothmoon.maafw.project.ProjectSource
 import com.aliothmoon.maafw.project.isExplicitProjectPath
 import com.aliothmoon.maafw.project.isProjectFileCandidate
-import com.aliothmoon.maafw.project.resolveProjectFile
 import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -50,7 +49,7 @@ fun focusContentNeedsIo(content: String): Boolean =
  * 序号轮转：日志里同时挂着好几张图时，新的不该把旧的盖掉，但也不能无限堆
  */
 class PrivilegedFocusContentResolver(
-    private val installer: PiInstaller,
+    private val source: ProjectSource,
     private val servicePort: PrivilegedServicePort,
 ) : FocusContentResolver {
 
@@ -73,15 +72,15 @@ class PrivilegedFocusContentResolver(
     }
 
     /** 读不到回落原文：PI 作者可能本来就想显示这行字 */
-    private fun readProjectFile(content: String): String = runCatching {
-        val root = installer.installedDir()
-        val file = resolveProjectFile(root, content)
-        if (file.isFile) file.readText() else content
-    }.getOrElse {
-        if (isExplicitProjectPath(content)) {
-            Timber.w(it, "focus body read failed for file path: %s", content)
+    private fun readProjectFile(content: String): String {
+        val result = source.tryReadText(content)
+        result.getOrNull()?.let { return it }
+        if (result.isFailure) {
+            Timber.w(result.exceptionOrNull(), "focus body read failed for file path: %s", content)
+        } else if (isExplicitProjectPath(content)) {
+            Timber.w("No project file for focus body: %s", content)
         }
-        content
+        return content
     }
 
     private companion object {

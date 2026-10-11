@@ -2,9 +2,14 @@ package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.isResource
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -12,6 +17,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileNotFoundException
+import java.io.IOException
 
 class ProjectTextFileTest {
     @get:Rule
@@ -104,14 +110,81 @@ class ProjectTextFileTest {
         assertEquals(listOf(relative, absolute), ready.definition.metadata.welcome)
         assertEquals(1, ready.diagnostics.count { it.message.isResource(R.string.diagnostic_description_read_failed) })
         val source = DirectoryProjectSource(root)
-        assertThrows(IllegalArgumentException::class.java) { source.read(relative) }
-        assertThrows(IllegalArgumentException::class.java) { source.read(absolute) }
-        assertThrows(IllegalArgumentException::class.java) { source.read("C:/outside.md") }
+        assertNull(source.tryReadText(relative).getOrThrow())
+        assertNull(source.tryReadText(absolute).getOrThrow())
+        assertNull(source.tryReadText("C:/outside.md").getOrThrow())
+    }
+
+    @Test
+    fun `非法路径作为未命中返回 不向调用方抛异常`() {
+        val source = DirectoryProjectSource(temp.newFolder("pi"))
+        val paths = listOf("../outside.md", "C:/outside.md", "/outside.md", "bad\u0000.md")
+        paths.forEach { path -> assertNull(path, source.tryReadText(path).getOrThrow()) }
     }
 
     @Test
     fun `项目目录本身不能作为正文文件读取`() {
         val source = DirectoryProjectSource(temp.newFolder("pi"))
+        assertNull(source.tryReadText("./").getOrThrow())
+        assertNull(source.tryReadText("missing.md").getOrThrow())
         assertThrows(FileNotFoundException::class.java) { source.read("./") }
+    }
+
+    @Test
+    fun `空文件是成功正文 不回退到原路径`() {
+        val root = temp.newFolder("pi")
+        write(root, "empty.md", "")
+        assertEquals("", DirectoryProjectSource(root).tryReadText("empty.md").getOrThrow())
+        assertEquals(listOf(""), load(root, listOf("empty.md")).definition.metadata.welcome)
+    }
+
+    @Test
+    fun `规范化的 IO 错误保留原始原因`() {
+        val root = mockk<File>()
+        val error = IOException("cannot resolve root")
+        every { root.name } returns "pi"
+        every { root.canonicalFile } throws error
+        assertSame(error, DirectoryProjectSource(root).tryReadText("intro.md").exceptionOrNull())
+    }
+
+    @Test
+    fun `实际读取失败保留正文并记录原因 必需配置缺失仍加载失败`() {
+        val files = MapProjectSource(mapOf(
+            "interface.json" to """{"interface_version":2,"welcome":"intro.md"}""",
+        ))
+        val source = object : ProjectSource by files {
+            override fun tryReadText(path: String): Result<String?> = Result.failure(IOException("read failed"))
+        }
+        val ready = ProjectLoader(source).load() as ProjectLoadResult.Ready
+        assertEquals(listOf("intro.md"), ready.definition.metadata.welcome)
+        assertTrue(ready.diagnostics.any {
+            it.message.isResource(R.string.diagnostic_description_read_failed, "read failed")
+        })
+        assertTrue(ProjectLoader(DirectoryProjectSource(temp.newFolder("empty"))).load() is ProjectLoadResult.Failure)
+    }
+
+    @Test
+    fun `安装目录初始化的预期错误以失败结果返回`() {
+        val installer = mockk<PiInstaller>()
+        val errors = listOf(
+            PiNotInstalledException(temp.root),
+            IOException("cannot read install marker"),
+            SecurityException("access denied"),
+        )
+        errors.forEach { error ->
+            every { installer.installedDir() } throws error
+            assertSame(error, InstalledProjectSource(installer).tryReadText("intro.md").exceptionOrNull())
+        }
+    }
+
+    @Test
+    fun `取消与程序错误不会被伪装成文件读取失败`() {
+        val installer = mockk<PiInstaller>()
+        val errors = listOf(CancellationException("cancelled"), IllegalStateException("bug"), AssertionError("bug"))
+        errors.forEach { error ->
+            every { installer.installedDir() } throws error
+            val thrown = assertThrows(error.javaClass) { InstalledProjectSource(installer).tryReadText("intro.md") }
+            assertSame(error, thrown)
+        }
     }
 }

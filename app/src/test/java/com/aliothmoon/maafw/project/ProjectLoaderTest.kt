@@ -126,6 +126,8 @@ internal class MapProjectSource(private val files: Map<String, String>) : Projec
 
     override fun read(path: String): String =
         files[path] ?: throw IllegalArgumentException("no file: $path")
+
+    override fun tryReadText(path: String): Result<String?> = Result.success(files[path])
 }
 
 /** 生成合法的 V2 根文件：interface_version + import 声明，body 追加其余顶层字段 */
@@ -804,7 +806,7 @@ class ProjectLoaderWelcomeTest {
                 it.severity == DiagnosticSeverity.Warning &&
                     it.message.isResource(
                         R.string.diagnostic_description_read_failed,
-                        "no file: missing.md",
+                        "Not a project file: missing.md",
                     )
             },
         )

@@ -77,7 +77,7 @@ val runnerModule = module {
 
     single<FocusContentResolver> {
         PrivilegedFocusContentResolver(
-            installer = get(),
+            source = get(),
             servicePort = get(),
         )
     }
