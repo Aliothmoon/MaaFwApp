@@ -126,6 +126,9 @@ private fun TasksContent(
     modifier: Modifier = Modifier,
 ) {
     var showQuickOptions by rememberSaveable { mutableStateOf(false) }
+    // 日志面板开合态提到这一层：开始运行要顺带弹起日志，启停条（RunnerToggleButton）
+    // 与日志开关（ConfigurationSelectorRow）得共享同一状态，所以归 TasksContent 持有
+    var showLog by rememberSaveable { mutableStateOf(false) }
     // 设置搜索点中的是快捷面板里的项：面板是本页的局部状态，只能由本页自己打开
     val searchLocation = pendingSearchLocation()
     LaunchedEffect(searchLocation) {
@@ -201,6 +204,8 @@ private fun TasksContent(
                         onExportLogs = onExportLogs,
                         onIntent = onIntent,
                         showLogToggle = true,
+                        logOpen = showLog,
+                        onToggleLog = { showLog = !showLog },
                         modifier = Modifier.weight(7f),
                     )
                 }
@@ -208,7 +213,11 @@ private fun TasksContent(
                 RunnerToggleButton(
                     state = state,
                     quickOptionsOpen = showQuickOptions,
-                    onIntent = onIntent,
+                    // 开始运行即弹起日志面板；其余 intent（停止 / 快捷操作 / ReloadProject 等）照常转发
+                    onIntent = { intent ->
+                        if (intent is SessionIntent.Start) showLog = true
+                        onIntent(intent)
+                    },
                     onToggleQuickOptions = { showQuickOptions = !showQuickOptions },
                     modifier = Modifier.fillMaxWidth(),
                 )
