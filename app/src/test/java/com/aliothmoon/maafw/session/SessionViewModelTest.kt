@@ -36,7 +36,6 @@ import com.aliothmoon.maafw.runner.RecordingEventRunnerPort
 import com.aliothmoon.maafw.runner.RecordingPreviewPort
 import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
 import com.aliothmoon.maafw.runner.DisplayHazards
-import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.ResolutionPresets
@@ -162,8 +161,8 @@ class SessionViewModelTest {
     )
 
     /**
-     * 带上真实的前台拦截（只拦定时）与保活挂载物：手动路径不受影响，
-     * overlay Start 的用例才证明它真的送到了 runner
+     * 带保活挂载物：手动路径不受影响；前台/定时由各自调用方（SessionViewModel.start /
+     * ScheduleExecutionService + CountdownHook）负责，不在这一层再挂拦截
      */
     private fun TestScope.launcherFor(
         project: FakeProjectRepository,
@@ -175,7 +174,7 @@ class SessionViewModelTest {
         projectRepository = project,
         configurationStore = store,
         runnerPort = runner,
-        prechecks = listOf(ForegroundModePrecheck, DisplayHazardPrecheck { hazards }),
+        prechecks = listOf(DisplayHazardPrecheck { hazards }),
         hooks = listOf(KeepAliveHook(RecordingRunKeepAlive())),
         runMode = { settings.runMode.value },
         scope = backgroundScope,

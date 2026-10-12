@@ -20,7 +20,6 @@ import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.RemoteGameFpsReader
 import com.aliothmoon.maafw.telemetry.TelemetryController
 import com.aliothmoon.maafw.telemetry.TelemetryHook
-import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.NotificationHook
@@ -150,7 +149,7 @@ val runnerModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            prechecks = listOf(ForegroundModePrecheck, BackgroundModePrecheck(), DisplayHazardPrecheck(get())),
+            prechecks = listOf(BackgroundModePrecheck(), DisplayHazardPrecheck(get())),
             hooks = listOf(
                 SessionLogHook(get()),
                 TelemetryHook(get()),
@@ -161,7 +160,7 @@ val runnerModule = module {
                 },
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
-                CountdownHook,
+                CountdownHook(),
                 KeepAliveHook(get()),
                 GameFpsHook(get()),
                 DisplayHazardNoticeHook(get(), get()),

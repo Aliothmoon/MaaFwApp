@@ -13,7 +13,6 @@ import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
@@ -22,7 +21,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 执行期间把 app 进程钉住的手段
@@ -94,13 +92,9 @@ class RunLauncher(
     /** 已受理过的请求 id；只留最近若干条，闹钟重投的间隔是秒级，不需要长记忆 */
     private val handled = ArrayDeque<RunRequestId>()
 
-    /** 抢占时要撤掉上一轮的收尾登记，否则旧的自动熄屏会落到新一轮头上 */
-    private val settling = AtomicReference<Job?>(null)
-
     /**
      * @param configurationId null 跑当前激活的那份；定时规则可以指定别的
      * @param requestId 非 null 时做幂等：同一个 id 第二次进来直接 [RunLaunchResult.DuplicateRequest]
-     * @param force 已有执行在跑时是否掐掉它再上；false 就让 RunnerPort 拒
      * @param steps 非 null 时把每个挂载物的落点抄一份给调用方，用于记账
      * @param signals 用户的打断面；只有会等待的挂载物（倒计时）读它
      * @param progress 挂载物的进度上报口；调用方决定往哪显示
@@ -110,12 +104,11 @@ class RunLauncher(
         acknowledged: Set<ConfirmToken> = emptySet(),
         configurationId: RunConfigurationId? = null,
         requestId: RunRequestId? = null,
-        force: Boolean = false,
         steps: RunStepSink? = null,
         signals: RunSignals = RunSignals(),
         progress: RunProgress = RunProgress { _, _ -> },
     ): RunLaunchResult =
-        dispatch(trigger, acknowledged, configurationId, requestId, force, steps, signals, progress)
+        dispatch(trigger, acknowledged, configurationId, requestId, steps, signals, progress)
             .also { logOutcome(trigger, configurationId, it) }
 
     private suspend fun dispatch(
@@ -123,7 +116,6 @@ class RunLauncher(
         acknowledged: Set<ConfirmToken>,
         configurationId: RunConfigurationId?,
         requestId: RunRequestId?,
-        force: Boolean,
         steps: RunStepSink?,
         signals: RunSignals,
         progress: RunProgress,
@@ -162,7 +154,11 @@ class RunLauncher(
             val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal)
             runPrechecks(ctx)?.let { return it }
 
-            if (force) preemptRunning()
+            // 定时触发绝不抢占正在跑的轮次：已有执行时不进倒计时，直接以
+            // 「已有执行在进行中」拒绝，由 ScheduleExecutionService 在通知栏报出来
+            if (trigger is RunTrigger.Schedule && runnerPort.state.value.phase.isBusy) {
+                return RunLaunchResult.Rejected(uiTextOf(R.string.msg_reject_already_running))
+            }
 
             engage(Anchor.BeforeDispatch, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
@@ -188,7 +184,7 @@ class RunLauncher(
             val pending = engaged.toList()
             engaged.clear()
             val label = logLabel(trigger, configurationId)
-            settling.set(scope.launch { awaitSettledThenFinalize(pending, label) })
+            scope.launch { awaitSettledThenFinalize(pending, label) }
             return RunLaunchResult.Started
         } catch (cancellation: CancellationException) {
             finalize(engaged, RunEndReason.NotRun(NotRunCause.Cancelled))
@@ -233,19 +229,6 @@ class RunLauncher(
     private fun remember(requestId: RunRequestId) {
         handled.addLast(requestId)
         while (handled.size > HANDLED_HISTORY) handled.removeFirst()
-    }
-
-    /**
-     * 掐掉在跑的那一轮并等它停稳，然后把它的收尾跑完
-     *
-     * 顺序不能换：先 stop 让 Runner 收敛，再 join 上一轮的收尾协程——反过来会让新一轮的
-     * engage 与旧一轮的 release 交错，屏保刚盖上就被上一轮撤掉
-     */
-    private suspend fun preemptRunning() {
-        if (!runnerPort.state.value.phase.isBusy) return
-        Timber.i("preempt: aborting the running round")
-        runnerPort.stop()
-        settling.getAndSet(null)?.join()
     }
 
     /**

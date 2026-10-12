@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.MaaDispatchers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.aliothmoon.maafw.settings.AppSettingsManager
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,15 @@ class ScheduleBootReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + MaaDispatchers.IO + scheduleReceiverExceptionHandler).launch {
             try {
                 val koin = GlobalContext.get()
+                val appSettings: AppSettingsManager = koin.get()
+                val loaded = withTimeoutOrNull(STORE_READY_TIMEOUT_MS) {
+                    // 前台模式的提前量写在设置里；设置没读盘前重排会拿到默认的后台模式
+                    appSettings.loaded.first { it }
+                }
+                if (loaded == null) {
+                    Timber.w("Timed out reading settings; skipping reschedule")
+                    return@launch
+                }
                 resyncScheduleAlarms(koin.get(), koin.get(), reason = intent.action.orEmpty())
             } finally {
                 pendingResult.finish()

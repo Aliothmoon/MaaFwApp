@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.content.edit
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.domain.RunMode
 import timber.log.Timber
 import java.time.ZonedDateTime
 
@@ -18,7 +19,11 @@ import java.time.ZonedDateTime
  * 服务起不来时由 [ScheduleReceiver] 兜底补注册——否则链一断就再也不响；
  * 规则暂时读不出时走 [scheduleRetry]，重试用尽仍读不出走 [scheduleReconnect]，读得出再接回正常链
  */
-class ScheduleAlarmManager(private val context: Context) {
+class ScheduleAlarmManager(
+    private val context: Context,
+    /** 排程那一刻的全局运行模式；前台模式的闹钟要提前 [FOREGROUND_COUNTDOWN_LEAD_MS] 响 */
+    private val runMode: () -> RunMode,
+) {
 
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
@@ -44,9 +49,16 @@ class ScheduleAlarmManager(private val context: Context) {
             clearPendingRetry(strategy.id)
             return
         }
-        val triggerMs = next.toInstant().toEpochMilli()
-        register(strategy.id, scheduledTimeMs = triggerMs, triggerMs = triggerMs)
-        Timber.i("Strategy %s next trigger %s", strategy.id, next)
+        val scheduledMs = next.toInstant().toEpochMilli()
+        // 前台模式先把闹钟提前 30s 叫起来做倒计时；EXTRA_SCHEDULED_TIME 仍是计约定时刻，
+        // CountdownHook 以此为准在到点那一刻投递
+        val alarmMs = if (runMode() == RunMode.FOREGROUND) {
+            scheduledMs - FOREGROUND_COUNTDOWN_LEAD_MS
+        } else {
+            scheduledMs
+        }
+        register(strategy.id, scheduledTimeMs = scheduledMs, triggerMs = alarmMs)
+        Timber.i("Strategy %s next trigger %s (alarm %s)", strategy.id, next, alarmMs)
     }
 
     /**
@@ -241,6 +253,9 @@ class ScheduleAlarmManager(private val context: Context) {
     private fun requestCode(strategyId: String): Int = strategyId.hashCode() and 0x7FFFFFFF
 
     companion object {
+        /** 前台模式闹钟相对计约定时刻提前的毫秒数：给倒计时留的窗口 */
+        const val FOREGROUND_COUNTDOWN_LEAD_MS = 30_000L
+
         /** 跟 applicationId 走：分包出去的两个包装同一台设备时，同名 action 会让闹钟广播串到对方 */
         const val ACTION_SCHEDULE_TRIGGER = BuildConfig.APPLICATION_ID + ".SCHEDULE_TRIGGER"
         const val EXTRA_STRATEGY_ID = "strategy_id"
