@@ -84,6 +84,22 @@ class ProjectTextFileTest {
     }
 
     @Test
+    fun `含斜杠的长正文超出文件名长度上限时按未命中保留`() {
+        val root = temp.newFolder("pi")
+        val declarations = listOf(
+            "这个黑市商人是奸商,你需要在战力指导的陪同下使用这个功能;可以调一下只显示自己,关闭称号等," +
+                "防止黑市商人被遮挡;[size:15][color:tomato]需要二级密码,你需要非常小心," +
+                "MaaAutoNaruto不会对任何损失负责[/color][/size]",
+            "${"超出文件名长度上限的正文".repeat(30)}/A",
+        )
+
+        val ready = load(root, declarations)
+
+        assertEquals(declarations, ready.definition.metadata.welcome)
+        assertTrue(ready.diagnostics.none { it.message.isResource(R.string.diagnostic_description_read_failed) })
+    }
+
+    @Test
     fun `显式路径缺失会警告 规范化后仍在项目内的路径可以读取`() {
         val root = temp.newFolder("pi")
         write(root, "announcement/简介.md", "# 简介")

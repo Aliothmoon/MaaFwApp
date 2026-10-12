@@ -55,9 +55,10 @@ private fun resolveProjectFile(root: File, path: String): File? {
         return null
     }
     val base = root.canonicalFile
-    val file = File(base, relative).canonicalFile
     return try {
-        file.takeIf { it.toPath().startsWith(base.toPath()) && it.isFile }
+        File(base, relative).canonicalFile.takeIf { it.toPath().startsWith(base.toPath()) && it.isFile }
+    } catch (_: IOException) {
+        null
     } catch (_: InvalidPathException) {
         null
     }
