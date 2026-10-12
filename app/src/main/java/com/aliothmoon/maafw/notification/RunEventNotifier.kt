@@ -37,6 +37,14 @@ class RunEventNotifier(
         send(title, text, ID_RUN, isError)
     }
 
+    fun notifyStartAppFailed(taskLabel: String?) {
+        val title = appContext.getString(R.string.run_log_app_not_started)
+        val text = taskLabel?.takeIf(String::isNotBlank)
+            ?.let { appContext.getString(R.string.notification_event_app_not_started_task_body, it) }
+            ?: appContext.getString(R.string.notification_event_app_not_started_body)
+        send(title, text, ID_RUN, isError = true)
+    }
+
     fun notifyTest(title: String, text: String) {
         send(title, text, ID_RUN_RESULT, isError = false)
     }
