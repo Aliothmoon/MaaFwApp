@@ -247,29 +247,66 @@ public final class InputControlUtils {
         return apply(TouchPointerSequence.Kind.Up, x, y, contact, displayId) == TouchResult.DELIVERED;
     }
 
+    private static KeyEvent obtainKeyEvent(long downTime, long eventTime, int action, int keyCode) {
+        return new KeyEvent(
+                downTime,
+                eventTime,
+                action,
+                keyCode,
+                0,
+                0,
+                DEFAULT_DEVICE_ID,
+                0,
+                0,
+                InputDevice.SOURCE_KEYBOARD
+        );
+    }
+
+    private static boolean injectKey(KeyEvent keyEvent, int displayId, int injectMode) {
+        if (!setDisplayId(keyEvent, displayId)) {
+            logKeyFailure(keyEvent, displayId, injectMode, STAGE_SET_DISPLAY_ID, -1);
+            return false;
+        }
+
+        long start = SystemClock.elapsedRealtimeNanos();
+        boolean injected = getManager().injectInputEvent(keyEvent, injectMode);
+        if (!injected) {
+            logKeyFailure(keyEvent, displayId, injectMode, STAGE_INJECT,
+                    SystemClock.elapsedRealtimeNanos() - start);
+        }
+        return injected;
+    }
+
     public static boolean keyDown(int keyCode, int displayId) {
-        return injectKey(KeyEvent.ACTION_DOWN, keyCode, displayId,
+        long downTime = SystemClock.uptimeMillis();
+        return injectKey(
+                obtainKeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, keyCode),
+                displayId,
                 InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH);
     }
 
     public static boolean keyUp(int keyCode, int displayId) {
-        return injectKey(KeyEvent.ACTION_UP, keyCode, displayId, InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+        long downTime = SystemClock.uptimeMillis();
+        return injectKey(
+                obtainKeyEvent(downTime, downTime, KeyEvent.ACTION_UP, keyCode),
+                displayId,
+                InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
     }
 
-    private static boolean injectKey(int action, int keyCode, int displayId, int mode) {
-        long now = SystemClock.uptimeMillis();
-        KeyEvent keyEvent = new KeyEvent(now, now, action, keyCode, 0);
-
-        if (!setDisplayId(keyEvent, displayId)) {
-            logKeyFailure(keyEvent, displayId, mode, STAGE_SET_DISPLAY_ID, -1);
-            return false;
-        }
-        long start = SystemClock.elapsedRealtimeNanos();
-        boolean injected = getManager().injectInputEvent(keyEvent, mode);
-        if (!injected) {
-            logKeyFailure(keyEvent, displayId, mode, STAGE_INJECT, SystemClock.elapsedRealtimeNanos() - start);
-        }
-        return injected;
+    /**
+     * 成对注入一次按键；UP 使用与 DOWN 相同的 downTime，确保系统按同一次按压处理
+     */
+    public static boolean pressKey(int keyCode, int displayId) {
+        long downTime = SystemClock.uptimeMillis();
+        boolean down = injectKey(
+                obtainKeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, keyCode),
+                displayId,
+                InputManager.INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH);
+        boolean up = injectKey(
+                obtainKeyEvent(downTime, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode),
+                displayId,
+                InputManager.INJECT_INPUT_EVENT_MODE_ASYNC);
+        return down && up;
     }
 
     /** 最后一个事件等目标窗口处理完才返回，紧接着的点击不能抢在文字送达之前；失败日志不带键码，能拼回原文 */

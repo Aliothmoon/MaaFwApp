@@ -42,6 +42,9 @@ interface RemoteService {
 
     void stopVirtualDisplay() = 13;
 
+    /** 后台虚拟屏是否仍存在；任务结束不等于虚拟屏结束 */
+    boolean isVirtualDisplayRunning() = 37;
+
     boolean isAppOnVirtualDisplay(String packageName) = 14;
 
     boolean moveAppToVirtualDisplay(String packageName) = 15;
@@ -75,6 +78,9 @@ interface RemoteService {
     oneway void touchMove(int x, int y, int contact) = 34;
 
     oneway void touchUp(int x, int y, int contact) = 35;
+
+    /** 只注入后台虚拟屏；主屏模式或没有虚拟屏时忽略 */
+    oneway void pressKey(int keyCode) = 36;
 
     // ── 代授权限 ──
 

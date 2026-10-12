@@ -81,6 +81,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -150,6 +151,9 @@ class SessionViewModel(
         PrivilegedSnapshot(access, granting, readiness, service, system)
     }
 
+    private val _virtualDisplayRunning = MutableStateFlow(false)
+    private val _virtualDisplayKeysUnlocked = MutableStateFlow(false)
+
     private val settingsState: Flow<SettingsSnapshot> = combine(
         appSettings.runMode,
         appSettings.overlayControlMode,
@@ -193,6 +197,19 @@ class SessionViewModel(
     }.flowOn(MaaDispatchers.Default) // resolve 属重计算，不占用主线程
         .combine(permissionGateway.watchdogState) { base, wd -> base.copy(watchdogState = wd) }
         .combine(piInstall.state) { base, install -> base.copy(piInstallState = install) }
+        .combine(_virtualDisplayRunning) { base, running -> base.copy(virtualDisplayRunning = running) }
+        .combine(_virtualDisplayKeysUnlocked) { base, unlocked ->
+            base.copy(virtualDisplayKeysUnlocked = unlocked)
+        }
+        .combine(welcomePrompt) { base, welcome -> base.copy(welcomePrompt = welcome) }
+        .combine(staleResourceNotice) { base, notice ->
+            // 写回落定前 Resolver 自己还在报同一条，不去重会闪出两行
+            if (notice == null || base.projectState !is ProjectState.Ready || notice in base.sessionDiagnostics) {
+                base
+            } else {
+                base.copy(sessionDiagnostics = listOf(notice) + base.sessionDiagnostics)
+            }
+        }
         .combine(welcomePrompt) { base, welcome -> base.copy(welcomePrompt = welcome) }
         .combine(staleResourceNotice) { base, notice ->
             // 写回落定前 Resolver 自己还在报同一条，不去重会闪出两行
@@ -289,6 +306,20 @@ class SessionViewModel(
                         configurationStore.update { it.withPasswordFieldsMarked(definition) }
                     }
                 }
+        }
+        viewModelScope.launch {
+            permissionGateway.serviceState.collect { state ->
+                if (state == PrivilegedServiceState.Connected) {
+                    refreshVirtualDisplayRunning()
+                } else {
+                    _virtualDisplayRunning.value = false
+                }
+            }
+        }
+        viewModelScope.launch {
+            runnerPort.state.map { it.phase }.distinctUntilChanged().collect {
+                refreshVirtualDisplayRunning()
+            }
         }
     }
 
@@ -596,9 +627,12 @@ class SessionViewModel(
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
             // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
             // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
-            SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
-                runCatching { service.stopVirtualDisplay() }
-                    .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
+            SessionIntent.CloseTargetApp -> {
+                servicePort.serviceOrNull()?.let { service ->
+                    runCatching { service.stopVirtualDisplay() }
+                        .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
+                }
+                refreshVirtualDisplayRunning()
             }
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
@@ -633,6 +667,11 @@ class SessionViewModel(
                 PreviewTouchAction.Move -> previewPort.touchMove(intent.x, intent.y, intent.contact)
                 PreviewTouchAction.Up -> previewPort.touchUp(intent.x, intent.y, intent.contact)
             }
+
+            is SessionIntent.PressVirtualDisplayKey -> previewPort.pressKey(intent.key)
+
+            is SessionIntent.SetVirtualDisplayKeysUnlocked ->
+                _virtualDisplayKeysUnlocked.value = intent.unlocked
 
             // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授
             SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
@@ -685,6 +724,13 @@ class SessionViewModel(
     }
 
     private fun locked(): Boolean = runnerPort.state.value.phase.isBusy
+
+    private suspend fun refreshVirtualDisplayRunning() {
+        _virtualDisplayRunning.value = withContext(MaaDispatchers.IO) {
+            runCatching { servicePort.serviceOrNull()?.isVirtualDisplayRunning() == true }
+                .getOrDefault(false)
+        }
+    }
 
     private suspend fun appendAndActivate(configuration: RunConfiguration) {
         configurationStore.update { config ->
