@@ -21,6 +21,7 @@ import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.schedule.ShizukuDownMonitor
 import com.aliothmoon.maafw.schedule.resyncScheduleAlarms
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.telemetry.TelemetryController
@@ -88,5 +89,7 @@ class MaaFwApp : Application() {
         koin.get<SessionMessagePresenter>().setup()
         koin.get<ScreenSaverOverlayManager>().setup()
         koin.get<TelemetryController>().setup()
+        // 要在 RemoteServiceManager.initialize 之后：状态监听挂上了，Shizuku 掉线才看得见
+        koin.get<ShizukuDownMonitor>().start(koin.get(named<AppCoroutineScope>()))
     }
 }

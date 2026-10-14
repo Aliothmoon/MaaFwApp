@@ -61,6 +61,26 @@ class NotificationCenter(
     }
 
     /**
+     * 有启用的定时而 Shizuku 没在跑：到点必定跑不起来，提前说
+     *
+     * 只发系统通知不外推：这是让人去手机上点一下的事，推到别处也没法处理。
+     * 不设超时，Shizuku 回来时由 `ShizukuDownMonitor` 撤
+     */
+    fun notifyShizukuDown(afterBoot: Boolean) {
+        eventNotifier.notifyShizukuDown(
+            title = renderText(uiTextOf(R.string.notification_shizuku_down_title)),
+            text = renderText(
+                uiTextOf(
+                    if (afterBoot) R.string.notification_shizuku_down_after_boot
+                    else R.string.notification_shizuku_down_stopped,
+                ),
+            ),
+        )
+    }
+
+    fun withdrawShizukuDown() = eventNotifier.cancelShizukuDown()
+
+    /**
      * 特权进程死掉这一档单独判，不与普通失败混在一起
      *
      * `MaaFrameworkRunnerPort` 自己就在监听 `Died` 并中止本轮，所以这里不必再挂一个观察者——

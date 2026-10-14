@@ -434,6 +434,10 @@
     <string name="msg_backend_auth_rejected">%1$s 未授权</string>
     <string name="msg_backend_not_running">%1$s 未运行</string>
     <string name="msg_backend_connect_failed">连接 %1$s 特权进程失败：%2$s</string>
+    <string name="notification_action_open_shizuku">打开 Shizuku</string>
+    <string name="notification_shizuku_down_title">Shizuku 未运行</string>
+    <string name="notification_shizuku_down_after_boot">手机重启后需要重新启动 Shizuku，否则定时任务无法执行</string>
+    <string name="notification_shizuku_down_stopped">Shizuku 已停止，重新启动前定时任务无法执行</string>
     <string name="msg_bind_service_failed">连接特权进程失败：%1$s</string>
     <string name="msg_no_executable_tasks">没有可用的任务</string>
     <string name="msg_template_not_found">模板“%1$s”不存在</string>

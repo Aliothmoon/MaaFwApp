@@ -130,6 +130,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- 开机后 / Shizuku 停了之后复查它回来没有；只由 ShizukuDownMonitor 的闹钟显式投递 -->
+        <receiver
+            android:name=".schedule.ShizukuCheckReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".schedule.ScheduleBootReceiver"
             android:exported="false">

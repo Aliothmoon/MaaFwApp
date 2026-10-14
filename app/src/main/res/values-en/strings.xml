@@ -441,6 +441,10 @@
     <string name="msg_backend_auth_rejected">%1$s was not granted</string>
     <string name="msg_backend_not_running">%1$s is not running</string>
     <string name="msg_backend_connect_failed">Could not connect to the %1$s privileged process: %2$s</string>
+    <string name="notification_action_open_shizuku">Open Shizuku</string>
+    <string name="notification_shizuku_down_title">Shizuku is not running</string>
+    <string name="notification_shizuku_down_after_boot">Shizuku has to be started again after a reboot, or scheduled tasks cannot run</string>
+    <string name="notification_shizuku_down_stopped">Shizuku has stopped; scheduled tasks cannot run until it is started again</string>
     <string name="msg_bind_service_failed">Could not connect to the privileged process: %1$s</string>
     <string name="msg_no_executable_tasks">No tasks available to run</string>
     <string name="msg_template_not_found">Template \"%1$s\" does not exist</string>
