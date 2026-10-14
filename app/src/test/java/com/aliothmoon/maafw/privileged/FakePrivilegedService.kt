@@ -192,4 +192,19 @@ class FakePrivilegedServicePort(
         holdUseService?.await()
         return action(checkNotNull(service) { "fake service unavailable" })
     }
+
+    /** 非 null 时 [connect] 直接交回它；null 时按 [service] 在不在给 Connected / Failed */
+    var connectResult: ServiceConnectResult? = null
+    var connectCount: Int = 0
+        private set
+
+    override suspend fun connect(): ServiceConnectResult {
+        connectCount++
+        connectResult?.let { return it }
+        return if (service != null) {
+            ServiceConnectResult.Connected
+        } else {
+            ServiceConnectResult.Failed(RemoteBackend.SHIZUKU, IllegalStateException("fake service unavailable"))
+        }
+    }
 }

@@ -8,6 +8,9 @@ import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
+import com.aliothmoon.maafw.privileged.message
+import com.aliothmoon.maafw.privileged.remoteAccessMessage
 import com.aliothmoon.maafw.schedule.UnlockGestureReader
 import com.aliothmoon.maafw.schedule.WakeResult
 import com.aliothmoon.maafw.settings.AppSettingsGateway
@@ -87,6 +90,9 @@ internal object HookOrder {
 
     /** 紧随会话日志：收尾时排在所有环境动作之后，播报的是环境都撤干净之后的结局 */
     const val NOTIFICATION = -5
+
+    /** 不改环境，排在四个环境挂载物之前：它们都要特权进程 */
+    const val PRIVILEGED_CONNECT = -2
     const val AUTO_SLEEP = 0
     const val WAKE_UNLOCK = 10
     const val SCREEN_SAVER = 20
@@ -104,6 +110,39 @@ internal object HookOrder {
 
     /** 收尾时最先撤计时器：别的挂载物撤到一半时它不该再到点去 stop */
     const val RUN_DURATION_LIMIT = 60
+}
+
+/**
+ * 投递前先把特权进程连上
+ *
+ * 解锁、熄屏采样、投递都要它；连不上时前两步各自回落默认值，拉起失败会被报成「解锁失败」，
+ * 真原因就丢了。gating：连不上整轮跑不起来，早拦下早给原因
+ *
+ * 未授权会在这里当场请求（手动那轮用户在跟前），所以超时要盖住授权弹窗加一次拉起
+ */
+class PrivilegedConnectHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
+
+    override val id: String = ID
+    override val anchor: Anchor = Anchor.BeforeDispatch
+    override val order: Int = HookOrder.PRIVILEGED_CONNECT
+    override val gating: Boolean = true
+    override val engageTimeoutMs: Long = ENGAGE_TIMEOUT_MS
+
+    override suspend fun engage(ctx: RunContext): EngageResult =
+        when (val result = withContext(MaaDispatchers.IO) { servicePort.connect() }) {
+            ServiceConnectResult.Connected -> EngageResult.Skipped()
+            is ServiceConnectResult.NotReady ->
+                EngageResult.Failed(remoteAccessMessage(result.backend, result.failure))
+            is ServiceConnectResult.Failed ->
+                EngageResult.Failed(result.message(), error = result.error)
+        }
+
+    companion object {
+        private const val ENGAGE_TIMEOUT_MS = 60_000L
+
+        /** 进触发日志的 steps，落盘了就别改 */
+        const val ID = "privileged-connect"
+    }
 }
 
 /**

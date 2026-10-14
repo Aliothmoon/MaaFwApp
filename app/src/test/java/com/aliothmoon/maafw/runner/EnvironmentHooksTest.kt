@@ -12,6 +12,11 @@ import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
+import com.aliothmoon.maafw.privileged.RemoteAccessFailure
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
+import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.i18n.isResource
+import java.util.concurrent.TimeoutException
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.currentTime
@@ -54,6 +59,42 @@ class EnvironmentHooksTest {
         override suspend fun hide() {
             hidden++
         }
+    }
+
+    // ── 连接特权进程 ────────────────────────────────────────────────
+
+    @Test
+    fun `connect hook passes once the privileged process is connected`() = runTest {
+        val port = FakePrivilegedServicePort(FakePrivilegedService())
+
+        assertTrue(PrivilegedConnectHook(port).engage(context()) is EngageResult.Skipped)
+        assertEquals(1, port.connectCount)
+    }
+
+    /** 后端没就绪给的是本地化原因，不是连接器抛出来的英文 message */
+    @Test
+    fun `connect hook reports a stopped Shizuku as not running`() = runTest {
+        val port = FakePrivilegedServicePort().apply {
+            connectResult = ServiceConnectResult.NotReady(RemoteBackend.SHIZUKU, RemoteAccessFailure.UNAVAILABLE)
+        }
+
+        val failed = PrivilegedConnectHook(port).engage(context()) as EngageResult.Failed
+
+        assertTrue(failed.reason.isResource(R.string.msg_backend_not_running))
+        assertEquals(NotRunCause.HookFailed, failed.notRun)
+    }
+
+    @Test
+    fun `connect hook keeps the spawn failure as the error`() = runTest {
+        val error = TimeoutException("binder not attached within 10000ms; launcher log tail: ...")
+        val port = FakePrivilegedServicePort().apply {
+            connectResult = ServiceConnectResult.Failed(RemoteBackend.SHIZUKU, error)
+        }
+
+        val failed = PrivilegedConnectHook(port).engage(context()) as EngageResult.Failed
+
+        assertTrue(failed.reason.isResource(R.string.msg_backend_connect_failed))
+        assertEquals(error, failed.error)
     }
 
     // ── 亮屏解锁 ────────────────────────────────────────────────────

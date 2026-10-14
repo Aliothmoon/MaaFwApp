@@ -8,7 +8,10 @@ import com.aliothmoon.maafw.domain.UnlockCredential
  * 纯推导，列表页的健康卡与保存后的引导共用一套判定（对齐 MaaMeow 的 ScheduleHealthLogic）
  */
 enum class ScheduleHealthIssue {
-    /** 当前启动模式（Shizuku/Root）未授权：亮屏解锁、拉起、执行都走特权进程 */
+    /** 当前启动模式（Shizuku/Root）没在运行：亮屏解锁、拉起、执行都走特权进程 */
+    BACKEND_DOWN,
+
+    /** 在运行但未授权 */
     BACKEND,
 
     /** 未加入电池优化白名单：闹钟能响，前台服务却可能被系统拦下或延迟 */
@@ -31,6 +34,8 @@ enum class ScheduleHealthIssue {
 data class ScheduleHealthSnapshot(
     /** 只看授权，不看特权进程连没连上：到点时服务本就未必在线，按连接态判会误报 */
     val backendGranted: Boolean,
+    /** 没在运行也就谈不上授权，两者分开报：修法不一样，一个去启动服务，一个去授权 */
+    val backendAvailable: Boolean,
     val batteryWhitelist: Boolean,
     val exactAlarmAllowed: Boolean,
     val notification: Boolean,
@@ -63,7 +68,10 @@ object ScheduleHealthLogic {
      */
     fun failingIssues(snapshot: ScheduleHealthSnapshot): List<ScheduleHealthIssue> =
         buildList {
-            if (!snapshot.backendGranted) add(ScheduleHealthIssue.BACKEND)
+            when {
+                !snapshot.backendAvailable -> add(ScheduleHealthIssue.BACKEND_DOWN)
+                !snapshot.backendGranted -> add(ScheduleHealthIssue.BACKEND)
+            }
             if (!snapshot.batteryWhitelist) add(ScheduleHealthIssue.BATTERY)
             if (!snapshot.exactAlarmAllowed) add(ScheduleHealthIssue.EXACT_ALARM)
             if (!snapshot.notification) add(ScheduleHealthIssue.NOTIFICATION)
@@ -74,10 +82,14 @@ object ScheduleHealthLogic {
     /**
      * 保存后逐项引导的那几项：都是跳一次系统页就能解决的
      *
-     * 后端授权要走 Shizuku/Root 的整套流程，PIN 要去设置页填，都不是一个弹窗能收尾的，留给健康卡
+     * 后端启动与授权要走 Shizuku/Root 的整套流程，PIN 要去设置页填，都不是一个弹窗能收尾的，留给健康卡
      */
     fun wizardItems(snapshot: ScheduleHealthSnapshot): List<ScheduleHealthIssue> =
-        failingIssues(snapshot).filterNot {
-            it == ScheduleHealthIssue.BACKEND || it == ScheduleHealthIssue.WAKE_CREDENTIAL
-        }
+        failingIssues(snapshot).filterNot { it in NOT_IN_WIZARD }
+
+    private val NOT_IN_WIZARD = setOf(
+        ScheduleHealthIssue.BACKEND_DOWN,
+        ScheduleHealthIssue.BACKEND,
+        ScheduleHealthIssue.WAKE_CREDENTIAL,
+    )
 }

@@ -298,6 +298,14 @@ fun AppRoot(
         // 健康卡与保存后引导的修复入口：授权动作仍走 Session 那条路（先代授、不成再跳系统页）
         val fixScheduleIssue: (ScheduleHealthIssue) -> Unit = { issue ->
             when (issue) {
+                // Shizuku 没在跑只能去它自己的界面启动；Root 不可用多半是 su 还没给，代授一次
+                ScheduleHealthIssue.BACKEND_DOWN -> viewModel.onIntent(
+                    if (scheduleState.backend == RemoteBackend.SHIZUKU) {
+                        SessionIntent.OpenShizuku
+                    } else {
+                        SessionIntent.RequestRemoteAccess
+                    },
+                )
                 ScheduleHealthIssue.BACKEND -> viewModel.onIntent(SessionIntent.RequestRemoteAccess)
                 ScheduleHealthIssue.BATTERY -> viewModel.onIntent(
                     SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),

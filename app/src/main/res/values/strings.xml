@@ -303,6 +303,9 @@
     <string name="schedule_health_fix">去修复</string>
     <string name="schedule_health_backend">%1$s 未授权</string>
     <string name="schedule_health_backend_desc">到点后的亮屏解锁、拉起与执行都靠它，请先完成授权</string>
+    <string name="schedule_health_backend_not_running">%1$s 未运行</string>
+    <string name="schedule_health_backend_unavailable">%1$s 不可用</string>
+    <string name="schedule_health_backend_down_desc">到点后的亮屏解锁、拉起与执行都靠它，请先启动对应服务</string>
     <string name="schedule_health_battery">未加入电源管理白名单</string>
     <string name="schedule_health_battery_desc">到点时系统可能延迟或拦下后台启动</string>
     <string name="schedule_health_notification">通知权限未开启</string>
@@ -429,6 +432,8 @@
     <string name="msg_project_not_loaded">项目尚未加载完成</string>
     <string name="msg_backend_unavailable">%1$s 不可用</string>
     <string name="msg_backend_auth_rejected">%1$s 未授权</string>
+    <string name="msg_backend_not_running">%1$s 未运行</string>
+    <string name="msg_backend_connect_failed">连接 %1$s 特权进程失败：%2$s</string>
     <string name="msg_bind_service_failed">连接特权进程失败：%1$s</string>
     <string name="msg_no_executable_tasks">没有可用的任务</string>
     <string name="msg_template_not_found">模板“%1$s”不存在</string>

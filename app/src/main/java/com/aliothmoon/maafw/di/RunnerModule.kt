@@ -21,6 +21,8 @@ import com.aliothmoon.maafw.runner.RemoteGameFpsReader
 import com.aliothmoon.maafw.telemetry.TelemetryController
 import com.aliothmoon.maafw.telemetry.TelemetryHook
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
+import com.aliothmoon.maafw.runner.PrivilegedAccessPrecheck
+import com.aliothmoon.maafw.runner.PrivilegedConnectHook
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.NotificationHook
@@ -150,11 +152,17 @@ val runnerModule = module {
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
-            prechecks = listOf(ForegroundModePrecheck, BackgroundModePrecheck(), DisplayHazardPrecheck(get())),
+            prechecks = listOf(
+                PrivilegedAccessPrecheck(get(), get()),
+                ForegroundModePrecheck,
+                BackgroundModePrecheck(),
+                DisplayHazardPrecheck(get()),
+            ),
             hooks = listOf(
                 SessionLogHook(get()),
                 TelemetryHook(get()),
                 NotificationHook(get()),
+                PrivilegedConnectHook(get()),
                 AutoSleepHook(get()),
                 WakeUnlockHook(get(), get<AppSettingsManager>(), get<UnlockGestureStore>()) {
                     androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true

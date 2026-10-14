@@ -1,5 +1,9 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.i18n.isResource
+import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.privileged.RemoteAccessFailure
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
 import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
@@ -216,6 +220,20 @@ class MaaFrameworkRunnerPortTest {
         assertTrue(started.await() is RunnerCommandResult.Rejected)
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
         assertTrue(runner.state.value.latestResult is ExecutionResult.Cancelled)
+    }
+
+    /** 以前是 IllegalStateException 的英文 message 原样进触发日志 */
+    @Test
+    fun `a backend that is not ready rejects with a localized reason`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort().apply {
+            connectResult = ServiceConnectResult.NotReady(RemoteBackend.SHIZUKU, RemoteAccessFailure.UNAVAILABLE)
+        }
+        val (runner, _) = port(this, servicePort = servicePort)
+
+        val rejected = runner.start(plan(), "e1") as RunnerCommandResult.Rejected
+
+        assertTrue(rejected.reason.isResource(R.string.msg_backend_not_running))
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
     }
 
     @Test

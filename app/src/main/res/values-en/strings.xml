@@ -309,6 +309,9 @@
     <string name="schedule_health_fix">Fix</string>
     <string name="schedule_health_backend">%1$s not authorized</string>
     <string name="schedule_health_backend_desc">Waking, unlocking, launching and running a scheduled task all depend on it; grant access first</string>
+    <string name="schedule_health_backend_not_running">%1$s is not running</string>
+    <string name="schedule_health_backend_unavailable">%1$s is not available</string>
+    <string name="schedule_health_backend_down_desc">Waking, unlocking, launching and running a scheduled task all depend on it; start the service first</string>
     <string name="schedule_health_battery">Not on the battery optimization whitelist</string>
     <string name="schedule_health_battery_desc">The system may delay or block the background start when the alarm fires</string>
     <string name="schedule_health_notification">Notifications are off</string>
@@ -436,6 +439,8 @@
     <string name="msg_project_not_loaded">Project is not loaded yet</string>
     <string name="msg_backend_unavailable">%1$s is not available</string>
     <string name="msg_backend_auth_rejected">%1$s was not granted</string>
+    <string name="msg_backend_not_running">%1$s is not running</string>
+    <string name="msg_backend_connect_failed">Could not connect to the %1$s privileged process: %2$s</string>
     <string name="msg_bind_service_failed">Could not connect to the privileged process: %1$s</string>
     <string name="msg_no_executable_tasks">No tasks available to run</string>
     <string name="msg_template_not_found">Template \"%1$s\" does not exist</string>

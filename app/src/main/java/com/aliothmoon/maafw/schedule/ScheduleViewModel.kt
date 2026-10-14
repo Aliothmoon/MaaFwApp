@@ -96,6 +96,7 @@ class ScheduleViewModel(
     ) { access, system, (exact, secure), settings ->
         val snapshot = ScheduleHealthSnapshot(
             backendGranted = access.isGranted(access.configuredBackend),
+            backendAvailable = access.isAvailable(access.configuredBackend),
             batteryWhitelist = system.batteryWhitelist,
             exactAlarmAllowed = exact,
             notification = system.notification,

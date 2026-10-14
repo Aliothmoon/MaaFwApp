@@ -26,6 +26,8 @@ import com.aliothmoon.maafw.privileged.DisplaySizeGateway
 import com.aliothmoon.maafw.privileged.DisplaySizeResult
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.RemoteAccessFailure
+import com.aliothmoon.maafw.privileged.remoteAccessMessage
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ServiceBindResult
@@ -595,10 +597,9 @@ class SessionViewModel(
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
             // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
-            // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
-            SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
-                runCatching { service.stopVirtualDisplay() }
-                    .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
+            // 只用现成连接：一颗次级按钮，不值得为它弹授权请求。stopVirtualDisplay 不是 oneway，远端卡住会挂住调用方
+            SessionIntent.CloseTargetApp -> servicePort.callWithTimeout(CLOSE_TARGET_TIMEOUT) {
+                it.stopVirtualDisplay()
             }
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
@@ -745,10 +746,10 @@ class SessionViewModel(
         val message = when (val result = permissionGateway.bindService()) {
             ServiceBindResult.Started, ServiceBindResult.AlreadyConnected -> return
             is ServiceBindResult.BackendUnavailable ->
-                uiTextOf(R.string.msg_backend_unavailable, result.backend.display)
+                remoteAccessMessage(result.backend, RemoteAccessFailure.UNAVAILABLE)
 
             is ServiceBindResult.AuthRejected ->
-                uiTextOf(R.string.msg_backend_auth_rejected, result.backend.display)
+                remoteAccessMessage(result.backend, RemoteAccessFailure.NOT_GRANTED)
 
             is ServiceBindResult.Failed -> uiTextOf(R.string.msg_bind_service_failed, result.reason)
         }
@@ -862,6 +863,7 @@ class SessionViewModel(
     private companion object {
         // 整帧 PNG 编码在特权进程里做，高分辨率下要几百毫秒
         val CAPTURE_TIMEOUT = 5.seconds
+        val CLOSE_TARGET_TIMEOUT = 5.seconds
         const val MANUAL_SCREENSHOT_KEEP = 20
         val SCREENSHOT_STAMP = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
     }

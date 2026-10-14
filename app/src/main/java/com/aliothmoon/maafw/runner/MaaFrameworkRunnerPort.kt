@@ -14,6 +14,10 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
+import com.aliothmoon.maafw.privileged.message
+import com.aliothmoon.maafw.privileged.remoteAccessMessage
+import com.aliothmoon.maafw.privileged.remoteAccessMessageOrNull
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.remote.AgentRuntimeDescriptor
 import com.aliothmoon.maafw.remote.AgentRuntimeEntry
@@ -294,6 +298,9 @@ class MaaFrameworkRunnerPort(
 
         return withContext(MaaDispatchers.IO) {
             try {
+                connectFailure()?.let { (reason, error) ->
+                    return@withContext failPreparation(reason, executionId, error)
+                }
                 val rejection = launchOnService(plan, executionId)
                 if (rejection != null) return@withContext failPreparation(rejection, executionId)
                 // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
@@ -321,7 +328,8 @@ class MaaFrameworkRunnerPort(
             } catch (throwable: Throwable) {
                 Timber.e(throwable, "Failed to start run")
                 failPreparation(
-                    uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
+                    throwable.remoteAccessMessageOrNull()
+                        ?: uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
                     executionId,
                     error = throwable,
                 )
@@ -349,9 +357,18 @@ class MaaFrameworkRunnerPort(
     }
 
     /**
+     * 先连上再投递：连不上时 useService 抛出来的只剩一句英文 message，当不了文案
+     * connect 会先刷新授权、必要时发起授权请求，后端换了也会重新绑定
+     */
+    private suspend fun connectFailure(): Pair<UiText, Throwable?>? = when (val result = servicePort.connect()) {
+        ServiceConnectResult.Connected -> null
+        is ServiceConnectResult.NotReady -> remoteAccessMessage(result.backend, result.failure) to null
+        is ServiceConnectResult.Failed -> result.message() to result.error
+    }
+
+    /**
      * 返回 null 表示已受理，否则返回拒绝原因
-     * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
-     * 后端换了也会重新绑定
+     * 前面已经 connect 过，这里的 useService 只是取现成连接；中途断了照常抛
      */
     private suspend fun launchOnService(plan: RunPlan, executionId: String): UiText? {
         val piRoot = installer.installedDir()
