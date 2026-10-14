@@ -45,7 +45,7 @@ class DiscordProvider(
         return runCatching {
             httpClient.postForm(
                 url = "https://discord.com/api/v9/channels/$channelId/messages",
-                params = mapOf("content" to "$title\n$content"),
+                params = mapOf("content" to "$title\n$content".fitChars(MAX_CONTENT_LENGTH)),
                 headers = discordHeaders(botToken),
             ).use { response ->
                 if (response.isSuccessful) {
@@ -107,4 +107,9 @@ class DiscordProvider(
 
     @Serializable
     private data class DiscordCreateChannelResponse(val id: String? = null)
+
+    private companion object {
+        /** content 上限，超了接口回 400 */
+        const val MAX_CONTENT_LENGTH = 2000
+    }
 }

@@ -30,7 +30,7 @@ class BarkProvider(
         // 自建服务可能挂在子路径上，用 resolve 而不是拼串：末尾没有斜杠时 resolve 会吃掉最后一段
         val url = URI.create(barkServer.trimEnd('/') + "/").resolve("push").toString()
         val body = providerJson.encodeToString(
-            BarkRequest(title = title, body = content, deviceKey = sendKey),
+            BarkRequest(title = title, body = content.fitUtf8(MAX_BODY_BYTES), deviceKey = sendKey),
         )
 
         return runCatching {
@@ -64,4 +64,9 @@ class BarkProvider(
 
     @Serializable
     private data class BarkResponse(val code: Int = -1)
+
+    private companion object {
+        /** APNs 整个载荷上限 4096 字节，超了 bark-server 回 500 PayloadTooLarge；标题与转义同在载荷里，正文只给 3000 */
+        const val MAX_BODY_BYTES = 3000
+    }
 }

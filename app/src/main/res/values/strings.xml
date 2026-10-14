@@ -843,6 +843,7 @@
     <!-- 推送失败原因；由各渠道产出，展示在测试反馈里 -->
     <string name="notification_err_network">网络请求失败</string>
     <string name="notification_err_http_status">服务端返回状态码 %1$d</string>
+    <string name="notification_err_rejected">服务端拒绝：%1$s</string>
     <string name="notification_err_serverchan_key_empty">Server 酱 Send Key 未填写</string>
     <string name="notification_err_serverchan_sctp_fmt">Server 酱 sctp 开头的 Send Key 格式不对</string>
     <string name="notification_err_telegram_token_empty">Telegram Bot Token 未填写</string>

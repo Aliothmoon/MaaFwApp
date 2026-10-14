@@ -27,7 +27,7 @@ class DiscordWebhookProvider(
                 uiTextOf(R.string.notification_err_discord_webhook_empty),
             )
         val body = providerJson.encodeToString(
-            DiscordWebhookRequest(content = "$title\n$content"),
+            DiscordWebhookRequest(content = "$title\n$content".fitChars(MAX_CONTENT_LENGTH)),
         )
 
         return runCatching {
@@ -67,4 +67,9 @@ class DiscordWebhookProvider(
         val message: String? = null,
         val code: Int? = null,
     )
+
+    private companion object {
+        /** content 上限，超了接口回 400 */
+        const val MAX_CONTENT_LENGTH = 2000
+    }
 }

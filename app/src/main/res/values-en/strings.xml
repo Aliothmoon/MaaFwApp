@@ -855,6 +855,7 @@
     <!-- Push failure reasons, produced by each channel and shown in the test feedback -->
     <string name="notification_err_network">Network request failed</string>
     <string name="notification_err_http_status">Server returned status %1$d</string>
+    <string name="notification_err_rejected">Rejected by the server: %1$s</string>
     <string name="notification_err_serverchan_key_empty">ServerChan Send Key is empty</string>
     <string name="notification_err_serverchan_sctp_fmt">ServerChan sctp Send Key has the wrong format</string>
     <string name="notification_err_telegram_token_empty">Telegram Bot Token is empty</string>
