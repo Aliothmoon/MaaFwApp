@@ -548,6 +548,10 @@
     <string name="run_log_task_starting">任务开始: %1$s</string>
     <string name="run_log_task_succeeded">任务完成: %1$s</string>
     <string name="run_log_task_failed">任务失败: %1$s</string>
+    <string name="run_log_task_elapsed">%1$s（用时 %2$s）</string>
+    <string name="run_log_elapsed_hms">%1$d 小时 %2$d 分 %3$d 秒</string>
+    <string name="run_log_elapsed_ms">%1$d 分 %2$d 秒</string>
+    <string name="run_log_elapsed_s">%1$d 秒</string>
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
     <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)</string>
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>

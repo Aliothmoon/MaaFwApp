@@ -557,6 +557,10 @@
     <string name="run_log_task_starting">Task started: %1$s</string>
     <string name="run_log_task_succeeded">Task completed: %1$s</string>
     <string name="run_log_task_failed">Task failed: %1$s</string>
+    <string name="run_log_task_elapsed">%1$s (took %2$s)</string>
+    <string name="run_log_elapsed_hms">%1$dh %2$dm %3$ds</string>
+    <string name="run_log_elapsed_ms">%1$dm %2$ds</string>
+    <string name="run_log_elapsed_s">%1$ds</string>
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
     <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s).</string>
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
