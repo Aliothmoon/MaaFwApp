@@ -671,7 +671,8 @@ fun MaaToneBadge(
                 vertical = MaaDesignTokens.Spacing.xxs,
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        // 调用方定宽（列表里逐条对齐）时居中；自适应宽度没有多余空间，不受影响
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs, Alignment.CenterHorizontally),
     ) {
         if (icon != null) {
             Icon(

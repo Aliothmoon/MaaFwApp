@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -28,7 +29,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.asString
@@ -95,6 +99,7 @@ fun ScheduleTriggerLogScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            val badgeWidth = rememberResultBadgeWidth()
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize(),
@@ -108,6 +113,7 @@ fun ScheduleTriggerLogScreen(
                         ?.takeUnless { it == ScheduleFixAction.EDIT_RULE && entry.strategyId !in ruleIds }
                     TriggerLogRow(
                         entry = entry,
+                        badgeWidth = badgeWidth,
                         onDelete = { viewModel.onIntent(ScheduleIntent.DeleteTriggerLogEntry(entry.stableId)) },
                         onFix = fix?.let { { onFix(it, entry) } },
                     )
@@ -118,8 +124,26 @@ fun ScheduleTriggerLogScreen(
     }
 }
 
+/** 结果徽章逐条等宽才对得齐，按当前语言下最长的那个量；内边距与 [MaaToneBadge] 一致 */
 @Composable
-private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit, onFix: (() -> Unit)?) {
+private fun rememberResultBadgeWidth(): Dp {
+    val labels = TriggerResult.entries.map { it.asUiText().asString() }
+    val style = MaterialTheme.typography.labelSmall
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(labels, style, density) {
+        val text = with(density) { labels.maxOf { measurer.measure(it, style, maxLines = 1).size.width }.toDp() }
+        text + MaaDesignTokens.Spacing.sm * 2
+    }
+}
+
+@Composable
+private fun TriggerLogRow(
+    entry: TriggerLogEntry,
+    badgeWidth: Dp,
+    onDelete: () -> Unit,
+    onFix: (() -> Unit)?,
+) {
     MaaCardSurface(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -143,6 +167,7 @@ private fun TriggerLogRow(entry: TriggerLogEntry, onDelete: () -> Unit, onFix: (
                         TriggerResult.STARTED, TriggerResult.TRIGGERED -> MaaTheme.palette.success
                         else -> MaaTheme.palette.warning
                     },
+                    modifier = Modifier.width(badgeWidth),
                 )
                 MaaIconButton(onClick = onDelete) {
                     Icon(
