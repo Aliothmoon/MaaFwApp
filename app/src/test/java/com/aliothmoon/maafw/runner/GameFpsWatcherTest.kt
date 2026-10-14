@@ -56,9 +56,10 @@ class GameFpsWatcherTest {
         val watcher = GameFpsWatcher(object : GameFpsReader {
             override suspend fun readGameFps(): Float? = 25f
         }, journal, backgroundScope)
+        val advisor = GameFpsAdvisor()
 
-        repeat(15) { watcher.pollOnce(EXECUTION_ID) }
-        repeat(5) { watcher.pollOnce(EXECUTION_ID) }
+        repeat(15) { watcher.pollOnce(EXECUTION_ID, advisor) }
+        repeat(5) { watcher.pollOnce(EXECUTION_ID, advisor) }
 
         assertEquals(1, journal.notes.size)
         assertEquals(RunNote.Error, journal.notes.single().first)
@@ -70,8 +71,9 @@ class GameFpsWatcherTest {
         val watcher = GameFpsWatcher(object : GameFpsReader {
             override suspend fun readGameFps(): Float? = 40f
         }, journal, backgroundScope)
+        val advisor = GameFpsAdvisor()
 
-        repeat(15) { watcher.pollOnce(EXECUTION_ID) }
+        repeat(15) { watcher.pollOnce(EXECUTION_ID, advisor) }
 
         assertEquals(listOf(RunNote.Warning), journal.notes.map { it.first })
     }
@@ -82,12 +84,47 @@ class GameFpsWatcherTest {
         val watcher = GameFpsWatcher(object : GameFpsReader {
             override suspend fun readGameFps(): Float? = null
         }, journal, backgroundScope)
+        val advisor = GameFpsAdvisor()
 
         repeat(GameFpsAdvisor.DEFAULT_WINDOW_SIZE + GameFpsAdvisor.DEFAULT_MAX_IDLE_STREAK) {
-            watcher.pollOnce(EXECUTION_ID)
+            watcher.pollOnce(EXECUTION_ID, advisor)
         }
 
         assertNull(watcher.fps.value)
         assertEquals(emptyList<Pair<RunNote, UiText>>(), journal.notes)
+    }
+
+    /** 每轮自带判定器：上一轮报过的低帧率，新一轮照样要报 */
+    @Test
+    fun `a restarted round advises again`() = runTest {
+        val journal = RecordingJournal()
+        val watcher = GameFpsWatcher(object : GameFpsReader {
+            override suspend fun readGameFps(): Float? = 25f
+        }, journal, backgroundScope)
+
+        watcher.start(EXECUTION_ID)
+        advanceTimeBy(GameFpsAdvisor.DEFAULT_WINDOW_SIZE * 1_000L + 1)
+        watcher.start("e2")
+        advanceTimeBy(GameFpsAdvisor.DEFAULT_WINDOW_SIZE * 1_000L + 1)
+        watcher.stop()
+
+        assertEquals(2, journal.notes.size)
+    }
+
+    /** binder 读数取消不掉：读的途中被停了，回来的那次不能把旧帧率写回已清空的状态 */
+    @Test
+    fun `a read that lands after stop is dropped`() = runTest {
+        lateinit var watcher: GameFpsWatcher
+        watcher = GameFpsWatcher(object : GameFpsReader {
+            override suspend fun readGameFps(): Float? {
+                watcher.stop()
+                return 60f
+            }
+        }, DiscardingRunJournal, backgroundScope)
+
+        watcher.start(EXECUTION_ID)
+        advanceTimeBy(1_001)
+
+        assertNull(watcher.fps.value)
     }
 }
