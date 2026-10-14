@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.config.passwordPlaintexts
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
+import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.runner.AutoSleepHook
 import com.aliothmoon.maafw.runner.BackgroundModePrecheck
@@ -23,6 +24,7 @@ import com.aliothmoon.maafw.telemetry.TelemetryHook
 import com.aliothmoon.maafw.runner.ForegroundModePrecheck
 import com.aliothmoon.maafw.runner.PrivilegedAccessPrecheck
 import com.aliothmoon.maafw.runner.PrivilegedConnectHook
+import com.aliothmoon.maafw.runner.OverlayClearHook
 import com.aliothmoon.maafw.runner.KeepAliveHook
 import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.NotificationHook
@@ -170,6 +172,8 @@ val runnerModule = module {
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,
+                // 调用时才取：OverlayController 经 SessionViewModel 依赖 RunLauncher，构造期取会成环
+                OverlayClearHook { get<OverlayController>().awaitPanelCleared() },
                 KeepAliveHook(get()),
                 GameFpsHook(get()),
                 DisplayHazardNoticeHook(get(), get()),

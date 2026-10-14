@@ -97,6 +97,20 @@ class EnvironmentHooksTest {
         assertEquals(error, failed.error)
     }
 
+    // ── 前台面板 ────────────────────────────────────────────────────
+
+    /** 后台模式截的是虚拟屏，面板盖不着 */
+    @Test
+    fun `overlay clear only waits in foreground mode`() = runTest {
+        var waited = 0
+        val hook = OverlayClearHook { waited++ }
+
+        assertTrue(hook.engage(context(RunMode.BACKGROUND)) is EngageResult.Skipped)
+        assertEquals(0, waited)
+        assertTrue(hook.engage(context(RunMode.FOREGROUND)) is EngageResult.Skipped)
+        assertEquals(1, waited)
+    }
+
     // ── 亮屏解锁 ────────────────────────────────────────────────────
 
     private fun wakeHook(

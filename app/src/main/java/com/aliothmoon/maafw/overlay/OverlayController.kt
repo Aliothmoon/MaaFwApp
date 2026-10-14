@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentCallbacks
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.SystemClock
 import android.graphics.Color
 import android.view.ViewGroup
 import androidx.compose.runtime.collectAsState
@@ -34,6 +35,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -41,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
@@ -70,6 +73,9 @@ class OverlayController(
 
     private var currentMode: OverlayControlMode = OverlayControlMode.FLOAT_BALL
     private var phaseJob: Job? = null
+
+    @Volatile
+    private var panelHiddenAtMs = 0L
     private var panelLayout: Pair<Int, Int>? = null
 
     private val configCallback = object : ComponentCallbacks {
@@ -309,9 +315,29 @@ class OverlayController(
         FloatingX.controlOrNull(PANEL_TAG)?.show()
     }
 
+    /** 主线程调用 */
     private fun hidePanel() {
-        FloatingX.controlOrNull(PANEL_TAG)?.hide()
+        val control = FloatingX.controlOrNull(PANEL_TAG)
+        if (control?.isShow() == true) {
+            control.hide()
+            panelHiddenAtMs = SystemClock.uptimeMillis()
+        }
         viewModelOwner.stop()
+    }
+
+    /**
+     * 前台模式投递前收干净面板：面板盖在主屏上，Runner 一开跑就截首帧，面板还在会被当成目标应用画面
+     *
+     * 进 busy 时 [onPhaseChanged] 也会收，但那是受理之后、经状态流异步到的，赶不上
+     */
+    suspend fun awaitPanelCleared() {
+        if (!_isActive.value) return
+        val hiddenAt = withContext(Dispatchers.Main) {
+            hidePanel()
+            panelHiddenAtMs
+        }
+        val remaining = PANEL_CLEAR_SETTLE_MS - (SystemClock.uptimeMillis() - hiddenAt)
+        if (remaining > 0) delay(remaining)
     }
 
     private fun showBall() = FloatingX.controlOrNull(BALL_TAG)?.show()
@@ -380,6 +406,9 @@ class OverlayController(
 
     private companion object {
         const val PANEL_TAG = "maafw_overlay_panel"
+
+        /** 窗口撤掉到合成进屏幕、再进截图要几帧，实测（MaaMeow）主线程忙时约 150ms */
+        private const val PANEL_CLEAR_SETTLE_MS = 300L
         const val BALL_TAG = "maafw_overlay_ball"
     }
 }

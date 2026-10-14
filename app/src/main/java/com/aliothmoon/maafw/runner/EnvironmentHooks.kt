@@ -99,6 +99,9 @@ internal object HookOrder {
     const val CLOSE_APP = 30
     const val COUNTDOWN = 40
 
+    /** 紧挨投递：倒计时期间用户还可能点开面板 */
+    const val OVERLAY_CLEAR = 45
+
     /** 只是挂一个监听，排在最后，收尾时最先摘掉 */
     const val WATCHDOG_NOTICE = 50
 
