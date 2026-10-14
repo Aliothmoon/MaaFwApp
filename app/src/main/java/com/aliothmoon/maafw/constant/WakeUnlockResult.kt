@@ -4,6 +4,9 @@ object WakeUnlockResult {
     /** 只在 app 侧出现：特权进程没连上或调用抛了 */
     const val IPC_FAILED = -1
 
+    /** 只在 app 侧出现：有任务在跑，自测与录制会锁屏打断它 */
+    const val TASK_RUNNING = -2
+
     const val OK = 0
     const val WAKE_FAILED = 1
     const val CREDENTIAL_REQUIRED = 2

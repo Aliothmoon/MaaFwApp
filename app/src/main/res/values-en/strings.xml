@@ -903,6 +903,7 @@
     <string name="wake_result_unsupported">Not supported on this system</string>
     <string name="wake_result_lock_failed">Could not enter lock screen</string>
     <string name="wake_result_ipc_failed">Elevated service not connected</string>
+    <string name="wake_result_task_running">A task is running. Stop it before testing or recording</string>
     <string name="wake_result_unknown">Unlock failed (code %1$d)</string>
     <string name="wake_result_gesture_empty">No unlock gesture recorded yet</string>
     <string name="wake_result_gesture_screen_mismatch">Screen orientation or resolution differs from the recording; please record again</string>
