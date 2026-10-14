@@ -339,7 +339,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         StaleFrameGuard.blankIfVacant()
         val started = runner.start(runPlanJson)
         if (started) {
-            AppWatchdog.startWatching()
+            AppWatchdog.startWatching(runner::isRunning)
             StaleFrameGuard.start(runner::isRunning)
         }
         return started
