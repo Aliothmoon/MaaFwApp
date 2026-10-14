@@ -557,6 +557,7 @@ fun AppRoot(
                         previewContent = previewContent.takeUnless { previewFullscreen },
                         // settledPage 只在滑动落定后翻页，手势中途弹回去仍是旧页——组合≠可见
                         isActivePage = pagerState.settledPage == page,
+                        backEnabled = pagerState.settledPage == page && !onSubPage,
                         pipOnHome = settingsState.pipOnHome,
                         runLog = { runLogState.value },
                         onEnterFullscreen = { previewFullscreen = true },

@@ -24,10 +24,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.runner.DisplayResolution
 import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
@@ -48,6 +50,9 @@ import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 import com.aliothmoon.maafw.ui.pip.PipController
 import com.aliothmoon.maafw.ui.pip.PipHost
 import com.aliothmoon.maafw.ui.pip.PipRequest
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * [previewContent] 由 AppRoot 创建并持有：全屏宿主必须在 pager 之外才能盖住底部 tab 栏，
@@ -61,6 +66,8 @@ fun TasksScreen(
     previewContent: (@Composable () -> Unit)?,
     /** 用户停留的页是否是本页；画中画只在该页武装（pager 会预组合相邻页，组合≠可见） */
     isActivePage: Boolean,
+    /** 本页的面板该不该接返回键：除了停在本页，还得没有二级页盖在上面 */
+    backEnabled: Boolean,
     pipOnHome: Boolean,
     /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
     runLog: () -> RunLogSnapshot,
@@ -102,6 +109,7 @@ fun TasksScreen(
                 previewSurfaceReady = previewSurfaceReady,
                 previewContent = previewContent,
                 isActivePage = isActivePage,
+                backEnabled = backEnabled,
                 pipOnHome = pipOnHome,
                 runLog = runLog,
                 onEnterFullscreen = onEnterFullscreen,
@@ -118,6 +126,7 @@ private fun TasksContent(
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
     isActivePage: Boolean,
+    backEnabled: Boolean,
     pipOnHome: Boolean,
     runLog: () -> RunLogSnapshot,
     onEnterFullscreen: () -> Unit,
@@ -140,7 +149,8 @@ private fun TasksContent(
     val context = LocalContext.current
     val pipHost = context as? PipHost
     val previewResolution = state.previewResolution
-    var previewBounds by remember { mutableStateOf<Rect?>(null) }
+    // 坐标只在协程里读：预览随主导航滑动时它逐帧在变，进了组合就是逐帧整页重组 + 跨进程设参数
+    val previewBounds = remember { mutableStateOf<Rect?>(null) }
     val pipEligible = pipOnHome &&
             isActivePage &&
             previewContent != null &&
@@ -150,17 +160,32 @@ private fun TasksContent(
             previewSurfaceReady &&
             pipHost != null &&
             PipController.isSupported(context)
-    DisposableEffect(pipHost, pipEligible, previewResolution, previewBounds) {
+    val currentEligible by rememberUpdatedState(pipEligible)
+    val currentResolution by rememberUpdatedState(previewResolution)
+    LaunchedEffect(pipHost) {
+        val host = pipHost ?: return@LaunchedEffect
+        val activity = host as? android.app.Activity ?: return@LaunchedEffect
+        var resolution: DisplayResolution? = null
+        var armedEligible: Boolean? = null
         fun arm(enabled: Boolean, sourceRect: Rect?) {
-            val host = pipHost ?: return
-            val activity = host as? android.app.Activity ?: return
-            val resolution = previewResolution ?: return
-            val request = PipRequest(resolution, sourceRect)
+            val res = resolution ?: return
+            val request = PipRequest(res, sourceRect)
             host.pipRequest = if (enabled) request else null
             PipController.updateParams(activity, enabled, request)
         }
-        arm(pipEligible, previewBounds)
-        onDispose { arm(enabled = false, sourceRect = null) }
+        try {
+            snapshotFlow {
+                Triple(currentEligible, currentResolution, if (currentEligible) previewBounds.value else null)
+            }.distinctUntilChanged().collectLatest { (eligible, res, bounds) ->
+                // 只是坐标在动（主导航滑到一半）就等它停稳再设；开跑、停下这类变化立刻生效
+                if (eligible && armedEligible == true && res == resolution) delay(BOUNDS_SETTLE_MS)
+                resolution = res
+                arm(eligible, bounds)
+                armedEligible = eligible
+            }
+        } finally {
+            arm(enabled = false, sourceRect = null)
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -193,7 +218,7 @@ private fun TasksContent(
                             .fillMaxWidth()
                             .weight(3f),
                         // 小窗里这张卡缩成了巴掌大，别拿它的坐标覆盖 sourceRectHint
-                        onBoundsChanged = { if (!pipActive) previewBounds = it },
+                        onBoundsChanged = { if (!pipActive) previewBounds.value = it },
                     )
                     TaskWorkspace(
                         state = state,
@@ -201,6 +226,7 @@ private fun TasksContent(
                         onExportLogs = onExportLogs,
                         onIntent = onIntent,
                         showLogToggle = true,
+                        backEnabled = backEnabled,
                         modifier = Modifier.weight(7f),
                     )
                 }
@@ -214,8 +240,8 @@ private fun TasksContent(
                 )
             }
         }
+        BackHandler(enabled = showQuickOptions && backEnabled) { showQuickOptions = false }
         if (showQuickOptions) {
-            BackHandler { showQuickOptions = false }
             TasksQuickOptionsPanel(
                 state = state,
                 onIntent = onIntent,
@@ -224,3 +250,6 @@ private fun TasksContent(
         }
     }
 }
+
+/** 主导航滑动时预览坐标逐帧在变；停稳这么久才把它设给系统 */
+private const val BOUNDS_SETTLE_MS = 150L
