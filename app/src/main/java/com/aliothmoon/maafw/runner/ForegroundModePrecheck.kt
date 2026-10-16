@@ -14,7 +14,7 @@ object ForegroundModePrecheck : RunPrecheck {
 
     override suspend fun evaluate(ctx: RunContext): Verdict =
         if (ctx.runMode == RunMode.FOREGROUND && ctx.trigger is RunTrigger.Schedule) {
-            Verdict.Block(uiTextOf(R.string.runner_foreground_blocked))
+            Verdict.Block(uiTextOf(R.string.runner_foreground_schedule_blocked))
         } else {
             Verdict.Pass
         }

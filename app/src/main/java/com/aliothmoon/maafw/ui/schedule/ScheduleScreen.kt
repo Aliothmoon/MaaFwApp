@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.schedule.ScheduleHealthIssue
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleRow
@@ -38,6 +39,7 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
+import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaCardSurface
 import com.aliothmoon.maafw.ui.components.MaaEmptyState
 import com.aliothmoon.maafw.ui.components.MaaSwitch
@@ -134,6 +136,11 @@ fun ScheduleScreen(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
             // 有没有规则都进列表：五六项加厂商提示在矮屏 / 横屏上超出一屏，放列表外就被截掉
+            if (state.runMode == RunMode.FOREGROUND) {
+                item(key = "foreground") {
+                    ForegroundModeCard()
+                }
+            }
             if (state.healthIssues.isNotEmpty()) {
                 item(key = "health") {
                     ScheduleHealthCard(
@@ -167,6 +174,20 @@ fun ScheduleScreen(
         }
     }
 
+}
+
+@Composable
+private fun ForegroundModeCard(modifier: Modifier = Modifier) {
+    MaaCard(
+        modifier = modifier,
+        title = stringResource(R.string.schedule_foreground_reminder_title),
+    ) {
+        Text(
+            text = stringResource(R.string.schedule_foreground_reminder_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable
