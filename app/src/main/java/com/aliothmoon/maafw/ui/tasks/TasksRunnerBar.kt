@@ -220,6 +220,19 @@ internal fun TasksQuickOptionsPanel(
                         )
                     }
                 }
+                ActionTile(
+                    icon = Icons.Outlined.Refresh,
+                    label = stringResource(R.string.quick_action_reset_task_list),
+                    accent = MaterialTheme.colorScheme.secondary,
+                    enabled = !state.configurationLocked && state.activeConfiguration != null,
+                    onClick = {
+                        val configurationId = state.activeConfiguration?.id
+                        if (configurationId != null) {
+                            onDismiss()
+                            onIntent(SessionIntent.ResetTaskList(configurationId))
+                        }
+                    },
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
