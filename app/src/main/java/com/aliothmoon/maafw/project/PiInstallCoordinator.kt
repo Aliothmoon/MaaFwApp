@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import androidx.tracing.trace
+import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
 
 /** PI 解包的可观测状态；除 [Unpacking] 外几档都是一闪而过，留着是为了状态机完整 */
@@ -31,7 +32,8 @@ sealed interface PiInstallState {
 
     data object Ready : PiInstallState
 
-    data class Failed(val reason: UiText) : PiInstallState
+    /** [message] 是弹窗正文全文，处理建议按失败类型各自带上 */
+    data class Failed(val message: UiText) : PiInstallState
 }
 
 /**
@@ -86,9 +88,17 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
             // 作用域被取消不是解包失败，状态留在原处交给下一次
             throw e
         } catch (e: Exception) {
-            _state.value = PiInstallState.Failed(uiTextOf(R.string.pi_install_error, e.message.orEmpty()))
+            Timber.e(e, "PI install failed")
+            _state.value = PiInstallState.Failed(failureMessage(e))
             false
         }
+    }
+
+    /** 包坏了重试没用，得让人换包；读归档出错也不是存储空间的事，只有其余失败才让人去查空间 */
+    private fun failureMessage(e: Exception): UiText = when {
+        e is PiArchiveException && e.corrupt -> uiTextOf(R.string.pi_install_failed_corrupt)
+        e is PiArchiveException -> uiTextOf(R.string.pi_install_failed_read, e.message.orEmpty())
+        else -> uiTextOf(R.string.pi_install_failed_message, uiTextOf(R.string.pi_install_error, e.message.orEmpty()))
     }
 
     private companion object {

@@ -4,6 +4,8 @@ import android.content.Context
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.log.LogExportCollector
+import timber.log.Timber
+import java.io.EOFException
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -11,6 +13,9 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.CRC32
+import java.util.zip.ZipException
+import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 /**
@@ -25,10 +30,23 @@ interface PiPackage {
 
     /** PI 归档；解包按 zip 顺序扫一遍。单测内存包没有这份 */
     fun openArchive(): InputStream? = null
+
+    /** 出包时记下的整份归档 CRC；解包出错时拿它判是不是包本身坏了，拿不到就是 null */
+    fun archiveCrc(): Long? = null
 }
 
 /** zip-slip / 缺根文件：解包失败，由 [PiInstallCoordinator] 收成 Failed */
 class PiUnpackException(message: String) : IOException(message)
+
+/**
+ * 读归档时 inflate 出错
+ * [corrupt] 为 true 是重读整份归档、确认 CRC 与 [PiPackage.archiveCrc] 不符：包本身坏了，重解多少次都一样
+ */
+class PiArchiveException(entry: String, done: Int, val corrupt: Boolean, cause: IOException) : IOException(
+    "${if (corrupt) "corrupt PI archive" else "cannot inflate PI archive"} at $entry " +
+        "(after $done entries): ${cause.message}",
+    cause,
+)
 
 /** [PiInstaller.installedDir] 在标记未提交时抛；不解包 */
 class PiNotInstalledException(dir: File) : IllegalStateException("PI is not installed: ${dir.absolutePath}")
@@ -37,6 +55,7 @@ class PiNotInstalledException(dir: File) : IllegalStateException("PI is not inst
 class AssetPiPackage(context: Context) : PiPackage {
 
     private val assets = context.applicationContext.assets
+    private val apkPath = context.applicationContext.applicationInfo.sourceDir
 
     override fun manifest(): List<String> = emptyList()
 
@@ -45,6 +64,14 @@ class AssetPiPackage(context: Context) : PiPackage {
     override fun openArchive(): InputStream? = try {
         assets.open(PI_ARCHIVE_ASSET)
     } catch (_: FileNotFoundException) {
+        null
+    }
+
+    // AssetManager 读 STORED 条目不校验 CRC；签名校验被关掉的机器上，下载残缺的 APK 照样装得上，只剩中央目录这份可对
+    override fun archiveCrc(): Long? = try {
+        ZipFile(apkPath).use { apk -> apk.getEntry("assets/$PI_ARCHIVE_ASSET")?.crc?.takeIf { it >= 0 } }
+    } catch (e: IOException) {
+        Timber.w(e, "Cannot read the PI archive CRC from %s", apkPath)
         null
     }
 }
@@ -194,29 +221,65 @@ class PiInstaller(
         val buffer = ByteArray(COPY_BUFFER_BYTES)
         val roots = linkedSetOf<String>()
         var done = 0
-        while (true) {
-            val zipEntry = zip.nextEntry ?: break
-            if (zipEntry.isDirectory) {
+        // 读条目头时出错则为 null
+        var current: String? = null
+        try {
+            while (true) {
+                current = null
+                val zipEntry = zip.nextEntry ?: break
+                if (zipEntry.isDirectory) {
+                    zip.closeEntry()
+                    continue
+                }
+                val name = normalizeZipName(zipEntry.name)
+                current = name
+                val outFile = File(dest, name)
+                val outCanon = outFile.canonicalFile
+                if (outCanon != destCanon && !outCanon.path.startsWith(destCanon.path + File.separator)) {
+                    throw PiUnpackException("illegal PI archive entry: $name")
+                }
+                // 归档只扫一遍，根级条目名事先拿不到：头一回遇到时把旧的那棵整体删掉
+                val root = rootOf(name)
+                if (roots.add(root)) File(dest, root).deleteRecursively()
+                outFile.parentFile?.mkdirs()
+                outFile.outputStream().use { output -> zip.copyTo(output, buffer) }
                 zip.closeEntry()
-                continue
+                done++
+                onProgress(done, 0, name)
             }
-            val name = normalizeZipName(zipEntry.name)
-            val outFile = File(dest, name)
-            val outCanon = outFile.canonicalFile
-            if (outCanon != destCanon && !outCanon.path.startsWith(destCanon.path + File.separator)) {
-                throw PiUnpackException("illegal PI archive entry: $name")
-            }
-            // 归档只扫一遍，根级条目名事先拿不到：头一回遇到时把旧的那棵整体删掉
-            val root = rootOf(name)
-            if (roots.add(root)) File(dest, root).deleteRecursively()
-            outFile.parentFile?.mkdirs()
-            outFile.outputStream().use { output -> zip.copyTo(output, buffer) }
-            zip.closeEntry()
-            done++
-            onProgress(done, 0, name)
+        } catch (e: ZipException) {
+            throw archiveFailure(current, done, e)
+        } catch (e: EOFException) {
+            throw archiveFailure(current, done, e)
         }
         if (done > 0) requireInterfaceJson(dest)
         return roots
+    }
+
+    /** inflate 出错分不清是包坏了还是这一遍没读对，只能把整份归档重读一遍对 CRC；正常解包不多读这一遍 */
+    private fun archiveFailure(entry: String?, done: Int, cause: IOException): PiArchiveException =
+        PiArchiveException(entry ?: "entry header", done, isArchiveCorrupt(), cause)
+
+    private fun isArchiveCorrupt(): Boolean {
+        val expected = pkg.archiveCrc() ?: return false
+        val actual = try {
+            pkg.openArchive()?.use(::crc32Of) ?: return false
+        } catch (e: IOException) {
+            Timber.w(e, "Cannot checksum the PI archive")
+            return false
+        }
+        return actual != expected
+    }
+
+    private fun crc32Of(input: InputStream): Long {
+        val crc = CRC32()
+        val buffer = ByteArray(COPY_BUFFER_BYTES)
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            crc.update(buffer, 0, read)
+        }
+        return crc.value
     }
 
     private fun rootOf(entry: String): String = entry.substringBefore('/')

@@ -738,6 +738,8 @@
     <string name="pi_install_failed_message">%1$s\n\nCheck that there is enough free space, then retry.</string>
     <string name="pi_install_retry">Retry</string>
     <string name="pi_install_error">Extraction failed: %1$s</string>
+    <string name="pi_install_failed_corrupt">The installation package is damaged: the bundled project resources do not match the checksum recorded in the package, so retrying will not help.\n\nThis usually means the download was incomplete. Download the package again and install it over the current one.</string>
+    <string name="pi_install_failed_read">Extraction failed: %1$s\n\nRetry. If it keeps failing, download the package again and install it over the current one.</string>
 
     <string name="settings_section_pi">Project resources</string>
     <string name="pi_reinstall_title">Extract resources again</string>

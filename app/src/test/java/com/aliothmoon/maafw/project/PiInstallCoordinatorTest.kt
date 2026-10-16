@@ -1,7 +1,9 @@
 package com.aliothmoon.maafw.project
 
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.i18n.UiText
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
@@ -106,6 +108,24 @@ class PiInstallCoordinatorTest {
         assertFalse(coordinator.ensureInstalled())
 
         assertTrue(coordinator.state.value is PiInstallState.Failed)
+        assertEquals(R.string.pi_install_failed_message, failedMessageRes(coordinator))
+    }
+
+    /** 包坏了重试没用，弹窗得让人重新下载，而不是去查存储空间 */
+    @Test
+    fun `安装包损坏时提示重新下载`() = runTest(dispatcher) {
+        val (intact, damaged) = zeroFilledArchive(mapOf("resource/bulky.txt" to bulkyText(), "interface.json" to "{}"))
+        val pkg = ZipPiPackage(damaged, archiveCrc = crc32Of(intact))
+        val coordinator = coordinatorFor(pkg, temp.newFolder("external"))
+
+        assertFalse(coordinator.ensureInstalled())
+
+        assertEquals(R.string.pi_install_failed_corrupt, failedMessageRes(coordinator))
+    }
+
+    private fun failedMessageRes(coordinator: PiInstallCoordinator): Int {
+        val failed = coordinator.state.value as PiInstallState.Failed
+        return (failed.message as UiText.Resource).resId
     }
 
     /** 弹窗上的「重试」走的就是这条；Failed 不是终点 */
