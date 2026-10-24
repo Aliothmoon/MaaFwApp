@@ -95,6 +95,8 @@ class RunContext(
     /** 本轮运行日志；单测可传 [DiscardingRunJournal] */
     val journal: RunJournal,
     val executionId: String = UUID.randomUUID().toString(),
+    /** 本轮归属的实例号；默认 0 兼容老调用点 */
+    val slot: Int = 0,
 ) {
     /**
      * 本轮被时长上限停下；结局与手动停同为 [ExecutionResult.Cancelled]，收尾靠它把两者分开

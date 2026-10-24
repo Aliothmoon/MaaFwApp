@@ -298,14 +298,6 @@ fun AppRoot(
         // 健康卡与保存后引导的修复入口：授权动作仍走 Session 那条路（先代授、不成再跳系统页）
         val fixScheduleIssue: (ScheduleHealthIssue) -> Unit = { issue ->
             when (issue) {
-                // Shizuku 没在跑只能去它自己的界面启动；Root 不可用多半是 su 还没给，代授一次
-                ScheduleHealthIssue.BACKEND_DOWN -> viewModel.onIntent(
-                    if (scheduleState.backend == RemoteBackend.SHIZUKU) {
-                        SessionIntent.OpenShizuku
-                    } else {
-                        SessionIntent.RequestRemoteAccess
-                    },
-                )
                 ScheduleHealthIssue.BACKEND -> viewModel.onIntent(SessionIntent.RequestRemoteAccess)
                 ScheduleHealthIssue.BATTERY -> viewModel.onIntent(
                     SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
@@ -531,6 +523,8 @@ fun AppRoot(
         ) { padding ->
             HorizontalPager(
                 state = pagerState,
+                // 禁用左右滑动切页：只保留底部导航点击切换，避免误触
+                userScrollEnabled = false,
                 // 不预组合的话，整页的首次组合与测量全落在切页动画的第一帧里：
                 // 实测任务页那一帧 193ms（7 个 TaskRow 逐个组合 45ms + measureAndLayout 31ms）
                 beyondViewportPageCount = 1,
@@ -557,9 +551,10 @@ fun AppRoot(
                         previewContent = previewContent.takeUnless { previewFullscreen },
                         // settledPage 只在滑动落定后翻页，手势中途弹回去仍是旧页——组合≠可见
                         isActivePage = pagerState.settledPage == page,
-                        backEnabled = pagerState.settledPage == page && !onSubPage,
                         pipOnHome = settingsState.pipOnHome,
                         runLog = { runLogState.value },
+                        // 给流而不是值：只有「全部实例」那一屏会订阅它，别的页不必跟着日志重组
+                        instanceLogs = viewModel.instanceLogs,
                         onEnterFullscreen = { previewFullscreen = true },
                         onExportLogs = { exportSheetVisible = true },
                         onIntent = viewModel::onIntent,
@@ -769,7 +764,12 @@ fun AppRoot(
                 confirmText = stringResource(R.string.precheck_start_anyway),
                 onConfirm = {
                     confirmStartDialog = null
-                    viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
+                    val batch = confirm.slots
+                    if (batch != null) {
+                        viewModel.onIntent(SessionIntent.StartMultiple(batch, acknowledged = confirm.acknowledged))
+                    } else {
+                        viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
+                    }
                 },
                 dismissText = stringResource(R.string.dialog_cancel),
                 onDismissRequest = { confirmStartDialog = null },

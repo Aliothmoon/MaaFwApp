@@ -212,12 +212,21 @@ object RunPlanBuilder {
             if (!option.applicability.matches(controllerName, resourceName)) return
             when (option) {
                 is OptionDefinition.Choice -> {
-                    // 存的 case 失效与未设值同样回落，与 Resolver 同源
-                    val case = option.selectedCase(values[name])
-                    if (case == null) {
+                    val value = values[name] as? OptionValue.SingleCase
+                    // 回落与 Resolver 同源，见 OptionDefinition.Choice.effectiveDefaultCase
+                    val selectedName = value?.case ?: option.effectiveDefaultCase
+                    if (selectedName == null) {
                         diagnostics += runtimeError(
                             scopeLabel,
                             DiagnosticMessages.optionUnsetWithoutDefault(name),
+                        )
+                        return
+                    }
+                    val case = option.cases.firstOrNull { it.name == selectedName }
+                    if (case == null) {
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessages.selectedCaseMissing(name, selectedName),
                         )
                         return
                     }
@@ -226,14 +235,22 @@ object RunPlanBuilder {
                 }
 
                 is OptionDefinition.Checkbox -> {
-                    val selected = option.selectedCases(values[name]).toSet()
+                    val value = values[name] as? OptionValue.MultipleCases
+                    val selected = value?.cases?.toSet() ?: option.defaultCases.toSet()
+                    (selected - option.cases.mapTo(mutableSetOf()) { it.name }).forEach {
+                        diagnostics += runtimeError(
+                            scopeLabel,
+                            DiagnosticMessages.selectedCaseMissing(name, it),
+                        )
+                    }
                     // 协议要求不带着不满足上下限的选择启动；PI 更新后收紧了限制，旧配置也在这里拦
-                    if (!option.acceptsCount(selected.size)) {
+                    val selectedCount = option.cases.count { it.name in selected }
+                    if (!option.acceptsCount(selectedCount)) {
                         diagnostics += runtimeError(
                             scopeLabel,
                             DiagnosticMessages.checkboxCountOutOfRange(
                                 name,
-                                selected.size,
+                                selectedCount,
                                 option.minCount,
                                 option.maxCount,
                             ),

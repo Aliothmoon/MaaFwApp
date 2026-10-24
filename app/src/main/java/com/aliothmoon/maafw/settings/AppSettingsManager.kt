@@ -74,6 +74,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                     screenSaverEnabled to AppSettings::screenSaverEnabled,
                     closeAppAfterTask to AppSettings::closeAppAfterTask,
                     touchPreviewEnabled to AppSettings::touchPreviewEnabled,
+                    instancesTwoColumn to AppSettings::instancesTwoColumn,
+                    showInstanceLogs to AppSettings::showInstanceLogs,
                     debugMode to AppSettings::debugMode,
                     saveOnError to AppSettings::saveOnError,
                     themeStyle to AppSettings::themeStyle,
@@ -134,6 +136,12 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private val _touchPreviewEnabled = MutableStateFlow(defaults.touchPreviewEnabled.toBoolean())
     override val touchPreviewEnabled: StateFlow<Boolean> = _touchPreviewEnabled.asStateFlow()
+
+    private val _instancesTwoColumn = MutableStateFlow(defaults.instancesTwoColumn.toBoolean())
+    override val instancesTwoColumn: StateFlow<Boolean> = _instancesTwoColumn.asStateFlow()
+
+    private val _showInstanceLogs = MutableStateFlow(defaults.showInstanceLogs.toBoolean())
+    override val showInstanceLogs: StateFlow<Boolean> = _showInstanceLogs.asStateFlow()
 
     private val _eventNotificationLevel =
         MutableStateFlow(parseEventNotificationLevel(defaults.eventNotificationLevel))
@@ -211,6 +219,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _screenSaverEnabled.value = s.screenSaverEnabled.toBoolean()
                 _closeAppAfterTask.value = s.closeAppAfterTask.toBoolean()
                 _touchPreviewEnabled.value = s.touchPreviewEnabled.toBoolean()
+                _instancesTwoColumn.value = s.instancesTwoColumn.toBoolean()
+                _showInstanceLogs.value = s.showInstanceLogs.toBoolean()
                 _resolutionPreset.value = ResolutionPresets.resolve(s.resolutionPreset)
                 _debugMode.value = s.debugMode.toBoolean()
                 _saveOnError.value = s.saveOnError.toBoolean()
@@ -270,6 +280,14 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setTouchPreviewEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[touchPreviewEnabled] = enabled.toString() }
+    }
+
+    override suspend fun setInstancesTwoColumn(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[instancesTwoColumn] = enabled.toString() }
+    }
+
+    override suspend fun setShowInstanceLogs(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[showInstanceLogs] = enabled.toString() }
     }
 
     override suspend fun setResolutionPreset(preset: ResolutionPreset): Unit = with(AppSettingsSchema) {

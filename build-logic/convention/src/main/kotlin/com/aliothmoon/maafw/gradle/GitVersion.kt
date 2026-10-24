@@ -4,6 +4,21 @@ import org.gradle.api.Project
 import java.io.File
 
 /**
+ * 检查 git 是否可用
+ */
+private fun Project.isGitAvailable(): Boolean {
+    return try {
+        val result = providers.exec {
+            commandLine("git", "--version")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim()
+        result.isNotEmpty()
+    } catch (e: Exception) {
+        false
+    }
+}
+
+/**
  * A standalone checkout versions itself. When this checkout is a submodule, walk through any
  * nested superprojects and version from the outermost repository instead.
  */
@@ -14,6 +29,12 @@ private fun Project.versionGitWorkingDir(): File {
     (extras.properties[GIT_WORKING_DIR_KEY] as? File)?.let { return it }
 
     var workingDir = rootProject.projectDir
+    
+    if (!isGitAvailable()) {
+        extras.set(GIT_WORKING_DIR_KEY, workingDir)
+        return workingDir
+    }
+    
     while (true) {
         val superproject = providers.exec {
             workingDir(workingDir)
@@ -31,21 +52,37 @@ private const val GIT_WORKING_DIR_KEY = "maafw.gitWorkingDir"
 
 /** versionCode counts commits in the selected version repo; the build fails without a git checkout */
 internal fun Project.gitVersionCode(): Int {
+    if (!isGitAvailable()) {
+        return 1
+    }
     val gitWorkingDir = versionGitWorkingDir()
-    return providers.exec {
-        workingDir(gitWorkingDir)
-        commandLine("git", "rev-list", "--count", "HEAD")
-    }.standardOutput.asText.get().trim().toInt()
+    return try {
+        providers.exec {
+            workingDir(gitWorkingDir)
+            commandLine("git", "rev-list", "--count", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.get().trim().toIntOrNull() ?: 1
+    } catch (e: Exception) {
+        1
+    }
 }
 
-internal fun Project.gitVersionName(workingDir: File): String =
-    versionNameFromDescribe(
-        providers.exec {
-            workingDir(workingDir)
-            commandLine("git", "describe", "--tags", "--always")
-            isIgnoreExitValue = true
-        }.standardOutput.asText.get().trim(),
-    )
+internal fun Project.gitVersionName(workingDir: File): String {
+    if (!isGitAvailable()) {
+        return "1.0.0"
+    }
+    return try {
+        versionNameFromDescribe(
+            providers.exec {
+                workingDir(workingDir)
+                commandLine("git", "describe", "--tags", "--always")
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().trim(),
+        )
+    } catch (e: Exception) {
+        "1.0.0"
+    }
+}
 
 /**
  * A tag on HEAD gives x.y.z, keeping any prerelease suffix. Past a release tag, patch is bumped by

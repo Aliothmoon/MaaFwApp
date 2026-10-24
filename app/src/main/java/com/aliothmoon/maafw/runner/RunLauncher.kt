@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.runner
 
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.config.ActiveSlotProvider
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -159,17 +160,17 @@ class RunLauncher(
                 is RunPlanResult.Success -> built.plan
             }
 
-            val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal)
+            val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal, slot = ActiveSlotProvider.current)
             runPrechecks(ctx)?.let { return it }
 
-            if (force) preemptRunning()
+            if (force) preemptRunning(ctx.slot)
 
             engage(Anchor.BeforeDispatch, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
                 return RunLaunchResult.Blocked(halt.reason, halt.cause.error)
             }
 
-            when (val command = runnerPort.start(plan, ctx.executionId)) {
+            when (val command = runnerPort.start(plan, ctx.executionId, ctx.slot)) {
                 RunnerCommandResult.Accepted -> Unit
                 is RunnerCommandResult.Rejected -> {
                     finalize(engaged, RunEndReason.NotRun(NotRunCause.Rejected, command.reason, command.error))
@@ -188,7 +189,7 @@ class RunLauncher(
             val pending = engaged.toList()
             engaged.clear()
             val label = logLabel(trigger, configurationId)
-            settling.set(scope.launch { awaitSettledThenFinalize(pending, label) })
+            settling.set(scope.launch { awaitSettledThenFinalize(pending, label, ctx.slot) })
             return RunLaunchResult.Started
         } catch (cancellation: CancellationException) {
             finalize(engaged, RunEndReason.NotRun(NotRunCause.Cancelled))
@@ -241,9 +242,9 @@ class RunLauncher(
      * 顺序不能换：先 stop 让 Runner 收敛，再 join 上一轮的收尾协程——反过来会让新一轮的
      * engage 与旧一轮的 release 交错，屏保刚盖上就被上一轮撤掉
      */
-    private suspend fun preemptRunning() {
-        if (!runnerPort.state.value.phase.isBusy) return
-        Timber.i("preempt: aborting the running round")
+    private suspend fun preemptRunning(slot: Int) {
+        if (!runnerPort.stateOfSlot(slot).value.phase.isBusy) return
+        Timber.i("preempt: aborting the running round (slot=%d)", slot)
         runnerPort.stop()
         settling.getAndSet(null)?.join()
     }
@@ -326,9 +327,12 @@ class RunLauncher(
 
     /**
      * 等待任务结束直到
+     *
+     * 钉死在发起那轮的 slot：若用跟随 activeSlot 的 state 等终局，切到下一路启动时
+     * 会立刻读到新路的空闲态，把上一路误判成「无结果结束」。
      */
-    private suspend fun awaitSettledThenFinalize(pending: List<Release>, label: String) {
-        val settled = runnerPort.state.first { !it.phase.isBusy }
+    private suspend fun awaitSettledThenFinalize(pending: List<Release>, label: String, slot: Int) {
+        val settled = runnerPort.stateOfSlot(slot).first { !it.phase.isBusy }
         val result = settled.latestResult ?: run {
             Timber.e("runner became idle without a result, synthesizing Failed")
             ExecutionResult.Failed(uiTextOf(R.string.msg_fail_default))

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,11 +45,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.schedule.CloseAppEffect
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleFieldError
@@ -62,12 +65,14 @@ import com.aliothmoon.maafw.ui.components.CardCollapse
 import com.aliothmoon.maafw.ui.components.CardExpand
 import com.aliothmoon.maafw.ui.components.ExpandableTipContent
 import com.aliothmoon.maafw.ui.components.ExpandableTipIcon
+import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.ITextField
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaTimePickerDialog
+import com.aliothmoon.maafw.ui.tasks.instanceOrdinal
 import java.time.DayOfWeek
 import java.time.format.DateTimeFormatter
 import java.time.Instant
@@ -98,13 +103,28 @@ fun ScheduleEditScreen(
     // 新建时预选当前激活的配置：没有「跟随当前选中」那一档了，总得给个最可能的起点
     val defaultConfigurationId = state.activeConfigurationId
         ?: state.configurations.firstOrNull()?.id.orEmpty()
+    // 新建预选配置属于哪个实例，默认「运行实例」就跟着它，保证一进来实例与配置就一致
+    val defaultOption = state.configurations.firstOrNull { it.id == defaultConfigurationId }
+    val defaultSlot = defaultOption?.sourceSlot
+        ?.takeIf { it in RemoteServiceManager.activeSlots }
+        ?: 0
     val initial: ScheduleStrategy = remember(strategyId, defaultName, defaultConfigurationId, state.rows) {
         if (isNew) {
-            ScheduleStrategy(name = defaultName, runConfigurationId = defaultConfigurationId)
+            ScheduleStrategy(
+                name = defaultName,
+                runConfigurationId = defaultConfigurationId,
+                configurationSourceSlot = defaultOption?.sourceSlot ?: -1,
+                targetSlot = defaultSlot,
+            )
         } else {
             // 列表已展示过这条，VM 里必有；极端情况下找不到（被删）退回新建态
             state.rows.firstOrNull { it.strategy.id == strategyId }?.strategy
-                ?: ScheduleStrategy(name = defaultName, runConfigurationId = defaultConfigurationId)
+                ?: ScheduleStrategy(
+                    name = defaultName,
+                    runConfigurationId = defaultConfigurationId,
+                    configurationSourceSlot = defaultOption?.sourceSlot ?: -1,
+                    targetSlot = defaultSlot,
+                )
         }
     }
 
@@ -199,24 +219,86 @@ fun ScheduleEditScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            // 先选「跑在哪个实例」：选定后下方运行配置只列这一路的配置，避免五个实例的配置全堆在一起。
+            // 实例号有默认值，不单独做必填校验；真正生效时由执行侧兜底提示
+            ScheduleSection(stringResource(R.string.schedule_edit_instance)) {
+                val slots = RemoteServiceManager.activeSlots
+                // 原来指定的那一路被删掉时退回第一路显示：这控件只认一个非空选中项
+                val effectiveSlot = draft.targetSlot.takeIf { it in slots } ?: slots.first()
+                if (slots.size <= 1) {
+                    // 只有一路时没什么可挑的，说清楚会跑在哪儿就够了
+                    Text(
+                        text = stringResource(R.string.schedule_edit_instance_single),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    MaaSingleChoiceFlow<Int>(
+                        options = slots.map { slot ->
+                            slot to stringResource(R.string.quick_instance_label, instanceOrdinal(slot + 1))
+                        },
+                        selected = effectiveSlot,
+                        onSelect = { slot ->
+                            // 切实例时把运行配置对齐到该实例：同 id 的那份在新实例里存在就保留，
+                            // 否则默认选该实例第一个配置；一个都没有则留空，由下方配置区提示
+                            val slotConfigs = state.configurations.filter { it.sourceSlot == slot }
+                            val retained = slotConfigs.firstOrNull {
+                                it.id == draft.runConfigurationId && it.sourceSlot == slot
+                            } ?: slotConfigs.firstOrNull()
+                            draft = draft.copy(
+                                targetSlot = slot,
+                                runConfigurationId = retained?.id.orEmpty(),
+                                configurationSourceSlot = retained?.sourceSlot ?: slot,
+                            )
+                        },
+                    )
+                }
+            }
+
+            // 运行配置：只列「运行实例」选中那一路的配置，不再把五个实例的配置平铺
             ScheduleSection(stringResource(R.string.schedule_edit_configuration)) {
-                if (state.configurations.isEmpty()) {
+                val slots = RemoteServiceManager.activeSlots
+                val effectiveSlot = draft.targetSlot.takeIf { it in slots } ?: slots.first()
+                val slotConfigs = state.configurations.filter { it.sourceSlot == effectiveSlot }
+                if (slotConfigs.isEmpty()) {
                     Text(
                         text = stringResource(R.string.schedule_edit_configuration_none),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    MaaSingleChoiceFlow<String?>(
-                        options = state.configurations.map { it.id to it.name },
-                        selected = draft.runConfigurationId
-                            .takeIf { id -> state.configurations.any { it.id == id } },
-                        onSelect = { id -> draft = draft.copy(runConfigurationId = id.orEmpty()) },
-                    )
-                    // 绑定的那份被删掉时落在这里：选中项为空，保存被 CONFIGURATION 挡住
-                    if (ScheduleFieldError.CONFIGURATION in errors ||
-                        state.configurations.none { it.id == draft.runConfigurationId }
+                    // 选中要同时比「配置所属实例 + 配置id」：多实例下同一份配置可能被复制到多路、
+                    // id 相同，光比 id 会把所有同 id 的都高亮
+                    val selectedConfig = slotConfigs.firstOrNull {
+                        it.id == draft.runConfigurationId && it.sourceSlot == effectiveSlot
+                    }
+                    // 单路内全局互斥，只能选一个
+                    Column(
+                        modifier = Modifier.selectableGroup(),
+                        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                     ) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+                            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+                        ) {
+                            slotConfigs.forEach { config ->
+                                MaaChoiceChip(
+                                    label = config.name,
+                                    selected = selectedConfig?.id == config.id && selectedConfig?.sourceSlot == config.sourceSlot,
+                                    role = Role.RadioButton,
+                                    onClick = {
+                                        draft = draft.copy(
+                                            runConfigurationId = config.id,
+                                            configurationSourceSlot = config.sourceSlot,
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    // 绑定的那份被删掉、或切实例后这一路没有配置：选中项为空，保存被 CONFIGURATION 挡住
+                    if (ScheduleFieldError.CONFIGURATION in errors || selectedConfig == null) {
                         Text(
                             text = stringResource(R.string.schedule_edit_configuration_required),
                             style = MaterialTheme.typography.bodySmall,

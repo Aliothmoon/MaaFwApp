@@ -1,150 +1,239 @@
 package com.aliothmoon.maafw.privileged
-import com.aliothmoon.maafw.MaaDispatchers
 
 import android.content.Context
-import android.os.IBinder
-import android.os.Process
+import android.content.SharedPreferences
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.RemoteService
+import com.aliothmoon.maafw.config.ActiveSlotProvider
 import com.aliothmoon.maafw.domain.RemoteBackend
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import timber.log.Timber
-import java.util.concurrent.TimeoutException
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * 特权服务门面（单路流程的既有入口，同时是多路的总入口）
+ *
+ * 历史实现是「一个进程 + 一个 binder」的单例；多路改造把连接逻辑下沉到
+ * [SlotServiceConnection]，本对象退化为门面，并多了一层「当前操作哪一路」：
+ *
+ * - [serviceState] / [useService] / [serviceOrNull] 等 [PrivilegedServicePort] 成员
+ *   一律按 [activeSlot] 分发。默认仍是 0 号路，所以既有单路代码一行都不用改；
+ * - 切路用 [setActiveSlot]，它只改「UI 现在操作谁」，**不动任何一路正在跑的任务**——
+ *   多开下各路本就各跑各的，切视角不该停别人的活；
+ * - 建过的路号写进 SharedPreferences，下次启动照着把各路重新拉起来（编号留着，
+ *   但进程是新的，必须重新 bind）；
+ * - 多路场景用 [connection] 按路号取用，[allocateSlot] / [releaseSlot] 管路号。
+ *
+ * 每路一个独立服务进程（`pkg:shizuku_service_N`），所以在每路进程内部，
+ * [VirtualDisplayManager] 之类的 object 单例天然等价于「这一路自己的实例」。
+ */
 object RemoteServiceManager : PrivilegedServicePort {
 
-    sealed class ServiceState {
-        data object Disconnected : ServiceState()
-        data object Connecting : ServiceState()
-        data object Died : ServiceState()
-        data class Connected(val service: RemoteService) : ServiceState()
-        data class Error(val exception: Throwable) : ServiceState()
-    }
+    private const val PREFS_NAME = "maafw_multi_instance"
+    private const val KEY_SLOTS = "created_slots"
 
-    // 纯兜底：连接器自带超时先行归因，此处按其最坏时长再放余量
-    private const val CONNECT_TIMEOUT_GRACE_MS = 2_000L
-
-    // 调用方默认等待须晚于兜底：先于连接器超时就只剩裸超时，launcher 日志尾部等根因全被截胡
-    private const val CALLER_WAIT_MARGIN_MS = 1_000L
-
-    // 状态迁移（boundBackend / currentBinder / _state）统一在此锁内完成
-    private val lock = Any()
-
-    private val currentBinder = AtomicReference<IBinder>()
-    private var currentDeathRecipient: BindingDeathRecipient? = null // guarded by lock
-    private val _state = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
-
-    private val timeoutScope = CoroutineScope(MaaDispatchers.Default + SupervisorJob())
-    private val connectAttempt = AtomicInteger(0)
-
-    private val connectors: Map<RemoteBackend, RemoteServiceConnectorBackend> = mapOf(
-        RemoteBackend.SHIZUKU to ShizukuProcessServiceConnector,
-        RemoteBackend.ROOT to RootRemoteServiceConnector
-    )
+    private val connections = ConcurrentHashMap<Int, SlotServiceConnection>()
 
     @Volatile
-    private var boundBackend: RemoteBackend? = null
+    private var appContext: Context? = null
 
-    // 拉起进程时的身份（uid），guarded by lock
-    private var boundIdentity: Int? = null
+    @Volatile
+    private var prefs: SharedPreferences? = null
+
+    // serviceState 要跟着 activeSlot 走，flatMapLatest 需要一个长期作用域
+    private val facadeScope = CoroutineScope(MaaDispatchers.Default + SupervisorJob())
+
+    // 启动时把上次建的路重新拉起来：编号是持久的，进程是新的，bind 得重来
+    private val restoreScope = CoroutineScope(MaaDispatchers.IO + SupervisorJob())
 
     /**
-     * 对外只给不带 binder 的投影：[ServiceState.Connected] 揣着 [RemoteService]，
-     * 漏出这一层就等于把 IPC 句柄发给了 UI
+     * 持久化用的路号集合，独立于 [connections] 维护
+     *
+     * 不能在 connections.computeIfAbsent 里回头去读 connections——那是在同一个 map 上
+     * 的重入操作，ConcurrentHashMap 的契约不允许
      */
-    override val serviceState: StateFlow<PrivilegedServiceState> = _state
-        .map { it.toPrivilegedServiceState() }
-        .stateIn(timeoutScope, SharingStarted.Eagerly, PrivilegedServiceState.Disconnected)
+    private val persistedSlots = ConcurrentHashMap.newKeySet<Int>()
 
-    override val currentBackend: RemoteBackend? get() = boundBackend
+    // ── 当前操作路 ──
 
-    // 携带绑定时的 binder，迟到的死亡通知靠身份比对丢弃
-    private class BindingDeathRecipient(val binder: IBinder) : IBinder.DeathRecipient {
-        override fun binderDied() = onBinderDied(this)
+    private val _activeSlot = MutableStateFlow(ShizukuProcessServiceConnector.PRIMARY_SLOT)
+
+    /** UI 当前正在操作的路号；门面所有成员按它分发 */
+    override val activeSlot: StateFlow<Int> = _activeSlot.asStateFlow()
+
+    /**
+     * 切到某一路。未建立的路拒绝（返回 false），调用方据此提示用户先去设置页新建。
+     * 不做任何停机动作：别的路该跑继续跑
+     */
+    fun setActiveSlot(slot: Int): Boolean {
+        if (!connections.containsKey(slot)) {
+            Timber.w("setActiveSlot(%d) refused: slot not created", slot)
+            return false
+        }
+        _activeSlot.value = slot
+        // 配置层（每路一套配置）读不到 privileged，切路要顺手同步过去
+        ActiveSlotProvider.set(slot)
+        Timber.i("RemoteServiceManager: active slot -> %d", slot)
+        return true
     }
 
-    private val connectorCallbacks = object : RemoteServiceConnectorBackend.Callbacks {
-        override fun onConnected(backend: RemoteBackend, binder: IBinder) {
-            val service: RemoteService
-            synchronized(lock) {
-                if (boundBackend != backend) {
-                    ServiceBootLogger.event("CB_ON_CONNECTED_STALE", "backend=$backend bound=$boundBackend")
-                    Timber.w("Ignoring stale %s connection", backend)
-                    return
-                }
-                ServiceBootLogger.event("CB_ON_CONNECTED", "backend=$backend")
-                clearCurrentBinderLocked()
-                val recipient = BindingDeathRecipient(binder)
-                try {
-                    binder.linkToDeath(recipient, 0)
-                } catch (e: Exception) {
-                    // binder 送达时已死亡
-                    ServiceBootLogger.event("CB_ON_CONNECTED_DEAD", "backend=$backend ${e.message}")
-                    Timber.e(e, "RemoteService binder dead on arrival: %s", backend)
-                    boundBackend = null
-                    _state.value = ServiceState.Error(e)
-                    return
-                }
-                currentBinder.set(binder)
-                currentDeathRecipient = recipient
-                service = RemoteService.Stub.asInterface(binder)
-                _state.value = ServiceState.Connected(service)
-                ServiceBootLogger.event("BINDER_CONNECTED", "backend=$backend linkToDeath ok")
-            }
-            runCatching { service.heartbeat(Process.myPid()) }
-                .onFailure { Timber.w(it, "heartbeat failed") }
-        }
+    /** 门面统一按当前选中路取连接 */
+    private val active: SlotServiceConnection get() = connection(_activeSlot.value)
 
-        override fun onDisconnected(backend: RemoteBackend) {
-            synchronized(lock) {
-                if (boundBackend != backend) {
-                    return
-                }
-                ServiceBootLogger.event("CB_ON_DISCONNECTED", "backend=$backend")
-                Timber.i("RemoteService disconnected: %s", backend)
-                // 被动断开由服务进程死亡触发，Connected 态下收敛为 Died 保证终态确定
-                val wasConnected = _state.value is ServiceState.Connected
-                clearCurrentBinderLocked()
-                boundBackend = null
-                if (wasConnected) {
-                    ServiceBootLogger.event("STATE_DIED")
-                    _state.value = ServiceState.Died
-                } else {
-                    ServiceBootLogger.event("STATE_DISCONNECTED")
-                    _state.value = ServiceState.Disconnected
+    /** 0 号路：初始化与单路底座 */
+    private val primary: SlotServiceConnection
+        get() = connection(ShizukuProcessServiceConnector.PRIMARY_SLOT)
+
+    /** 按路号取连接，不存在则创建（并补上初始化）。多路的路号在这里被记进持久化 */
+    fun connection(slot: Int): SlotServiceConnection =
+        connections.computeIfAbsent(slot) { index ->
+            SlotServiceConnection(index).also { conn ->
+                appContext?.let { conn.initialize(it) }
+                if (index != ShizukuProcessServiceConnector.PRIMARY_SLOT) {
+                    persistedSlots.add(index)
+                    persistSlots()
                 }
             }
         }
 
-        override fun onError(backend: RemoteBackend, throwable: Throwable) {
-            synchronized(lock) {
-                if (boundBackend != backend) {
-                    return
-                }
-                ServiceBootLogger.event("CB_ON_ERROR", "backend=$backend ${throwable.javaClass.simpleName}: ${throwable.message}")
-                Timber.e(throwable, "RemoteService connection failed: %s", backend)
-                clearCurrentBinderLocked()
-                boundBackend = null
-                _state.value = ServiceState.Error(throwable)
+    /** 已建连接的路（升序），用于 UI 枚举 */
+    val activeSlots: List<Int> get() = connections.keys.sorted()
+
+    /**
+     * 已知的全部实例路号（升序）：始终含 0 号路，加上持久化记录里建过的路。
+     *
+     * 与 [activeSlots] 的区别：这里只看「用户创建过哪些实例」的落盘记录，
+     * 不要求对应进程此刻已 bind/已连接。定时触发这类可能在连接建立前就要枚举实例的场景用它。
+     */
+    val knownSlots: List<Int>
+        get() {
+            val persisted = prefs?.getString(KEY_SLOTS, null).orEmpty()
+                .split(',')
+                .mapNotNull { it.trim().toIntOrNull() }
+                .filter { it > ShizukuProcessServiceConnector.PRIMARY_SLOT }
+            return (listOf(ShizukuProcessServiceConnector.PRIMARY_SLOT) + persisted + connections.keys)
+                .distinct()
+                .sorted()
+        }
+
+    /** 已建连接则返回，不建新的；给 UI 按路订阅状态用 */
+    fun slotConnectionOrNull(slot: Int): SlotServiceConnection? = connections[slot]
+
+    /**
+     * 申请一个空闲路号（0 号路保留给单路流程，不参与分配）。
+     *
+     * 取「最小的空闲号」而不是往后递增：删掉实例后号位会被回收，
+     * 不会出现「删了五、新建变六」这种编号一路涨上去的情况
+     *
+     * 只发号，不建连接——真正拉起进程由调用方随后 [SlotServiceConnection.getInstance] 触发
+     */
+    fun allocateSlot(): Int {
+        var candidate = ShizukuProcessServiceConnector.PRIMARY_SLOT + 1
+        while (true) {
+            // 连接表看的是本次进程内，持久化集合看的是上次启动留下的路号，两个都要避开
+            val taken = connections.containsKey(candidate) || persistedSlots.contains(candidate)
+            if (!taken) return candidate
+            candidate++
+        }
+    }
+
+    /**
+     * 释放一路：清掉连接与残留进程，并从持久化里划掉。
+     * 0 号路是主流程底座，不允许释放；正被操作的那一路释放后回落到 0 号路
+     */
+    fun releaseSlot(slot: Int) {
+        if (slot == ShizukuProcessServiceConnector.PRIMARY_SLOT) {
+            Timber.w("releaseSlot(%d) refused: primary slot is not releasable", slot)
+            return
+        }
+        connections.remove(slot)?.release()
+        persistedSlots.remove(slot)
+        persistSlots()
+        if (_activeSlot.value == slot) {
+            _activeSlot.value = ShizukuProcessServiceConnector.PRIMARY_SLOT
+            ActiveSlotProvider.set(ShizukuProcessServiceConnector.PRIMARY_SLOT)
+        }
+    }
+
+    /** 把已建的路号写盘；[persistedSlots] 不含 0 号路 */
+    private fun persistSlots() {
+        val value = persistedSlots.sorted().joinToString(",")
+        prefs?.edit()?.putString(KEY_SLOTS, value)?.apply()
+    }
+
+    /**
+     * 恢复上次建过的路
+     *
+     * 只恢复编号与连接对象，进程重新拉起：app 重启后那些特权进程早已不在。
+     * 失败不抛——某一路上不去不该拦住整个 app 启动，用户回设置页重开即可
+     */
+    private fun restoreSlots() {
+        val saved = prefs?.getString(KEY_SLOTS, null).orEmpty()
+            .split(',')
+            .mapNotNull { it.trim().toIntOrNull() }
+            .filter { it > ShizukuProcessServiceConnector.PRIMARY_SLOT }
+            .distinct()
+        if (saved.isEmpty()) return
+        Timber.i("RemoteServiceManager: restoring slots %s", saved)
+        for (slot in saved) {
+            connection(slot)
+            restoreScope.launch {
+                runCatching { connection(slot).getInstance() }
+                    .onFailure { Timber.w(it, "restore slot %d failed", slot) }
             }
         }
     }
+
+    // ── PrivilegedServicePort：全部按「当前选中路」分发 ──
+
+    /**
+     * 用 flatMapLatest 跟住 [activeSlot]：切路后订阅自动挪到新路的连接上。
+     * 做成稳定的 StateFlow 而不是 getter，订阅方（Compose / SessionViewModel）才不用重订
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val serviceState: StateFlow<PrivilegedServiceState> =
+        _activeSlot
+            .flatMapLatest { slot -> connection(slot).serviceState }
+            .stateIn(
+                facadeScope,
+                SharingStarted.Eagerly,
+                PrivilegedServiceState.Disconnected,
+            )
+
+    override val currentBackend: RemoteBackend? get() = active.currentBackend
+
+    override fun bind() = active.bind()
+
+    override fun unbind() = active.unbind()
+
+    override fun serviceOrNull(): RemoteService? = active.serviceOrNull()
+
+    /** 按路取服务面：执行器逐路对账要用，拿到的是指定路的面，不碰当前选中路 */
+    override fun serviceOrNull(slot: Int): RemoteService? =
+        slotConnectionOrNull(slot)?.serviceOrNull()
+
+    override suspend fun <R> useService(action: suspend (RemoteService) -> R): R =
+        active.useService(action)
+
+    /** 按路投递：授权刷新/重绑/取值都在该路连接上，切路不影响它 */
+    override suspend fun <R> useService(slot: Int, action: suspend (RemoteService) -> R): R =
+        connection(slot).useService(action)
+
+    // ── 既有扩展入口（同样跟着当前选中路） ──
+
+    suspend fun getInstance(timeoutMs: Long? = null): RemoteService = active.getInstance(timeoutMs)
+
+    /** 当前路的已连接后端；未连接返回 null */
+    fun connectedBackendOrNull(): RemoteBackend? = active.connectedBackendOrNull()
 
     fun initialize(
         context: Context,
@@ -158,240 +247,11 @@ object RemoteServiceManager : PrivilegedServicePort {
 
     /** 连接器只要 applicationContext；PermissionManager 构造期「已授权即 bind」早于 [initialize]，须先注入 */
     fun initializeConnectors(context: Context) {
-        RootRemoteServiceConnector.initialize(context)
-        ShizukuProcessServiceConnector.initialize(context)
+        val app = context.applicationContext
+        appContext = app
+        prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        connection(ShizukuProcessServiceConnector.PRIMARY_SLOT).initialize(app)
         LogcatServiceManager.initialize(context)
+        restoreSlots()
     }
-
-    private fun onBinderDied(recipient: BindingDeathRecipient) {
-        synchronized(lock) {
-            if (currentBinder.get() !== recipient.binder) {
-                ServiceBootLogger.event("BINDER_DIED_STALE")
-                return
-            }
-            ServiceBootLogger.event("BINDER_DIED")
-            Timber.w("RemoteService binder died")
-            clearCurrentBinderLocked()
-            boundBackend = null
-            ServiceBootLogger.event("STATE_DIED")
-            _state.value = ServiceState.Died
-        }
-    }
-
-    private fun clearCurrentBinderLocked() {
-        val binder = currentBinder.getAndSet(null)
-        val recipient = currentDeathRecipient
-        currentDeathRecipient = null
-        if (binder != null && recipient != null) {
-            runCatching {
-                binder.unlinkToDeath(recipient, 0)
-            }.onFailure {
-                Timber.w(it, "unlinkToDeath failed")
-            }
-        }
-    }
-
-    override fun bind() {
-        val access = RemoteAccessCoordinator.refresh()
-        val backend = access.configuredBackend
-        if (!access.isGranted(backend)) {
-            val exception = RemoteAccessException(backend, access.failureOf(backend))
-            ServiceBootLogger.event("BIND_DENIED", "backend=$backend ${exception.failure}")
-            Timber.w(exception)
-            synchronized(lock) {
-                boundBackend = null
-                _state.value = ServiceState.Error(exception)
-            }
-            return
-        }
-
-        val identity = spawnIdentity(backend)
-        val attempt: Int
-        synchronized(lock) {
-            if (_state.value is ServiceState.Connecting && boundBackend == backend) {
-                ServiceBootLogger.event("BIND_SKIP", "already connecting backend=$backend")
-                return
-            }
-            // Shizuku / su 重启不影响已经拉起的进程；授权一恢复就重绑会把在跑的那一轮打断。
-            // 身份变了（adb 起的 Shizuku 换成 root 起的）才重起，旧进程的权限不对
-            if (_state.value is ServiceState.Connected && boundBackend == backend &&
-                currentBinder.get()?.isBinderAlive == true &&
-                identity != null && identity == boundIdentity
-            ) {
-                ServiceBootLogger.event("BIND_SKIP", "already connected backend=$backend uid=$identity")
-                Timber.i("Keep connected %s service (uid=%d)", backend, identity)
-                return
-            }
-
-            if (boundBackend != null) {
-                Timber.i("Unbinding old service before binding new one")
-                unbindLocked()
-            }
-
-            boundBackend = backend
-            boundIdentity = identity
-            attempt = connectAttempt.incrementAndGet()
-            ServiceBootLogger.event("BIND", "backend=$backend attempt=$attempt")
-            _state.value = ServiceState.Connecting
-            ServiceBootLogger.event("CONNECTING", "backend=$backend attempt=$attempt")
-            connectors.getValue(backend).connect(connectorCallbacks)
-        }
-        startConnectTimeout(attempt, backend)
-    }
-
-    private fun spawnIdentity(backend: RemoteBackend): Int? = when (backend) {
-        RemoteBackend.SHIZUKU -> ShizukuManager.serverUid()
-        RemoteBackend.ROOT -> 0
-    }
-
-    private fun startConnectTimeout(attempt: Int, backend: RemoteBackend) {
-        val timeoutMs = fallbackTimeoutMs(backend)
-        timeoutScope.launch {
-            delay(timeoutMs)
-            synchronized(lock) {
-                if (connectAttempt.get() != attempt ||
-                    _state.value !is ServiceState.Connecting ||
-                    boundBackend != backend
-                ) {
-                    return@launch
-                }
-                ServiceBootLogger.event(
-                    "CONNECT_TIMEOUT",
-                    "still CONNECTING after ${timeoutMs}ms (backend=$backend attempt=$attempt) — service process likely failed to start or did not return binder, see service_boot_debug.log"
-                )
-                runCatching {
-                    connectors.getValue(backend).disconnect(currentBinder.get())
-                }.onFailure {
-                    Timber.w(it, "disconnect after connect timeout failed")
-                }
-                clearCurrentBinderLocked()
-                boundBackend = null
-                _state.value = ServiceState.Error(
-                    TimeoutException("connect timeout after ${timeoutMs}ms (backend=$backend)")
-                )
-            }
-        }
-    }
-
-    private fun fallbackTimeoutMs(backend: RemoteBackend): Long =
-        connectors.getValue(backend).worstCaseConnectMs + CONNECT_TIMEOUT_GRACE_MS
-
-    /** [timeoutMs] 为 null 时按当前后端推算默认等待 */
-    private fun defaultWaitMs(backend: RemoteBackend): Long =
-        fallbackTimeoutMs(backend) + CALLER_WAIT_MARGIN_MS
-
-    private fun unbindLocked() {
-        val backend = boundBackend ?: return
-        connectors.getValue(backend).disconnect(currentBinder.get())
-        clearCurrentBinderLocked()
-        boundBackend = null
-    }
-
-    override fun unbind() {
-        synchronized(lock) {
-            if (_state.value == ServiceState.Disconnected && boundBackend == null) {
-                return
-            }
-            unbindLocked()
-            // 主动解绑不覆盖待消费的 Died 信号
-            if (_state.value != ServiceState.Died) {
-                ServiceBootLogger.event("STATE_DISCONNECTED")
-                _state.value = ServiceState.Disconnected
-            }
-        }
-    }
-
-    suspend fun getInstance(timeoutMs: Long? = null): RemoteService {
-        serviceOrNull()?.let { return it }
-
-        bind()
-        val waitMs =
-            timeoutMs ?: defaultWaitMs(boundBackend ?: RemoteAccessCoordinator.configuredBackend())
-        return try {
-            withTimeout(waitMs) {
-                _state.first { it is ServiceState.Connected || it is ServiceState.Error }
-                    .let { currentState ->
-                        when (currentState) {
-                            is ServiceState.Connected -> currentState.service
-                            is ServiceState.Error -> throw currentState.exception
-                            else -> error("Unexpected state: $currentState")
-                        }
-                    }
-            }
-        } catch (e: TimeoutCancellationException) {
-            ServiceBootLogger.event("GET_INSTANCE_TIMEOUT", "after ${waitMs}ms state=${_state.value}")
-            throw e
-        }
-    }
-
-    override fun serviceOrNull(): RemoteService? {
-        val current = _state.value
-        return if (current is ServiceState.Connected) current.service else null
-    }
-
-    /** 当前已连接的后端；未连接返回 null */
-    fun connectedBackendOrNull(): RemoteBackend? =
-        if (_state.value is ServiceState.Connected) boundBackend else null
-
-
-    // 整体切到 IO：授权刷新与 getInstance 里的 bind 都是同步 binder 调用，调用方忘了切就是 ANR
-    override suspend fun <R> useService(action: suspend (RemoteService) -> R): R = withContext(MaaDispatchers.IO) {
-        ensureAccess()?.let { throw RemoteAccessException(it.backend, it.failure) }
-        val service = getInstance()
-        action(service)
-    }
-
-    override suspend fun connect(): ServiceConnectResult = withContext(MaaDispatchers.IO) { connectOnIo() }
-
-    private suspend fun connectOnIo(): ServiceConnectResult {
-        ensureAccess()?.let { return it }
-        val backend = boundBackend ?: RemoteAccessCoordinator.configuredBackend()
-        return try {
-            getInstance()
-            ServiceConnectResult.Connected
-        } catch (e: TimeoutCancellationException) {
-            // 等连接超时与调用方自己的超时是同一个异常类型，外层取消了就别吞
-            currentCoroutineContext().ensureActive()
-            ServiceConnectResult.Failed(backend, e)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            ServiceConnectResult.Failed(backend, e)
-        }
-    }
-
-    /** 未授权先请求一次；就绪返回 null，并把绑定切到当前后端 */
-    private suspend fun ensureAccess(): ServiceConnectResult.NotReady? {
-        // 已连着当前后端就直接用：Shizuku / su 停了，它拉起的进程照样活着，停止与新一轮都还能走
-        if (serviceOrNull() != null && boundBackend == RemoteAccessCoordinator.configuredBackend()) return null
-
-        var accessState = RemoteAccessCoordinator.refresh()
-        var backend = accessState.configuredBackend
-        if (!accessState.isGranted(backend)) {
-            val granted = RemoteAccessCoordinator.request(backend)
-            accessState = RemoteAccessCoordinator.refresh()
-            backend = accessState.configuredBackend
-            if (!granted || !accessState.isGranted(backend)) {
-                return ServiceConnectResult.NotReady(backend, accessState.failureOf(backend))
-            }
-        }
-
-        if (boundBackend != null && boundBackend != backend) {
-            Timber.i("Rebinding remote service from %s to %s", boundBackend, backend)
-            unbind()
-        }
-        return null
-    }
-}
-
-/** 只在未授权时有意义：没在跑也就谈不上授权，两者分开报 */
-private fun RemoteAccessState.failureOf(backend: RemoteBackend): RemoteAccessFailure =
-    if (isAvailable(backend)) RemoteAccessFailure.NOT_GRANTED else RemoteAccessFailure.UNAVAILABLE
-
-private fun RemoteServiceManager.ServiceState.toPrivilegedServiceState() = when (this) {
-    is RemoteServiceManager.ServiceState.Connected -> PrivilegedServiceState.Connected
-    RemoteServiceManager.ServiceState.Connecting -> PrivilegedServiceState.Connecting
-    RemoteServiceManager.ServiceState.Died -> PrivilegedServiceState.Died
-    RemoteServiceManager.ServiceState.Disconnected -> PrivilegedServiceState.Disconnected
-    is RemoteServiceManager.ServiceState.Error -> PrivilegedServiceState.Error
 }

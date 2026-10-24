@@ -14,38 +14,41 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
-import com.aliothmoon.maafw.privileged.ServiceConnectResult
-import com.aliothmoon.maafw.privileged.message
-import com.aliothmoon.maafw.privileged.remoteAccessMessage
-import com.aliothmoon.maafw.privileged.remoteAccessMessageOrNull
 import com.aliothmoon.maafw.project.PiInstaller
+import com.aliothmoon.maafw.project.SlotWorkspace
 import com.aliothmoon.maafw.remote.AgentRuntimeDescriptor
 import com.aliothmoon.maafw.remote.AgentRuntimeEntry
 import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.getAndUpdate
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * RunnerPort 的真实实现：本对象跑在 app 进程，MaaFramework 实例在特权进程里，两者经 binder 通信
  * 这里不持有任何 native handle，也不理解 C API 调用序列（docs/privileged-runtime.md §6）
+ *
+ * 多开下的分工：**每路一套执行态**（[stateBySlot]），一次运行归它发起时的那一路。
+ * 对外暴露的 [state] 只看当前选中路，所以第 1 路跑着时切到第 2 路，界面显示的是
+ * 第 2 路的空闲态——而不是把第 1 路的运行态冒充成第 2 路的，那个会让「停止」按钮
+ * 出现在一个根本没跑的路上面
  */
 class MaaFrameworkRunnerPort(
     private val installer: PiInstaller,
@@ -67,8 +70,34 @@ class MaaFrameworkRunnerPort(
     private val textInputSink: () -> ITextInputSink,
 ) : RunnerPort {
 
-    private val _state = MutableStateFlow(RunnerState())
-    override val state: StateFlow<RunnerState> = _state.asStateFlow()
+    // ── 执行态：按路分份 ──
+
+    /**
+     * 每路一套执行态，键是路号
+     *
+     * 回调与对账必须按「发起那次运行的路」记账，不能读当前选中路：否则第 1 路跑着、
+     * 用户切到第 2 路，第 1 路的结果会写进第 2 路的界面，而第 1 路的 phase 永远停在 Running
+     */
+    private val stateBySlot = ConcurrentHashMap<Int, MutableStateFlow<RunnerState>>()
+
+    private fun stateFor(slot: Int): MutableStateFlow<RunnerState> =
+        stateBySlot.computeIfAbsent(slot) { MutableStateFlow(RunnerState()) }
+
+    /** 当前选中路的执行态；面向「一次动作」的读写都走它 */
+    private val currentState: MutableStateFlow<RunnerState>
+        get() = stateFor(servicePort.activeSlot.value)
+
+    /**
+     * 对外只暴露当前选中路的进度；切路后订阅自动挪到新路的那个流上
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val state: StateFlow<RunnerState> =
+        servicePort.activeSlot
+            .flatMapLatest { slot -> stateFor(slot) }
+            .stateIn(scope, SharingStarted.Eagerly, RunnerState())
+
+    /** 钉死在某一路的执行态；收尾协程按发起那轮的 slot 等终局，不受随后切路影响 */
+    override fun stateOfSlot(slot: Int): StateFlow<RunnerState> = stateFor(slot)
 
     private val _events = MutableSharedFlow<RunnerEventEnvelope>(
         extraBufferCapacity = 256,
@@ -102,10 +131,17 @@ class MaaFrameworkRunnerPort(
         // 特权进程死了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
         // 跟着卡死，UI 全灰且再也发不起下一轮。只认 Died：主动 unbind 只是断了 app 这侧的
         // binder，远端仍握着我们的 callback stub，那一轮还在跑、结果照样会回来
+        //
+        // 多开下 serviceState 跟的是当前选中路，这里收回的也就是那一路的执行态；
+        // 别的路的进程各自活着，不该被牵连
         scope.launch {
             servicePort.serviceState.collect { serviceState ->
                 if (serviceState == PrivilegedServiceState.Died) {
-                    abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died mid-run, forcing abort")
+                    abortRun(
+                        servicePort.activeSlot.value,
+                        uiTextOf(R.string.msg_fail_privileged_exited),
+                        "privileged process died mid-run, forcing abort",
+                    )
                 }
             }
         }
@@ -121,34 +157,42 @@ class MaaFrameworkRunnerPort(
      *
      * Preparing 时 startRun 还没发出去，那边本来就没在跑，不问。
      * Stopping 也要问：PostStop 之后 onFinished 丢了，phase 会永远停在 Stopping
+     *
+     * 多开下逐路扫：每一路各跑各的，只盯当前选中路会让切走的那一路卡在 Running 到天荒地老
      */
     private suspend fun reconcileWhileRunning() {
-        _state.map { it.phase }.distinctUntilChanged().collectLatest { phase ->
-            if (phase != RunnerPhase.Running && phase != RunnerPhase.Stopping) return@collectLatest
-            while (true) {
-                delay(RECONCILE_INTERVAL_MS)
-                if (remoteRunning() != false) continue
+        while (true) {
+            delay(RECONCILE_INTERVAL_MS)
+            for (slot in stateBySlot.keys.toList()) {
+                val flow = stateFor(slot)
+                val phase = flow.value.phase
+                if (phase != RunnerPhase.Running && phase != RunnerPhase.Stopping) continue
+                if (remoteRunning(slot) != false) continue
                 delay(RECONCILE_GRACE_MS)
                 // onFinished 在宽限期内落地了，一切正常
-                if (!_state.value.phase.isBusy) return@collectLatest
-                if (remoteRunning() != false) continue
-                abortRun(uiTextOf(R.string.msg_fail_privileged_reported_finished), "reconciliation found run already finished but result missing, forcing abort")
-                return@collectLatest
+                if (!flow.value.phase.isBusy) continue
+                if (remoteRunning(slot) != false) continue
+                abortRun(
+                    slot,
+                    uiTextOf(R.string.msg_fail_privileged_reported_finished),
+                    "reconciliation found run already finished but result missing, forcing abort (slot=$slot)",
+                )
             }
         }
     }
 
     /** null = 问不出来（没连上或调用失败），不能据此判定，只有明确的 false 才算数 */
-    private suspend fun remoteRunning(): Boolean? = withContext(MaaDispatchers.IO) {
-        runCatching { servicePort.serviceOrNull()?.isRunning() }.getOrNull()
+    private suspend fun remoteRunning(slot: Int): Boolean? = withContext(MaaDispatchers.IO) {
+        runCatching { servicePort.serviceOrNull(slot)?.isRunning() }.getOrNull()
     }
 
     /**
      * 用 getAndUpdate 原子判并换：真正的 onFinished 可能刚好抢在前头落地，
      * 那一份结果比这里编的准，不能覆盖
      */
-    private fun abortRun(resultReason: UiText, logMessage: String) {
-        val previous = _state.getAndUpdate { current ->
+    private fun abortRun(slot: Int, resultReason: UiText, logMessage: String) {
+        val flow = stateFor(slot)
+        val previous = flow.getAndUpdate { current ->
             if (!current.phase.isBusy) {
                 current
             } else {
@@ -164,7 +208,14 @@ class MaaFrameworkRunnerPort(
         if (previous.phase.isBusy) {
             previous.activeExecution?.let {
                 val result = ExecutionResult.Failed(resultReason, it.taskResults)
-                _events.tryEmit(RunnerEventEnvelope(it.executionId, it.currentTaskLabel, RunnerEvent.ExecutionFinished(result)))
+                _events.tryEmit(
+                    RunnerEventEnvelope(
+                        it.executionId,
+                        it.currentTaskLabel,
+                        RunnerEvent.ExecutionFinished(result),
+                        slot,
+                    ),
+                )
             }
             Timber.w(logMessage)
         }
@@ -203,9 +254,14 @@ class MaaFrameworkRunnerPort(
 
     /** 按轮新建，排队中的旧轮调用改不动新一轮；同一 Stub 的 oneway 调用按序到达，收到时的 [taskLabel] 就是事件所属任务 */
     internal inner class ExecutionCallback(
+        /** 这次执行落在哪一路；回调只动那一路的执行态 */
+        private val slot: Int,
         private val executionId: String,
         private val taskLabels: Map<String, String>,
     ) {
+        /** 本轮自己的执行态，与「当前选中路」无关 */
+        private val own: MutableStateFlow<RunnerState> get() = stateFor(slot)
+
         @Volatile
         private var taskLabel: String? = null
 
@@ -248,7 +304,7 @@ class MaaFrameworkRunnerPort(
 
         fun onFinished(outcome: Int, reason: String?) {
             // 已被对账或死亡通知收回的那轮，终局 marker 在 abortRun 里发过了
-            val execution = _state.value.activeExecution?.takeIf { it.executionId == executionId } ?: return
+            val execution = own.value.activeExecution?.takeIf { it.executionId == executionId } ?: return
             // 同一 Stub 的回调按序到达，此刻 taskResults 已是全量，marker 与 state 用同一份结局
             val results = execution.taskResults
             val result = when (outcome) {
@@ -259,14 +315,14 @@ class MaaFrameworkRunnerPort(
                 else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
             }
             emit(RunnerEvent.ExecutionFinished(result))
-            _state.update { current ->
+            own.update { current ->
                 if (current.activeExecution?.executionId != executionId) return@update current
                 RunnerState(phase = RunnerPhase.Idle, latestResult = result)
             }
         }
 
         private inline fun updateOwn(crossinline transform: (ActiveExecution) -> ActiveExecution) {
-            _state.update { current ->
+            own.update { current ->
                 val execution = current.activeExecution
                 if (execution?.executionId != executionId) return@update current
                 current.copy(activeExecution = transform(execution))
@@ -274,15 +330,19 @@ class MaaFrameworkRunnerPort(
         }
 
         private fun emit(event: RunnerEvent) {
-            _events.tryEmit(RunnerEventEnvelope(executionId, taskLabel, event))
+            // slot 冻在信封上：日志按它分桶，「全部实例」那一屏才能各显示各自的几行
+            _events.tryEmit(RunnerEventEnvelope(executionId, taskLabel, event, slot))
         }
     }
 
-    override suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult {
-        if (_state.value.phase.isBusy) {
+    override suspend fun start(plan: RunPlan, executionId: String, slot: Int): RunnerCommandResult {
+        // 这一轮归「按下开始那一刻」的路；slot 由编排层在 dispatch 一开始冻结后传入，
+        // 执行途中（含亮屏解锁、倒计时等耗时 hook）切路都不影响它落到哪一路
+        val own = stateFor(slot)
+        if (own.value.phase.isBusy) {
             return RunnerCommandResult.Rejected(uiTextOf(R.string.msg_reject_already_running))
         }
-        _state.value = RunnerState(
+        own.value = RunnerState(
             phase = RunnerPhase.Preparing,
             activeExecution = ActiveExecution(
                 executionId = executionId,
@@ -298,14 +358,11 @@ class MaaFrameworkRunnerPort(
 
         return withContext(MaaDispatchers.IO) {
             try {
-                connectFailure()?.let { (reason, error) ->
-                    return@withContext failPreparation(reason, executionId, error)
-                }
-                val rejection = launchOnService(plan, executionId)
-                if (rejection != null) return@withContext failPreparation(rejection, executionId)
+                val rejection = launchOnService(plan, executionId, slot)
+                if (rejection != null) return@withContext failPreparation(rejection, executionId, slot)
                 // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
                 // 无条件写成 Running 会把停止意图丢掉，任务继续跑到结束
-                val accepted = _state.updateAndGet { current ->
+                val accepted = own.updateAndGet { current ->
                     if (current.phase == RunnerPhase.Preparing) {
                         current.copy(phase = RunnerPhase.Running)
                     } else {
@@ -323,14 +380,14 @@ class MaaFrameworkRunnerPort(
                     RunnerCommandResult.Accepted
                 }
             } catch (cancellation: CancellationException) {
-                failPreparation(uiTextOf(R.string.msg_fail_default), executionId)
+                failPreparation(uiTextOf(R.string.msg_fail_default), executionId, slot)
                 throw cancellation
             } catch (throwable: Throwable) {
                 Timber.e(throwable, "Failed to start run")
                 failPreparation(
-                    throwable.remoteAccessMessageOrNull()
-                        ?: uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
+                    uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
                     executionId,
+                    slot,
                     error = throwable,
                 )
             }
@@ -338,12 +395,14 @@ class MaaFrameworkRunnerPort(
     }
 
     override suspend fun stop(): RunnerCommandResult {
-        val phase = _state.value.phase
+        // 停的永远是「当前选中路」：切到第 2 路按停止，停的是第 2 路，第 1 路照跑
+        val own = currentState
+        val phase = own.value.phase
         if (!phase.isBusy) {
             // 幂等：没在跑也算受理，UI 不必先查状态
             return RunnerCommandResult.Accepted
         }
-        _state.update { it.copy(phase = RunnerPhase.Stopping) }
+        own.update { it.copy(phase = RunnerPhase.Stopping) }
         return withContext(MaaDispatchers.IO) {
             runCatching { servicePort.serviceOrNull()?.stopRun() }
                 .fold(
@@ -357,29 +416,33 @@ class MaaFrameworkRunnerPort(
     }
 
     /**
-     * 先连上再投递：连不上时 useService 抛出来的只剩一句英文 message，当不了文案
-     * connect 会先刷新授权、必要时发起授权请求，后端换了也会重新绑定
-     */
-    private suspend fun connectFailure(): Pair<UiText, Throwable?>? = when (val result = servicePort.connect()) {
-        ServiceConnectResult.Connected -> null
-        is ServiceConnectResult.NotReady -> remoteAccessMessage(result.backend, result.failure) to null
-        is ServiceConnectResult.Failed -> result.message() to result.error
-    }
-
-    /**
      * 返回 null 表示已受理，否则返回拒绝原因
-     * 前面已经 connect 过，这里的 useService 只是取现成连接；中途断了照常抛
+     * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
+     * 后端换了也会重新绑定
      */
-    private suspend fun launchOnService(plan: RunPlan, executionId: String): UiText? {
+    private suspend fun launchOnService(plan: RunPlan, executionId: String, slot: Int): UiText? {
         val piRoot = installer.installedDir()
-        return servicePort.useService { service -> prepareAndStart(plan, piRoot, service, executionId) }
+        // agent 的 cwd 按路分开：它会在里面写 config/、.venv/ 与动作脚本的产物，
+        // 共用一份时两路互相覆盖（一路存的账号另一路看不出来）。MaaFramework 的资源路径
+        // 仍旧指向共用 PI，识别模板只存一份、改一处所有实例立刻生效
+        val workRoot = withContext(MaaDispatchers.IO) {
+            runCatching { SlotWorkspace.ensureInstalled(piRoot, slot) }
+                .onFailure { Timber.w(it, "SlotWorkspace 准备失败，回退到共用 PI 根") }
+                .getOrDefault(piRoot)
+        }
+        return servicePort.useService(slot) { service ->
+            prepareAndStart(plan, piRoot, workRoot, service, executionId, slot)
+        }
     }
 
+    /** [piRoot] 供 MaaFramework 读资源；[workRoot] 是该路 agent 的 cwd——读共用、写分家 */
     private fun prepareAndStart(
         plan: RunPlan,
         piRoot: File,
+        workRoot: File,
         service: RemoteService,
         executionId: String,
+        slot: Int,
     ): UiText? {
         // 调试模式：把 app + 特权进程的 logcat 抓到 external/debug/logcat（对齐 MaaMeow）。
         // 跟主服务同后端；bind 只在首次生效，startCapture 对已抓的 pid 是空操作。
@@ -397,7 +460,7 @@ class MaaFrameworkRunnerPort(
                 }.onFailure { Timber.w(it, "LogcatService startCapture failed") }
             }
         }
-        if (!service.setup(piRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
+        if (!service.setup(workRoot.absolutePath, AppPaths.LOG_DIR.absolutePath, debugMode())) {
             return uiTextOf(R.string.msg_reject_setup_failed)
         }
         // 环境性开关，不作为拒跑理由：设不上只是不存图，下一轮再试
@@ -422,9 +485,10 @@ class MaaFrameworkRunnerPort(
             return if (mode == RunMode.FOREGROUND) uiTextOf(R.string.msg_reject_primary_capture) else uiTextOf(R.string.msg_reject_virtual_display)
         }
 
-        bindRunnerCallback(service, ExecutionCallback(executionId, plan.taskLabelMap()))
+        bindRunnerCallback(service, ExecutionCallback(slot, executionId, plan.taskLabelMap()))
 
         val payload = RunPlanPayload(
+            // 资源始终取共用 PI：模板只存一份，改一处所有实例立刻生效
             resourcePaths = plan.resourceBundlePaths().map { File(piRoot, it).absolutePath },
             screenWidth = width,
             screenHeight = height,
@@ -444,15 +508,16 @@ class MaaFrameworkRunnerPort(
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return uiTextOf(R.string.msg_reject_service_rejected)
         }
-        if (shouldRetryStop(executionId)) {
+        if (shouldRetryStop(executionId, slot)) {
             runCatching { service.stopRun() }
                 .onFailure { Timber.w(it, "Failed to retry stop after run start") }
         }
         return null
     }
 
-    private fun shouldRetryStop(executionId: String): Boolean {
-        val current = _state.value
+    /** 查的是「这一轮所属那一路」的态：执行途中切了路也要认自己那一轮 */
+    private fun shouldRetryStop(executionId: String, slot: Int): Boolean {
+        val current = stateFor(slot).value
         return current.phase == RunnerPhase.Stopping &&
             current.activeExecution?.executionId == executionId
     }
@@ -460,8 +525,13 @@ class MaaFrameworkRunnerPort(
     /**
      * 准备失败才把 phase 收回 Idle；onFinished / abort 已经写过终态的不要盖掉
      */
-    private fun failPreparation(reason: UiText, executionId: String, error: Throwable? = null): RunnerCommandResult {
-        val next = _state.updateAndGet { current ->
+    private fun failPreparation(
+        reason: UiText,
+        executionId: String,
+        slot: Int,
+        error: Throwable? = null,
+    ): RunnerCommandResult {
+        val next = stateFor(slot).updateAndGet { current ->
             if (current.phase == RunnerPhase.Preparing) {
                 RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Failed(reason))
             } else if (current.phase == RunnerPhase.Stopping &&

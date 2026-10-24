@@ -35,7 +35,7 @@ class KookProvider(
             KookRequest(
                 type = KMARKDOWN,
                 targetId = targetId,
-                content = "**$title**\n$content".fitChars(MAX_CONTENT_LENGTH),
+                content = "**$title**\n$content",
             ),
         )
 
@@ -101,8 +101,5 @@ class KookProvider(
 
         /** KOOK 消息类型 9 = KMarkdown */
         const val KMARKDOWN = 9
-
-        /** 文档建议消息内容不超过 8000 字符 */
-        const val MAX_CONTENT_LENGTH = 8000
     }
 }

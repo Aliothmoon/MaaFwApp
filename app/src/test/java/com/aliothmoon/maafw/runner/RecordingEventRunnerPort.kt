@@ -39,7 +39,7 @@ class RecordingEventRunnerPort : RunnerPort {
         }
     }
 
-    override suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult {
+    override suspend fun start(plan: RunPlan, executionId: String, slot: Int): RunnerCommandResult {
         startedExecutionIds += executionId
         return RunnerCommandResult.Accepted
     }

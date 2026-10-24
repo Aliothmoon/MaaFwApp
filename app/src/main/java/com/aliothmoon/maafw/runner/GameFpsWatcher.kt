@@ -6,9 +6,7 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +35,7 @@ class GameFpsWatcher(
     private val scope: CoroutineScope,
 ) {
 
+    private val advisor = GameFpsAdvisor()
     private val _fps = MutableStateFlow<Float?>(null)
     val fps: StateFlow<Float?> = _fps.asStateFlow()
     private var job: Job? = null
@@ -44,12 +43,11 @@ class GameFpsWatcher(
     @Synchronized
     fun start(executionId: String) {
         stop()
-        // 每轮自带判定器：stop 不等旧一轮退出，它可能还在判定，共用一个会被两轮同时改
-        val advisor = GameFpsAdvisor()
+        advisor.reset()
         job = scope.launch {
             while (isActive) {
                 delay(POLL_INTERVAL_MS)
-                pollOnce(executionId, advisor)
+                pollOnce(executionId)
             }
         }
     }
@@ -61,10 +59,8 @@ class GameFpsWatcher(
         _fps.value = null
     }
 
-    internal suspend fun pollOnce(executionId: String, advisor: GameFpsAdvisor) {
+    internal suspend fun pollOnce(executionId: String) {
         val value = reader.readGameFps()
-        // 读数取消不掉（binder 调用），已停的一轮读回来直接丢：不把旧帧率写回已清空的状态，也不再判定
-        currentCoroutineContext().ensureActive()
         _fps.value = value
         advisor.onSample(value ?: 0f)?.let { advice ->
             val fps = advice.medianFps.roundToInt()

@@ -12,7 +12,7 @@ import org.gradle.kotlin.dsl.register
 import java.io.File
 
 /** The package every build sits under; a profile only appends to it, it never replaces it */
-private const val BASE_APPLICATION_ID = "com.aliothmoon.maafw"
+private const val BASE_APPLICATION_ID = "com.a.maafw"
 
 /**
  * A profile's app.id becomes package segments, so it takes package rules rather than free text
@@ -62,7 +62,10 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
             android.defaultConfig {
                 applicationId = maafwApplicationId()
                 targetSdk = TARGET_SDK
-                versionCode = gitVersionCode()
+                // 打包工具注入：本机没有 git，版本号由 打包配置.ini 控制，
+                // 手机上是否重新解包资源就看这个 versionCode
+                versionCode = textSetting("build.versionCode", "BUILD_VERSION_CODE")
+                    ?.toIntOrNull() ?: gitVersionCode()
                 val pinnedVersionName = textSetting("build.versionName", "BUILD_VERSION_NAME")
                 versionName = pinnedVersionName ?: gitVersionName()
 

@@ -129,6 +129,12 @@ class RemotePreviewPort(
                 }
             }
         }
+        // 切路时 serviceState 往往"没有变"：两块屏都连着，值都是 Connected，
+        // StateFlow 去重后下游收不到任何通知，预览就停在上一路。所以另跟一条 activeSlot，
+        // 切到哪一路就把手上这块 Surface 重新递过去（换过进程会推进 surfaceEpoch，由 UI 换新面）
+        scope.launch {
+            servicePort.activeSlot.collect { push(current.get()) }
+        }
         // 开关是运行期改的，改完当场生效；关掉时顺手清空已画上去的触点，
         // 否则最后几个会在预览上停到 TTL 到期
         scope.launch {

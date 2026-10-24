@@ -192,6 +192,7 @@ fun SettingsScreen(
                 LogCard(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
                 BackupCard(onConfigBackup)
                 PiCard(onIntent)
+                MultiInstanceCard()
                 OtherCard(state, settingsState, onIntent, onSettingsIntent)
                 AboutCard(state)
             }

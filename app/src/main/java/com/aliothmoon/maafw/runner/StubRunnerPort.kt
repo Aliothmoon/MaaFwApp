@@ -53,7 +53,7 @@ class StubRunnerPort(
         val stopRequested = AtomicBoolean(false)
     }
 
-    override suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult = commandMutex.withLock {
+    override suspend fun start(plan: RunPlan, executionId: String, slot: Int): RunnerCommandResult = commandMutex.withLock {
         if (_state.value.phase != RunnerPhase.Idle) {
             return RunnerCommandResult.Rejected(uiTextFromFramework("Busy"))
         }

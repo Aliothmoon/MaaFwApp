@@ -22,7 +22,7 @@ class SessionLogHook(private val journal: RunJournal) : RunEnvHook {
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): EngageResult {
-        journal.begin(ctx.plan, ctx.executionId)
+        journal.begin(ctx.plan, ctx.executionId, ctx.slot)
         ctx.plan.skippedTasks.forEach {
             journal.warn(ctx.executionId, uiTextOf(R.string.run_log_task_skipped, it.label, it.reason))
         }

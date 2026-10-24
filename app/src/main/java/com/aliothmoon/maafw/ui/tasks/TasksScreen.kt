@@ -24,11 +24,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,8 +37,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.project.ProjectState
-import com.aliothmoon.maafw.runner.DisplayResolution
+import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
@@ -50,9 +51,7 @@ import com.aliothmoon.maafw.ui.pip.LocalIsInPip
 import com.aliothmoon.maafw.ui.pip.PipController
 import com.aliothmoon.maafw.ui.pip.PipHost
 import com.aliothmoon.maafw.ui.pip.PipRequest
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * [previewContent] 由 AppRoot 创建并持有：全屏宿主必须在 pager 之外才能盖住底部 tab 栏，
@@ -66,11 +65,11 @@ fun TasksScreen(
     previewContent: (@Composable () -> Unit)?,
     /** 用户停留的页是否是本页；画中画只在该页武装（pager 会预组合相邻页，组合≠可见） */
     isActivePage: Boolean,
-    /** 本页的面板该不该接返回键：除了停在本页，还得没有二级页盖在上面 */
-    backEnabled: Boolean,
     pipOnHome: Boolean,
     /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
     runLog: () -> RunLogSnapshot,
+    /** 实例号 → 该路最近两行；只有「全部实例」那一屏才订阅，平时这一层不跟日志频率重组 */
+    instanceLogs: StateFlow<Map<Int, List<RunLogEntry>>>,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
@@ -109,9 +108,9 @@ fun TasksScreen(
                 previewSurfaceReady = previewSurfaceReady,
                 previewContent = previewContent,
                 isActivePage = isActivePage,
-                backEnabled = backEnabled,
                 pipOnHome = pipOnHome,
                 runLog = runLog,
+                instanceLogs = instanceLogs,
                 onEnterFullscreen = onEnterFullscreen,
                 onExportLogs = onExportLogs,
                 onIntent = onIntent,
@@ -126,15 +125,26 @@ private fun TasksContent(
     previewSurfaceReady: Boolean,
     previewContent: (@Composable () -> Unit)?,
     isActivePage: Boolean,
-    backEnabled: Boolean,
     pipOnHome: Boolean,
     runLog: () -> RunLogSnapshot,
+    instanceLogs: StateFlow<Map<Int, List<RunLogEntry>>>,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showQuickOptions by rememberSaveable { mutableStateOf(false) }
+    // 全部实例视图：顶掉预览与任务区，只留画面；底部那颗「开始任务」照常作用在当前选中的实例上
+    var showAllInstances by rememberSaveable { mutableStateOf(false) }
+    val activeSlot by RemoteServiceManager.activeSlot.collectAsState()
+    // 全部实例视图里的多选集合：单击 toggle，可同时选中多路，底部「开始任务」批量启动
+    var selectedSlotList by rememberSaveable { mutableStateOf(listOf(activeSlot)) }
+    // 选中≥2 路时底部按钮批量启动；其余情况（单路页 / 只选 1 路）走单路 Start
+    val multiStartSlots = if (showAllInstances) {
+        selectedSlotList.filter { it in RemoteServiceManager.activeSlots }.sorted().takeIf { it.size >= 2 }
+    } else {
+        null
+    }
     // 设置搜索点中的是快捷面板里的项：面板是本页的局部状态，只能由本页自己打开
     val searchLocation = pendingSearchLocation()
     LaunchedEffect(searchLocation) {
@@ -149,8 +159,7 @@ private fun TasksContent(
     val context = LocalContext.current
     val pipHost = context as? PipHost
     val previewResolution = state.previewResolution
-    // 坐标只在协程里读：预览随主导航滑动时它逐帧在变，进了组合就是逐帧整页重组 + 跨进程设参数
-    val previewBounds = remember { mutableStateOf<Rect?>(null) }
+    var previewBounds by remember { mutableStateOf<Rect?>(null) }
     val pipEligible = pipOnHome &&
             isActivePage &&
             previewContent != null &&
@@ -160,32 +169,17 @@ private fun TasksContent(
             previewSurfaceReady &&
             pipHost != null &&
             PipController.isSupported(context)
-    val currentEligible by rememberUpdatedState(pipEligible)
-    val currentResolution by rememberUpdatedState(previewResolution)
-    LaunchedEffect(pipHost) {
-        val host = pipHost ?: return@LaunchedEffect
-        val activity = host as? android.app.Activity ?: return@LaunchedEffect
-        var resolution: DisplayResolution? = null
-        var armedEligible: Boolean? = null
+    DisposableEffect(pipHost, pipEligible, previewResolution, previewBounds) {
         fun arm(enabled: Boolean, sourceRect: Rect?) {
-            val res = resolution ?: return
-            val request = PipRequest(res, sourceRect)
+            val host = pipHost ?: return
+            val activity = host as? android.app.Activity ?: return
+            val resolution = previewResolution ?: return
+            val request = PipRequest(resolution, sourceRect)
             host.pipRequest = if (enabled) request else null
             PipController.updateParams(activity, enabled, request)
         }
-        try {
-            snapshotFlow {
-                Triple(currentEligible, currentResolution, if (currentEligible) previewBounds.value else null)
-            }.distinctUntilChanged().collectLatest { (eligible, res, bounds) ->
-                // 只是坐标在动（主导航滑到一半）就等它停稳再设；开跑、停下这类变化立刻生效
-                if (eligible && armedEligible == true && res == resolution) delay(BOUNDS_SETTLE_MS)
-                resolution = res
-                arm(eligible, bounds)
-                armedEligible = eligible
-            }
-        } finally {
-            arm(enabled = false, sourceRect = null)
-        }
+        arm(pipEligible, previewBounds)
+        onDispose { arm(enabled = false, sourceRect = null) }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -207,28 +201,65 @@ private fun TasksContent(
                         .padding(top = MaaDesignTokens.Spacing.md),
                     verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
                 ) {
-                    LivePreview(
-                        resolution = state.previewResolution,
-                        surfaceReady = previewSurfaceReady,
-                        running = state.runner.phase.isBusy,
-                        watchdogState = state.watchdogState,
-                        content = previewContent.takeUnless { pipActive },
-                        onEnterFullscreen = onEnterFullscreen,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(3f),
-                        // 小窗里这张卡缩成了巴掌大，别拿它的坐标覆盖 sourceRectHint
-                        onBoundsChanged = { if (!pipActive) previewBounds.value = it },
-                    )
-                    TaskWorkspace(
-                        state = state,
-                        runLog = runLog,
-                        onExportLogs = onExportLogs,
-                        onIntent = onIntent,
-                        showLogToggle = true,
-                        backEnabled = backEnabled,
-                        modifier = Modifier.weight(7f),
-                    )
+                    if (showAllInstances) {
+                        // 只放画面：任务列表与日志在这一屏只会挡住别人
+                        // 过滤掉已删除的实例，避免选择集里残留不存在的路
+                        val availableSlots = RemoteServiceManager.activeSlots
+                        val selectedSlots = selectedSlotList.filter { it in availableSlots }.toSet()
+                        AllInstancesPanel(
+                            resolution = state.previewResolution,
+                            selectedSlots = selectedSlots,
+                            onToggleSlot = { slot ->
+                                val current = selectedSlotList
+                                if (slot in current) {
+                                    // 取消选中：若取消的恰是当前焦点路，焦点挪到剩余选择里最后一个
+                                    val rest = current - slot
+                                    selectedSlotList = rest
+                                    if (RemoteServiceManager.activeSlot.value == slot) {
+                                        rest.lastOrNull()?.let { RemoteServiceManager.setActiveSlot(it) }
+                                    }
+                                } else {
+                                    selectedSlotList = current + slot
+                                    // 新选中的路成为焦点：双击进入、任务列表等都看它
+                                    RemoteServiceManager.setActiveSlot(slot)
+                                }
+                            },
+                            onEnter = { slot ->
+                                RemoteServiceManager.setActiveSlot(slot)
+                                showAllInstances = false
+                            },
+                            // 排布与每格那两行日志都随「快捷选项 → 自动设置」里的开关走
+                            twoColumn = state.instancesTwoColumn,
+                            showLogs = state.showInstanceLogs,
+                            instanceLogs = instanceLogs,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                        )
+                        // 选中≥2 路时 multiStartSlots 非空，底部按钮批量启动
+                    } else {
+                        LivePreview(
+                            resolution = state.previewResolution,
+                            surfaceReady = previewSurfaceReady,
+                            running = state.runner.phase.isBusy,
+                            watchdogState = state.watchdogState,
+                            content = previewContent.takeUnless { pipActive },
+                            onEnterFullscreen = onEnterFullscreen,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(3f),
+                            // 小窗里这张卡缩成了巴掌大，别拿它的坐标覆盖 sourceRectHint
+                            onBoundsChanged = { if (!pipActive) previewBounds = it },
+                        )
+                        TaskWorkspace(
+                            state = state,
+                            runLog = runLog,
+                            onExportLogs = onExportLogs,
+                            onIntent = onIntent,
+                            showLogToggle = true,
+                            modifier = Modifier.weight(7f),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(MaaDesignTokens.Spacing.xs))
                 RunnerToggleButton(
@@ -236,20 +267,23 @@ private fun TasksContent(
                     quickOptionsOpen = showQuickOptions,
                     onIntent = onIntent,
                     onToggleQuickOptions = { showQuickOptions = !showQuickOptions },
+                    multiStartSlots = multiStartSlots,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
-        BackHandler(enabled = showQuickOptions && backEnabled) { showQuickOptions = false }
+        // 返回先退出「全部实例」，否则这一下会一路退出整个 app
+        if (showAllInstances) {
+            BackHandler { showAllInstances = false }
+        }
         if (showQuickOptions) {
+            BackHandler { showQuickOptions = false }
             TasksQuickOptionsPanel(
                 state = state,
                 onIntent = onIntent,
                 onDismiss = { showQuickOptions = false },
+                onShowAllInstances = { showAllInstances = true },
             )
         }
     }
 }
-
-/** 主导航滑动时预览坐标逐帧在变；停稳这么久才把它设给系统 */
-private const val BOUNDS_SETTLE_MS = 150L

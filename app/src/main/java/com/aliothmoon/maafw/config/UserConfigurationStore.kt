@@ -17,6 +17,31 @@ import java.io.OutputStream
 interface UserConfigurationStore {
     val data: Flow<UserConfiguration>
     suspend fun update(transform: (UserConfiguration) -> UserConfiguration): UserConfiguration
+
+    /**
+     * 丢掉某一路自己的那份配置；实例被删除时调用
+     *
+     * 号位会被下一个新实例复用，不清掉的话新实例一上手就带着上一任的任务勾选与参数。
+     * 单路实现没有「别的路」，默认什么都不做
+     */
+    suspend fun forgetSlot(slot: Int) = Unit
+
+    /**
+     * 读取指定实例的配置流。
+     * 单实例实现忽略 slot 参数直接返回 [data]；
+     * 多实例实现返回对应 slot 的配置（首次访问会从主实例播种）。
+     * 用于定时功能跨实例查找/同步运行配置。
+     */
+    fun dataForSlot(slot: Int): Flow<UserConfiguration> = data
+
+    /**
+     * 更新指定实例的配置。
+     * 单实例实现忽略 slot 参数等同于 [update]；
+     * 多实例实现直接写入对应 slot 的存储，不依赖当前活动实例。
+     * 用于定时功能触发前把配置同步到目标实例。
+     */
+    suspend fun updateSlot(slot: Int, transform: (UserConfiguration) -> UserConfiguration): UserConfiguration =
+        update(transform)
 }
 
 class DataStoreUserConfigurationStore(

@@ -60,6 +60,19 @@ data class ScheduleStrategy(
      */
     val runConfigurationId: String = "",
     /**
+     * 绑定的运行配置属于哪个实例；多实例下同一份配置可能被复制到多路、id 相同，
+     * 光靠 [runConfigurationId] 区分不了选中的是哪一路的，用这个字段一起定位。
+     * -1 = 旧数据未记录，执行侧遍历所有实例按 id 找
+     */
+    val configurationSourceSlot: Int = -1,
+    /**
+     * 到点在哪个实例上跑；0 是主实例
+     *
+     * 与 [runConfigurationId] 同一条理由：半夜到点跑在哪儿得看得见。跟着用户当下选中的那一路走，
+     * 等于每次触发都可能是另一路——五开之后这还是「跑的那一路有没有连上」的问题
+     */
+    val targetSlot: Int = 0,
+    /**
      * 到点时已有执行在跑：true 掐掉它再上，false 让这次触发落空
      *
      * 默认 false——半夜把用户手动起的长跑掐掉，比这条定时没跑更难解释

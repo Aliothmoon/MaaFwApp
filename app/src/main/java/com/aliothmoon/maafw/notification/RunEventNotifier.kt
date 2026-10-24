@@ -7,11 +7,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.graphics.drawable.IconCompat
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.EventNotificationLevel
-import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import timber.log.Timber
 
@@ -43,39 +41,7 @@ class RunEventNotifier(
         send(title, text, ID_RUN_RESULT, isError = false)
     }
 
-    /** 不随整轮结局覆盖：它说的是「下一次会跑不起来」，与上一轮的结果各占一格 */
-    fun notifyShizukuDown(title: String, text: String) {
-        send(title, text, ID_SHIZUKU_DOWN, isError = true, action = openShizukuAction())
-    }
-
-    fun cancelShizukuDown() {
-        runCatching { manager.cancel(ID_SHIZUKU_DOWN) }
-    }
-
-    /** 装的不是官方 Shizuku（如 Sui）就没有可打开的界面，不挂按钮 */
-    private fun openShizukuAction(): NotificationCompat.Action? {
-        val launch = appContext.packageManager
-            .getLaunchIntentForPackage(ShizukuInstallHelper.SHIZUKU_PACKAGE) ?: return null
-        val intent = PendingIntent.getActivity(
-            appContext,
-            ID_SHIZUKU_DOWN,
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        return NotificationCompat.Action.Builder(
-            null as IconCompat?,
-            appContext.getString(R.string.notification_action_open_shizuku),
-            intent,
-        ).build()
-    }
-
-    private fun send(
-        title: String,
-        text: String,
-        notifyId: Int,
-        isError: Boolean,
-        action: NotificationCompat.Action? = null,
-    ) {
+    private fun send(title: String, text: String, notifyId: Int, isError: Boolean) {
         val level = appSettingsManager.eventNotificationLevel.value
         if (level == EventNotificationLevel.OFF) return
 
@@ -112,7 +78,6 @@ class RunEventNotifier(
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .apply { if (high) setDefaults(NotificationCompat.DEFAULT_ALL) }
-            .apply { action?.let(::addAction) }
             .build()
 
         runCatching { manager.notify(notifyId, notification) }
@@ -154,6 +119,5 @@ class RunEventNotifier(
         /** 整轮结局共用一个 id：后一轮的结果顶掉上一轮的，通知栏里只留最新那条 */
         const val ID_RUN_RESULT = 9001
         const val ID_RUN = 9002
-        const val ID_SHIZUKU_DOWN = 9003
     }
 }

@@ -10,8 +10,23 @@ interface RunnerPort {
     val state: StateFlow<RunnerState>
     val events: Flow<RunnerEventEnvelope>
 
-    /** [executionId] 由编排层先生成：会话日志在 start 之前就要按它开文件 */
-    suspend fun start(plan: RunPlan, executionId: String): RunnerCommandResult
+    /**
+     * 取某一路的执行态，且**钉死在该路**、不随当前选中路切换。
+     *
+     * 多开收尾必须用它而不是 [state]：[state] 是 flatMapLatest 跟 activeSlot，slot0 跑着时
+     * 切到 slot1 启动，slot0 的收尾协程会立刻读到 slot1 的空闲态，误判 slot0「无结果结束」。
+     * 默认退化为主 [state]，单路实现与测试桩不用改。
+     */
+    fun stateOfSlot(slot: Int): StateFlow<RunnerState> = state
+
+    /**
+     * [executionId] 由编排层先生成：会话日志在 start 之前就要按它开文件
+     *
+     * [slot] 由编排层在 dispatch 一开始（[RunContext]）冻结后传入，**不在这里现读
+     * activeSlot**：亮屏解锁/倒计时等 hook 可能让 dispatch 挂起几十秒，期间用户切到下一路
+     * 启动，现读会把这一轮投递到错误的路
+     */
+    suspend fun start(plan: RunPlan, executionId: String, slot: Int): RunnerCommandResult
     suspend fun stop(): RunnerCommandResult
 }
 
@@ -20,6 +35,13 @@ data class RunnerEventEnvelope(
     val executionId: String,
     val taskLabel: String?,
     val event: RunnerEvent,
+    /**
+     * 这一轮归属的实例号
+     *
+     * 日志按它分桶，「全部实例」那一屏才能各显示各自的两行。默认 0 只是让老调用点不必逐个改：
+     * 真值由 [com.aliothmoon.maafw.runner.ExecutionCallback] 在起跑那一刻冻下来，运行中切实例不改它
+     */
+    val slot: Int = 0,
 )
 
 data class RunnerState(

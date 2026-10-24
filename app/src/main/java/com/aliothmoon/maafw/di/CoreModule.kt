@@ -8,7 +8,7 @@ import androidx.datastore.dataStoreFile
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.SystemApkInstaller
-import com.aliothmoon.maafw.config.DataStoreUserConfigurationStore
+import com.aliothmoon.maafw.config.MultiSlotUserConfigurationStore
 import com.aliothmoon.maafw.config.UserConfigurationSerializer
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.constant.DataStoreFile
@@ -60,7 +60,8 @@ val coreModule = module {
             },
         )
     }
-    single<UserConfigurationStore> { DataStoreUserConfigurationStore(get()) }
+    // 多实例：0 号实例沿用上面这份 DataStore，1..N 各占一份文件，见 MultiSlotUserConfigurationStore
+    single<UserConfigurationStore> { MultiSlotUserConfigurationStore(androidContext(), get()) }
 
     single { AppSettingsManager(androidContext()) }
     // 设置搜索的定位请求要跨过 tab 切换与子页面推入，挂在哪个页面的 VM 上都活不到那一头

@@ -39,8 +39,8 @@ class AppLogWriter {
         }
     }
 
-    fun submit(priority: Int, tag: String?, message: String) {
-        channel.trySend(format(priority, tag, message))
+    fun submit(priority: Int, tag: String?, message: String, throwable: Throwable?) {
+        channel.trySend(format(priority, tag, message, throwable))
     }
 
     fun setup() {
@@ -143,7 +143,9 @@ class AppLogWriter {
 
     private fun rotatedName(index: Int): String = "app.$index.log"
 
-    private fun format(priority: Int, tag: String?, message: String): String {
+    private fun format(
+        priority: Int, tag: String?, message: String, throwable: Throwable?
+    ): String {
         val level = when (priority) {
             Log.VERBOSE -> "V"
             Log.DEBUG -> "D"
@@ -156,6 +158,7 @@ class AppLogWriter {
         return buildString {
             append("[").append(ZonedDateTime.now().format(timestampFormat)).append("] ")
             append(level).append(" ").append(tag ?: "-").append(": ").append(message).append("\n")
+            throwable?.let { append(Log.getStackTraceString(it)).append("\n") }
         }
     }
 

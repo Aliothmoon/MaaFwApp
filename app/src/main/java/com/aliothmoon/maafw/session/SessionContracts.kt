@@ -70,6 +70,10 @@ data class SessionUiState(
     /** 全局的跑完关目标应用；与 ScheduleStrategy 上的同名选项并存，本项优先 */
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
+    /** 全部实例视图：true 双列（一屏看全），false 单列（每格更大，超出滚动） */
+    val instancesTwoColumn: Boolean = true,
+    /** 全部实例视图：每格下方显示该实例最近两行运行日志 */
+    val showInstanceLogs: Boolean = false,
     val resolutionPreset: ResolutionPreset = ResolutionPresets.default,
     /**
      * 预览画面的尺寸：后台模式是虚拟屏尺寸（PI controller 的 display_* 推导），
@@ -271,6 +275,12 @@ sealed interface SessionIntent {
     /** 预览上是否画注入的触点 */
     data class SetTouchPreviewEnabled(val enabled: Boolean) : SessionIntent
 
+    /** 全部实例视图的排布：双列看全，还是单列放大 */
+    data class SetInstancesTwoColumn(val enabled: Boolean) : SessionIntent
+
+    /** 全部实例视图每格下方是否带该实例的日志 */
+    data class SetShowInstanceLogs(val enabled: Boolean) : SessionIntent
+
     data class SetTelemetryEnabled(val enabled: Boolean) : SessionIntent
 
     /** 立刻关掉目标应用：停虚拟屏，屏上的应用跟着一起没 */
@@ -317,6 +327,20 @@ sealed interface SessionIntent {
         val surface: TaskSurface = TaskSurface.InApp,
         val acknowledged: Set<ConfirmToken> = emptySet(),
     ) : SessionIntent
+
+    /**
+     * 一键启动多个实例：全部实例页多选（≥2 路）后点开始。
+     *
+     * 编排层把各路按 [slots] 顺序逐个启动，相邻两路之间错峰一段（见 SessionViewModel
+     * 的 multiStartStagger），避免同时拉起游戏、抢截图/资源；每路仍跑各自当前激活的配置。
+     * [surface] 与 [acknowledged] 语义同 [Start]。
+     */
+    data class StartMultiple(
+        val slots: List<Int>,
+        val surface: TaskSurface = TaskSurface.InApp,
+        val acknowledged: Set<ConfirmToken> = emptySet(),
+    ) : SessionIntent
+
     data object Stop : SessionIntent
 
     /**
@@ -371,8 +395,15 @@ sealed interface SessionEffect {
      * 开跑前要用户点头；同意就带着 [acknowledged] 重发 [SessionIntent.Start]
      *
      * [acknowledged] 已含本次这项：几项都要问时逐个弹，前面点过的跟着累积，VM 不必记
+     *
+     * [slots] 非空表示这是批量启动的确认：确认后重发 [SessionIntent.StartMultiple] 而不是
+     * 单路 [SessionIntent.Start]，否则多选的实例会丢
      */
-    data class ConfirmStart(val prompt: UiText, val acknowledged: Set<ConfirmToken>) : SessionEffect
+    data class ConfirmStart(
+        val prompt: UiText,
+        val acknowledged: Set<ConfirmToken>,
+        val slots: List<Int>? = null,
+    ) : SessionEffect
 
     /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
     data object InstallShizuku : SessionEffect

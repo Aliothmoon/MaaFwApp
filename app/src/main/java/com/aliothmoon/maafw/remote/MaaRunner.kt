@@ -20,7 +20,7 @@ import com.aliothmoon.maafw.runner.runPlanWireJson
 import com.aliothmoon.maafw.third.Ln
 import com.sun.jna.Memory
 import com.sun.jna.Pointer
-import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
@@ -35,6 +35,27 @@ import java.util.concurrent.atomic.AtomicReference
  * 单工作线程串行：MaaFramework 的一个 Tasker 同时只跑一轮
  */
 class MaaRunner(private val agentHost: AgentHost) {
+
+    /**
+     * 深合并多个 pipeline override：同名字段后者覆盖、不同字段保留，
+     * 递归到最深层（符合 PI v2.3.0「Option 覆盖顺序」语义：后合并覆盖先合并的同名字段）。
+     * 修复：多个 option 同时 override 同一节点（如 input + switch 都改 custom_action_param）时，
+     * 直接按序传数组会被核心整节点浅替换，导致先编译的 option 被后编译的整体覆盖。
+     */
+    private fun deepMerge(target: JsonObject, source: JsonObject): JsonObject = buildJsonObject {
+        target.forEach { (k, v) -> put(k, v) }
+        source.forEach { (k, v) ->
+            val existing = target[k]
+            if (existing is JsonObject && v is JsonObject) {
+                put(k, deepMerge(existing, v))
+            } else {
+                put(k, v)
+            }
+        }
+    }
+
+    private fun mergeOverrides(patches: List<JsonObject>): JsonObject =
+        patches.fold(buildJsonObject {}) { acc, patch -> deepMerge(acc, patch) }
 
     // agent child 由这条线程 fork，PDEATHSIG 认线程：线程被换掉时 child 一并收走，下一轮判不可复用重拉
     private val worker = Executors.newSingleThreadExecutor { r ->
@@ -275,7 +296,7 @@ class MaaRunner(private val agentHost: AgentHost) {
                 }
                 notify { onTaskStarted(task.taskName, index, payload.tasks.size) }
 
-                val overrides = JsonArray(task.pipelineOverrides).toString()
+                val overrides = mergeOverrides(task.pipelineOverrides).toString()
                 val currentTasker = synchronized(lifecycleLock) { tasker }
                 val taskId = lib.MaaTaskerPostTask(currentTasker, task.entry, overrides)
                 if (taskId == INVALID_ID) {
