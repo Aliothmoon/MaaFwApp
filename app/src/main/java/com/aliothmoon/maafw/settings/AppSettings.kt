@@ -58,6 +58,14 @@ data class AppSettings(
     @PrefKey(default = "true")
     val touchPreviewEnabled: String = "true",
 
+    /** 全部实例视图：true 双列（一屏看全），false 单列（每格更大，超出滚动） */
+    @PrefKey(default = "true")
+    val instancesTwoColumn: String = "true",
+
+    /** 全部实例视图：每格下方是否显示该实例最近两行运行日志 */
+    @PrefKey(default = "false")
+    val showInstanceLogs: String = "false",
+
     /**
      * 后台模式虚拟屏选的 [com.aliothmoon.maafw.runner.ResolutionPreset.id]；空 = 预设列表的第一项
      *

@@ -11,6 +11,7 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.domain.RunConfigurationId
@@ -20,6 +21,7 @@ import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHED
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
+import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
@@ -28,6 +30,7 @@ import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.service.SpecialUseFgsGate
 import com.aliothmoon.maafw.runner.RunProgress
 import com.aliothmoon.maafw.runner.ScheduleRunOptions
+import com.aliothmoon.maafw.runner.RunRequestId
 import com.aliothmoon.maafw.runner.RunSignals
 import com.aliothmoon.maafw.runner.RunStepSink
 import com.aliothmoon.maafw.runner.RunTrigger
@@ -36,6 +39,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,6 +67,7 @@ class ScheduleExecutionService : Service() {
     private val alarms: ScheduleAlarmManager by inject()
     private val triggerLog: ScheduleTriggerLog by inject()
     private val runLauncher: RunLauncher by inject()
+    private val configurationStore: UserConfigurationStore by inject()
     private val appSettings: AppSettingsManager by inject()
     private val projectRepository: ProjectRepository by inject()
     private val piInstall: PiInstallCoordinator by inject()
@@ -192,40 +197,122 @@ class ScheduleExecutionService : Service() {
         signalsByStrategy[strategy.id] = signals
 
         ensureProjectLoaded()
+
+        // 多实例配置同步：定时规则绑定的配置可能属于另一个实例（比如在实例一里建的配置，
+        // 定时要跑在实例二上）。在切到目标实例之前，先确保目标实例有这份配置，
+        // 否则 RunLauncher 会返回 ConfigurationMissing 导致启动失败。
+        // 注意：必须在 setActiveSlot 之前完成，且用 dataForSlot/updateSlot 明确操作目标实例，
+        // 不能依赖 configurationStore.data（它跟随当前活动实例，切换时有异步延迟）。
+        val configId = RunConfigurationId(strategy.runConfigurationId)
+        try {
+            val targetHasConfig = configurationStore.dataForSlot(strategy.targetSlot)
+                .first().configuration(configId) != null
+            if (!targetHasConfig) {
+                // 遍历所有实例找这份配置；用 knownSlots 而非固定数量，
+                // 实例数由用户在设置页创建（不依赖 RemoteServiceManager.activeSlots 的已连接状态）
+                val sourceConfig = RemoteServiceManager.knownSlots.firstNotNullOfOrNull { slot ->
+                    configurationStore.dataForSlot(slot).first().configuration(configId)
+                }
+                if (sourceConfig != null) {
+                    configurationStore.updateSlot(strategy.targetSlot) { data ->
+                        if (data.configurations.any { it.id == configId }) data
+                        else data.copy(configurations = data.configurations + sourceConfig)
+                    }
+                    Timber.i(
+                        "Schedule %s: copied configuration %s to target slot %d",
+                        strategy.id, strategy.runConfigurationId, strategy.targetSlot,
+                    )
+                } else {
+                    Timber.w(
+                        "Schedule %s: configuration %s not found in any slot",
+                        strategy.id, strategy.runConfigurationId,
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            // 配置同步失败不能阻断定时触发：launch 时如果配置真的缺失会返回 ConfigurationMissing，
+            // 触发日志会记录失败原因，比直接崩溃好
+            Timber.e(e, "Schedule %s: configuration sync failed, continuing to launch", strategy.id)
+        }
+
+        // 这条规则跑在哪一路由规则自己带：先切过去，随后 launch 起的这一轮就落在它身上。
+        // 没建立的路直接放弃：落到当前选中的一路会跑错实例，比不跑更糟
+        if (!RemoteServiceManager.setActiveSlot(strategy.targetSlot)) {
+            Timber.w(
+                "Schedule %s targets slot %d which is not created, aborting",
+                strategy.id,
+                strategy.targetSlot,
+            )
+            store.recordTrigger(strategy.id, TriggerResult.FAILED_START, "目标实例未创建")
+            triggerLog.append(
+                TriggerLogEntry(
+                    strategyId = strategy.id,
+                    strategyName = strategy.name,
+                    scheduledAt = scheduledTimeMs,
+                    actualAt = now,
+                    result = TriggerResult.FAILED_START,
+                    detail = "目标实例${strategy.targetSlot + 1}未创建",
+                ),
+            )
+            return
+        }
+
         // 冷启动时 RunLauncher 多半还没建：它一路依赖到屏保浮窗，那份构造只能在主线程，
         // 在这条 IO 协程上头一回解析会直接抛，定时就此落空（postCreate 在主线程建它，但不一定抢得过）
         val launcher = withContext(Dispatchers.Main.immediate) { runLauncher }
+
+        // 整个启动过程包一层 try-catch：launch() 内部任何未捕获异常都会中断本函数，
+        // 导致 triggerLog 不写——用户只看到「界面切了但任务没跑」，完全不知道错在哪。
+        // 这里兜住所有异常，照样记一条 FAILED_START，把异常信息写进 detail。
         val launchResult = try {
-            launcher.launch(
-                trigger = RunTrigger.Schedule(
-                    strategy.id,
-                    ScheduleRunOptions(
-                        autoSleepAfterTask = strategy.autoSleepAfterTask,
-                        skipAutoSleepIfAwake = strategy.skipAutoSleepIfAwake,
-                        closeAppAfterTask = strategy.closeAppAfterTask,
+            try {
+                launcher.launch(
+                    trigger = RunTrigger.Schedule(
+                        strategy.id,
+                        ScheduleRunOptions(
+                            autoSleepAfterTask = strategy.autoSleepAfterTask,
+                            skipAutoSleepIfAwake = strategy.skipAutoSleepIfAwake,
+                            closeAppAfterTask = strategy.closeAppAfterTask,
+                        ),
                     ),
+                    configurationId = RunConfigurationId(strategy.runConfigurationId),
+                    // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
+                    requestId = RunRequestId("${strategy.id}@$scheduledTimeMs"),
+                    force = strategy.forceStart,
+                    steps = RunStepSink {
+                        steps += TriggerStep(
+                            it.hookId,
+                            it.outcome.toTriggerStepOutcome()
+                        )
+                    },
+                    signals = signals,
+                    progress = RunProgress { _, detail ->
+                        updateNotification(detail.resolve(this), strategy.id, interruptible = true)
+                    },
+                )
+            } finally {
+                signalsByStrategy.remove(strategy.id)
+                updateNotification(
+                    getString(R.string.notification_schedule_triggered),
+                    strategy.id,
+                    interruptible = false,
+                )
+            }
+        } catch (t: Throwable) {
+            Timber.e(t, "Schedule %s launch() threw exception", strategy.id)
+            triggerLog.append(
+                TriggerLogEntry(
+                    strategyId = strategy.id,
+                    strategyName = strategy.name,
+                    scheduledAt = scheduledTimeMs,
+                    actualAt = now,
+                    result = TriggerResult.FAILED_START,
+                    detail = "launch异常: ${t.javaClass.simpleName}: ${t.message}",
+                    steps = steps,
                 ),
-                configurationId = RunConfigurationId(strategy.runConfigurationId),
-                requestId = scheduleRequestId(strategy.id, scheduledTimeMs),
-                force = strategy.forceStart,
-                steps = RunStepSink {
-                    steps += TriggerStep(
-                        it.hookId,
-                        it.outcome.toTriggerStepOutcome()
-                    )
-                },
-                signals = signals,
-                progress = RunProgress { _, detail ->
-                    updateNotification(detail.resolve(this), strategy.id, interruptible = true)
-                },
             )
-        } finally {
-            signalsByStrategy.remove(strategy.id)
-            updateNotification(
-                getString(R.string.notification_schedule_triggered),
-                strategy.id,
-                interruptible = false,
-            )
+            store.recordTrigger(strategy.id, TriggerResult.FAILED_START, message = "launch异常: ${t.message}", triggeredAt = now)
+            return
         }
         val outcome = launchResult.toScheduleOutcome()
         if (outcome.result == TriggerResult.DUPLICATE) {

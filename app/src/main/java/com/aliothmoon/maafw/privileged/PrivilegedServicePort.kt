@@ -25,6 +25,13 @@ interface PrivilegedServicePort {
     /** 连接态；binder 不出这一层（见 [PrivilegedServiceState]） */
     val serviceState: StateFlow<PrivilegedServiceState>
 
+    /**
+     * 当前 UI 正在操作的路号
+     *
+     * 单路实现恒为 0；多路门面按它分发上面这些成员，UI 与执行器也按它区分各自的进度
+     */
+    val activeSlot: StateFlow<Int>
+
     fun bind()
     fun unbind()
 
@@ -34,36 +41,17 @@ interface PrivilegedServicePort {
     /** 已连接时给出服务面，否则 null；不触发绑定 */
     fun serviceOrNull(): RemoteService?
 
-    /**
-     * 先刷新授权、必要时发起授权与重绑，再把服务面交给 [action]
-     *
-     * 后端没就绪抛 [RemoteAccessException]，连不上抛连接器给的原因
-     */
+    /** 按路取服务面；不触发绑定。默认退化为当前路，单路实现不必重写 */
+    fun serviceOrNull(slot: Int): RemoteService? = serviceOrNull()
+
+    /** 先刷新授权、必要时发起授权与重绑，再把服务面交给 [action] */
     suspend fun <R> useService(action: suspend (RemoteService) -> R): R
 
-    /** 与 [useService] 同一条连接路径，可预期的失败交回来而不抛；调用方自己被取消照常抛 */
-    suspend fun connect(): ServiceConnectResult
-}
-
-enum class RemoteAccessFailure {
-    /** Shizuku 没在跑 / 没有 su */
-    UNAVAILABLE,
-    NOT_GRANTED,
-}
-
-/** 提权后端没就绪；文案按 [failure] 走 [remoteAccessMessage]，别拿 message 当文案 */
-class RemoteAccessException(
-    val backend: RemoteBackend,
-    val failure: RemoteAccessFailure,
-) : IllegalStateException("$backend ${failure.name.lowercase()}")
-
-sealed interface ServiceConnectResult {
-    data object Connected : ServiceConnectResult
-
-    data class NotReady(val backend: RemoteBackend, val failure: RemoteAccessFailure) : ServiceConnectResult
-
-    /** 授权齐了但进程没拉起来或没回 binder；[error] 的 message 带着连接器归因，只能作细节后缀 */
-    data class Failed(val backend: RemoteBackend, val error: Throwable) : ServiceConnectResult
+    /**
+     * 按路把服务面交给 [action]：多开启动某一路时用，确保授权刷新/重绑/取值都钉在
+     * 该路的连接上，不被随后切路带偏。默认退化为当前路，单路实现不必重写。
+     */
+    suspend fun <R> useService(slot: Int, action: suspend (RemoteService) -> R): R = useService(action)
 }
 
 suspend fun <T : Any> PrivilegedServicePort.callWithTimeout(timeout: Duration, block: (RemoteService) -> T): T? {

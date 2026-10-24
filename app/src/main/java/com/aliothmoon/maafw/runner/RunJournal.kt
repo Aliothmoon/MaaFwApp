@@ -11,7 +11,7 @@ import com.aliothmoon.maafw.i18n.UiText
  */
 interface RunJournal {
 
-    suspend fun begin(plan: RunPlan, executionId: String)
+    suspend fun begin(plan: RunPlan, executionId: String, slot: Int = 0)
 
     suspend fun end(executionId: String, reason: RunEndReason)
 
@@ -33,7 +33,7 @@ fun RunJournal.error(executionId: String, text: UiText) = note(executionId, RunN
 
 /** 单测与没有落盘的调用方 */
 object DiscardingRunJournal : RunJournal {
-    override suspend fun begin(plan: RunPlan, executionId: String) = Unit
+    override suspend fun begin(plan: RunPlan, executionId: String, slot: Int) = Unit
     override suspend fun end(executionId: String, reason: RunEndReason) = Unit
     override fun note(executionId: String, level: RunNote, text: UiText) = Unit
 }

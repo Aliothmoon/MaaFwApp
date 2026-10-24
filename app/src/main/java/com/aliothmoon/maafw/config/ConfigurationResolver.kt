@@ -310,7 +310,9 @@ object ConfigurationResolver {
         val value = values[option.name]
         return when (option) {
             is OptionDefinition.Choice -> {
-                val selected = option.selectedCase(value)?.name
+                val selected = (value as? OptionValue.SingleCase)?.case
+                    ?.takeIf { s -> option.cases.any { it.name == s } }
+                    ?: option.effectiveDefaultCase
                 OptionEditorState(
                     name = option.name,
                     label = option.label,
@@ -325,7 +327,8 @@ object ConfigurationResolver {
             }
 
             is OptionDefinition.Checkbox -> {
-                val selected = option.selectedCases(value)
+                // emptyList() = 明确全不选；仅 Unset 才回退默认
+                val selected = (value as? OptionValue.MultipleCases)?.cases ?: option.defaultCases
                 OptionEditorState(
                     name = option.name,
                     label = option.label,

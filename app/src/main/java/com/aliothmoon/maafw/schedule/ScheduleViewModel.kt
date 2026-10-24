@@ -8,7 +8,9 @@ import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.privileged.PermissionGateway
+import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.settings.AppSettingsGateway
+import com.aliothmoon.maafw.ui.tasks.instanceOrdinal
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -96,7 +99,6 @@ class ScheduleViewModel(
     ) { access, system, (exact, secure), settings ->
         val snapshot = ScheduleHealthSnapshot(
             backendGranted = access.isGranted(access.configuredBackend),
-            backendAvailable = access.isAvailable(access.configuredBackend),
             batteryWhitelist = system.batteryWhitelist,
             exactAlarmAllowed = exact,
             notification = system.notification,
@@ -129,14 +131,34 @@ class ScheduleViewModel(
         state.copy(wizard = wizard, autoStart = autoStart.takeIf { wizard.isEmpty() })
     }
 
+    /**
+     * 聚合所有实例的运行配置：多实例下每份配置只存在于创建它的那个实例里，
+     * 定时规则可能要绑实例一的配置、跑在实例二上，所以这里把所有实例的配置都列出来，
+     * 带上 sourceSlot 供 UI 分组显示、执行侧同步用。
+     * 配置名本身不加实例前缀，由 UI 按 sourceSlot 分组后在组标题标明。
+     * 以当前实例的配置流为触发源：切实例或改当前实例配置时刷新；
+     * 其他实例配置变化时不会自动推，但重新进入页面时 WhileSubscribed 会重收。
+     */
     private val configurations: Flow<ConfigurationSnapshot> = configurationStore.data
-        .map { config ->
+        .map { current ->
+            val slots = RemoteServiceManager.activeSlots
+            val allOptions = slots.flatMap { slot ->
+                val config = configurationStore.dataForSlot(slot).first()
+                config.configurations.map {
+                    ScheduleConfigurationOption(
+                        id = it.id.value,
+                        name = it.name,
+                        sourceSlot = slot,
+                    )
+                }
+            }
             ConfigurationSnapshot(
-                options = config.configurations.map { ScheduleConfigurationOption(it.id.value, it.name) },
-                activeId = config.activeConfigurationId?.value,
+                options = allOptions,
+                activeId = current.activeConfigurationId?.value,
             )
         }
         .distinctUntilChanged()
+        .flowOn(MaaDispatchers.IO)
 
     val uiState: StateFlow<ScheduleUiState> = combine(
         store.strategies,

@@ -16,6 +16,8 @@ data class ScheduleRow(
 data class ScheduleConfigurationOption(
     val id: String,
     val name: String,
+    /** 这份配置属于哪个实例；多实例下同名配置可能在不同实例里，靠它区分 */
+    val sourceSlot: Int = 0,
 )
 
 data class ScheduleUiState(

@@ -42,6 +42,7 @@
 
     <!-- Runner toggle -->
     <string name="runner_start">Start tasks</string>
+    <string name="runner_start_multi">Start tasks (%1$d)</string>
     <string name="runner_foreground_blocked">Foreground mode is active; switch to background mode first</string>
     <string name="runner_background_unsupported">Background mode is unavailable below Android 10. Try another device or update the system.</string>
     <string name="runner_stop">Stop</string>
@@ -309,9 +310,6 @@
     <string name="schedule_health_fix">Fix</string>
     <string name="schedule_health_backend">%1$s not authorized</string>
     <string name="schedule_health_backend_desc">Waking, unlocking, launching and running a scheduled task all depend on it; grant access first</string>
-    <string name="schedule_health_backend_not_running">%1$s is not running</string>
-    <string name="schedule_health_backend_unavailable">%1$s is not available</string>
-    <string name="schedule_health_backend_down_desc">Waking, unlocking, launching and running a scheduled task all depend on it; start the service first</string>
     <string name="schedule_health_battery">Not on the battery optimization whitelist</string>
     <string name="schedule_health_battery_desc">The system may delay or block the background start when the alarm fires</string>
     <string name="schedule_health_notification">Notifications are off</string>
@@ -402,7 +400,6 @@
     <string name="schedule_result_failed_start">Did not start</string>
     <string name="schedule_reason_configuration_missing">The bound run configuration was deleted</string>
     <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be prepared</string>
-    <string name="schedule_reason_invalid_plan_detail">Configuration error (%1$s): %2$s</string>
     <string name="schedule_reason_blocked">A start check did not pass</string>
     <string name="schedule_reason_rejected">A run is already in progress</string>
     <string name="schedule_edit_configuration">Run configuration</string>
@@ -440,17 +437,12 @@
     <string name="msg_project_not_loaded">Project is not loaded yet</string>
     <string name="msg_backend_unavailable">%1$s is not available</string>
     <string name="msg_backend_auth_rejected">%1$s was not granted</string>
-    <string name="msg_backend_not_running">%1$s is not running</string>
-    <string name="msg_backend_connect_failed">Could not connect to the %1$s privileged process: %2$s</string>
-    <string name="notification_action_open_shizuku">Open Shizuku</string>
-    <string name="notification_shizuku_down_title">Shizuku is not running</string>
-    <string name="notification_shizuku_down_after_boot">Shizuku has to be started again after a reboot, or scheduled tasks cannot run</string>
-    <string name="notification_shizuku_down_stopped">Shizuku has stopped; scheduled tasks cannot run until it is started again</string>
     <string name="msg_bind_service_failed">Could not connect to the privileged process: %1$s</string>
     <string name="msg_no_executable_tasks">No tasks available to run</string>
     <string name="msg_template_not_found">Template \"%1$s\" does not exist</string>
     <string name="msg_cannot_start">Cannot start: %1$s</string>
     <string name="msg_launch_in_progress">Launch already in progress</string>
+    <string name="msg_multi_slot_not_created">This instance is not created or connected; skipped</string>
     <string name="msg_precheck_ignored_confirmation">A start check ignored the confirmation; aborted</string>
     <string name="precheck_confirm_title">Before you start</string>
     <string name="precheck_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off in the system display settings first. Start anyway?</string>
@@ -567,10 +559,6 @@
     <string name="run_log_task_starting">Task started: %1$s</string>
     <string name="run_log_task_succeeded">Task completed: %1$s</string>
     <string name="run_log_task_failed">Task failed: %1$s</string>
-    <string name="run_log_task_elapsed">%1$s (took %2$s)</string>
-    <string name="run_log_elapsed_hms">%1$dh %2$dm %3$ds</string>
-    <string name="run_log_elapsed_ms">%1$dm %2$ds</string>
-    <string name="run_log_elapsed_s">%1$ds</string>
     <string name="run_log_agent_flood">Agent output is flooding; display paused. Full output goes to logcat.</string>
     <string name="run_log_app_left_display">The target app left the virtual display and could not be moved back (%1$s).</string>
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
@@ -713,6 +701,7 @@
     <string name="diagnostic_configured_task_missing">Task "%1$s" is no longer in the project</string>
     <string name="diagnostic_runtime_no_resource">No resource is available to build the runtime environment</string>
     <string name="diagnostic_option_unset_without_default">Option "%1$s" is unset and has no default</string>
+    <string name="diagnostic_selected_case_missing">Option "%1$s" selects missing case "%2$s"</string>
     <string name="diagnostic_invalid_input">Option "%1$s" input "%2$s" is invalid: %3$s</string>
     <string name="diagnostic_checkbox_count_out_of_range">Option "%1$s" has %2$d selected; requirement: %3$s</string>
     <string name="diagnostic_integer_conversion_failed">Option "%1$s" input "%2$s" cannot be converted to an integer</string>
@@ -738,8 +727,6 @@
     <string name="pi_install_failed_message">%1$s\n\nCheck that there is enough free space, then retry.</string>
     <string name="pi_install_retry">Retry</string>
     <string name="pi_install_error">Extraction failed: %1$s</string>
-    <string name="pi_install_failed_corrupt">The installation package is damaged: the bundled project resources do not match the checksum recorded in the package, so retrying will not help.\n\nThis usually means the download was incomplete. Download the package again and install it over the current one.</string>
-    <string name="pi_install_failed_read">Extraction failed: %1$s\n\nRetry. If it keeps failing, download the package again and install it over the current one.</string>
 
     <string name="settings_section_pi">Project resources</string>
     <string name="pi_reinstall_title">Extract resources again</string>
@@ -866,7 +853,6 @@
     <!-- Push failure reasons, produced by each channel and shown in the test feedback -->
     <string name="notification_err_network">Network request failed</string>
     <string name="notification_err_http_status">Server returned status %1$d</string>
-    <string name="notification_err_rejected">Rejected by the server: %1$s</string>
     <string name="notification_err_serverchan_key_empty">ServerChan Send Key is empty</string>
     <string name="notification_err_serverchan_sctp_fmt">ServerChan sctp Send Key has the wrong format</string>
     <string name="notification_err_telegram_token_empty">Telegram Bot Token is empty</string>
@@ -914,7 +900,6 @@
     <string name="wake_result_unsupported">Not supported on this system</string>
     <string name="wake_result_lock_failed">Could not enter lock screen</string>
     <string name="wake_result_ipc_failed">Elevated service not connected</string>
-    <string name="wake_result_task_running">A task is running. Stop it before testing or recording</string>
     <string name="wake_result_unknown">Unlock failed (code %1$d)</string>
     <string name="wake_result_gesture_empty">No unlock gesture recorded yet</string>
     <string name="wake_result_gesture_screen_mismatch">Screen orientation or resolution differs from the recording; please record again</string>

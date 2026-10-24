@@ -34,15 +34,6 @@ import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 
 @Composable
 private fun ScheduleHealthIssue.title(backend: RemoteBackend): String = when (this) {
-    // Root 没有「运行」一说，su 不在就是不可用
-    ScheduleHealthIssue.BACKEND_DOWN -> stringResource(
-        if (backend == RemoteBackend.SHIZUKU) {
-            R.string.schedule_health_backend_not_running
-        } else {
-            R.string.schedule_health_backend_unavailable
-        },
-        backend.display,
-    )
     ScheduleHealthIssue.BACKEND -> stringResource(R.string.schedule_health_backend, backend.display)
     ScheduleHealthIssue.BATTERY -> stringResource(R.string.schedule_health_battery)
     ScheduleHealthIssue.EXACT_ALARM -> stringResource(R.string.schedule_exact_alarm_blocked)
@@ -53,7 +44,6 @@ private fun ScheduleHealthIssue.title(backend: RemoteBackend): String = when (th
 
 @Composable
 private fun ScheduleHealthIssue.description(): String = when (this) {
-    ScheduleHealthIssue.BACKEND_DOWN -> stringResource(R.string.schedule_health_backend_down_desc)
     ScheduleHealthIssue.BACKEND -> stringResource(R.string.schedule_health_backend_desc)
     ScheduleHealthIssue.BATTERY -> stringResource(R.string.schedule_health_battery_desc)
     ScheduleHealthIssue.EXACT_ALARM -> stringResource(R.string.schedule_exact_alarm_hint)

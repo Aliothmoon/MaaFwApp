@@ -33,6 +33,14 @@ interface AppSettingsGateway {
     val touchPreviewEnabled: StateFlow<Boolean>
     suspend fun setTouchPreviewEnabled(enabled: Boolean)
 
+    /** 全部实例视图：true 双列（一屏看全），false 单列（每格更大，超出滚动） */
+    val instancesTwoColumn: StateFlow<Boolean>
+    suspend fun setInstancesTwoColumn(enabled: Boolean)
+
+    /** 全部实例视图：每格下方显示该实例最近两行运行日志 */
+    val showInstanceLogs: StateFlow<Boolean>
+    suspend fun setShowInstanceLogs(enabled: Boolean)
+
     val resolutionPreset: StateFlow<ResolutionPreset>
     suspend fun setResolutionPreset(preset: ResolutionPreset)
 

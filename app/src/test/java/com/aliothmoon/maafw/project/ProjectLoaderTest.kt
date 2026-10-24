@@ -126,8 +126,6 @@ internal class MapProjectSource(private val files: Map<String, String>) : Projec
 
     override fun read(path: String): String =
         files[path] ?: throw IllegalArgumentException("no file: $path")
-
-    override fun tryReadText(path: String): Result<String?> = Result.success(files[path])
 }
 
 /** 生成合法的 V2 根文件：interface_version + import 声明，body 追加其余顶层字段 */
@@ -787,26 +785,25 @@ class ProjectLoaderWelcomeTest {
     }
 
     @Test
-    fun `welcome 显式路径读取失败才记 warning 并保留原文`() {
+    fun `welcome 文件读取失败保留原始路径并记 warning`() {
         val ready = load(
             mapOf(
                 "interface.json" to piRoot(
                     "tasks/a.json",
-                    body = """"welcome":["missing.md","./missing.md","announcements/second.md"]""",
+                    body = """"welcome":["missing.md","announcements/second.md"]""",
                 ),
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
                 "announcements/second.md" to "# Second",
             ),
         )
 
-        assertEquals(listOf("missing.md", "./missing.md", "# Second"), ready.definition.metadata.welcome)
-        assertEquals(1, ready.diagnostics.count { it.message.isResource(R.string.diagnostic_description_read_failed) })
+        assertEquals(listOf("missing.md", "# Second"), ready.definition.metadata.welcome)
         assertTrue(
             ready.diagnostics.any {
                 it.severity == DiagnosticSeverity.Warning &&
                     it.message.isResource(
                         R.string.diagnostic_description_read_failed,
-                        "Not a project file: missing.md",
+                        "no file: missing.md",
                     )
             },
         )

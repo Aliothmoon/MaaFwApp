@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.remote.internal
 import android.os.Build
 import com.aliothmoon.maafw.constant.AndroidVersions
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
+import com.aliothmoon.maafw.constant.ShellDirs
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.DisplayControl
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
@@ -13,16 +14,26 @@ import java.util.concurrent.atomic.AtomicInteger
 object PowerController {
     private const val TAG = "PowerController"
     private const val USER_ACTIVITY_INTERVAL_MS = 4_000L
-
-    // 不落盘：落盘的标记会被被杀的进程留下，下一个进程 destroy 时把用户自己关的屏强行点亮。
-    // 进程被杀后面板由用户唤醒时系统恢复
-    private val poweredOff = AtomicBoolean(false)
+    private val file = ShellDirs.POWER_OFF_FLAG
 
     private val keepAliveDisplayId = AtomicInteger(DefaultDisplayConfig.DISPLAY_NONE)
     private val keepAliveRunning = AtomicBoolean(false)
 
+    var flag: Boolean
+        get() = runCatching { file.exists() }.getOrDefault(false)
+        set(value) {
+            runCatching {
+                if (value) {
+                    file.parentFile?.mkdirs()
+                    file.createNewFile()
+                } else {
+                    file.delete()
+                }
+            }
+        }
+
     fun setDisplayPower(on: Boolean): Boolean {
-        poweredOff.set(!on)
+        flag = !on
         return setDisplayPowerInternal(on)
     }
 
@@ -103,7 +114,7 @@ object PowerController {
 
     fun destroy() {
         stopUserActivityKeepAlive()
-        if (poweredOff.get()) {
+        if (flag) {
             Ln.i("$TAG: Emergency recovering screen power...")
             runCatching {
                 setDisplayPower(true)

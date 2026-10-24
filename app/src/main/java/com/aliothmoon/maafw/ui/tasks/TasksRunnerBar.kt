@@ -3,6 +3,11 @@ package com.aliothmoon.maafw.ui.tasks
 import com.aliothmoon.maafw.settings.search.SettingAnchors
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -19,12 +24,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Nightlight
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Subject
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -41,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
@@ -68,6 +76,8 @@ internal fun RunnerToggleButton(
     quickOptionsOpen: Boolean,
     onIntent: (SessionIntent) -> Unit,
     onToggleQuickOptions: () -> Unit,
+    /** 全部实例页多选（≥2 路）时非空：点开始走批量启动；null 时走单路 Start */
+    multiStartSlots: List<Int>? = null,
     modifier: Modifier = Modifier,
 ) {
     val phase = state.runner.phase
@@ -94,7 +104,14 @@ internal fun RunnerToggleButton(
             // 前台模式灰显但仍可点：点了走 Start，由 SessionViewModel 拦下并给提示
             val foregroundBlocked = state.runMode == RunMode.FOREGROUND
             MaaButton(
-                onClick = { onIntent(SessionIntent.Start()) },
+                onClick = {
+                    val slots = multiStartSlots
+                    if (slots != null) {
+                        onIntent(SessionIntent.StartMultiple(slots))
+                    } else {
+                        onIntent(SessionIntent.Start())
+                    }
+                },
                 enabled = state.canStart,
                 colors = if (foregroundBlocked) {
                     ButtonDefaults.buttonColors(
@@ -106,7 +123,13 @@ internal fun RunnerToggleButton(
                 },
                 modifier = toggleModifier,
             ) {
-                Text(stringResource(R.string.runner_start))
+                Text(
+                    if (multiStartSlots != null) {
+                        stringResource(R.string.runner_start_multi, multiStartSlots.size)
+                    } else {
+                        stringResource(R.string.runner_start)
+                    },
+                )
             }
         }
         // 展开时描边与文字一起转 primary，让按钮自己表示面板的开合
@@ -148,6 +171,7 @@ internal fun TasksQuickOptionsPanel(
     state: SessionUiState,
     onIntent: (SessionIntent) -> Unit,
     onDismiss: () -> Unit,
+    onShowAllInstances: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scrimInteraction = remember { MutableInteractionSource() }
@@ -177,6 +201,36 @@ internal fun TasksQuickOptionsPanel(
                 modifier = Modifier.padding(MaaDesignTokens.Spacing.md),
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
             ) {
+                // 多开时才有得选：只有一路时这块不出现，面板与单路版一模一样
+                val slots = RemoteServiceManager.activeSlots
+                val activeSlot by RemoteServiceManager.activeSlot.collectAsState()
+                if (slots.size > 1) {
+                    GroupLabel(stringResource(R.string.quick_group_instances))
+                    // 一排最多五格：五开时正好铺满一行，再多就换一行
+                    Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
+                        slots.chunked(InstancesPerRow).forEach { rowSlots ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                            ) {
+                                rowSlots.forEach { slot ->
+                                    InstanceChip(
+                                        label = stringResource(
+                                            R.string.quick_instance_label_short,
+                                            instanceOrdinal(slot + 1),
+                                        ),
+                                        selected = slot == activeSlot,
+                                        onClick = {
+                                            RemoteServiceManager.setActiveSlot(slot)
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 GroupLabel(stringResource(R.string.quick_actions_title))
                 // 运行日志不在这儿：入口已经在配置行右侧，同一个动作不留两处
                 Row(
@@ -187,22 +241,20 @@ internal fun TasksQuickOptionsPanel(
                         // 前台模式没有虚拟屏，屏保与「关目标应用」两格都无从谈起
                         RunMode.BACKGROUND -> {
                             ActionTile(
-                                icon = Icons.Outlined.PowerSettingsNew,
-                                label = stringResource(R.string.quick_action_screen_saver),
-                                accent = MaterialTheme.colorScheme.tertiary,
-                                onClick = {
-                                    onDismiss()
-                                    onIntent(SessionIntent.ShowScreenSaver)
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                            ActionTile(
                                 icon = Icons.AutoMirrored.Outlined.ExitToApp,
                                 label = stringResource(R.string.quick_action_close_app),
                                 accent = MaterialTheme.colorScheme.error,
                                 onClick = {
-                                    onDismiss()
                                     onIntent(SessionIntent.CloseTargetApp)
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            ActionTile(
+                                icon = Icons.Outlined.PowerSettingsNew,
+                                label = stringResource(R.string.quick_action_screen_saver),
+                                accent = MaterialTheme.colorScheme.tertiary,
+                                onClick = {
+                                    onIntent(SessionIntent.ShowScreenSaver)
                                 },
                                 modifier = Modifier.weight(1f),
                             )
@@ -213,7 +265,6 @@ internal fun TasksQuickOptionsPanel(
                             label = stringResource(R.string.settings_overlay_show),
                             accent = MaterialTheme.colorScheme.tertiary,
                             onClick = {
-                                onDismiss()
                                 onIntent(SessionIntent.ShowOverlay)
                             },
                             modifier = Modifier.weight(1f),
@@ -230,8 +281,19 @@ internal fun TasksQuickOptionsPanel(
                         accent = MaterialTheme.colorScheme.secondary,
                         enabled = !state.configurationLocked,
                         onClick = {
-                            onDismiss()
                             onIntent(SessionIntent.ReloadProject)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                    // 并排这一格除了是自己的入口，也让「重新加载项目」回到半宽，
+                    // 不再是一格占满整行的那种突兀尺寸
+                    ActionTile(
+                        icon = Icons.Outlined.GridView,
+                        label = stringResource(R.string.quick_action_all_instances),
+                        accent = MaterialTheme.colorScheme.secondary,
+                        onClick = {
+                            onDismiss()
+                            onShowAllInstances()
                         },
                         modifier = Modifier.weight(1f),
                     )
@@ -241,7 +303,6 @@ internal fun TasksQuickOptionsPanel(
                             label = stringResource(R.string.quick_action_screenshot),
                             accent = MaterialTheme.colorScheme.secondary,
                             onClick = {
-                                onDismiss()
                                 onIntent(SessionIntent.CaptureVirtualDisplay)
                             },
                             modifier = Modifier.weight(1f),
@@ -276,6 +337,19 @@ internal fun TasksQuickOptionsPanel(
                         onCheckedChange = { onIntent(SessionIntent.SetTouchPreviewEnabled(it)) },
                     )
                 }
+                // 下面两项是「全部实例」那一屏的排布与内容，与运行模式无关，不裹在 BACKGROUND 里
+                SettingToggleRow(
+                    icon = Icons.Outlined.GridView,
+                    label = stringResource(R.string.quick_setting_instances_two_column),
+                    checked = state.instancesTwoColumn,
+                    onCheckedChange = { onIntent(SessionIntent.SetInstancesTwoColumn(it)) },
+                )
+                SettingToggleRow(
+                    icon = Icons.Outlined.Subject,
+                    label = stringResource(R.string.quick_setting_show_instance_logs),
+                    checked = state.showInstanceLogs,
+                    onCheckedChange = { onIntent(SessionIntent.SetShowInstanceLogs(it)) },
+                )
             }
         }
     }
@@ -289,6 +363,55 @@ private fun GroupLabel(text: String) {
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Bold,
     )
+}
+
+/** 一排最多放几个实例格：五开时正好铺满一行，再多就换一行 */
+private const val InstancesPerRow = 5
+
+/** 实例序号的中文写法：实例一、实例二…超出就退回阿拉伯数字 */
+private val InstanceOrdinals = listOf("一", "二", "三", "四", "五", "六", "七", "八", "九", "十")
+
+/** 设置页与快捷面板共用一套实例名，避免两处各写一套对不上 */
+internal fun instanceOrdinal(index: Int): String =
+    InstanceOrdinals.getOrNull(index - 1) ?: index.toString()
+
+/**
+ * 一格「第 N 路」：多开时切 UI 操作的是哪一路
+ *
+ * 用 chip 而不是按钮：它表达的是「当前视角」这种单选状态，
+ * 不是「按一下做一件事」的动作，与旁边的 ActionTile 区分开
+ */
+@Composable
+private fun InstanceChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(MaaTheme.style.radii.card),
+        color = if (selected) scheme.primaryContainer else scheme.surfaceVariant,
+        contentColor = if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+        border = BorderStroke(
+            MaaDesignTokens.Separator.thickness,
+            if (selected) scheme.primary else scheme.outlineVariant,
+        ),
+    ) {
+        // 宽度由外层的 weight 等分决定，与文字长短无关；文字在自己的格子里居中，
+        // 免得短标签（「一」）贴着左边显得偏
+        Text(
+            text = label,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 /** 面板离底的距离：让开下面那条启停条，否则会盖住自己的入口 */

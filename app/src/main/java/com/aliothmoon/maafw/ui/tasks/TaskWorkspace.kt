@@ -41,8 +41,6 @@ internal fun TaskWorkspace(
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     showLogToggle: Boolean,
-    /** 主 pager 会预组合相邻页：停在别的页、或二级页盖在上面时，收日志不该抢走返回键 */
-    backEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val locked = state.configurationLocked
@@ -112,7 +110,9 @@ internal fun TaskWorkspace(
         }
     }
 
-    BackHandler(enabled = logOpen && backEnabled) { showRunLog = false }
+    if (logOpen) {
+        BackHandler { showRunLog = false }
+    }
 
     if (showAddTasks && active != null) {
         AddTasksSheet(

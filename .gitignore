@@ -23,6 +23,7 @@ versioncode.txt
 
 # Log Files
 *.log
+build_log*.txt
 
 # IntelliJ
 *.iml
@@ -53,3 +54,21 @@ versioncode.txt
 # Python 缓存
 __pycache__/
 *.py[cod]
+
+# build_agent_bundle.py 的最终产物（Python agent 运行时，体积大，按 INTEGRATION.md 重新构建）
+/agent-dist/
+
+# 本机重定向的 Gradle / AppData 缓存目录与临时目录
+/.gradle-home/
+/.local-appdata/
+/.tmp/
+
+# 本机打包脚本（硬编码绝对路径）与构建输出
+/run_build*.bat
+/build_result.txt
+/build_final.txt
+
+# 具体打包配方（含业务标识、本地路径、包名等）不进仓库，仅保留接入样例
+/pi-profile-*.yaml
+/*-profile.yaml
+!/pi-profile.sample.yaml

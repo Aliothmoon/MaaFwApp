@@ -34,6 +34,19 @@ android {
     androidResources {
         noCompress += "zip"
     }
+
+    packaging {
+        jniLibs {
+            // 必须保持 true（= manifest 里 extractNativeLibs=true），这是本应用的功能前提：
+            // 特权进程是靠执行 nativeLibraryDir/liblauncher.so 拉起来的
+            // （ProcessServiceConnectorBackend.buildStartCommand：「test -x <launcher> || exit 126」），
+            // agent 的 exec 文件同样走这个目录。设成 false 时 .so 不会被解压成可执行文件，
+            // 服务进程永远回不了 binder，表现为「connect timeout after 15000ms (backend=SHIZUKU)」。
+            // 官方发行包同样是 extractNativeLibs=true。
+            // 代价：.so 压缩存储，Android 15+ 会对可调试版弹「16 KB 对齐」提示（仅提示，不影响运行）。
+            useLegacyPackaging = true
+        }
+    }
 }
 
 baselineProfile {

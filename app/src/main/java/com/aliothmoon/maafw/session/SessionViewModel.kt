@@ -26,10 +26,9 @@ import com.aliothmoon.maafw.privileged.DisplaySizeGateway
 import com.aliothmoon.maafw.privileged.DisplaySizeResult
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
-import com.aliothmoon.maafw.privileged.RemoteAccessFailure
-import com.aliothmoon.maafw.privileged.remoteAccessMessage
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.privileged.ServiceBindResult
 import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
@@ -47,6 +46,7 @@ import com.aliothmoon.maafw.runner.FocusMessage
 import com.aliothmoon.maafw.runner.GameFpsWatcher
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PreviewTouchMarker
+import com.aliothmoon.maafw.runner.RunLogEntry
 import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
@@ -82,7 +82,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -108,6 +110,8 @@ private data class QuickSnapshot(
     val closeAppAfterTask: Boolean = false,
     val touchPreviewEnabled: Boolean = true,
     val telemetryEnabled: Boolean = true,
+    val instancesTwoColumn: Boolean = true,
+    val showInstanceLogs: Boolean = false,
 )
 
 /** 提权相关几条流的一次快照；只为把外层 combine 的元数压回 4 以内 */
@@ -169,6 +173,8 @@ class SessionViewModel(
                 appSettings.closeAppAfterTask,
                 appSettings.touchPreviewEnabled,
                 appSettings.telemetryEnabled,
+                appSettings.instancesTwoColumn,
+                appSettings.showInstanceLogs,
                 ::QuickSnapshot,
             ),
         ) { snapshot, quick -> snapshot.copy(quick = quick) }
@@ -229,6 +235,9 @@ class SessionViewModel(
      * Activity 一重建日志就没了，定时触发更是压根没有 VM
      */
     val runLog: StateFlow<RunLogSnapshot> = recorder.runLog
+
+    /** 各路实例最近两行；「全部实例」开着显示日志时按实例号取 */
+    val instanceLogs: StateFlow<Map<Int, List<RunLogEntry>>> = recorder.instanceLogs
 
     private val _effects = MutableSharedFlow<SessionEffect>(
         extraBufferCapacity = 64,
@@ -359,6 +368,8 @@ class SessionViewModel(
             closeAppAfterTask = settings.quick.closeAppAfterTask,
             touchPreviewEnabled = settings.quick.touchPreviewEnabled,
             telemetryEnabled = settings.quick.telemetryEnabled,
+            instancesTwoColumn = settings.quick.instancesTwoColumn,
+            showInstanceLogs = settings.quick.showInstanceLogs,
             resolutionPreset = settings.resolutionPreset,
             remoteAccess = privileged.access,
             remoteAccessGranting = privileged.granting,
@@ -591,15 +602,22 @@ class SessionViewModel(
             is SessionIntent.SetTouchPreviewEnabled ->
                 appSettings.setTouchPreviewEnabled(intent.enabled)
 
+            is SessionIntent.SetInstancesTwoColumn ->
+                appSettings.setInstancesTwoColumn(intent.enabled)
+
+            is SessionIntent.SetShowInstanceLogs ->
+                appSettings.setShowInstanceLogs(intent.enabled)
+
             SessionIntent.ShowOverlay -> openControlOverlay()
             SessionIntent.ApplyForegroundResolution -> applyForegroundResolution()
             SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
             // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
-            // 只用现成连接：一颗次级按钮，不值得为它弹授权请求。stopVirtualDisplay 不是 oneway，远端卡住会挂住调用方
-            SessionIntent.CloseTargetApp -> servicePort.callWithTimeout(CLOSE_TARGET_TIMEOUT) {
-                it.stopVirtualDisplay()
+            // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
+            SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
+                runCatching { service.stopVirtualDisplay() }
+                    .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
             }
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
@@ -623,6 +641,9 @@ class SessionViewModel(
             }
 
             is SessionIntent.Start -> start(intent.surface, intent.acknowledged)
+            is SessionIntent.StartMultiple ->
+                // 独立协程：每路之间要等 30 秒，不能在串行的 intent 通道里阻塞，否则停止等指令全被堵住
+                viewModelScope.launch { startMultiple(intent.slots, intent.surface, intent.acknowledged) }
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -746,10 +767,10 @@ class SessionViewModel(
         val message = when (val result = permissionGateway.bindService()) {
             ServiceBindResult.Started, ServiceBindResult.AlreadyConnected -> return
             is ServiceBindResult.BackendUnavailable ->
-                remoteAccessMessage(result.backend, RemoteAccessFailure.UNAVAILABLE)
+                uiTextOf(R.string.msg_backend_unavailable, result.backend.display)
 
             is ServiceBindResult.AuthRejected ->
-                remoteAccessMessage(result.backend, RemoteAccessFailure.NOT_GRANTED)
+                uiTextOf(R.string.msg_backend_auth_rejected, result.backend.display)
 
             is ServiceBindResult.Failed -> uiTextOf(R.string.msg_bind_service_failed, result.reason)
         }
@@ -852,6 +873,101 @@ class SessionViewModel(
         }
     }
 
+    /** 一批实例正在依次启动：防止用户连点开始，两个批量循环交叉切换活动路导致串台 */
+    private val multiStartLock = Mutex()
+
+    /**
+     * 批量启动多选实例：逐路切换活动路再投递，相邻两路之间错峰 [MULTI_START_STAGGER_MS]。
+     *
+     * 每路用的是各自当前激活的配置（与单路「开始任务」一致）。活动路的切换只影响投递目标，
+     * 已启动的路由 RunLauncher 钉在自己的 slot 上收尾，不受后续切路影响。
+     */
+    private suspend fun startMultiple(
+        slots: List<Int>,
+        surface: TaskSurface,
+        acknowledged: Set<ConfirmToken>,
+    ) {
+        if (slots.isEmpty()) return
+        if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
+            return
+        }
+        if (!multiStartLock.tryLock()) {
+            Timber.i("startMultiple skipped: another batch launch is in progress")
+            return
+        }
+        try {
+            slots.forEachIndexed { index, slot ->
+                if (index > 0) delay(MULTI_START_STAGGER_MS)
+                if (!RemoteServiceManager.setActiveSlot(slot)) {
+                    // 该路尚未建立，无法投递：提示并继续下一路
+                    emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_multi_slot_not_created)))
+                    return@forEachIndexed
+                }
+                val result = runLauncher.launch(
+                    trigger = RunTrigger.Manual,
+                    acknowledged = acknowledged,
+                )
+                if (reportMultipleLaunchResult(result, slots, acknowledged)) return
+            }
+        } finally {
+            multiStartLock.unlock()
+        }
+    }
+
+    /**
+     * 汇报批量启动中某一路的结果；返回 true 表示应中止整批（配置/确认类问题，后面的路也会撞上），
+     * false 表示继续下一路（该路已在跑、被拒等单路特有的情况）。
+     */
+    private suspend fun reportMultipleLaunchResult(
+        result: RunLaunchResult,
+        slots: List<Int>,
+        acknowledged: Set<ConfirmToken>,
+    ): Boolean = when (result) {
+        RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> false
+
+        RunLaunchResult.ProjectNotReady -> {
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
+            true
+        }
+
+        RunLaunchResult.NoExecutableTasks -> {
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_no_executable_tasks)))
+            true
+        }
+
+        RunLaunchResult.ConfigurationMissing -> {
+            emitEffect(
+                SessionEffect.ShowMessage(uiTextOf(R.string.schedule_reason_configuration_missing)),
+            )
+            true
+        }
+
+        is RunLaunchResult.Invalid -> {
+            emitEffect(SessionEffect.ShowDiagnostics(result.diagnostics))
+            true
+        }
+
+        is RunLaunchResult.Blocked -> {
+            emitEffect(SessionEffect.ShowMessage(result.reason))
+            true
+        }
+
+        is RunLaunchResult.Rejected -> {
+            // 该路已在跑、setup 失败等：单路特有，提示后继续启动其余路
+            emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_cannot_start, result.reason)))
+            false
+        }
+
+        is RunLaunchResult.NeedsConfirmation -> {
+            // precheck 拦下、这一路还没真正投递：弹确认，确认后重发整批；已启动的路重发会被幂等拒绝
+            emitEffect(
+                SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token, slots),
+            )
+            true
+        }
+    }
+
     private suspend fun stop() {
         when (val command = runnerPort.stop()) {
             is RunnerCommandResult.Accepted -> Unit
@@ -863,7 +979,8 @@ class SessionViewModel(
     private companion object {
         // 整帧 PNG 编码在特权进程里做，高分辨率下要几百毫秒
         val CAPTURE_TIMEOUT = 5.seconds
-        val CLOSE_TARGET_TIMEOUT = 5.seconds
+        // 批量启动相邻两路的错峰间隔：上一路完成启动、虚拟屏出图后再拉下一路
+        const val MULTI_START_STAGGER_MS = 30_000L
         const val MANUAL_SCREENSHOT_KEEP = 20
         val SCREENSHOT_STAMP = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
     }
