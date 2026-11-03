@@ -102,6 +102,7 @@ internal fun TaskRow(
     onDuplicate: () -> Unit,
     onRename: () -> Unit,
     onClick: () -> Unit,
+    onRunActions: (() -> Unit)?,
     modifier: Modifier = Modifier,
     dragHandleModifier: Modifier = Modifier,
 ) {
@@ -119,7 +120,12 @@ internal fun TaskRow(
     MaaCard(
         modifier = modifier
             .shadow(elevation = dragElevation, shape = MaterialTheme.shapes.medium)
-            .maaClickable(enabled = task.hasOptions, shape = MaterialTheme.shapes.medium, onClick = onClick),
+            .maaClickable(
+                enabled = task.hasOptions || onRunActions != null,
+                shape = MaterialTheme.shapes.medium,
+                onLongClick = onRunActions,
+                onClick = onClick,
+            ),
         contentPadding = PaddingValues(
             horizontal = MaaDesignTokens.Spacing.xs,
             vertical = MaaDesignTokens.Spacing.xs,

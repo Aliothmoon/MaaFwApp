@@ -42,6 +42,7 @@ sealed interface RunLaunchResult {
     /** 项目还在加载或加载失败，没有可编译的 Definition */
     data object ProjectNotReady : RunLaunchResult
     data object NoExecutableTasks : RunLaunchResult
+    data class InvalidTaskSelection(val reason: UiText) : RunLaunchResult
 
     /** 点名要跑的那份运行配置已经被删了 */
     data object ConfigurationMissing : RunLaunchResult
@@ -109,19 +110,32 @@ class RunLauncher(
         trigger: RunTrigger,
         acknowledged: Set<ConfirmToken> = emptySet(),
         configurationId: RunConfigurationId? = null,
+        taskSelection: RunTaskSelection? = null,
         requestId: RunRequestId? = null,
         force: Boolean = false,
         steps: RunStepSink? = null,
         signals: RunSignals = RunSignals(),
         progress: RunProgress = RunProgress { _, _ -> },
-    ): RunLaunchResult =
-        dispatch(trigger, acknowledged, configurationId, requestId, force, steps, signals, progress)
-            .also { logOutcome(trigger, configurationId, it) }
+    ): RunLaunchResult {
+        val selectedConfigurationId = taskSelection?.configurationId ?: configurationId
+        return dispatch(
+            trigger,
+            acknowledged,
+            selectedConfigurationId,
+            taskSelection,
+            requestId,
+            force,
+            steps,
+            signals,
+            progress,
+        ).also { logOutcome(trigger, selectedConfigurationId, it) }
+    }
 
     private suspend fun dispatch(
         trigger: RunTrigger,
         acknowledged: Set<ConfirmToken>,
         configurationId: RunConfigurationId?,
+        taskSelection: RunTaskSelection?,
         requestId: RunRequestId?,
         force: Boolean,
         steps: RunStepSink?,
@@ -150,11 +164,13 @@ class RunLauncher(
                 project.definition,
                 config,
                 configurationId,
+                taskSelection,
                 clientVersion = BuildConfig.VERSION_NAME,
                 clientLanguage = AppLocales.currentProjectTag(),
             )
             val plan = when (built) {
                 RunPlanResult.NoExecutableTasks -> return RunLaunchResult.NoExecutableTasks
+                is RunPlanResult.InvalidSelection -> return RunLaunchResult.InvalidTaskSelection(built.reason)
                 is RunPlanResult.Invalid -> return RunLaunchResult.Invalid(built.diagnostics)
                 is RunPlanResult.Success -> built.plan
             }
@@ -214,6 +230,8 @@ class RunLauncher(
                 Timber.w(result.error, "run %s blocked: %s", label, renderText(result.reason))
             is RunLaunchResult.Invalid ->
                 Timber.w("run %s not started: %d plan diagnostics", label, result.diagnostics.size)
+            is RunLaunchResult.InvalidTaskSelection ->
+                Timber.w("run %s not started: invalid task selection: %s", label, renderText(result.reason))
             RunLaunchResult.ProjectNotReady, RunLaunchResult.NoExecutableTasks, RunLaunchResult.ConfigurationMissing ->
                 Timber.w("run %s not started: %s", label, result)
         }

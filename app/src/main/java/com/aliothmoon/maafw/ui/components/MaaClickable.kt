@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.onLongClick as semanticsOnLongClick
 import androidx.compose.ui.unit.Constraints
 import kotlinx.coroutines.launch
 
@@ -46,8 +47,9 @@ fun Modifier.maaClickable(
     indication: Boolean = true,
     shape: Shape = RectangleShape,
     pressScale: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
-): Modifier = this then MaaClickableElement(enabled, indication, shape, pressScale, onClick)
+): Modifier = this then MaaClickableElement(enabled, indication, shape, pressScale, onClick, onLongClick)
 
 private const val PressedScale = 0.97f
 
@@ -63,12 +65,13 @@ private data class MaaClickableElement(
     val shape: Shape,
     val pressScale: Boolean,
     val onClick: () -> Unit,
+    val onLongClick: (() -> Unit)?,
 ) : ModifierNodeElement<MaaClickableNode>() {
 
-    override fun create(): MaaClickableNode = MaaClickableNode(enabled, indication, shape, pressScale, onClick)
+    override fun create(): MaaClickableNode = MaaClickableNode(enabled, indication, shape, pressScale, onClick, onLongClick)
 
     override fun update(node: MaaClickableNode) {
-        node.update(enabled, indication, shape, pressScale, onClick)
+        node.update(enabled, indication, shape, pressScale, onClick, onLongClick)
     }
 
     override fun InspectorInfo.inspectableProperties() {
@@ -84,6 +87,7 @@ private class MaaClickableNode(
     private var shape: Shape,
     private var pressScale: Boolean,
     private var onClick: () -> Unit,
+    private var onLongClick: (() -> Unit)?,
 ) : DelegatingNode(),
     LayoutModifierNode,
     SemanticsModifierNode {
@@ -124,8 +128,16 @@ private class MaaClickableNode(
         interactionSource.tryEmit(PressInteraction.Cancel(press))
     }
 
-    fun update(enabled: Boolean, indication: Boolean, shape: Shape, pressScale: Boolean, onClick: () -> Unit) {
+    fun update(
+        enabled: Boolean,
+        indication: Boolean,
+        shape: Shape,
+        pressScale: Boolean,
+        onClick: () -> Unit,
+        onLongClick: (() -> Unit)?,
+    ) {
         this.onClick = onClick
+        this.onLongClick = onLongClick
         this.pressScale = pressScale
         if (this.indication != indication || this.shape != shape) {
             this.indication = indication
@@ -173,6 +185,7 @@ private class MaaClickableNode(
                 }
                 coroutineScope.launch { scale.animateTo(1f, PressSpring) }
             },
+            onLongPress = { onLongClick?.invoke() },
             onTap = { onClick() },
         )
     }
@@ -203,6 +216,12 @@ private class MaaClickableNode(
             onClick {
                 this@MaaClickableNode.onClick()
                 true
+            }
+            onLongClick?.let { callback ->
+                semanticsOnLongClick {
+                    callback()
+                    true
+                }
             }
         } else {
             disabled()

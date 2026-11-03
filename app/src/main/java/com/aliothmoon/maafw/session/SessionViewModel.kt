@@ -51,6 +51,7 @@ import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunLauncher
 import com.aliothmoon.maafw.runner.RunTrigger
+import com.aliothmoon.maafw.runner.RunTaskSelection
 import com.aliothmoon.maafw.runner.ConfirmToken
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerCommandResult
@@ -622,7 +623,7 @@ class SessionViewModel(
                 if (piInstall.reinstall()) projectRepository.reload()
             }
 
-            is SessionIntent.Start -> start(intent.surface, intent.acknowledged)
+            is SessionIntent.Start -> start(intent.surface, intent.acknowledged, intent.taskSelection)
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -803,7 +804,11 @@ class SessionViewModel(
      * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
      * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
      */
-    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>) {
+    private suspend fun start(
+        surface: TaskSurface,
+        acknowledged: Set<ConfirmToken>,
+        taskSelection: RunTaskSelection?,
+    ) {
         if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
             return
@@ -813,7 +818,7 @@ class SessionViewModel(
             TaskSurface.InApp -> RunTrigger.Manual
             TaskSurface.Overlay -> RunTrigger.Overlay
         }
-        when (val result = runLauncher.launch(trigger, acknowledged)) {
+        when (val result = runLauncher.launch(trigger, acknowledged, taskSelection = taskSelection)) {
             // 手动发起不传 requestId，这条到不了
             RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
 
@@ -822,6 +827,9 @@ class SessionViewModel(
 
             RunLaunchResult.NoExecutableTasks ->
                 emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_no_executable_tasks)))
+
+            is RunLaunchResult.InvalidTaskSelection ->
+                emitEffect(SessionEffect.ShowMessage(result.reason))
 
             // 首页只跑当前激活的配置，不点名，所以这条到不了这里；定时才会撞上
             RunLaunchResult.ConfigurationMissing ->
@@ -848,7 +856,13 @@ class SessionViewModel(
                 emitEffect(SessionEffect.ShowMessage(result.reason))
 
             is RunLaunchResult.NeedsConfirmation ->
-                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token))
+                emitEffect(
+                    SessionEffect.ConfirmStart(
+                        result.prompt,
+                        acknowledged + result.token,
+                        taskSelection,
+                    ),
+                )
         }
     }
 

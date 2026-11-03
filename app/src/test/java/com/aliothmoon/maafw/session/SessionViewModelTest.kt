@@ -42,6 +42,8 @@ import com.aliothmoon.maafw.runner.RecordingRunKeepAlive
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.DiscardingRunJournal
 import com.aliothmoon.maafw.runner.RunLauncher
+import com.aliothmoon.maafw.runner.RunTaskSelection
+import com.aliothmoon.maafw.runner.RunTaskSelectionMode
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.i18n.UiText
@@ -575,23 +577,30 @@ class SessionViewModelTest {
         val effects = mutableListOf<SessionEffect>()
         backgroundScope.launch { vm.effects.collect { effects += it } }
 
-        vm.onIntent(SessionIntent.Start())
+        val selection = RunTaskSelection(
+            RunConfigurationId("c1"),
+            "t1",
+            RunTaskSelectionMode.Current,
+        )
+        vm.onIntent(SessionIntent.Start(taskSelection = selection))
         advanceUntilIdle()
         val first = effects.filterIsInstance<SessionEffect.ConfirmStart>().single()
         assertTrue(first.prompt.isResource(R.string.precheck_smart_resolution_enabled))
         assertEquals(setOf(DisplayHazardPrecheck.SMART_RESOLUTION), first.acknowledged)
+        assertEquals(selection, first.taskSelection)
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
 
-        vm.onIntent(SessionIntent.Start(acknowledged = first.acknowledged))
+        vm.onIntent(SessionIntent.Start(acknowledged = first.acknowledged, taskSelection = first.taskSelection))
         advanceUntilIdle()
         val second = effects.filterIsInstance<SessionEffect.ConfirmStart>().last()
         assertTrue(second.prompt.isResource(R.string.precheck_eye_protection_enabled))
+        assertEquals(selection, second.taskSelection)
         assertEquals(
             setOf(DisplayHazardPrecheck.SMART_RESOLUTION, DisplayHazardPrecheck.EYE_PROTECTION),
             second.acknowledged,
         )
 
-        vm.onIntent(SessionIntent.Start(acknowledged = second.acknowledged))
+        vm.onIntent(SessionIntent.Start(acknowledged = second.acknowledged, taskSelection = second.taskSelection))
         advanceUntilIdle()
         assertEquals(2, effects.filterIsInstance<SessionEffect.ConfirmStart>().size)
         assertTrue(runner.state.value.phase.isBusy)

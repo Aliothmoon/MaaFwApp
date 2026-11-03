@@ -42,6 +42,11 @@
 
     <!-- 运行开关 -->
     <string name="runner_start">开始任务</string>
+    <string name="task_run_actions_title">运行任务：%1$s</string>
+    <string name="task_run_current">运行当前任务</string>
+    <string name="task_run_current_and_following">运行当前及后续任务</string>
+    <string name="task_run_selection_invalid">所选任务已不存在、已停用或当前环境下不可运行</string>
+    <string name="task_reorder_handle">拖动排序</string>
     <string name="runner_foreground_blocked">当前是前台模式，请先切换到后台模式</string>
     <string name="runner_background_unsupported">Android 10 以下无法使用后台模式，尝试更换设备或者升级系统</string>
     <string name="runner_stop">停止</string>

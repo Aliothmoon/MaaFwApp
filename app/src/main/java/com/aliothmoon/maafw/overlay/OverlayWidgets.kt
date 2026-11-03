@@ -39,6 +39,7 @@ import com.aliothmoon.maafw.ui.components.MaaCheckbox
 @Composable
 internal fun OverlayTile(
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     enabled: Boolean = true,
@@ -50,7 +51,7 @@ internal fun OverlayTile(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .maaClickable(enabled = enabled, shape = shape, onClick = onClick),
+            .maaClickable(enabled = enabled, shape = shape, onLongClick = onLongClick, onClick = onClick),
         shape = shape,
         color = if (selected) scheme.primaryContainer else scheme.surface,
         border = BorderStroke(

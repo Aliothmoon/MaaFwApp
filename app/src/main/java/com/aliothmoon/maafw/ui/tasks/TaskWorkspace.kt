@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunLogSnapshot
+import com.aliothmoon.maafw.runner.RunTaskSelection
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -52,6 +54,7 @@ internal fun TaskWorkspace(
     var editingTaskInstanceId by rememberSaveable { mutableStateOf<String?>(null) }
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
     var showRunLog by rememberSaveable { mutableStateOf(false) }
+    var runActionTarget by remember { mutableStateOf<TaskRunActionTarget?>(null) }
     val logOpen = showLogToggle && showRunLog
 
     Column(
@@ -95,6 +98,9 @@ internal fun TaskWorkspace(
                     onIntent = onIntent,
                     onRequestAddTasks = { showAddTasks = true },
                     onEditTask = { editingTaskInstanceId = it },
+                    onRunActions = { task ->
+                        active?.let { runActionTarget = TaskRunActionTarget(it.id, task.instanceId, task.label) }
+                    },
                 )
             }
         } else {
@@ -107,6 +113,9 @@ internal fun TaskWorkspace(
                 onIntent = onIntent,
                 onRequestAddTasks = { showAddTasks = true },
                 onEditTask = { editingTaskInstanceId = it },
+                onRunActions = { task ->
+                    active?.let { runActionTarget = TaskRunActionTarget(it.id, task.instanceId, task.label) }
+                },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -161,6 +170,20 @@ internal fun TaskWorkspace(
             onDismiss = { showConfigSheet = false },
         )
     }
+
+    TaskRunActionsSheet(
+        target = runActionTarget,
+        onDismiss = { runActionTarget = null },
+        onRun = { mode ->
+            val target = runActionTarget ?: return@TaskRunActionsSheet
+            runActionTarget = null
+            onIntent(
+                SessionIntent.Start(
+                    taskSelection = RunTaskSelection(target.configurationId, target.instanceId, mode),
+                ),
+            )
+        },
+    )
 }
 
 @Composable
@@ -173,6 +196,7 @@ private fun TaskWorkspaceBody(
     onIntent: (SessionIntent) -> Unit,
     onRequestAddTasks: () -> Unit,
     onEditTask: (String) -> Unit,
+    onRunActions: (com.aliothmoon.maafw.domain.ResolvedConfiguredTask) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -196,6 +220,7 @@ private fun TaskWorkspaceBody(
             onIntent = onIntent,
             onRequestAddTasks = onRequestAddTasks,
             onEditTask = onEditTask,
+            onRunActions = onRunActions,
             modifier = modifier.fillMaxSize(),
         )
     }

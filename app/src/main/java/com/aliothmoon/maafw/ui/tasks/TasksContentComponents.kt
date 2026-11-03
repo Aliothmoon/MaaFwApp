@@ -69,6 +69,7 @@ internal fun TaskList(
     onIntent: (SessionIntent) -> Unit,
     onRequestAddTasks: () -> Unit,
     onEditTask: (String) -> Unit,
+    onRunActions: (ResolvedConfiguredTask) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val copySuffix = stringResource(R.string.tasks_copy_suffix)
@@ -154,6 +155,11 @@ internal fun TaskList(
                     onRename = { renamingTask = task },
                     onClick = {
                         if (task.hasOptions) onEditTask(task.instanceId)
+                    },
+                    onRunActions = if (task.effectiveEnabled && !locked) {
+                        { onRunActions(task) }
+                    } else {
+                        null
                     },
                     modifier = Modifier.animateItem(),
                 )

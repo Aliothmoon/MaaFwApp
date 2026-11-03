@@ -150,6 +150,73 @@ class RunPlanBuilderTest {
     }
 
     @Test
+    fun `选择当前任务只编译该任务`() {
+        val configuration = configWith(
+            ConfiguredTask("启动游戏", instanceId = "first"),
+            ConfiguredTask("收取荒原", instanceId = "selected"),
+            ConfiguredTask("每日心相（意志解析）", instanceId = "last"),
+        )
+        val result = RunPlanBuilder.build(
+            definition,
+            configuration,
+            taskSelection = RunTaskSelection(
+                RunConfigurationId("test"),
+                "selected",
+                RunTaskSelectionMode.Current,
+            ),
+        )
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        assertEquals(listOf("收取荒原"), (result as RunPlanResult.Success).plan.tasks.map { it.taskName })
+    }
+
+    @Test
+    fun `选择当前及后续任务保留顺序并跳过禁用与不适用项且不改配置`() {
+        val configuration = configWith(
+            ConfiguredTask("启动游戏", instanceId = "first"),
+            ConfiguredTask("收取荒原", enabled = false, instanceId = "disabled"),
+            ConfiguredTask("每日心相（意志解析）", instanceId = "unavailable"),
+        )
+        val unavailableLater = definition.copy(
+            tasks = definition.tasks.map {
+                if (it.name == "每日心相（意志解析）") it.copy(resources = listOf("台服")) else it
+            },
+        )
+        val originalTasks = configuration.configuration(RunConfigurationId("test"))!!.tasks
+        val result = RunPlanBuilder.build(
+            unavailableLater,
+            configuration,
+            taskSelection = RunTaskSelection(
+                RunConfigurationId("test"),
+                "first",
+                RunTaskSelectionMode.CurrentAndFollowing,
+            ),
+        )
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(listOf("启动游戏"), plan.tasks.map { it.taskName })
+        assertEquals(listOf("每日心相（意志解析）"), plan.skippedTasks.map { it.label })
+        assertEquals(originalTasks, configuration.configuration(RunConfigurationId("test"))!!.tasks)
+    }
+
+    @Test
+    fun `所选实例缺失或不可运行时拒绝启动`() {
+        val config = configWith(ConfiguredTask("启动游戏", instanceId = "selected"))
+        val missing = RunPlanBuilder.build(
+            definition,
+            config,
+            taskSelection = RunTaskSelection(RunConfigurationId("test"), "missing", RunTaskSelectionMode.Current),
+        )
+        val disabledConfig = configWith(ConfiguredTask("启动游戏", enabled = false, instanceId = "selected"))
+        val disabled = RunPlanBuilder.build(
+            definition,
+            disabledConfig,
+            taskSelection = RunTaskSelection(RunConfigurationId("test"), "selected", RunTaskSelectionMode.Current),
+        )
+        assertTrue(missing is RunPlanResult.InvalidSelection)
+        assertTrue(disabled is RunPlanResult.InvalidSelection)
+    }
+
+    @Test
     fun `switch 活动分支的 input placeholder 替换进 pipeline override`() {
         val result = RunPlanBuilder.build(definition, configWith(customStageTask()))
         assertTrue("应编译成功: $result", result is RunPlanResult.Success)

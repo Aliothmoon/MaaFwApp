@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.DragIndicator
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,12 +52,16 @@ import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.uniqueCopyLabel
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.session.SessionIntent
+import com.aliothmoon.maafw.session.TaskSurface
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.ui.components.MaaSkipReason
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.tasks.setPresent
+import com.aliothmoon.maafw.ui.tasks.TaskRunActionTarget
+import com.aliothmoon.maafw.ui.tasks.TaskRunActionsSheet
+import com.aliothmoon.maafw.runner.RunTaskSelection
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -77,6 +82,7 @@ internal fun OverlayTaskSplit(
     var editMode by rememberSaveable { mutableStateOf(false) }
     var adding by rememberSaveable { mutableStateOf(false) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var runActionTarget by remember { mutableStateOf<TaskRunActionTarget?>(null) }
 
     val taskIds = remember(active?.tasks) { active?.tasks?.map { it.instanceId }.orEmpty() }
     LaunchedEffect(active?.id, taskIds) {
@@ -115,6 +121,9 @@ internal fun OverlayTaskSplit(
                 adding = !adding
             },
             onSelect = { selectedId = it },
+            onRunActions = { task ->
+                active?.let { runActionTarget = TaskRunActionTarget(it.id, task.instanceId, task.label) }
+            },
             onIntent = onIntent,
             modifier = Modifier
                 .fillMaxHeight()
@@ -136,6 +145,21 @@ internal fun OverlayTaskSplit(
                 .weight(1f),
         )
     }
+
+    TaskRunActionsSheet(
+        target = runActionTarget,
+        onDismiss = { runActionTarget = null },
+        onRun = { mode ->
+            val target = runActionTarget ?: return@TaskRunActionsSheet
+            runActionTarget = null
+            onIntent(
+                SessionIntent.Start(
+                    surface = TaskSurface.Overlay,
+                    taskSelection = RunTaskSelection(target.configurationId, target.instanceId, mode),
+                ),
+            )
+        },
+    )
 }
 
 @Composable
@@ -146,6 +170,7 @@ private fun OverlayTaskListPane(
     editMode: Boolean,
     adding: Boolean,
     selectedId: String?,
+    onRunActions: (ResolvedConfiguredTask) -> Unit,
     onConfigMode: () -> Unit,
     onEditMode: () -> Unit,
     onAdding: () -> Unit,
@@ -194,8 +219,10 @@ private fun OverlayTaskListPane(
             OverlayCompactTaskList(
                 active = active,
                 locked = locked,
+                editMode = editMode,
                 selectedId = selectedId,
                 onSelect = onSelect,
+                onRunActions = onRunActions,
                 onIntent = onIntent,
                 modifier = Modifier.weight(1f),
             )
@@ -207,8 +234,10 @@ private fun OverlayTaskListPane(
 private fun OverlayCompactTaskList(
     active: ResolvedRunConfiguration,
     locked: Boolean,
+    editMode: Boolean,
     selectedId: String?,
     onSelect: (String) -> Unit,
+    onRunActions: (ResolvedConfiguredTask) -> Unit,
     onIntent: (SessionIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -248,17 +277,29 @@ private fun OverlayCompactTaskList(
                 OverlayTile(
                     selected = instanceId == selectedId,
                     onClick = { onSelect(instanceId) },
-                    modifier = Modifier.longPressDraggableHandle(
-                        enabled = !locked,
-                        onDragStopped = {
-                            val target = currentOrder().indexOf(instanceId)
-                            val origin = canonicalState.value.indexOf(instanceId)
-                            if (target >= 0 && origin >= 0 && target != origin) {
-                                onIntent(SessionIntent.MoveTask(active.id, instanceId, target))
-                            }
-                        },
-                    ),
+                    onLongClick = if (!locked && task.effectiveEnabled) {
+                        { onRunActions(task) }
+                    } else {
+                        null
+                    },
                 ) {
+                    if (editMode) {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Outlined.DragIndicator,
+                            contentDescription = stringResource(R.string.task_reorder_handle),
+                            modifier = Modifier.draggableHandle(
+                                enabled = !locked,
+                                onDragStopped = {
+                                    val target = currentOrder().indexOf(instanceId)
+                                    val origin = canonicalState.value.indexOf(instanceId)
+                                    if (target >= 0 && origin >= 0 && target != origin) {
+                                        onIntent(SessionIntent.MoveTask(active.id, instanceId, target))
+                                    }
+                                },
+                            ),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     OverlayCheckbox(
                         checked = task.checkedForDisplay,
                         onCheckedChange = { enabled ->

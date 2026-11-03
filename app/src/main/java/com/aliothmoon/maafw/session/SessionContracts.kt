@@ -32,6 +32,7 @@ import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.RunTaskSelection
 import com.aliothmoon.maafw.runner.isBusy
 
 /** 跨页工作会话聚合态；Activity 作用域单实例，UI 只读 */
@@ -316,6 +317,7 @@ sealed interface SessionIntent {
     data class Start(
         val surface: TaskSurface = TaskSurface.InApp,
         val acknowledged: Set<ConfirmToken> = emptySet(),
+        val taskSelection: RunTaskSelection? = null,
     ) : SessionIntent
     data object Stop : SessionIntent
 
@@ -372,7 +374,11 @@ sealed interface SessionEffect {
      *
      * [acknowledged] 已含本次这项：几项都要问时逐个弹，前面点过的跟着累积，VM 不必记
      */
-    data class ConfirmStart(val prompt: UiText, val acknowledged: Set<ConfirmToken>) : SessionEffect
+    data class ConfirmStart(
+        val prompt: UiText,
+        val acknowledged: Set<ConfirmToken>,
+        val taskSelection: RunTaskSelection? = null,
+    ) : SessionEffect
 
     /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
     data object InstallShizuku : SessionEffect

@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.config.ConfigurationResolver
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.DiagnosticSeverity
@@ -14,6 +15,7 @@ import com.aliothmoon.maafw.domain.ProjectDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.validateInputCandidate
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.telemetry.TelemetrySummary
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -26,6 +28,7 @@ sealed interface RunPlanResult {
 
     /** 无活动配置 / 空配置 / 全禁用 / 全不适用 */
     data object NoExecutableTasks : RunPlanResult
+    data class InvalidSelection(val reason: UiText) : RunPlanResult
 }
 
 /** ProjectDefinition + UserConfiguration → RunPlan；UI 不得绕过此模块拼 pipeline JSON */
@@ -43,6 +46,7 @@ object RunPlanBuilder {
         definition: ProjectDefinition,
         config: UserConfiguration,
         configurationId: RunConfigurationId? = null,
+        taskSelection: RunTaskSelection? = null,
         clientVersion: String? = null,
         clientLanguage: String? = null,
     ): RunPlanResult {
@@ -56,9 +60,34 @@ object RunPlanBuilder {
         }
         val controller = definition.controller(config.activeControllerName)
 
-        val runConfiguration = config.configuration(configurationId ?: config.activeConfigurationId)
+        val runConfiguration = config.configuration(taskSelection?.configurationId ?: configurationId ?: config.activeConfigurationId)
             ?: return RunPlanResult.NoExecutableTasks
-        if (runConfiguration.tasks.isEmpty()) return RunPlanResult.NoExecutableTasks
+        if (runConfiguration.tasks.isEmpty()) {
+            return if (taskSelection == null) {
+                RunPlanResult.NoExecutableTasks
+            } else {
+                RunPlanResult.InvalidSelection(uiTextOf(R.string.task_run_selection_invalid))
+            }
+        }
+
+        val selectedTasks = if (taskSelection == null) {
+            runConfiguration.tasks
+        } else {
+            val anchorIndex = runConfiguration.tasks.indexOfFirst { it.instanceId == taskSelection.instanceId }
+            val anchor = runConfiguration.tasks.getOrNull(anchorIndex)
+            val anchorDefinition = anchor?.let { definition.task(it.taskName) }
+            val anchorUnavailable = anchorDefinition?.let {
+                ConfigurationResolver.checkApplicability(definition, it, controller, resource.name)
+            }
+            if (anchor == null || !anchor.enabled || anchorDefinition == null || anchorUnavailable != null) {
+                return RunPlanResult.InvalidSelection(uiTextOf(R.string.task_run_selection_invalid))
+            }
+            val endIndex = when (taskSelection.mode) {
+                RunTaskSelectionMode.Current -> anchorIndex + 1
+                RunTaskSelectionMode.CurrentAndFollowing -> runConfiguration.tasks.size
+            }
+            runConfiguration.tasks.subList(anchorIndex, endIndex)
+        }
 
         // 只编译一次：放进任务循环会让诊断按启用任务数重复
         // 诊断单收一份，是否计入见下面 runtimeTasks 那处
@@ -103,7 +132,7 @@ object RunPlanBuilder {
 
         val runtimeTasks = mutableListOf<RuntimeTask>()
         val skippedTasks = mutableListOf<SkippedTask>()
-        for (configured in runConfiguration.tasks) {
+        for (configured in selectedTasks) {
             if (!configured.enabled) continue
             // 已不在项目里的任务也只跳过不报错：勾选框已锁，拦下整轮用户只能去删
             val task = definition.task(configured.taskName)

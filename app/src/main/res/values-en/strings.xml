@@ -42,6 +42,11 @@
 
     <!-- Runner toggle -->
     <string name="runner_start">Start tasks</string>
+    <string name="task_run_actions_title">Run task: %1$s</string>
+    <string name="task_run_current">Run this task</string>
+    <string name="task_run_current_and_following">Run this and following tasks</string>
+    <string name="task_run_selection_invalid">The selected task is missing, disabled, or unavailable in the current environment</string>
+    <string name="task_reorder_handle">Reorder tasks</string>
     <string name="runner_foreground_blocked">Foreground mode is active; switch to background mode first</string>
     <string name="runner_background_unsupported">Background mode is unavailable below Android 10. Try another device or update the system.</string>
     <string name="runner_stop">Stop</string>
