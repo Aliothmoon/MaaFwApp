@@ -120,7 +120,7 @@ object AppWatchdog {
 
         // 屏上空了先问进程还在不在：被杀和"窗口跑到主屏去了"是两回事，
         // 拿后者的文案去讲前者，用户会照着去改前台模式而问题根本不在那
-        when (ProcessLiveness.probe(pkg)) {
+        when (ProcessLiveness.probeMainProcess(pkg)) {
             ProcessLiveness.DEAD -> {
                 if (++deadPolls < DEAD_CONFIRM_POLLS) {
                     Ln.i("AppWatchdog: $pkg not found, confirming on next poll")

@@ -16,6 +16,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -49,9 +50,15 @@ object RemoteServiceManager : PrivilegedServicePort {
     private val currentBinder = AtomicReference<IBinder>()
     private var currentDeathRecipient: BindingDeathRecipient? = null // guarded by lock
     private val _state = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
+    private val _serviceGeneration = MutableStateFlow(0L)
 
     private val timeoutScope = CoroutineScope(MaaDispatchers.Default + SupervisorJob())
     private val connectAttempt = AtomicInteger(0)
+
+    /** 最近一次成功连接的提权进程 PID；进程死亡后保留，供下一次连接补取证 */
+    @Volatile
+    var lastServicePid: Int? = null
+        private set
 
     private val connectors: Map<RemoteBackend, RemoteServiceConnectorBackend> = mapOf(
         RemoteBackend.SHIZUKU to ShizukuProcessServiceConnector,
@@ -72,6 +79,8 @@ object RemoteServiceManager : PrivilegedServicePort {
         .map { it.toPrivilegedServiceState() }
         .stateIn(timeoutScope, SharingStarted.Eagerly, PrivilegedServiceState.Disconnected)
 
+    override val serviceGeneration: StateFlow<Long> = _serviceGeneration.asStateFlow()
+
     override val currentBackend: RemoteBackend? get() = boundBackend
 
     // 携带绑定时的 binder，迟到的死亡通知靠身份比对丢弃
@@ -82,6 +91,7 @@ object RemoteServiceManager : PrivilegedServicePort {
     private val connectorCallbacks = object : RemoteServiceConnectorBackend.Callbacks {
         override fun onConnected(backend: RemoteBackend, binder: IBinder) {
             val service: RemoteService
+            var binderChanged = false
             synchronized(lock) {
                 if (boundBackend != backend) {
                     ServiceBootLogger.event("CB_ON_CONNECTED_STALE", "backend=$backend bound=$boundBackend")
@@ -89,6 +99,11 @@ object RemoteServiceManager : PrivilegedServicePort {
                     return
                 }
                 ServiceBootLogger.event("CB_ON_CONNECTED", "backend=$backend")
+                binderChanged = currentBinder.get() !== binder
+                if (binderChanged) {
+                    // 上一次服务的 PID 只属于旧连接；新 binder 的 pid() 回来前不能拿它兜底
+                    lastServicePid = null
+                }
                 clearCurrentBinderLocked()
                 val recipient = BindingDeathRecipient(binder)
                 try {
@@ -105,10 +120,30 @@ object RemoteServiceManager : PrivilegedServicePort {
                 currentDeathRecipient = recipient
                 service = RemoteService.Stub.asInterface(binder)
                 _state.value = ServiceState.Connected(service)
+                if (binderChanged) {
+                    _serviceGeneration.value += 1
+                }
                 ServiceBootLogger.event("BINDER_CONNECTED", "backend=$backend linkToDeath ok")
             }
             runCatching { service.heartbeat(Process.myPid()) }
                 .onFailure { Timber.w(it, "heartbeat failed") }
+            runCatching { service.pid() }
+                .onSuccess {
+                    val accepted = synchronized(lock) {
+                        if (currentBinder.get() !== binder || !binder.isBinderAlive) {
+                            false
+                        } else {
+                            lastServicePid = it
+                            true
+                        }
+                    }
+                    if (accepted) {
+                        ServiceBootLogger.event("SERVICE_PID", "pid=$it")
+                    } else {
+                        ServiceBootLogger.event("SERVICE_PID_STALE", "pid=$it")
+                    }
+                }
+                .onFailure { Timber.w(it, "query service pid failed") }
         }
 
         override fun onDisconnected(backend: RemoteBackend) {
@@ -120,11 +155,21 @@ object RemoteServiceManager : PrivilegedServicePort {
                 Timber.i("RemoteService disconnected: %s", backend)
                 // 被动断开由服务进程死亡触发，Connected 态下收敛为 Died 保证终态确定
                 val wasConnected = _state.value is ServiceState.Connected
+                val death = if (wasConnected) {
+                    ServiceProcessDeath(
+                        pid = lastServicePid,
+                        backend = boundBackend,
+                        diedAtMs = System.currentTimeMillis(),
+                    )
+                } else {
+                    null
+                }
                 clearCurrentBinderLocked()
                 boundBackend = null
                 if (wasConnected) {
                     ServiceBootLogger.event("STATE_DIED")
                     _state.value = ServiceState.Died
+                    death?.let(ServiceLifecycleSignals::recordDeath)
                 } else {
                     ServiceBootLogger.event("STATE_DISCONNECTED")
                     _state.value = ServiceState.Disconnected
@@ -171,10 +216,16 @@ object RemoteServiceManager : PrivilegedServicePort {
             }
             ServiceBootLogger.event("BINDER_DIED")
             Timber.w("RemoteService binder died")
+            val death = ServiceProcessDeath(
+                pid = lastServicePid,
+                backend = boundBackend,
+                diedAtMs = System.currentTimeMillis(),
+            )
             clearCurrentBinderLocked()
             boundBackend = null
             ServiceBootLogger.event("STATE_DIED")
             _state.value = ServiceState.Died
+            ServiceLifecycleSignals.recordDeath(death)
         }
     }
 
@@ -282,9 +333,11 @@ object RemoteServiceManager : PrivilegedServicePort {
 
     private fun unbindLocked() {
         val backend = boundBackend ?: return
-        connectors.getValue(backend).disconnect(currentBinder.get())
-        clearCurrentBinderLocked()
+        val binder = currentBinder.get()
+        // 先摘身份再通知连接器：主动解绑触发的迟到死讯不能被记成崩溃
         boundBackend = null
+        clearCurrentBinderLocked()
+        connectors.getValue(backend).disconnect(binder)
     }
 
     override fun unbind() {

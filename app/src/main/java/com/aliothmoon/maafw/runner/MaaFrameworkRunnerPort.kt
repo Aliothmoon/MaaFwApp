@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.runner
 
 import android.os.Process
+import android.os.RemoteException
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.IMaaRunnerCallback
 import com.aliothmoon.maafw.ITextInputSink
@@ -70,6 +71,12 @@ class MaaFrameworkRunnerPort(
     private val _state = MutableStateFlow(RunnerState())
     override val state: StateFlow<RunnerState> = _state.asStateFlow()
 
+    private data class RunServiceBinding(val executionId: String, val generation: Long)
+
+    /** 本轮真正投递成功的服务代际；首次连接不算替换 */
+    @Volatile
+    private var runServiceBinding: RunServiceBinding? = null
+
     private val _events = MutableSharedFlow<RunnerEventEnvelope>(
         extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -106,6 +113,18 @@ class MaaFrameworkRunnerPort(
             servicePort.serviceState.collect { serviceState ->
                 if (serviceState == PrivilegedServiceState.Died) {
                     abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died mid-run, forcing abort")
+                }
+            }
+        }
+        scope.launch {
+            servicePort.serviceGeneration.collect { generation ->
+                val binding = runServiceBinding ?: return@collect
+                if (_state.value.activeExecution?.executionId != binding.executionId) return@collect
+                if (generation != binding.generation) {
+                    abortRun(
+                        uiTextOf(R.string.msg_fail_privileged_replaced),
+                        "privileged service replaced mid-run (generation ${binding.generation} -> $generation), forcing abort",
+                    )
                 }
             }
         }
@@ -152,21 +171,40 @@ class MaaFrameworkRunnerPort(
             if (!current.phase.isBusy) {
                 current
             } else {
+                val results = current.activeExecution?.taskResults.orEmpty()
                 RunnerState(
                     phase = RunnerPhase.Idle,
-                    latestResult = ExecutionResult.Failed(
-                        resultReason,
-                        current.activeExecution?.taskResults.orEmpty(),
-                    ),
+                    latestResult = if (current.phase == RunnerPhase.Stopping) {
+                        ExecutionResult.Cancelled(results)
+                    } else {
+                        ExecutionResult.Failed(resultReason, results)
+                    },
                 )
             }
         }
         if (previous.phase.isBusy) {
-            previous.activeExecution?.let {
-                val result = ExecutionResult.Failed(resultReason, it.taskResults)
-                _events.tryEmit(RunnerEventEnvelope(it.executionId, it.currentTaskLabel, RunnerEvent.ExecutionFinished(result)))
+            previous.activeExecution?.let { execution ->
+                val result = if (previous.phase == RunnerPhase.Stopping) {
+                    ExecutionResult.Cancelled(execution.taskResults)
+                } else {
+                    ExecutionResult.Failed(resultReason, execution.taskResults)
+                }
+                _events.tryEmit(
+                    RunnerEventEnvelope(
+                        execution.executionId,
+                        execution.currentTaskLabel,
+                        RunnerEvent.ExecutionFinished(result),
+                    ),
+                )
+                clearServiceBinding(execution.executionId)
             }
             Timber.w(logMessage)
+        }
+    }
+
+    private fun clearServiceBinding(executionId: String) {
+        if (runServiceBinding?.executionId == executionId) {
+            runServiceBinding = null
         }
     }
 
@@ -259,9 +297,12 @@ class MaaFrameworkRunnerPort(
                 else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
             }
             emit(RunnerEvent.ExecutionFinished(result))
-            _state.update { current ->
-                if (current.activeExecution?.executionId != executionId) return@update current
+            val previous = _state.getAndUpdate { current ->
+                if (current.activeExecution?.executionId != executionId) return@getAndUpdate current
                 RunnerState(phase = RunnerPhase.Idle, latestResult = result)
+            }
+            if (previous.activeExecution?.executionId == executionId) {
+                clearServiceBinding(executionId)
             }
         }
 
@@ -343,17 +384,97 @@ class MaaFrameworkRunnerPort(
             // 幂等：没在跑也算受理，UI 不必先查状态
             return RunnerCommandResult.Accepted
         }
-        _state.update { it.copy(phase = RunnerPhase.Stopping) }
+        val executionId = _state.getAndUpdate { current ->
+            if (current.phase.isBusy) current.copy(phase = RunnerPhase.Stopping) else current
+        }.activeExecution?.executionId
         return withContext(MaaDispatchers.IO) {
-            runCatching { servicePort.serviceOrNull()?.stopRun() }
-                .fold(
-                    onSuccess = { RunnerCommandResult.Accepted },
-                    onFailure = {
-                        Timber.w(it, "Failed to stop run")
-                        RunnerCommandResult.Rejected(if (it.message.isNullOrBlank()) uiTextOf(R.string.msg_reject_stop_failed) else uiTextFromFramework(it.message))
-                    },
+            if (servicePort.serviceState.value == PrivilegedServiceState.Died) {
+                abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process already died while stopping")
+                return@withContext RunnerCommandResult.Accepted
+            }
+
+            var service = servicePort.serviceOrNull()
+            if (service == null) {
+                // Preparing 时 startRun 还没发出去，保持 Stopping 由 startRun 成功后的补发收尾
+                if (phase == RunnerPhase.Preparing) return@withContext RunnerCommandResult.Accepted
+                when (val connected = servicePort.connect()) {
+                    ServiceConnectResult.Connected -> service = servicePort.serviceOrNull()
+                    is ServiceConnectResult.NotReady ->
+                        return@withContext rejectStop(
+                            executionId,
+                            phase,
+                            remoteAccessMessage(connected.backend, connected.failure),
+                        )
+                    is ServiceConnectResult.Failed -> {
+                        if (servicePort.serviceState.value == PrivilegedServiceState.Died) {
+                            abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died while reconnecting to stop")
+                            return@withContext RunnerCommandResult.Accepted
+                        }
+                        return@withContext rejectStop(
+                            executionId,
+                            phase,
+                            uiTextOf(R.string.msg_reject_stop_failed),
+                            connected.error,
+                        )
+                    }
+                }
+            }
+            if (service == null) {
+                return@withContext rejectStop(
+                    executionId,
+                    phase,
+                    uiTextOf(R.string.msg_reject_stop_failed),
                 )
+            }
+
+            try {
+                if (service.stopRun()) return@withContext RunnerCommandResult.Accepted
+                if (service.isRunning().not()) {
+                    abortRun(uiTextOf(R.string.msg_reject_stop_failed), "stopRun was rejected, but the privileged process reports the run finished")
+                    return@withContext RunnerCommandResult.Accepted
+                }
+                rejectStop(executionId, phase, uiTextOf(R.string.msg_reject_stop_failed))
+            } catch (cancellation: CancellationException) {
+                restorePhaseAfterRejectedStop(executionId, phase)
+                throw cancellation
+            } catch (e: RemoteException) {
+                // binder 已死，Core 随之消失；继续留在 Stopping 只会卡死
+                abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died while stopping")
+                RunnerCommandResult.Accepted
+            } catch (e: Throwable) {
+                rejectStop(executionId, phase, uiTextOf(R.string.msg_reject_stop_failed), e)
+            }
         }
+    }
+
+    private fun rejectStop(
+        executionId: String?,
+        previousPhase: RunnerPhase,
+        reason: UiText,
+        error: Throwable? = null,
+    ): RunnerCommandResult {
+        val restored = restorePhaseAfterRejectedStop(executionId, previousPhase)
+        return if (restored) {
+            Timber.w(error, "Failed to stop run")
+            RunnerCommandResult.Rejected(reason, error)
+        } else {
+            // 并发的 Died / onFinished 已经收回终态，停止意图无需再报失败
+            RunnerCommandResult.Accepted
+        }
+    }
+
+    private fun restorePhaseAfterRejectedStop(executionId: String?, previousPhase: RunnerPhase): Boolean {
+        val previous = _state.getAndUpdate { current ->
+            if (current.phase == RunnerPhase.Stopping &&
+                current.activeExecution?.executionId == executionId
+            ) {
+                current.copy(phase = previousPhase)
+            } else {
+                current
+            }
+        }
+        return previous.phase == RunnerPhase.Stopping &&
+            previous.activeExecution?.executionId == executionId
     }
 
     /**
@@ -441,14 +562,45 @@ class MaaFrameworkRunnerPort(
             nativeLibraryDir = nativeLibraryDir,
             piEnv = plan.piEnv,
         )
+        val generationAtStart = servicePort.serviceGeneration.value
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return uiTextOf(R.string.msg_reject_service_rejected)
         }
-        if (shouldRetryStop(executionId)) {
+        if (servicePort.serviceGeneration.value != generationAtStart) {
             runCatching { service.stopRun() }
-                .onFailure { Timber.w(it, "Failed to retry stop after run start") }
+                .onFailure { Timber.w(it, "Failed to stop run on a replaced service") }
+            return uiTextOf(R.string.msg_fail_privileged_replaced)
+        }
+        runServiceBinding = RunServiceBinding(executionId, generationAtStart)
+        if (servicePort.serviceGeneration.value != generationAtStart) {
+            runCatching { service.stopRun() }
+                .onFailure { Timber.w(it, "Failed to stop run on a replaced service") }
+            clearServiceBinding(executionId)
+            return uiTextOf(R.string.msg_fail_privileged_replaced)
+        }
+        if (shouldRetryStop(executionId)) {
+            retryStopAfterStart(service, executionId)
         }
         return null
+    }
+
+    /**
+     * Preparing 窗口里收到的 Stop 已先落成 Stopping，startRun 成功后补发一次。
+     * 停不下来就恢复 Running，让用户还能重试，不能停在双方都没在执行的 Stopping。
+     */
+    private fun retryStopAfterStart(service: RemoteService, executionId: String) {
+        try {
+            if (service.stopRun()) return
+            restorePhaseAfterRejectedStop(executionId, RunnerPhase.Running)
+            Timber.w("Retry stop after run start was rejected")
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (e: RemoteException) {
+            abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died while retrying stop")
+        } catch (e: Throwable) {
+            restorePhaseAfterRejectedStop(executionId, RunnerPhase.Running)
+            Timber.w(e, "Failed to retry stop after run start")
+        }
     }
 
     private fun shouldRetryStop(executionId: String): Boolean {
@@ -461,7 +613,7 @@ class MaaFrameworkRunnerPort(
      * 准备失败才把 phase 收回 Idle；onFinished / abort 已经写过终态的不要盖掉
      */
     private fun failPreparation(reason: UiText, executionId: String, error: Throwable? = null): RunnerCommandResult {
-        val next = _state.updateAndGet { current ->
+        val previous = _state.getAndUpdate { current ->
             if (current.phase == RunnerPhase.Preparing) {
                 RunnerState(phase = RunnerPhase.Idle, latestResult = ExecutionResult.Failed(reason))
             } else if (current.phase == RunnerPhase.Stopping &&
@@ -472,6 +624,10 @@ class MaaFrameworkRunnerPort(
                 current
             }
         }
+        if (previous.activeExecution?.executionId == executionId) {
+            clearServiceBinding(executionId)
+        }
+        val next = _state.value
         val rejected = (next.latestResult as? ExecutionResult.Failed)?.reason ?: reason
         return RunnerCommandResult.Rejected(rejected, error)
     }

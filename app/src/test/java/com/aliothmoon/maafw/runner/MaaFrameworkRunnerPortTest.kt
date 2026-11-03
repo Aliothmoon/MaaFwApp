@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import android.os.RemoteException
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.privileged.RemoteAccessFailure
@@ -373,5 +374,115 @@ class MaaFrameworkRunnerPortTest {
 
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
         assertEquals(listOf("e1"), events.filter { it.event is RunnerEvent.ExecutionFinished }.map { it.executionId })
+    }
+
+    @Test
+    fun `stop reconnects after the local binding was dropped`() = runTest(dispatcher) {
+        val first = FakePrivilegedService()
+        val servicePort = FakePrivilegedServicePort(first)
+        val (runner, _) = port(this, first, servicePort)
+        runner.start(plan(), "e1")
+
+        val replacement = FakePrivilegedService()
+        servicePort.service = null
+        servicePort.connectAction = { servicePort.replaceService(replacement) }
+        val connectsBeforeStop = servicePort.connectCount
+
+        assertEquals(RunnerCommandResult.Accepted, runner.stop())
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(connectsBeforeStop + 1, servicePort.connectCount)
+        assertEquals(1, replacement.stopRunCount)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertTrue(runner.state.value.latestResult is ExecutionResult.Cancelled)
+    }
+
+    @Test
+    fun `a rejected stop returns to Running instead of getting stuck`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+        runner.start(plan(), "e1")
+        service.stopRunResult = false
+        service.isRunningResult = true
+
+        assertTrue(runner.stop() is RunnerCommandResult.Rejected)
+        assertEquals(RunnerPhase.Running, runner.state.value.phase)
+    }
+
+    @Test
+    fun `a dead binder while stopping settles as cancelled`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+        runner.start(plan(), "e1")
+        service.stopRunFailure = RemoteException("binder died")
+
+        assertEquals(RunnerCommandResult.Accepted, runner.stop())
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertTrue(runner.state.value.latestResult is ExecutionResult.Cancelled)
+    }
+
+    @Test
+    fun `an unexpected stop failure returns to Running`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val (runner, _) = port(this, service)
+        runner.start(plan(), "e1")
+        service.stopRunFailure = IllegalStateException("remote call failed")
+
+        assertTrue(runner.stop() is RunnerCommandResult.Rejected)
+        assertEquals(RunnerPhase.Running, runner.state.value.phase)
+    }
+
+    @Test
+    fun `service replacement while running aborts the run`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort()
+        val (runner, _) = port(this, servicePort = servicePort)
+        val (_, events) = recordCallbacks(runner)
+        runner.start(plan(), "e1")
+
+        servicePort.replaceService(FakePrivilegedService())
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertTrue(runner.state.value.latestResult is ExecutionResult.Failed)
+        assertEquals(1, events.count { it.event is RunnerEvent.ExecutionFinished })
+    }
+
+    @Test
+    fun `service replacement while stopping settles as cancelled`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort()
+        val (runner, _) = port(this, servicePort = servicePort)
+        val (_, events) = recordCallbacks(runner)
+        runner.start(plan(), "e1")
+        assertEquals(RunnerCommandResult.Accepted, runner.stop())
+
+        servicePort.replaceService(FakePrivilegedService())
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertTrue(runner.state.value.latestResult is ExecutionResult.Cancelled)
+        assertEquals(1, events.count { it.event is RunnerEvent.ExecutionFinished })
+    }
+
+    @Test
+    fun `service replacement during startRun stops the old run and rejects`() = runTest(dispatcher) {
+        lateinit var servicePort: FakePrivilegedServicePort
+        val replacement = FakePrivilegedService()
+        val service = object : FakePrivilegedService() {
+            override fun startRun(runPlanJson: String?): Boolean {
+                val accepted = super.startRun(runPlanJson)
+                servicePort.replaceService(replacement)
+                return accepted
+            }
+        }
+        servicePort = FakePrivilegedServicePort(service)
+        val (runner, _) = port(this, service, servicePort)
+
+        val rejected = runner.start(plan(), "e1") as RunnerCommandResult.Rejected
+
+        assertTrue(rejected.reason.isResource(R.string.msg_fail_privileged_replaced))
+        assertEquals(1, service.stopRunCount)
+        assertEquals(0, replacement.stopRunCount)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
     }
 }

@@ -61,6 +61,25 @@ class NotificationCenter(
     }
 
     /**
+     * 游戏主进程退出会以 Cancelled 收尾，但这不是用户主动停止，仍要报一次。
+     *
+     * 与普通错误共用标题和开关，正文说明剩余任务已中止。系统通知和外部推送各只发一条，
+     * 后续 [onRunFinished] 看到 Cancelled 会直接忽略，不会重复。
+     */
+    suspend fun notifyGameGoneAborted() {
+        val title = renderText(uiTextOf(R.string.notification_event_run_failed))
+        val body = renderText(uiTextOf(R.string.notification_game_gone_aborted))
+        eventNotifier.notifyRunFinished(title, body, isError = true)
+
+        val current = settings.current()
+        val wanted = current.sendOnError.toPrefBoolean(default = true) ||
+            current.sendOnComplete.toPrefBoolean(default = true)
+        if (!wanted) return
+
+        external.send(title, appendLogs(body, current))
+    }
+
+    /**
      * 有启用的定时而 Shizuku 没在跑：到点必定跑不起来，提前说
      *
      * 只发系统通知不外推：这是让人去手机上点一下的事，推到别处也没法处理。

@@ -61,7 +61,7 @@ internal fun DiagnosticLog.toRecords(context: DiagnosticLogContext): List<Diagno
  * Relay 对一个 logs 信封项只收 1 MiB，SDK 攒够 100 条就发、不看字节数。
  * 一条记录序列化后卡在 7 KiB 以内，与 MXU 同一个数，满一批也超不了；属性占掉的从正文里扣
  */
-private fun bodyBudget(attributes: Map<String, Any>): Int {
+internal fun bodyBudget(attributes: Map<String, Any>): Int {
     val own = attributes.entries.sumOf { (key, value) ->
         key.length + ATTRIBUTE_FRAMING_BYTES + value.toString().sumOf { serializedSize(it.code) }
     }
@@ -116,7 +116,7 @@ private fun boundedAttribute(value: String): String =
     value.map { if (it.isISOControl()) '�' else it }.take(MAX_ATTRIBUTE_CHARACTERS).joinToString("")
 
 /** MaaFramework 与外壳的日志都把级别写成方括号里的缩写 */
-private fun logLevelOf(content: String): SentryLogLevel {
+internal fun logLevelOf(content: String): SentryLogLevel {
     val upper = content.uppercase()
     return when {
         "[FTL]" in upper || "[FATAL]" in upper -> SentryLogLevel.FATAL

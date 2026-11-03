@@ -2,15 +2,20 @@ package com.aliothmoon.maafw.telemetry
 
 import android.content.Context
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.TelemetryDefinition
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.ServiceLifecycleSignals
 import com.aliothmoon.maafw.runner.RunPlan
 import com.aliothmoon.maafw.runner.RunnerEvent
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.log.SecretRedaction
 import io.sentry.Attachment
 import io.sentry.Hint
 import io.sentry.Sentry
@@ -20,10 +25,13 @@ import io.sentry.SentryOptions
 import io.sentry.android.core.SentryAndroid
 import io.sentry.logger.SentryLogParameters
 import io.sentry.protocol.User
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import timber.log.Timber
 import java.io.File
 
@@ -44,6 +52,7 @@ class TelemetryController(
     private val projectRepository: ProjectRepository,
     private val settings: AppSettingsManager,
     private val runnerPort: RunnerPort,
+    private val servicePort: PrivilegedServicePort,
     private val scope: CoroutineScope,
     /** 当前保存着的 PI password 明文，失败日志上传前打码用 */
     private val secrets: suspend () -> Collection<String>,
@@ -80,6 +89,12 @@ class TelemetryController(
         secrets = secrets,
         send = ::sendAgentExit,
     )
+    private val forensics by lazy {
+        ServiceDeathForensics(ServiceDeathForensics.PrefsStore(context))
+    }
+    private val forensicsMutex = Mutex()
+    private var handledServiceDeathAtMs = 0L
+    private var serviceDeathCaptureInProgress = false
 
     /** 取值不随 DSN 变，重新初始化不必再查一遍 ActivityManager */
     private val hardware by lazy { TelemetryHardware.collect(context) }
@@ -128,6 +143,18 @@ class TelemetryController(
                 }
             }
         }
+        scope.launch {
+            ServiceLifecycleSignals.lastDeath
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collect { captureServiceDeathIfReady() }
+        }
+        scope.launch {
+            servicePort.serviceState
+                .collect { state ->
+                    if (state == PrivilegedServiceState.Connected) collectDeathForensics()
+                }
+        }
     }
 
     /** 由 [tracer] 在上面那把锁里回调，[active] 此刻就是这轮所属的那份 */
@@ -169,6 +196,115 @@ class TelemetryController(
         Timber.i("[telemetry] agent exit event_id=%s %s", eventId, event.message?.formatted)
     }
 
+    /**
+     * 提权进程死亡单独成一条事件；若已经重新连上，马上尝试补系统日志。
+     * 事件 ID 是后续日志的关联键，所以必须先 capture 再落盘。
+     */
+    private fun captureServiceDeathIfReady() {
+        val death = ServiceLifecycleSignals.lastDeath.value ?: return
+        val incident = synchronized(lock) {
+            if (active == null ||
+                death.diedAtMs <= handledServiceDeathAtMs ||
+                serviceDeathCaptureInProgress
+            ) {
+                return
+            }
+            serviceDeathCaptureInProgress = true
+            ServiceDeathIncident(
+                death = death,
+                runId = runnerPort.state.value.activeExecution?.executionId,
+            )
+        }
+        val eventId = try {
+            Sentry.captureEvent(incident.toSentryEvent())
+        } catch (cancellation: CancellationException) {
+            synchronized(lock) { serviceDeathCaptureInProgress = false }
+            throw cancellation
+        } catch (e: Exception) {
+            synchronized(lock) { serviceDeathCaptureInProgress = false }
+            Timber.w(e, "capture service death failed, will retry when telemetry is ready again")
+            return
+        }
+        synchronized(lock) {
+            handledServiceDeathAtMs = maxOf(handledServiceDeathAtMs, death.diedAtMs)
+            serviceDeathCaptureInProgress = false
+        }
+        Timber.i(
+            "[telemetry] service death event_id=%s backend=%s pid=%s",
+            eventId,
+            death.backend,
+            death.pid,
+        )
+        val pid = death.pid
+        if (pid != null) {
+            runCatching {
+                forensics.remember(
+                    ServiceDeathForensics.Pending(
+                        eventId = eventId.toString(),
+                        runId = incident.runId,
+                        backend = death.backend?.name?.lowercase(),
+                        diedAtMs = death.diedAtMs,
+                        pid = pid,
+                    ),
+                )
+            }.onFailure {
+                Timber.w(it, "remember service death forensics failed")
+            }
+        }
+        collectDeathForensics()
+        if ((ServiceLifecycleSignals.lastDeath.value?.diedAtMs ?: 0L) > handledServiceDeathAtMs) {
+            captureServiceDeathIfReady()
+        }
+    }
+
+    private fun collectDeathForensics() {
+        val service = servicePort.serviceOrNull() ?: return
+        scope.launch(MaaDispatchers.IO) {
+            if (!forensicsMutex.tryLock()) return@launch
+            try {
+                if (synchronized(lock) { active } == null) return@launch
+                val connectedPid = runCatching { service.pid() }.getOrNull() ?: return@launch
+                val pending = forensics.peek(connectedPid) ?: return@launch
+                val content = runCatching {
+                    service.dumpSystemLog(
+                        pending.sinceMs,
+                        pending.untilMs,
+                        pending.pid,
+                        "${context.packageName}:",
+                    )
+                }.getOrElse { "# dump failed: ${it.message}" }
+                val redacted = try {
+                    SecretRedaction.redact(
+                        content,
+                        SecretRedaction.redactable(secrets()),
+                    )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (e: Exception) {
+                    // 密码表读不出来时宁可不发正文，避免把未脱敏的系统日志带出设备
+                    Timber.w(e, "redact service death logs failed")
+                    return@launch
+                }
+                val delayMs = System.currentTimeMillis() - pending.diedAtMs
+                serviceDeathLogRecords(redacted, pending, connectedPid, delayMs).forEach { record ->
+                    Sentry.logger().log(
+                        record.level,
+                        SentryLogParameters.create(SentryAttributes.fromMap(record.attributes)),
+                        record.body,
+                    )
+                }
+                forensics.complete(pending)
+                Timber.i("[telemetry] service death forensics sent, event_id=%s", pending.eventId)
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (e: Exception) {
+                Timber.w(e, "collect service death forensics failed")
+            } finally {
+                forensicsMutex.unlock()
+            }
+        }
+    }
+
     /** 由 [TelemetryHook] 在投递前调用 */
     fun begin(executionId: String, plan: RunPlan) = synchronized(lock) { tracer.begin(executionId, plan) }
 
@@ -193,7 +329,12 @@ class TelemetryController(
         if (telemetry == null) return
         runCatching { init(telemetry) }
             .onFailure { Timber.w(it, "Failed to init telemetry") }
-            .onSuccess { synchronized(lock) { active = telemetry } }
+            .onSuccess {
+                synchronized(lock) { active = telemetry }
+                captureServiceDeathIfReady()
+                // 冷启动时状态流那次 Connected 早于遥测就绪；磁盘里的待取证记录要在这里补发
+                collectDeathForensics()
+            }
     }
 
     private fun init(telemetry: ActiveTelemetry) {

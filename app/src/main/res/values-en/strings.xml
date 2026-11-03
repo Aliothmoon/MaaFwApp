@@ -466,6 +466,7 @@
     <string name="msg_fail_agent_launch_any">Agent failed to start</string>
     <string name="msg_fail_debug_hint">%1$s. Turn on Debug mode in Settings and try again to record the cause</string>
     <string name="msg_fail_privileged_exited">Privileged process exited</string>
+    <string name="msg_fail_privileged_replaced">The privileged process was replaced, so this run was aborted</string>
     <string name="msg_fail_privileged_reported_finished">Privileged process reported the run already finished</string>
     <string name="msg_reject_already_running">A run is already in progress</string>
     <string name="msg_reject_stop_failed">Failed to stop</string>
@@ -860,6 +861,7 @@
     <string name="notification_event_run_partial">Run ended with failures</string>
     <string tools:ignore="PluralsCandidate" name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
     <string name="notification_event_run_failed">Run failed</string>
+    <string name="notification_game_gone_aborted">The game process exited; remaining tasks were aborted</string>
     <string name="notification_event_service_died">Background service stopped</string>
     <string name="notification_event_service_died_body">The background service ended unexpectedly and this run was aborted</string>
 

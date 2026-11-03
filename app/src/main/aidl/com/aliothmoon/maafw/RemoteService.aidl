@@ -184,4 +184,13 @@ interface RemoteService {
      * 超级岛的云端鉴权断网即放行，运行通知选「超级岛」时在进度通知期间断开它
      */
     boolean setPackageNetworkingEnabled(String packageName, boolean enabled) = 84;
+
+    /**
+     * 系统记下的进程退出（含被杀、崩溃），只返回不早于 sinceMs 的。
+     * 返回 ProcessExitRecord 数组的 JSON；Parcelable 线格式会随外壳升级与旧特权进程错位。
+     */
+    String getProcessExitRecords(String packageName, long sinceMs, int maxNum) = 86;
+
+    /** 替被杀的上一个提权进程翻死亡窗口的系统日志；由下一次连上的特权进程执行 */
+    String dumpSystemLog(long sinceMs, long untilMs, int pid, String processPrefix) = 87;
 }

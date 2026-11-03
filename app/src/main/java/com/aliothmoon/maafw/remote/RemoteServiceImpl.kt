@@ -17,11 +17,13 @@ import com.aliothmoon.maafw.remote.internal.AppWatchdog
 import com.aliothmoon.maafw.remote.internal.GameFpsMonitor
 import com.aliothmoon.maafw.remote.internal.GestureRecorder
 import com.aliothmoon.maafw.remote.internal.PermissionGrantHelper
+import com.aliothmoon.maafw.remote.internal.ProcessExitQuery
 import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.remote.internal.PowerController
 import com.aliothmoon.maafw.remote.internal.PrimaryDisplayManager
 import com.aliothmoon.maafw.remote.internal.ScreenManager
 import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
+import com.aliothmoon.maafw.remote.internal.SystemLogDump
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.log.LogExportCollector
 import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
@@ -140,6 +142,15 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun setPackageNetworkingEnabled(packageName: String?, enabled: Boolean): Boolean {
         if (packageName.isNullOrBlank()) return false
         return XmsfFirewall.setNetworkingEnabled(packageName, enabled)
+    }
+
+    override fun getProcessExitRecords(packageName: String?, sinceMs: Long, maxNum: Int): String =
+        ProcessExitWire.encode(ProcessExitQuery.queryAsShell(packageName, sinceMs, maxNum))
+
+    override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String {
+        // 空前缀会命中整份系统日志
+        if (processPrefix.isNullOrBlank()) return "# missing process prefix"
+        return SystemLogDump.dump(sinceMs, untilMs, pid, processPrefix)
     }
 
     override fun stopTargetApp(): Boolean {

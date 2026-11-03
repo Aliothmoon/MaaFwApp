@@ -25,6 +25,14 @@ interface PrivilegedServicePort {
     /** 连接态；binder 不出这一层（见 [PrivilegedServiceState]） */
     val serviceState: StateFlow<PrivilegedServiceState>
 
+    /**
+     * 每次成功建立新的 binder 连接后递增
+     *
+     * 服务被替换时旧 binder 的死讯会因身份过期被丢弃，仅看 [serviceState]
+     * 只能看到 Connected -> Connecting -> Connected。执行侧用这个代际识别替换。
+     */
+    val serviceGeneration: StateFlow<Long>
+
     fun bind()
     fun unbind()
 

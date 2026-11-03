@@ -459,6 +459,7 @@
     <string name="msg_fail_agent_launch_any">Agent 启动失败</string>
     <string name="msg_fail_debug_hint">%1$s。在设置里打开调试模式后重试，可记录失败原因</string>
     <string name="msg_fail_privileged_exited">特权进程已退出</string>
+    <string name="msg_fail_privileged_replaced">特权进程已被替换，本轮已中止</string>
     <string name="msg_fail_privileged_reported_finished">特权进程报告本轮已结束</string>
     <string name="msg_reject_already_running">已有执行在进行中</string>
     <string name="msg_reject_stop_failed">停止失败</string>
@@ -848,6 +849,7 @@
     <string name="notification_event_run_partial">任务已结束，有失败项</string>
     <string name="notification_event_run_partial_body">成功 %1$d/%2$d；失败：%3$s</string>
     <string name="notification_event_run_failed">任务执行失败</string>
+    <string name="notification_game_gone_aborted">游戏进程已退出，已中止剩余任务</string>
     <string name="notification_event_service_died">后台服务中断</string>
     <string name="notification_event_service_died_body">运行中的后台服务意外结束，本轮任务已中止</string>
 

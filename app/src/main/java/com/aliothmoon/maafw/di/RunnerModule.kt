@@ -5,6 +5,7 @@ import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.UserConfigurationStore
 import com.aliothmoon.maafw.config.passwordPlaintexts
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
+import com.aliothmoon.maafw.notification.NotificationCenter
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.runner.AutoSleepHook
@@ -30,6 +31,7 @@ import com.aliothmoon.maafw.runner.MaaFrameworkRunnerPort
 import com.aliothmoon.maafw.runner.NotificationHook
 import com.aliothmoon.maafw.runner.PreviewPort
 import com.aliothmoon.maafw.runner.PrivilegedFocusContentResolver
+import com.aliothmoon.maafw.runner.ProcessExitRecorder
 import com.aliothmoon.maafw.runner.RemotePreviewPort
 import com.aliothmoon.maafw.runner.RunDurationLimitHook
 import com.aliothmoon.maafw.runner.RunKeepAlive
@@ -103,6 +105,7 @@ val runnerModule = module {
             projectRepository = get(),
             settings = get(),
             runnerPort = get(),
+            servicePort = get(),
             scope = get(named<AppCoroutineScope>()),
             secrets = { configurationStore.data.first().passwordPlaintexts() },
         )
@@ -120,6 +123,13 @@ val runnerModule = module {
         )
     }
     single<RunJournal> { get<RunLogRecorder>() }
+
+    single {
+        ProcessExitRecorder(
+            context = androidContext(),
+            servicePort = get(),
+        )
+    }
 
     single {
         GameFpsWatcher(
@@ -180,6 +190,10 @@ val runnerModule = module {
                 WatchdogNoticeHook(
                     watchdogState = get<PermissionGateway>().watchdogState,
                     servicePort = get(),
+                    runnerPort = get(),
+                    notifyGameGone = { get<NotificationCenter>().notifyGameGoneAborted() },
+                    rememberGamePackage = { packageName -> get<ProcessExitRecorder>().rememberGamePackage(packageName) },
+                    recordGameExit = { packageName -> get<ProcessExitRecorder>().recordGame(packageName) },
                     journal = get(),
                     scope = get(named<AppCoroutineScope>()),
                 ),

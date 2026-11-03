@@ -29,6 +29,14 @@ enum class ProcessLiveness {
         }
 
         /**
+         * 只认与包名同名的游戏主进程
+         *
+         * `包名:pushcore` 这类常驻子进程可能在游戏主进程退出后继续活着，
+         * 因此游戏判活不能复用会查进程表的 [probe]。
+         */
+        fun probeMainProcess(packageName: String): ProcessLiveness = pidof(packageName)
+
+        /**
          * 判活走 pidof（与 MaaMeow 同法）：调用方都跑在特权进程里，shell 身份直接 exec 即可
          *
          * 只有"退出码 1 且两个流都空"才算确认死亡——ROM 换了 pidof 实现、或权限被挡时，
