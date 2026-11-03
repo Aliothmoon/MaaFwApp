@@ -139,6 +139,7 @@ object DiagnosticMessages {
     fun regexCompileFailed(option: String, input: String, detail: String): UiText =
         uiTextOf(R.string.diagnostic_regex_compile_failed, option, input, detail)
 
+
     fun optionCycle(path: String): UiText = uiTextOf(R.string.diagnostic_option_cycle, path)
 
     // ── 会话解析 ──
