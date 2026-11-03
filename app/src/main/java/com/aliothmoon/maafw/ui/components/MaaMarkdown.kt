@@ -40,6 +40,7 @@ import com.aliothmoon.maafw.project.isRemoteUrl
 import com.aliothmoon.maafw.project.normalizeProjectPath
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
+import io.noties.markwon.MarkwonConfiguration
 import io.noties.markwon.MarkwonVisitor
 import io.noties.markwon.SpannableBuilder
 import io.noties.markwon.core.MarkwonTheme
@@ -51,6 +52,8 @@ import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.html.HtmlTag
 import io.noties.markwon.html.MarkwonHtmlRenderer
 import io.noties.markwon.html.TagHandler
+import io.noties.markwon.image.ImageSize
+import io.noties.markwon.image.ImageSizeResolverDef
 import io.noties.markwon.image.ImagesPlugin
 import io.noties.markwon.image.file.FileSchemeHandler
 import io.noties.markwon.linkify.LinkifyPlugin
@@ -212,6 +215,21 @@ private fun buildMarkwon(
     .usePlugin(LinkifyPlugin.create())
     .usePlugin(StrikethroughPlugin.create())
     .usePlugin(object : AbstractMarkwonPlugin() {
+        override fun configureConfiguration(builder: MarkwonConfiguration.Builder) {
+            builder.imageSizeResolver(object : ImageSizeResolverDef() {
+                override fun resolveAbsolute(
+                    dimension: ImageSize.Dimension,
+                    original: Int,
+                    textSize: Float,
+                ): Int = if (dimension.unit == null || dimension.unit == "px") {
+                    // HTML 逻辑像素跟随 Compose 密度（含页面缩放）；em 和百分比沿用默认规则。
+                    (dimension.value * density + .5f).toInt()
+                } else {
+                    super.resolveAbsolute(dimension, original, textSize)
+                }
+            })
+        }
+
         // 默认主题偏「文档」：粗黑大圆点、24dp 缩进、带下划线的链接、标题下划线，
         // 和 app 里其余文字放一起很跳；收成 Material 的样子
         override fun configureTheme(builder: MarkwonTheme.Builder) {
