@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
@@ -43,7 +44,10 @@ import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.ListPlaceholder
+import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
+import com.aliothmoon.maafw.ui.components.ansiAnnotated
+import com.aliothmoon.maafw.ui.components.rememberAnsiColorResolver
 import com.aliothmoon.maafw.ui.components.runLogColor
 import org.koin.androidx.compose.koinViewModel
 
@@ -184,6 +188,14 @@ private fun LineRow(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
+    val ansiColor = rememberAnsiColorResolver()
+    val rendered = remember(line.text, line.kind, ansiColor) {
+        if (line.kind == RunLogKind.Agent || line.kind == RunLogKind.AgentError) {
+            ansiAnnotated(line.text, ansiColor)
+        } else {
+            AnnotatedString(line.text)
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -197,13 +209,22 @@ private fun LineRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = line.text,
-                style = MaterialTheme.typography.labelSmall,
-                // 与运行日志面板同一条规矩：原始转储保持等宽，合成过的按正文排版
-                fontFamily = if (line.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
-                color = runLogColor(line.kind),
-            )
+            // 与实时运行日志一致，focus 正文按 Markdown 与 HTML 子集渲染
+            if (line.kind == RunLogKind.Focus) {
+                MaaMarkdown(
+                    text = line.text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = runLogColor(line.kind),
+                )
+            } else {
+                Text(
+                    text = rendered,
+                    style = MaterialTheme.typography.labelSmall,
+                    // 与运行日志面板同一条规矩：原始转储保持等宽，合成过的按正文排版
+                    fontFamily = if (line.kind == RunLogKind.Verbose) FontFamily.Monospace else null,
+                    color = runLogColor(line.kind),
+                )
+            }
             if (expanded) {
                 Text(
                     text = line.detail.orEmpty(),
