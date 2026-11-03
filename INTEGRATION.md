@@ -70,6 +70,9 @@ app:
 
 本地正文路径支持中文、空格和长路径，例如 `announcement/1.简介.md`。单行文本带路径前缀、分隔符、文档扩展名或使用 `LICENSE` 这样的名称时，会尝试读取项目内文件；成功则展示文件内容（包括空文件），否则保留原文。候选未命中不记警告；显式 `./`、`../`（也支持反斜杠）路径未命中，或实际发生文件访问错误时记警告。绝对路径和越出项目目录的路径不允许读取。
 
+> [!NOTE]
+> 后台模式需要将应用启动在虚拟屏上，所以至少要有一个包含了 `StartApp` 的 task ，否则将无法启动目标应用！
+
 ## Agent
 
 资源的 `interface.json` 里声明了 `agent` 才需要这一节。没声明就把配方里的 `agent:` 整段删掉。
@@ -193,6 +196,7 @@ build.releaseAbi=arm64-v8a
 | 出包时报 `the agent runtimes in the profile do not match …` | 下面逐条列出缺的东西：`no <abi>/<bundle 或 jniLibs>/** files` 是 dist 没出全或 `agent.abi` 多写了一项，`… is missing` 是 `executable` 写错或那个 ABI 漏了入口文件。`runtimes[n]` 从 0 数 |
 | 图标不显示 | 文件没进 `include`，或不是 png / webp |
 | 换了资源重装，设备还是旧内容 | 只换资源、没改本仓库时版本号不变，清应用数据或再交一次提交 |
+| 虚拟屏内容为空 | 请检查是否运行过包含了 `StartApp` 的 task 并且没有在前台抢占目标应用 |
 
 查看运行日志：
 
