@@ -650,7 +650,7 @@ class SessionViewModel(
     }
 
     private suspend fun captureVirtualDisplay() {
-        if (!appSettings.debugMode.value || appSettings.runMode.value != RunMode.BACKGROUND) {
+        if (appSettings.runMode.value != RunMode.BACKGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_screenshot_failed)))
             return
         }

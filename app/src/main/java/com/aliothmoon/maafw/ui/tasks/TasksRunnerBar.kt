@@ -235,7 +235,7 @@ internal fun TasksQuickOptionsPanel(
                         },
                         modifier = Modifier.weight(1f),
                     )
-                    if (state.debugMode && state.runMode == RunMode.BACKGROUND) {
+                    if (state.runMode == RunMode.BACKGROUND) {
                         ActionTile(
                             icon = Icons.Outlined.PhotoCamera,
                             label = stringResource(R.string.quick_action_screenshot),

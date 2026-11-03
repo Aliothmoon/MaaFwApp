@@ -675,7 +675,7 @@ class SessionViewModelTest {
     }
 
     @Test
-    fun `manual screenshot is debug-only and rejects before ipc`() = runTest(mainDispatcher) {
+    fun `manual screenshot works with debug mode disabled`() = runTest(mainDispatcher) {
         val service = FakePrivilegedService()
         val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service))
         advanceUntilIdle()
@@ -683,7 +683,7 @@ class SessionViewModelTest {
         vm.onIntent(SessionIntent.CaptureVirtualDisplay)
         advanceUntilIdle()
 
-        assertTrue(service.savedFramePaths.isEmpty())
+        assertEquals(1, service.savedFramePaths.size)
     }
 
     @Test
