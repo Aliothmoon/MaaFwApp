@@ -43,6 +43,7 @@ open class FakePrivilegedService : RemoteService {
     var running: Boolean = false
     var setupResult: Boolean = true
     var startRunResult: Boolean = true
+    var startRunJsons: MutableList<String> = mutableListOf()
     var lastRunPlanJson: String? = null
         private set
     var stopRunCount: Int = 0
@@ -133,6 +134,7 @@ open class FakePrivilegedService : RemoteService {
     }
     override fun startRun(runPlanJson: String?): Boolean {
         if (!startRunResult) return false
+        startRunJsons += runPlanJson.orEmpty()
         lastRunPlanJson = runPlanJson
         running = true
         return true

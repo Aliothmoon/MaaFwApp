@@ -32,6 +32,10 @@ object ActivityUtils {
     @Volatile
     var forceFullscreenOnVirtualDisplay: Boolean = false
 
+    /** false 时仅在目标应用未确认位于目标虚拟屏的情况下强停；进程默认 true 以保持旧行为 */
+    @Volatile
+    var forceRestartOnVirtualDisplay: Boolean = true
+
     private val setLaunchWindowingMode by lazy {
         runCatching {
             ActivityOptions::class.java
@@ -85,6 +89,17 @@ object ActivityUtils {
     @JvmStatic
     fun packageNameOf(spec: String): String = componentOf(spec)?.packageName ?: spec
 
+    /** 无法确认 display 时返回 true，保守沿用旧强停行为 */
+    internal fun shouldForceStopBeforeStart(
+        requestedForceStop: Boolean,
+        targetDisplayId: Int,
+        currentDisplayId: Int?,
+        forceRestart: Boolean,
+    ): Boolean = requestedForceStop && (
+        targetDisplayId == Display.DEFAULT_DISPLAY ||
+            forceRestart ||
+            currentDisplayId != targetDisplayId
+        )
     /** Android 13+ task FPS callback 只认 taskId；找不到则由调用方走帧计数回退 */
     @JvmStatic
     fun findTaskId(packageName: String): Int? {
@@ -154,15 +169,19 @@ object ActivityUtils {
         }
         intent.addFlags(flag)
 
-        // force_stop 只为把主屏上的现有进程挪到目标屏；已在目标屏上运行时只拉到前台。
-        // 资源侧常在加载期反复 StartApp 等待进入游戏（ADB 下语义即"已运行则前台化"），
-        // 每次都杀会让目标永远停在启动阶段
-        if (forceStop) {
-            if (getAppDisplayId(targetPackage) == displayId) {
-                Ln.i("startApp: $targetPackage already on display $displayId, skip force-stop")
-            } else {
-                forceStop(targetPackage, displayId)
-            }
+        val currentDisplayId = if (
+            forceStop &&
+            !forceRestartOnVirtualDisplay &&
+            displayId != Display.DEFAULT_DISPLAY
+        ) {
+            getAppDisplayId(targetPackage)
+        } else {
+            null
+        }
+        if (shouldForceStopBeforeStart(forceStop, displayId, currentDisplayId, forceRestartOnVirtualDisplay)) {
+            forceStop(targetPackage, displayId)
+        } else {
+            Ln.i("startApp keeps $targetPackage alive on display $displayId")
         }
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
 

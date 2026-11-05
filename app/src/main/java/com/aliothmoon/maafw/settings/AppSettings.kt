@@ -58,6 +58,10 @@ data class AppSettings(
     @PrefKey(default = "true")
     val touchPreviewEnabled: String = "true",
 
+    /** 后台模式下 StartApp 前是否无条件强停目标应用；默认开，保持既有强停行为 */
+    @PrefKey(default = "true")
+    val forceRestartApp: String = "true",
+
     /**
      * 后台模式虚拟屏选的 [com.aliothmoon.maafw.runner.ResolutionPreset.id]；空 = 预设列表的第一项
      *
