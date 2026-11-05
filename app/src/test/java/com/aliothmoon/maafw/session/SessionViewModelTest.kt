@@ -19,6 +19,7 @@ import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
+import com.aliothmoon.maafw.log.LogCleanupService
 import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
@@ -67,8 +68,11 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
@@ -195,6 +199,7 @@ class SessionViewModelTest {
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
+        cleanup: LogCleanupService = successfulCleanup(),
         welcomeResolver: WelcomeResolver = WelcomeResolver { null },
         hazards: DisplayHazards = DisplayHazards(),
     ): Triple<SessionViewModel, InMemoryUserConfigurationStore, StubRunnerPort> {
@@ -218,6 +223,7 @@ class SessionViewModelTest {
                 DiscardingRunJournal,
                 backgroundScope,
             ),
+            logCleanup = cleanup,
             piInstall = emptyPiInstall(),
             welcomeResolver = welcomeResolver,
         )
@@ -232,6 +238,7 @@ class SessionViewModelTest {
         val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
         val store = readyStore()
         val settings = FakeAppSettingsGateway()
+        val cleanup = successfulCleanup()
         return SessionViewModel(
             projectRepository = project,
             configurationStore = store,
@@ -251,6 +258,7 @@ class SessionViewModelTest {
                 DiscardingRunJournal,
                 backgroundScope,
             ),
+            logCleanup = cleanup,
             piInstall = emptyPiInstall(),
             welcomeResolver = WelcomeResolver { null },
         )
@@ -275,6 +283,11 @@ class SessionViewModelTest {
      */
     private fun emptyPiInstall() =
         PiInstallCoordinator(PiInstaller(EmptyPiPackage, versionCode = 1))
+
+    private fun successfulCleanup(): LogCleanupService =
+        mockk<LogCleanupService>().also {
+            coEvery { it.clearAll() } returns true
+        }
 
     /** 运行日志只从它那条流取事件，必须接在 VM 用的同一个 runner 上 */
     private fun TestScope.focusDispatcherFor(
@@ -697,6 +710,71 @@ class SessionViewModelTest {
         advanceUntilIdle()
 
         assertTrue(service.savedFramePaths.isEmpty())
+    }
+
+    @Test
+    fun `clearing diagnostic data restarts after a successful cleanup`() = runTest(mainDispatcher) {
+        val cleanup = mockk<LogCleanupService>()
+        coEvery { cleanup.clearAll() } returns true
+        val (vm, _, _) = createVm(cleanup = cleanup)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.ClearDiagnosticData)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { cleanup.clearAll() }
+        assertTrue(SessionEffect.RestartApp in effects)
+    }
+
+    @Test
+    fun `busy runner rejects diagnostic cleanup`() = runTest(mainDispatcher) {
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val cleanup = mockk<LogCleanupService>()
+        coEvery { cleanup.clearAll() } returns true
+        val (vm, _, _) = createVm(runner = runner, cleanup = cleanup)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        vm.onIntent(SessionIntent.ClearDiagnosticData)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { cleanup.clearAll() }
+        assertTrue(SessionEffect.RestartApp !in effects)
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.msg_locked_while_running)
+            },
+        )
+    }
+
+    @Test
+    fun `a failed diagnostic cleanup shows an error and does not restart`() = runTest(mainDispatcher) {
+        val cleanup = mockk<LogCleanupService>()
+        coEvery { cleanup.clearAll() } returns false
+        val (vm, _, _) = createVm(cleanup = cleanup)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.ClearDiagnosticData)
+        advanceUntilIdle()
+
+        assertTrue(SessionEffect.RestartApp !in effects)
+        assertTrue(
+            effects.any {
+                it is SessionEffect.ShowMessage &&
+                    it.message.isResource(R.string.settings_log_cleanup_failed)
+            },
+        )
     }
 
     @Test
