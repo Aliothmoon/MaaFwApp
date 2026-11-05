@@ -74,7 +74,7 @@ class ScheduleViewModel(
     private val deviceSecure = MutableStateFlow(readDeviceSecure())
     private val wizardRequested = MutableStateFlow(false)
     private val autoStartPrompt = MutableStateFlow<AutoStartTarget?>(null)
-    private val autoStartPrefs = AutoStartHelper.prefs(context)
+    private val autoStartPrefs by lazy { AutoStartHelper.prefs(context) }
     private val appContext = context.applicationContext
     private val loadedLog = MutableStateFlow<List<TriggerLogEntry>>(emptyList())
 
