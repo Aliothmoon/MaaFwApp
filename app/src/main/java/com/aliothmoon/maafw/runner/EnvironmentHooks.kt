@@ -234,7 +234,7 @@ class ScreenSaverHook(
 }
 
 /**
- * 跑完强停目标应用；engage 什么都不做，只为占一个收尾位
+ * 跑完停虚拟屏以关闭目标应用，同时释放采集与保活；engage 什么都不做，只为占一个收尾位
  *
  * 两层开关并存，全局优先：全局开了就每一轮都关（含手动 Start），关着才回落到
  * 这条定时规则自己的选项——规则级那条只能管定时触发，手动那轮压根没有 options
@@ -250,7 +250,7 @@ class CloseTargetAppHook(
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): EngageResult {
-        // 前台模式没有虚拟屏，看门狗从不起来，特权侧也就没有目标包名可关
+        // 与手动关闭共用停屏路径，只处理后台模式的虚拟屏
         if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
         val perRule = (ctx.trigger as? RunTrigger.Schedule)?.options?.closeAppAfterTask == true
         if (!settings.closeAppAfterTask.value && !perRule) return EngageResult.Skipped()
@@ -260,7 +260,7 @@ class CloseTargetAppHook(
             val ranToEnd = reason is RunEndReason.Ran &&
                 (reason.result !is ExecutionResult.Cancelled || ctx.stoppedAtLimit.get())
             if (ranToEnd) {
-                servicePort.callOrDefault("stopTargetApp", false) { it.stopTargetApp() }
+                servicePort.callOrDefault("stopVirtualDisplay", Unit) { it.stopVirtualDisplay() }
             }
         })
     }

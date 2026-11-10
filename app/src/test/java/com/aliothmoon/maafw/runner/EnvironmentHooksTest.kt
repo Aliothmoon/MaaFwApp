@@ -389,7 +389,21 @@ class EnvironmentHooksTest {
             RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
         )
 
-        assertEquals(1, service.stopTargetAppCount)
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
+    }
+
+    @Test
+    fun `virtual display is stopped after a failed run`() = runTest {
+        val service = FakePrivilegedService()
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
+
+        hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))).releaseOrNull()!!(
+            RunEndReason.Ran(ExecutionResult.Failed(uiTextOf(R.string.msg_fail_default))),
+        )
+
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
     }
 
     /** 用户手动停多半是想接手看看现场，别把人家应用关了 */
@@ -402,6 +416,7 @@ class EnvironmentHooksTest {
             RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())),
         )
 
+        assertEquals(0, service.stopVirtualDisplayCount)
         assertEquals(0, service.stopTargetAppCount)
     }
 
@@ -416,7 +431,8 @@ class EnvironmentHooksTest {
         ctx.stoppedAtLimit.set(true)
         release(RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())))
 
-        assertEquals(1, service.stopTargetAppCount)
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
     }
 
     /** 特权进程断了时收尾不该反过来触发重连 */
@@ -438,7 +454,8 @@ class EnvironmentHooksTest {
 
         hook.engage(context()).releaseOrNull()!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
-        assertEquals(1, service.stopTargetAppCount)
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
     }
 
     @Test
