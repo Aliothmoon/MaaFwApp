@@ -30,6 +30,9 @@ interface AppSettingsGateway {
     val closeAppAfterTask: StateFlow<Boolean>
     suspend fun setCloseAppAfterTask(enabled: Boolean)
 
+    val releaseDisplayOnAutoClose: StateFlow<Boolean>
+    suspend fun setReleaseDisplayOnAutoClose(enabled: Boolean)
+
     val touchPreviewEnabled: StateFlow<Boolean>
     suspend fun setTouchPreviewEnabled(enabled: Boolean)
 

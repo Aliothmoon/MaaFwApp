@@ -69,6 +69,7 @@ data class SessionUiState(
     val screenSaverEnabled: Boolean = false,
     /** 全局的跑完关目标应用；与 ScheduleStrategy 上的同名选项并存，本项优先 */
     val closeAppAfterTask: Boolean = false,
+    val releaseDisplayOnAutoClose: Boolean = true,
     val touchPreviewEnabled: Boolean = true,
     val resolutionPreset: ResolutionPreset = ResolutionPresets.default,
     /**
@@ -267,6 +268,8 @@ sealed interface SessionIntent {
 
     /** 全局的跑完关目标应用；开着时压过每条定时规则自己的同名选项 */
     data class SetCloseAppAfterTask(val enabled: Boolean) : SessionIntent
+
+    data class SetReleaseDisplayOnAutoClose(val enabled: Boolean) : SessionIntent
 
     /** 预览上是否画注入的触点 */
     data class SetTouchPreviewEnabled(val enabled: Boolean) : SessionIntent

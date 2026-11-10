@@ -84,6 +84,7 @@ object SettingAnchors {
 
     const val SCREEN_SAVER = "tasks.screen_saver"
     const val CLOSE_APP_AFTER_TASK = "tasks.close_app"
+    const val RELEASE_DISPLAY_ON_AUTO_CLOSE = "tasks.release_display_on_auto_close"
     const val TOUCH_PREVIEW = "tasks.touch_preview"
 
     fun projectOption(scope: String, optionName: String) = "$scope.option.$optionName"
@@ -214,6 +215,7 @@ object SettingSearchIndex {
 
         entry(R.string.settings_screen_saver_auto, SettingLocation.TasksQuickOptions, SettingAnchors.SCREEN_SAVER, keywordsRes = R.string.search_keywords_screen_saver, condition = SearchCondition.BACKGROUND_MODE),
         entry(R.string.quick_setting_close_app_after_task, SettingLocation.TasksQuickOptions, SettingAnchors.CLOSE_APP_AFTER_TASK, condition = SearchCondition.BACKGROUND_MODE),
+        entry(R.string.quick_setting_release_display_on_auto_close, SettingLocation.TasksQuickOptions, SettingAnchors.RELEASE_DISPLAY_ON_AUTO_CLOSE, R.string.quick_setting_release_display_on_auto_close_desc, condition = SearchCondition.BACKGROUND_MODE),
         entry(R.string.quick_setting_touch_preview, SettingLocation.TasksQuickOptions, SettingAnchors.TOUCH_PREVIEW),
     )
 
