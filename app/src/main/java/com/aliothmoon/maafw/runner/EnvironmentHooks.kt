@@ -237,7 +237,7 @@ class ScreenSaverHook(
  * 跑完关闭目标应用；engage 什么都不做，只为占一个收尾位
  *
  * 默认与手动关闭共用停屏路径，释放采集与 userActivity 保活。仅强停应用会保留虚拟屏，
- * 主屏熄灭后系统仍可能处于交互态，影响部分 ROM 的抬手唤醒；允许关闭释放选项以保留旧行为。
+ * 主屏熄灭后系统仍可能处于交互态，影响部分 ROM 的抬手唤醒。
  *
  * 两层开关并存，全局优先：全局开了就每一轮都关（含手动 Start），关着才回落到
  * 这条定时规则自己的选项——规则级那条只能管定时触发，手动那轮压根没有 options
@@ -253,7 +253,7 @@ class CloseTargetAppHook(
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): EngageResult {
-        // 与手动关闭共用停屏路径，只处理后台模式的虚拟屏
+        // 前台模式没有虚拟屏，看门狗也不记录自动关闭所需的目标包名
         if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
         val perRule = (ctx.trigger as? RunTrigger.Schedule)?.options?.closeAppAfterTask == true
         if (!settings.closeAppAfterTask.value && !perRule) return EngageResult.Skipped()

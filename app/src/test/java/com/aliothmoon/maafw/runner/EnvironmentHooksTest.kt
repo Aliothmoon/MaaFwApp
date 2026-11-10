@@ -483,7 +483,7 @@ class EnvironmentHooksTest {
         )
     }
 
-    /** 自动关闭只处理后台目标，不接管用户正在主屏操作的应用 */
+    /** 前台模式没有虚拟屏，看门狗也不记录自动关闭所需的目标包名 */
     @Test
     fun `foreground mode ignores the global switch`() = runTest {
         val port = FakePrivilegedServicePort(FakePrivilegedService())
