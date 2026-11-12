@@ -374,12 +374,6 @@ internal fun TaskOptionContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
-            OptionEditorList(
-                options = task.options,
-                locked = locked,
-                onSetOption = onSetOption,
-                carded = true,
-            )
             task.description?.takeIf { it.isNotBlank() }?.let { description ->
                 MaaCard(title = stringResource(R.string.tasks_description_title)) {
                     MaaDescriptionPanel {
@@ -390,6 +384,12 @@ internal fun TaskOptionContent(
                     }
                 }
             }
+            OptionEditorList(
+                options = task.options,
+                locked = locked,
+                onSetOption = onSetOption,
+                carded = true,
+            )
         }
     }
 }
