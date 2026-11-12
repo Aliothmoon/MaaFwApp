@@ -28,7 +28,6 @@ import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.service.SpecialUseFgsGate
 import com.aliothmoon.maafw.runner.RunProgress
 import com.aliothmoon.maafw.runner.ScheduleRunOptions
-import com.aliothmoon.maafw.runner.RunRequestId
 import com.aliothmoon.maafw.runner.RunSignals
 import com.aliothmoon.maafw.runner.RunStepSink
 import com.aliothmoon.maafw.runner.RunTrigger
@@ -207,8 +206,7 @@ class ScheduleExecutionService : Service() {
                     ),
                 ),
                 configurationId = RunConfigurationId(strategy.runConfigurationId),
-                // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
-                requestId = RunRequestId($$"${strategy.id}@$scheduledTimeMs"),
+                requestId = scheduleRequestId(strategy.id, scheduledTimeMs),
                 force = strategy.forceStart,
                 steps = RunStepSink {
                     steps += TriggerStep(

@@ -50,6 +50,8 @@ data class UpdatePanelState(
     val downloading: Boolean = false,
     val downloadedBytes: Long = -1L,
     val totalBytes: Long = -1L,
+    /** 每秒字节数；刚开始还算不出时为负 */
+    val bytesPerSecond: Long = -1L,
     val errorMessage: UiText? = null,
 ) {
     val availableUpdate: UpdateCheckResult.UpdateAvailable?

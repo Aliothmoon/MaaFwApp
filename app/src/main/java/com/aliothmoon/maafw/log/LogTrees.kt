@@ -69,8 +69,9 @@ class FileLogTree(
     override fun isLoggable(tag: String?, priority: Int): Boolean =
         verbose() || priority >= Log.WARN
 
+    // 带异常时 Timber 已把整条 Caused by 链拼进 message，再转交 t 落盘就是两遍堆栈
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
-        writer.submit(priority, tag, message, t)
+        writer.submit(priority, tag, message)
     }
 }
 

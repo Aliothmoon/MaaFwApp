@@ -7,6 +7,8 @@ import com.aliothmoon.maafw.domain.GestureRecordResult
 import com.aliothmoon.maafw.domain.GestureRecordStatus
 import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.domain.UnlockGesture
+import com.aliothmoon.maafw.runner.RunnerPort
+import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -25,7 +27,11 @@ class ScheduleWakeUnlockViewModel(
     private val appSettings: AppSettingsGateway,
     private val engine: WakeUnlockEngine,
     private val gestureStore: UnlockGestureStore,
+    private val runnerPort: RunnerPort,
 ) : ViewModel() {
+
+    /** 自测与录制都要先锁屏再注入，在跑的任务会被打断 */
+    private val taskActive: Boolean get() = runnerPort.state.value.phase.isBusy
 
     val wakeUnlockType: StateFlow<String> = appSettings.wakeUnlockType
     val wakeCredential: StateFlow<String> = appSettings.wakeCredential
@@ -53,6 +59,10 @@ class ScheduleWakeUnlockViewModel(
 
     fun runWakeTest() {
         if (_wakeTestState.value == WakeTestState.Testing) return
+        if (taskActive) {
+            _wakeTestState.value = WakeTestState.Done(WakeResult.TASK_RUNNING)
+            return
+        }
         viewModelScope.launch {
             _wakeTestState.value = WakeTestState.Testing
             val type = appSettings.wakeUnlockType.value
@@ -92,6 +102,10 @@ class ScheduleWakeUnlockViewModel(
 
     fun startGestureRecord() {
         if (recordJob?.isActive == true) return
+        if (taskActive) {
+            _gestureRecordState.value = GestureRecordState.Failed(WakeResult.TASK_RUNNING)
+            return
+        }
         recordJob = viewModelScope.launch {
             _gestureRecordState.value = GestureRecordState.Preparing
             if (!engine.startGestureRecord(RECORD_TIMEOUT_MS)) {

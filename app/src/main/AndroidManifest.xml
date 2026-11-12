@@ -52,6 +52,7 @@
         android:name=".MaaFwApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="false"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="${appIcon}"
         android:label="${appLabel}"
@@ -128,6 +129,11 @@
                 <action android:name="${applicationId}.SCHEDULE_TRIGGER" />
             </intent-filter>
         </receiver>
+
+        <!-- 开机后 / Shizuku 停了之后复查它回来没有；只由 ShizukuDownMonitor 的闹钟显式投递 -->
+        <receiver
+            android:name=".schedule.ShizukuCheckReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".schedule.ScheduleBootReceiver"

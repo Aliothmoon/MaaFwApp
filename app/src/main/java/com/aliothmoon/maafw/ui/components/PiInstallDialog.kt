@@ -52,7 +52,7 @@ fun PiInstallDialog(
         is PiInstallState.Failed -> if (!dismissed) {
             MaaPromptDialog(
                 title = stringResource(R.string.pi_install_failed_title),
-                message = stringResource(R.string.pi_install_failed_message, state.reason.asString()),
+                message = state.message.asString(),
                 icon = Icons.Rounded.Warning,
                 confirmText = stringResource(R.string.pi_install_retry),
                 onConfirm = onRetry,

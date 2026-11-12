@@ -336,17 +336,23 @@ class ProjectLoader(
 
         override fun description(raw: String?): String? {
             val resolved = raw?.let(::i18n) ?: return null
-            if (!isFilePath(resolved)) return resolved
-            val path = normalizeProjectPath(resolved)
-            return try {
-                source.read(path)
-            } catch (e: Exception) {
+            if (!isProjectFileCandidate(resolved)) return resolved
+            val path = normalizeProjectPath(resolved.replace('\\', '/'))
+            val result = source.tryReadText(path)
+            val body = result.getOrNull()
+            if (body != null) return body
+
+            val error = result.exceptionOrNull()
+            // 未命中的候选可能只是正文；显式路径未命中或实际读取失败才提醒作者
+            if (isExplicitProjectPath(resolved) || error != null) {
                 diagnostics += warning(
                     path,
-                    DiagnosticMessages.descriptionReadFailed(e.message.orEmpty())
+                    DiagnosticMessages.descriptionReadFailed(
+                        error?.message ?: "Not a project file: $path"
+                    )
                 )
-                resolved
             }
+            return resolved
         }
     }
 

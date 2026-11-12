@@ -22,6 +22,9 @@ object AppFiles {
     /** [LOG_DIR] 下：缓存帧轮转目录 */
     const val FOCUS_DIR = "focus"
 
+    /** [LOG_DIR] 下：用户手动截取的虚拟屏画面 */
+    const val MANUAL_SCREENSHOT_DIR = "manual"
+
     /** [LOG_DIR] 下：未捕获异常现场 */
     const val CRASH_DIR = "crash"
 

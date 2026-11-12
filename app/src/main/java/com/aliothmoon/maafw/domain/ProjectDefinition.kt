@@ -201,9 +201,18 @@ sealed interface OptionDefinition {
          * 未设值时的落点：PI 的 `default_case`，缺了退到首个 case
          * 生态里绝大多数 option 不写 `default_case`，逼用户逐个选不现实；与 MXU 的 `default_case || cases[0]` 同语义
          * 只有 cases 为空才是 null——那是 PI 自己写坏，留给编译期报诊断
-         * Resolver 与 RunPlanBuilder 必须共用这一处：两边算法不同就会「显示的」与「跑的」分叉
          */
         val effectiveDefaultCase: String? get() = defaultCase ?: cases.firstOrNull()?.name
+
+        /**
+         * 存的 case 已不在 cases 里（PI 更新改名、select 改 switch）按未设值回落，与 MXU 加载期重置同语义
+         * Resolver、RunPlanBuilder、遥测必须共用这一处：两边算法不同就会「显示的」与「跑的」分叉
+         */
+        fun selectedCase(value: OptionValue?): OptionCaseDefinition? {
+            val saved = (value as? OptionValue.SingleCase)?.case
+            return cases.firstOrNull { it.name == saved }
+                ?: cases.firstOrNull { it.name == effectiveDefaultCase }
+        }
     }
 
     data class Select(
@@ -240,6 +249,11 @@ sealed interface OptionDefinition {
         val maxCount: Int? = null,
     ) : OptionDefinition {
         fun acceptsCount(count: Int): Boolean = count >= minCount && (maxCount == null || count <= maxCount)
+
+        /** 仅 Unset 回退默认，emptyList() = 明确全不选；已不在 cases 里的名字滤掉，不报错，口径同 [Choice.selectedCase] */
+        fun selectedCases(value: OptionValue?): List<String> =
+            ((value as? OptionValue.MultipleCases)?.cases ?: defaultCases)
+                .filter { s -> cases.any { it.name == s } }
     }
 
     data class Input(

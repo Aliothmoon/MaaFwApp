@@ -179,6 +179,30 @@ internal class MirrorChyanUpdateClient(
         UpdateResolveResult.Failed(source, UpdateCheckFailure.NETWORK)
     }
 
+    /** 给 GitHub 源定版本号；出什么错都返回 null，不把 Mirror酱 的错报给选了 GitHub 的用户 */
+    suspend fun latestRelease(
+        rid: String?,
+        channel: UpdateChannel,
+        abi: AndroidAbi,
+        currentVersion: String,
+    ): MirrorChyanLatestApi.Latest? {
+        val id = rid?.trim()?.takeIf(String::isNotBlank) ?: return null
+        return try {
+            when (val outcome = latestWithUniversalFallback(id, channel, abi, currentVersion, cdk = null)) {
+                is UpdateSourceOutcome.Ok -> outcome.value
+                is UpdateSourceOutcome.Failed -> {
+                    Timber.tag("UpdateCheck").i("%s precheck skipped: %s", source, outcome.reason)
+                    null
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag("UpdateCheck").w(e, "%s precheck failed", source)
+            null
+        }
+    }
+
     /**
      * 服务端按 os/arch 精确匹配，不回退通用包；单 ABI 包那一架构下架后只剩 universal 时，
      * 再不带 arch 问一次。重试仍失败就报第一次的原因，那才是这个包自己的情况

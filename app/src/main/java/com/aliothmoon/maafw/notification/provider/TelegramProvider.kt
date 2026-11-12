@@ -30,7 +30,7 @@ class TelegramProvider(
         val body = providerJson.encodeToString(
             TelegramRequest(
                 chatId = chatId,
-                text = "$title: $content",
+                text = "$title: $content".fitChars(MAX_TEXT_LENGTH),
                 messageThreadId = settings.telegramTopicId.takeIf { it.isNotEmpty() },
             ),
         )
@@ -64,4 +64,9 @@ class TelegramProvider(
 
     @Serializable
     private data class TelegramResponse(val ok: Boolean = false)
+
+    private companion object {
+        /** sendMessage 的 text 上限，超了直接 400 整条发不出去 */
+        const val MAX_TEXT_LENGTH = 4096
+    }
 }

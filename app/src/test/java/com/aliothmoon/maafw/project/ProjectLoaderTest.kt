@@ -126,6 +126,8 @@ internal class MapProjectSource(private val files: Map<String, String>) : Projec
 
     override fun read(path: String): String =
         files[path] ?: throw IllegalArgumentException("no file: $path")
+
+    override fun tryReadText(path: String): Result<String?> = Result.success(files[path])
 }
 
 /** 生成合法的 V2 根文件：interface_version + import 声明，body 追加其余顶层字段 */
@@ -747,6 +749,67 @@ class ProjectLoaderControllerTest {
             },
         )
         assertEquals(listOf(ControllerDefinition()), ready.definition.controllers)
+    }
+}
+
+class ProjectLoaderWelcomeTest {
+
+    private fun load(files: Map<String, String>): ProjectLoadResult.Ready {
+        val result = ProjectLoader(MapProjectSource(files)).load()
+        assertTrue("加载应成功: $result", result is ProjectLoadResult.Ready)
+        return result as ProjectLoadResult.Ready
+    }
+
+    @Test
+    fun `welcome 数组按顺序读取文件并保留 URL`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """
+                        "welcome": [
+                            "announcements/first.md",
+                            "announcements/second.md",
+                            "https://example.com/announcement.md"
+                        ]
+                    """.trimIndent(),
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+                "announcements/first.md" to "# First",
+                "announcements/second.md" to "# Second",
+            ),
+        )
+
+        assertEquals(
+            listOf("# First", "# Second", "https://example.com/announcement.md"),
+            ready.definition.metadata.welcome,
+        )
+    }
+
+    @Test
+    fun `welcome 显式路径读取失败才记 warning 并保留原文`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/a.json",
+                    body = """"welcome":["missing.md","./missing.md","announcements/second.md"]""",
+                ),
+                "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
+                "announcements/second.md" to "# Second",
+            ),
+        )
+
+        assertEquals(listOf("missing.md", "./missing.md", "# Second"), ready.definition.metadata.welcome)
+        assertEquals(1, ready.diagnostics.count { it.message.isResource(R.string.diagnostic_description_read_failed) })
+        assertTrue(
+            ready.diagnostics.any {
+                it.severity == DiagnosticSeverity.Warning &&
+                    it.message.isResource(
+                        R.string.diagnostic_description_read_failed,
+                        "Not a project file: missing.md",
+                    )
+            },
+        )
     }
 }
 

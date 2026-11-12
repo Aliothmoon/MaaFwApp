@@ -197,7 +197,6 @@ object ConfigurationResolver {
                     applicable = applicability == null,
                     missingDefinition = false,
                     unavailableReason = applicability,
-                    unsupported = !isControllerSupported(definition, taskDefinition),
                     options = if (isActive) {
                         buildOptionEditors(
                             definition = definition,
@@ -311,9 +310,7 @@ object ConfigurationResolver {
         val value = values[option.name]
         return when (option) {
             is OptionDefinition.Choice -> {
-                val selected = (value as? OptionValue.SingleCase)?.case
-                    ?.takeIf { s -> option.cases.any { it.name == s } }
-                    ?: option.effectiveDefaultCase
+                val selected = option.selectedCase(value)?.name
                 OptionEditorState(
                     name = option.name,
                     label = option.label,
@@ -328,8 +325,7 @@ object ConfigurationResolver {
             }
 
             is OptionDefinition.Checkbox -> {
-                // emptyList() = 明确全不选；仅 Unset 才回退默认
-                val selected = (value as? OptionValue.MultipleCases)?.cases ?: option.defaultCases
+                val selected = option.selectedCases(value)
                 OptionEditorState(
                     name = option.name,
                     label = option.label,

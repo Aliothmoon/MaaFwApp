@@ -1,13 +1,17 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.runner.RunLaunchResult
+import com.aliothmoon.maafw.runner.RunRequestId
 
 /** 一次定时发起的记账结果 */
 data class ScheduleLaunchOutcome(
     val result: TriggerResult,
     val failureReason: TriggerFailureReason? = null,
-    /** 写入触发日志时冻成当时语言；来自 Blocked/Rejected 的 UiText */
+    /** 写入触发日志时冻成当时语言；来自 Blocked/Rejected 的 reason 或 Invalid 的首条 Error */
     val detail: UiText? = null,
 )
 
@@ -37,8 +41,15 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
     RunLaunchResult.NoExecutableTasks ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.NO_EXECUTABLE_TASKS)
 
+    // 只留「配置有错」用户无从下手；带上首条 Error 指到具体 option，其余等改完下一次触发再露面
     is RunLaunchResult.Invalid ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.INVALID_PLAN)
+        ScheduleLaunchOutcome(
+            TriggerResult.FAILED_START,
+            TriggerFailureReason.INVALID_PLAN,
+            diagnostics.firstOrNull { it.severity == DiagnosticSeverity.Error }?.let {
+                uiTextOf(R.string.schedule_reason_invalid_plan_detail, it.source, it.message)
+            },
+        )
 
     is RunLaunchResult.Rejected ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason)
@@ -49,6 +60,10 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
     is RunLaunchResult.NeedsConfirmation ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt)
 }
+
+/** 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id */
+fun scheduleRequestId(strategyId: String, scheduledTimeMs: Long): RunRequestId =
+    RunRequestId("$strategyId@$scheduledTimeMs")
 
 /** 框架侧的落点枚举翻成落盘的那一份；两边分开，schema 不跟着框架改 */
 fun com.aliothmoon.maafw.runner.HookOutcome.toTriggerStepOutcome(): TriggerStepOutcome = when (this) {

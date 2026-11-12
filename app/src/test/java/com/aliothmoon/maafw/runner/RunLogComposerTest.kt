@@ -34,6 +34,39 @@ class RunLogComposerTest {
         assertEquals(RunLogKind.Error, callback("Tasker.Task.Failed")?.kind)
     }
 
+    /** 对齐 MAA 的完成日志：带上本任务的用时 */
+    @Test
+    fun `task finish lines carry the elapsed time`() {
+        compose(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"Start"}"""), atMillis = 1_000)
+        val done = compose(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"Start"}"""), atMillis = 66_000)
+
+        assertEquals(
+            UiText.Resource(
+                R.string.run_log_task_elapsed,
+                listOf(
+                    UiText.Resource(R.string.run_log_task_succeeded, listOf("启动应用")),
+                    UiText.Resource(R.string.run_log_elapsed_ms, listOf(1L, 5L)),
+                ),
+            ),
+            done?.text,
+        )
+    }
+
+    /** 中途接上的日志没见到开始，宁可不带也不瞎算 */
+    @Test
+    fun `a finish without its start carries no elapsed time`() {
+        assertEquals(
+            UiText.Resource(R.string.run_log_task_failed, listOf("启动应用")),
+            callback("Tasker.Task.Failed")?.text,
+        )
+    }
+
+    @Test
+    fun `elapsed time picks the largest unit it needs`() {
+        assertEquals(UiText.Resource(R.string.run_log_elapsed_s, listOf(59L)), elapsedText(59_999))
+        assertEquals(UiText.Resource(R.string.run_log_elapsed_hms, listOf(1L, 0L, 1L)), elapsedText(3_601_000))
+    }
+
     /** 拿不到当前任务名就退回 PI 的 entry，宁可显示内部名也不显示空 */
     @Test
     fun `task name falls back to the pipeline entry`() {

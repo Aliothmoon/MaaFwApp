@@ -10,25 +10,17 @@ fun isRemoteUrl(content: String): Boolean =
     content.startsWith("https://") || content.startsWith("http://")
 
 private val DOC_EXTENSION = Regex("""\.(md|txt|json|html|htm)$""", RegexOption.IGNORE_CASE)
-private val SIMPLE_NAME_CHARS = Regex("""^[A-Za-z0-9_\-./\\]+$""")
-private val DIGITS_ONLY = Regex("""^\d+$""")
 private val UPPERCASE_NAME = Regex("""^[A-Z][A-Z0-9_\-]*$""")
 
-/**
- * 文件路径特征：./ 或 ../ 前缀；简单文件名的常见文档扩展名；
- * 或不含空白/HTML 标签的简单文件名（全大写如 LICENSE，或带路径分隔符）
- * 带空格的路径需显式使用 ./ 或 ../，避免把以 .html 等结尾的本地化正文误判为路径
- */
-fun isFilePath(content: String): Boolean {
-    if (isRemoteUrl(content)) return false
-    if (content.startsWith("./") || content.startsWith("../")) return true
+internal fun isExplicitProjectPath(content: String): Boolean =
+    content.startsWith("./") || content.startsWith("../") ||
+        content.startsWith(".\\") || content.startsWith("..\\")
 
-    val isSimpleName = SIMPLE_NAME_CHARS.matches(content) &&
-        content.length in 1..100 &&
-        !DIGITS_ONLY.matches(content)
-
-    if (isSimpleName && DOC_EXTENSION.containsMatchIn(content)) return true
-    if (isSimpleName && UPPERCASE_NAME.matches(content)) return true
-    if (isSimpleName && (content.contains('/') || content.contains('\\'))) return true
-    return false
+/** 单行文本有路径特征就尝试读取，允许中文、空格和长路径；是否为文件由读取结果决定 */
+fun isProjectFileCandidate(content: String): Boolean {
+    if (isRemoteUrl(content) || content.any { it == '\r' || it == '\n' || it == '\u0000' }) return false
+    if (isExplicitProjectPath(content)) return true
+    if (content.contains('<') || content.contains('>')) return false
+    return DOC_EXTENSION.containsMatchIn(content) || UPPERCASE_NAME.matches(content) ||
+        content.contains('/') || content.contains('\\')
 }

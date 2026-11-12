@@ -14,8 +14,13 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
+import com.aliothmoon.maafw.privileged.message
+import com.aliothmoon.maafw.privileged.remoteAccessMessage
+import com.aliothmoon.maafw.privileged.remoteAccessMessageOrNull
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.remote.AgentRuntimeDescriptor
+import com.aliothmoon.maafw.remote.AgentRuntimeEntry
 import com.aliothmoon.maafw.MaaDispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -75,11 +80,22 @@ class MaaFrameworkRunnerPort(
      * 配方给 agent 起的显示名，按序号对应；与特权进程读的是同一个 APK 里的同一份描述
      * 在 app 侧就地查而不经 binder 传：回调的签名一改，挺过升级的旧特权进程就会解错参数
      */
-    private val agentNames: List<String?> by lazy {
-        runCatching { AgentRuntimeDescriptor.readFromApk(apkPath)?.runtimes?.map { it.name } }
+    private val agentRuntimes: List<AgentRuntimeEntry> by lazy {
+        runCatching { AgentRuntimeDescriptor.readFromApk(apkPath)?.runtimes }
             .onFailure { Timber.w(it, "agent runtime descriptor unreadable, agent names fall back to executables") }
             .getOrNull()
             .orEmpty()
+    }
+
+    private fun agentName(index: Int): String? = agentRuntimes.getOrNull(index)?.name
+
+    /** 细节所在的特权进程 logcat 只有调试模式才落盘，没开就提示去打开 */
+    private fun agentLaunchFailure(index: Int?): UiText {
+        val failed = index?.let {
+            val entry = agentRuntimes.getOrNull(it)
+            uiTextOf(R.string.msg_fail_agent_launch, agentLabel(entry?.name, entry?.executable.orEmpty(), it))
+        } ?: uiTextOf(R.string.msg_fail_agent_launch_any)
+        return if (debugMode()) failed else uiTextOf(R.string.msg_fail_debug_hint, failed)
     }
 
     init {
@@ -176,8 +192,8 @@ class MaaFrameworkRunnerPort(
                 override fun onTaskStarted(taskName: String?, index: Int, total: Int) =
                     callback.onTaskStarted(taskName, index, total)
 
-                override fun onTaskFinished(taskName: String?, success: Boolean, message: String?) =
-                    callback.onTaskFinished(taskName, success, message)
+                override fun onTaskFinished(taskName: String?, success: Boolean, message: String?, cancelled: Boolean) =
+                    callback.onTaskFinished(taskName, success, message, cancelled)
 
                 override fun onFinished(outcome: Int, reason: String?) =
                     callback.onFinished(outcome, reason)
@@ -205,11 +221,11 @@ class MaaFrameworkRunnerPort(
         }
 
         fun onAgentConnected(index: Int, total: Int, exec: String?) {
-            emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty(), agentNames.getOrNull(index)))
+            emit(RunnerEvent.AgentConnected(index, total, exec.orEmpty(), agentName(index)))
         }
 
         fun onAgentExited(index: Int, exec: String?, exitCode: Int, crashReport: String?) {
-            emit(RunnerEvent.AgentExited(index, exec.orEmpty(), exitCode, crashReport, agentNames.getOrNull(index)))
+            emit(RunnerEvent.AgentExited(index, exec.orEmpty(), exitCode, crashReport, agentName(index)))
         }
 
         // 不碰 completedTaskCount：那是 onTaskFinished 的账，两边各记一套会在丢事件时永久漂
@@ -221,13 +237,13 @@ class MaaFrameworkRunnerPort(
             emit(RunnerEvent.Progress(name, index, total))
         }
 
-        fun onTaskFinished(taskName: String?, success: Boolean, message: String?) {
+        fun onTaskFinished(taskName: String?, success: Boolean, message: String?, cancelled: Boolean) {
             val result = TaskResult(taskName.orEmpty(), success, message)
             updateOwn { execution ->
                 val results = execution.taskResults + result
                 execution.copy(completedTaskCount = results.size, taskResults = results)
             }
-            emit(RunnerEvent.TaskFinished(taskIndex, success))
+            emit(RunnerEvent.TaskFinished(taskIndex, success, cancelled))
         }
 
         fun onFinished(outcome: Int, reason: String?) {
@@ -239,6 +255,7 @@ class MaaFrameworkRunnerPort(
                 RunOutcome.COMPLETED -> ExecutionResult.Completed(results)
                 RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
                 RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
+                RunOutcome.AGENT_LAUNCH_FAILED -> ExecutionResult.Failed(agentLaunchFailure(reason?.toIntOrNull()), results)
                 else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
             }
             emit(RunnerEvent.ExecutionFinished(result))
@@ -281,6 +298,9 @@ class MaaFrameworkRunnerPort(
 
         return withContext(MaaDispatchers.IO) {
             try {
+                connectFailure()?.let { (reason, error) ->
+                    return@withContext failPreparation(reason, executionId, error)
+                }
                 val rejection = launchOnService(plan, executionId)
                 if (rejection != null) return@withContext failPreparation(rejection, executionId)
                 // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
@@ -308,7 +328,8 @@ class MaaFrameworkRunnerPort(
             } catch (throwable: Throwable) {
                 Timber.e(throwable, "Failed to start run")
                 failPreparation(
-                    uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
+                    throwable.remoteAccessMessageOrNull()
+                        ?: uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
                     executionId,
                     error = throwable,
                 )
@@ -336,9 +357,18 @@ class MaaFrameworkRunnerPort(
     }
 
     /**
+     * 先连上再投递：连不上时 useService 抛出来的只剩一句英文 message，当不了文案
+     * connect 会先刷新授权、必要时发起授权请求，后端换了也会重新绑定
+     */
+    private suspend fun connectFailure(): Pair<UiText, Throwable?>? = when (val result = servicePort.connect()) {
+        ServiceConnectResult.Connected -> null
+        is ServiceConnectResult.NotReady -> remoteAccessMessage(result.backend, result.failure) to null
+        is ServiceConnectResult.Failed -> result.message() to result.error
+    }
+
+    /**
      * 返回 null 表示已受理，否则返回拒绝原因
-     * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
-     * 后端换了也会重新绑定
+     * 前面已经 connect 过，这里的 useService 只是取现成连接；中途断了照常抛
      */
     private suspend fun launchOnService(plan: RunPlan, executionId: String): UiText? {
         val piRoot = installer.installedDir()

@@ -303,6 +303,9 @@
     <string name="schedule_health_fix">去修复</string>
     <string name="schedule_health_backend">%1$s 未授权</string>
     <string name="schedule_health_backend_desc">到点后的亮屏解锁、拉起与执行都靠它，请先完成授权</string>
+    <string name="schedule_health_backend_not_running">%1$s 未运行</string>
+    <string name="schedule_health_backend_unavailable">%1$s 不可用</string>
+    <string name="schedule_health_backend_down_desc">到点后的亮屏解锁、拉起与执行都靠它，请先启动对应服务</string>
     <string name="schedule_health_battery">未加入电源管理白名单</string>
     <string name="schedule_health_battery_desc">到点时系统可能延迟或拦下后台启动</string>
     <string name="schedule_health_notification">通知权限未开启</string>
@@ -392,6 +395,7 @@
     <string name="schedule_result_failed_start">未能开始</string>
     <string name="schedule_reason_configuration_missing">绑定的运行配置已被删除</string>
     <string name="schedule_reason_invalid_plan">配置有错，无法生成本次执行</string>
+    <string name="schedule_reason_invalid_plan_detail">配置有错（%1$s）：%2$s</string>
     <string name="schedule_reason_blocked">启动前检查未通过</string>
     <string name="schedule_reason_rejected">已有执行在进行中</string>
     <string name="schedule_edit_configuration">运行配置</string>
@@ -421,14 +425,20 @@
 
     <!-- 跨层结构化语义的展示文案（domain/VM -> ui/i18n/DomainStrings） -->
     <string name="tasks_ungrouped">未分组</string>
-    <string name="task_unavailable_missing">项目中已不存在该任务</string>
+    <string name="task_unavailable_missing">项目中已不存在该任务，可删除</string>
     <string name="task_unavailable_controller">不支持该任务</string>
-    <string name="task_unavailable_controller_switch">需切换控制器到 %1$s</string>
+    <string name="task_unavailable_controller_switch">需切换控制器到「%1$s」</string>
     <string name="task_unavailable_resource">不支持当前资源（需要 %1$s）</string>
     <string name="msg_locked_while_running">运行期间不能修改配置</string>
     <string name="msg_project_not_loaded">项目尚未加载完成</string>
     <string name="msg_backend_unavailable">%1$s 不可用</string>
     <string name="msg_backend_auth_rejected">%1$s 未授权</string>
+    <string name="msg_backend_not_running">%1$s 未运行</string>
+    <string name="msg_backend_connect_failed">连接 %1$s 特权进程失败：%2$s</string>
+    <string name="notification_action_open_shizuku">打开 Shizuku</string>
+    <string name="notification_shizuku_down_title">Shizuku 未运行</string>
+    <string name="notification_shizuku_down_after_boot">手机重启后需要重新启动 Shizuku，否则定时任务无法执行</string>
+    <string name="notification_shizuku_down_stopped">Shizuku 已停止，重新启动前定时任务无法执行</string>
     <string name="msg_bind_service_failed">连接特权进程失败：%1$s</string>
     <string name="msg_no_executable_tasks">没有可用的任务</string>
     <string name="msg_template_not_found">模板“%1$s”不存在</string>
@@ -445,6 +455,9 @@
 
     <!-- Runner 拒绝/失败原因：reason 现为 UiText，不再当 %s 拼接 -->
     <string name="msg_fail_default">执行失败</string>
+    <string name="msg_fail_agent_launch">Agent 启动失败: %1$s</string>
+    <string name="msg_fail_agent_launch_any">Agent 启动失败</string>
+    <string name="msg_fail_debug_hint">%1$s。在设置里打开调试模式后重试，可记录失败原因</string>
     <string name="msg_fail_privileged_exited">特权进程已退出</string>
     <string name="msg_fail_privileged_reported_finished">特权进程报告本轮已结束</string>
     <string name="msg_reject_already_running">已有执行在进行中</string>
@@ -462,8 +475,11 @@
     <string name="quick_settings_title">自动设置</string>
     <string name="quick_action_screen_saver">熄屏挂机</string>
     <string name="quick_action_close_app">关闭目标应用</string>
+    <string name="quick_action_screenshot">截屏</string>
     <string name="quick_setting_close_app_after_task">任务自动结束时关闭目标应用</string>
     <string name="quick_setting_touch_preview">显示触摸预览</string>
+    <string name="msg_screenshot_saved">截图已保存，导出日志时会一并带上</string>
+    <string name="msg_screenshot_failed">截屏失败，请稍后重试</string>
 
     <!-- 提权授权（首页权限卡 + Shizuku 引导） -->
     <string name="permission_section">权限管理</string>
@@ -542,6 +558,10 @@
     <string name="run_log_task_starting">任务开始: %1$s</string>
     <string name="run_log_task_succeeded">任务完成: %1$s</string>
     <string name="run_log_task_failed">任务失败: %1$s</string>
+    <string name="run_log_task_elapsed">%1$s（用时 %2$s）</string>
+    <string name="run_log_elapsed_hms">%1$d 小时 %2$d 分 %3$d 秒</string>
+    <string name="run_log_elapsed_ms">%1$d 分 %2$d 秒</string>
+    <string name="run_log_elapsed_s">%1$d 秒</string>
     <string name="run_log_agent_flood">Agent 输出过快，已暂停显示；完整输出见 logcat</string>
     <string name="run_log_app_left_display">目标应用已离开虚拟显示器且自动拉回失败(%1$s)</string>
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
@@ -549,6 +569,7 @@
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
     <string name="run_log_game_fps_low">游戏画面帧率仅 %1$d FPS，低于 30，自动战斗可能出错；请在游戏设置中开启高帧率模式，并关闭省电模式</string>
     <string name="run_log_game_fps_degraded">游戏画面帧率 %1$d FPS，低于 50，战斗时机可能不准；建议在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_task_skipped">已跳过任务「%1$s」：%2$s</string>
     <string name="run_log_smart_resolution_enabled">系统已开启「智能分辨率」，后台模式下会导致识别出错，请在系统显示设置中手动关闭</string>
     <string name="run_log_eye_protection_enabled">设备当前处于护眼/夜光模式 (%1$s)，可能影响正常图像识别，请手动关闭</string>
 
@@ -681,9 +702,7 @@
     <string name="diagnostic_active_configuration_missing">activeConfigurationId 指向不存在的配置</string>
     <string name="diagnostic_configured_task_missing">任务 "%1$s" 已不在项目中</string>
     <string name="diagnostic_runtime_no_resource">没有可用的 resource，无法构造运行环境</string>
-    <string name="diagnostic_enabled_task_missing_definition">已启用任务 "%1$s" 缺少 definition</string>
     <string name="diagnostic_option_unset_without_default">option "%1$s" 未设置且没有默认值</string>
-    <string name="diagnostic_selected_case_missing">option "%1$s" 选择的 case "%2$s" 不存在</string>
     <string name="diagnostic_invalid_input">option "%1$s" 的输入 "%2$s" 不合法：%3$s</string>
     <string name="diagnostic_checkbox_count_out_of_range">option "%1$s" 选了 %2$d 项，不满足：%3$s</string>
     <string name="diagnostic_integer_conversion_failed">option "%1$s" 的输入 "%2$s" 无法转换为整数</string>
@@ -708,6 +727,8 @@
     <string name="pi_install_failed_message">%1$s\n\n请检查存储空间是否充足，然后重试。</string>
     <string name="pi_install_retry">重试</string>
     <string name="pi_install_error">解压失败：%1$s</string>
+    <string name="pi_install_failed_corrupt">安装包已损坏：内置的项目资源与安装包记录的校验值不一致，重试也无法修复。\n\n多为下载不完整所致，请重新下载安装包并覆盖安装。</string>
+    <string name="pi_install_failed_read">解压失败：%1$s\n\n请重试；反复失败请重新下载安装包并覆盖安装。</string>
 
     <string name="settings_section_pi">项目资源</string>
     <string name="pi_reinstall_title">重新解压资源</string>
@@ -833,6 +854,7 @@
     <!-- 推送失败原因；由各渠道产出，展示在测试反馈里 -->
     <string name="notification_err_network">网络请求失败</string>
     <string name="notification_err_http_status">服务端返回状态码 %1$d</string>
+    <string name="notification_err_rejected">服务端拒绝：%1$s</string>
     <string name="notification_err_serverchan_key_empty">Server 酱 Send Key 未填写</string>
     <string name="notification_err_serverchan_sctp_fmt">Server 酱 sctp 开头的 Send Key 格式不对</string>
     <string name="notification_err_telegram_token_empty">Telegram Bot Token 未填写</string>
@@ -880,6 +902,7 @@
     <string name="wake_result_unsupported">当前系统不支持该操作</string>
     <string name="wake_result_lock_failed">无法进入锁屏</string>
     <string name="wake_result_ipc_failed">提权服务未连接</string>
+    <string name="wake_result_task_running">任务运行中，请先停止任务再测试或录制</string>
     <string name="wake_result_unknown">解锁失败（代码 %1$d）</string>
     <string name="wake_result_gesture_empty">尚未录制解锁手势</string>
     <string name="wake_result_gesture_screen_mismatch">屏幕方向或分辨率与录制时不一致，请重新录制</string>

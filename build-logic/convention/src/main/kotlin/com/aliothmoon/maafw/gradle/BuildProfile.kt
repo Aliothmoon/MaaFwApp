@@ -32,7 +32,15 @@ private val DEFAULT_PI_INCLUDE = listOf(
 private val DEFAULT_PI_LOG_INCLUDE = listOf("debug/**/*.log")
 
 /** Where an executable lands; the two values are what AgentRuntimeLocation deserializes */
-private val AGENT_LOCATIONS = setOf("nativeLibs", "bundle")
+private val AGENT_LOCATIONS = setOf(AGENT_LOCATION_NATIVE_LIBS, AGENT_LOCATION_BUNDLE)
+
+private const val AGENT_LOCATION_NATIVE_LIBS = "nativeLibs"
+
+/** Install only extracts lib/<abi>/lib*.so into the flat nativeLibraryDir; any other name never reaches the device */
+private val NATIVE_LIB_NAME = Regex("""lib[^/\\]*\.so""")
+
+/** Only this location goes through AgentInstaller, so only it needs bundle.zip and the fingerprint in the package */
+internal const val AGENT_LOCATION_BUNDLE = "bundle"
 
 /** Densities outside this band either blur the game's UI or shrink it past what recognition was tuned for */
 private val PRESET_DPI_RANGE = 120..640
@@ -212,9 +220,13 @@ private fun Map<*, *>.toAgentRuntime(): AgentRuntime {
     require(location in AGENT_LOCATIONS) {
         "agent.runtimes[].location must be one of $AGENT_LOCATIONS, got ${location ?: "nothing"}"
     }
+    val executable = requireNotNull(text("executable")) { "agent.runtimes[].executable is required" }
+    require(location != AGENT_LOCATION_NATIVE_LIBS || NATIVE_LIB_NAME.matches(executable)) {
+        "agent.runtimes[].executable of a nativeLibs entry must be a lib*.so file name without a directory, got $executable"
+    }
     return AgentRuntime(
         location = location!!,
-        executable = requireNotNull(text("executable")) { "agent.runtimes[].executable is required" },
+        executable = executable,
         args = textList("args").orEmpty(),
         env = child("env")?.entries
             ?.associate { (key, value) -> key.toString() to value.scalar().orEmpty() }

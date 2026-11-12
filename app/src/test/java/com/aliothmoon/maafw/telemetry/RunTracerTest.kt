@@ -230,6 +230,19 @@ class RunTracerTest {
         assertTrue(failures.isEmpty())
     }
 
+    /** 叫停时 Wait 带着失败返回，那个任务记为取消；叫停引出的失败节点也不出摘要 */
+    @Test
+    fun `被叫停的任务记为取消，不出失败摘要`() {
+        emit(RunnerEvent.Progress("启动游戏", 0, 2))
+        callback(MaaMsg.NODE_PIPELINE_NODE_FAILED, """{"task_id":8,"node_id":3,"name":"AnyExit"}""")
+        emit(RunnerEvent.TaskFinished(0, success = false, cancelled = true))
+        finish(ExecutionResult.Cancelled(emptyList()))
+
+        assertTrue(failures.isEmpty())
+        assertEquals(SpanStatus.CANCELLED, transaction.children.single().status)
+        assertEquals("cancelled", transaction.children.single().data["result"])
+    }
+
     @Test
     fun `别的轮次的事件不落到当前事务上`() {
         emit(RunnerEvent.Progress("启动游戏", 0, 1))

@@ -156,10 +156,7 @@ class ConfigurationResolverTest {
         assertTrue(task.unavailableReason.isResource(R.string.task_unavailable_resource))
     }
 
-    /**
-     * controller 不匹配在 Android 上不会恢复：勾选框锁住、已勾的按警示显示，目录里也不能再加；
-     * resource 不匹配同样保留勾选意图并警示
-     */
+    /** controller / resource 不匹配都保留勾选意图、按跳过显示；只有 controller 不匹配在目录里不能再加 */
     @Test
     fun `controller mismatch is unsupported while resource mismatch keeps intent`() {
         val def = definition(tasks = listOf(task("PC", controllers = listOf("Win32")), task("T2", resources = listOf("B服"))))
@@ -179,15 +176,13 @@ class ConfigurationResolverTest {
             ),
         )
         val (pc, bili) = session.activeConfiguration!!.tasks
-        assertTrue(pc.unsupported)
         assertTrue(pc.checkedForDisplay)
-        assertTrue(pc.checkedButSkipped)
+        assertTrue(pc.skipped)
         assertFalse(pc.toggleable)
         assertTrue(pc.unavailableReason.isResource(R.string.task_unavailable_controller))
-        assertFalse(bili.unsupported)
         assertTrue(bili.checkedForDisplay)
-        assertTrue(bili.checkedButSkipped)
-        assertTrue(bili.toggleable)
+        assertTrue(bili.skipped)
+        assertFalse(bili.toggleable)
 
         val catalog = session.taskCatalog.flatMap { it.tasks }.associateBy { it.taskName }
         assertTrue(catalog.getValue("PC").unsupported)
@@ -307,6 +302,8 @@ class ConfigurationResolverTest {
         val task = session.activeConfiguration!!.tasks.single()
         assertTrue(task.missingDefinition)
         assertTrue(task.unavailableReason.isResource(R.string.task_unavailable_missing))
+        assertTrue(task.skipped)
+        assertFalse(task.toggleable)
     }
 
     @Test
@@ -332,7 +329,7 @@ class ConfigurationResolverTest {
         )
     }
 
-    /** 换个 controller 就能跑的任务保留勾选意图、不锁勾选框；一个都跑不了的才锁 */
+    /** 换个 controller 就能跑的任务提示切换；一个都跑不了的才算 unsupported */
     @Test
     fun `task limited to another Adb controller waits for a switch instead of being unsupported`() {
         val def = definition(
@@ -353,11 +350,14 @@ class ConfigurationResolverTest {
         val tasks = session.activeConfiguration!!.tasks.associateBy { it.taskName }
         val local = tasks.getValue("Local")
         assertFalse(local.applicable)
-        assertFalse(local.unsupported)
         assertTrue(local.checkedForDisplay)
         assertTrue(local.unavailableReason.isResource(R.string.task_unavailable_controller_switch, "安卓端"))
         assertTrue(tasks.getValue("Both").applicable)
-        assertTrue(tasks.getValue("PC").unsupported)
+        assertTrue(tasks.getValue("PC").unavailableReason.isResource(R.string.task_unavailable_controller))
+
+        val catalog = session.taskCatalog.flatMap { it.tasks }.associateBy { it.taskName }
+        assertFalse(catalog.getValue("Local").unsupported)
+        assertTrue(catalog.getValue("PC").unsupported)
 
         // 切回本地客户端就恢复
         val back = ConfigurationResolver.resolve(def, selecting("ADB", ConfiguredTask("Local")))

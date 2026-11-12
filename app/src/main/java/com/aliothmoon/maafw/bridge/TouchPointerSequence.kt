@@ -19,7 +19,7 @@ object TouchPointerSequence {
 
     enum class Kind { Down, Move, Up }
 
-    enum class FailureReason { InvalidContact, MissingContact, TooManyContacts }
+    enum class FailureReason { InvalidContact, TooManyContacts }
 
     data class Pointer(
         val contact: Int,
@@ -97,8 +97,10 @@ object TouchPointerSequence {
             }
 
             Kind.Up -> {
+                // 按下时系统把 DOWN 丢了（目标窗口这一刻不收触摸），这根手指就没进槽位；
+                // MaaFramework 的点击是 down/up 结果相与，拒掉抬起会把已经按成功上报的 DOWN 又判成失败
                 if (idx < 0) {
-                    return Step(ok = false, failureReason = FailureReason.MissingContact)
+                    return Step(ok = true, noop = true)
                 }
                 val next = current.toMutableList()
                 next[idx] = nextPointer

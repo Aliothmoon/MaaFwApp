@@ -37,6 +37,9 @@ object AppWatchdog {
     private const val REPIN_GRACE_MS = 5000L
     private const val MAX_REPIN_ATTEMPTS = 3
 
+    /** PI 自己重启目标应用时会有一拍查不到进程，连续两拍都查不到才算没了 */
+    private const val DEAD_CONFIRM_POLLS = 2
+
     private val scope = CoroutineScope(SupervisorJob() + MaaDispatchers.IO.limitedParallelism(1))
 
     private val _state = MutableStateFlow(STATE_IDLE)
@@ -51,24 +54,39 @@ object AppWatchdog {
     private var driftRepinAttempts = 0
     private var driftNotified = false
     private var diedNotified = false
+    private var deadPolls = 0
 
-    fun startWatching() {
+    /**
+     * [isRunActive] 返回 false 后自己收摊：一轮自然跑完没有人来调 [stopWatching]，
+     * 不收的话用户事后在主屏打开目标应用，会被当成「窗口飘了」拉回虚拟屏
+     *
+     * 收摊不清 [targetPackage]：收尾的 stopTargetApp 还要用它
+     */
+    @Synchronized
+    fun startWatching(isRunActive: () -> Boolean) {
         stopWatching()
         targetPackage = null
         driftFirstSeenMs = 0L
         driftRepinAttempts = 0
         driftNotified = false
         diedNotified = false
+        deadPolls = 0
         _state.value = STATE_IDLE
         Ln.i("AppWatchdog: start watching display ${VirtualDisplayManager.getDisplayId()}")
         job = scope.launch {
-            while (isActive) {
+            while (isActive && isRunActive()) {
                 delay(POLL_INTERVAL_MS)
+                if (!isRunActive()) break
                 tick()
+            }
+            if (isActive) {
+                Ln.i("AppWatchdog: run finished, stop watching")
+                _state.value = STATE_IDLE
             }
         }
     }
 
+    @Synchronized
     fun stopWatching() {
         job?.cancel()
         job = null
@@ -89,6 +107,7 @@ object AppWatchdog {
             driftRepinAttempts = 0
             driftNotified = false
             diedNotified = false
+            deadPolls = 0
             _state.value = STATE_WATCHING
             return
         }
@@ -103,6 +122,10 @@ object AppWatchdog {
         // 拿后者的文案去讲前者，用户会照着去改前台模式而问题根本不在那
         when (ProcessLiveness.probe(pkg)) {
             ProcessLiveness.DEAD -> {
+                if (++deadPolls < DEAD_CONFIRM_POLLS) {
+                    Ln.i("AppWatchdog: $pkg not found, confirming on next poll")
+                    return
+                }
                 if (!diedNotified) {
                     diedNotified = true
                     _state.value = STATE_APP_DIED
@@ -112,7 +135,7 @@ object AppWatchdog {
             }
             // 判不出就不下结论，等下一拍
             ProcessLiveness.UNKNOWN -> return
-            ProcessLiveness.ALIVE -> Unit
+            ProcessLiveness.ALIVE -> deadPolls = 0
         }
 
         // 进程还在，那就是窗口飘了 → 宽限后 repin，超限上报

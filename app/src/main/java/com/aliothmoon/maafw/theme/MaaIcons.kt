@@ -7,8 +7,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.DoNotDisturbOn
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Add
@@ -130,8 +130,8 @@ object MaaIcons {
     val Info: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.info_circle, Icons.Outlined.Info)
 
-    val InfoFilled: ImageVector
-        @Composable get() = themed(SemiIconRes.Mono.info_circle, Icons.Filled.Info)
+    val Skipped: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.minus_circle, Icons.Filled.DoNotDisturbOn)
 
     val Warning: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.alert_triangle, Icons.Outlined.Warning)

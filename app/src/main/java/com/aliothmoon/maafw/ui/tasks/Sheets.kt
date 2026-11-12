@@ -55,6 +55,7 @@ import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
+import com.aliothmoon.maafw.ui.components.MaaSkipReason
 import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 
@@ -318,15 +319,7 @@ private fun CatalogRow(
             } else {
                 null
             },
-            belowLabel = item.unavailableReason?.let { reason ->
-                {
-                    Text(
-                        text = reason.asString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
+            belowLabel = item.unavailableReason?.let { reason -> { MaaSkipReason(reason.asString()) } },
         )
         if (hasDescription) {
             ExpandableTipContent(visible = expanded) {

@@ -32,6 +32,7 @@ enum class WakeResult(val code: Int, val message: UiText) {
     RECORD_CANCELLED(WakeUnlockResult.RECORD_CANCELLED, uiTextOf(R.string.wake_result_record_cancelled)),
     RECORD_NO_TOUCH(WakeUnlockResult.RECORD_NO_TOUCH, uiTextOf(R.string.wake_result_record_no_touch)),
     IPC_FAILED(WakeUnlockResult.IPC_FAILED, uiTextOf(R.string.wake_result_ipc_failed)),
+    TASK_RUNNING(WakeUnlockResult.TASK_RUNNING, uiTextOf(R.string.wake_result_task_running)),
     ;
 
     /** 解开了，或者本来就没锁：两种都可以往下跑 */

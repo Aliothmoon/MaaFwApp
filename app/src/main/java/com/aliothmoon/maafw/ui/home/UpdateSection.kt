@@ -19,8 +19,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -59,6 +57,7 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
@@ -69,9 +68,11 @@ import com.aliothmoon.maafw.ui.components.horizontalBleed
 import com.aliothmoon.maafw.ui.components.updateSourceLabel
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.update.formatSpeed
 import timber.log.Timber
 
-private const val MIRRORCHYAN_SITE = "https://mirrorchyan.com/"
+/** source 让 MirrorChyan 认出访问来自本应用 */
+private const val MIRRORCHYAN_SITE = "https://mirrorchyan.com/?source=MaaFwApp"
 
 /** 概览行左侧标签；不用 MaaFieldLabel（组标题档），颜色跟 MaaInfoRow 的 onSurface 一致 */
 @Composable
@@ -233,7 +234,7 @@ private fun CdkInputBlock(
             )
         }
         Icon(
-            imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+            imageVector = if (expanded) MaaIcons.ChevronUp else MaaIcons.ChevronDown,
             contentDescription = toggleLabel,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(MaaDesignTokens.IconSize.md),
@@ -361,6 +362,13 @@ private fun DownloadProgressRow(
         } else {
             // 总长未知：不确定进度条，没有可算的百分比
             LinearProgressIndicator(modifier = Modifier.weight(1f))
+        }
+        if (update.bytesPerSecond >= 0) {
+            Text(
+                text = formatSpeed(update.bytesPerSecond),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         IconButton(
             onClick = { onSettingsIntent(SettingsIntent.CancelDownload) },
