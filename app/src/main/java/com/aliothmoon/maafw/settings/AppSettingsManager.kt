@@ -73,6 +73,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                     overlayControlMode to AppSettings::overlayControlMode,
                     screenSaverEnabled to AppSettings::screenSaverEnabled,
                     closeAppAfterTask to AppSettings::closeAppAfterTask,
+                    releaseDisplayOnAutoClose to AppSettings::releaseDisplayOnAutoClose,
                     touchPreviewEnabled to AppSettings::touchPreviewEnabled,
                     debugMode to AppSettings::debugMode,
                     saveOnError to AppSettings::saveOnError,
@@ -131,6 +132,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     private val _closeAppAfterTask = MutableStateFlow(defaults.closeAppAfterTask.toBoolean())
     override val closeAppAfterTask: StateFlow<Boolean> = _closeAppAfterTask.asStateFlow()
+
+    private val _releaseDisplayOnAutoClose = MutableStateFlow(defaults.releaseDisplayOnAutoClose.toBoolean())
+    override val releaseDisplayOnAutoClose: StateFlow<Boolean> = _releaseDisplayOnAutoClose.asStateFlow()
 
     private val _touchPreviewEnabled = MutableStateFlow(defaults.touchPreviewEnabled.toBoolean())
     override val touchPreviewEnabled: StateFlow<Boolean> = _touchPreviewEnabled.asStateFlow()
@@ -210,6 +214,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _overlayControlMode.value = parseOverlayMode(s.overlayControlMode)
                 _screenSaverEnabled.value = s.screenSaverEnabled.toBoolean()
                 _closeAppAfterTask.value = s.closeAppAfterTask.toBoolean()
+                _releaseDisplayOnAutoClose.value = s.releaseDisplayOnAutoClose.toBoolean()
                 _touchPreviewEnabled.value = s.touchPreviewEnabled.toBoolean()
                 _resolutionPreset.value = ResolutionPresets.resolve(s.resolutionPreset)
                 _debugMode.value = s.debugMode.toBoolean()
@@ -266,6 +271,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     override suspend fun setCloseAppAfterTask(enabled: Boolean): Unit = with(AppSettingsSchema) {
         context.dataStore.edit { it[closeAppAfterTask] = enabled.toString() }
+    }
+
+    override suspend fun setReleaseDisplayOnAutoClose(enabled: Boolean): Unit = with(AppSettingsSchema) {
+        context.dataStore.edit { it[releaseDisplayOnAutoClose] = enabled.toString() }
     }
 
     override suspend fun setTouchPreviewEnabled(enabled: Boolean): Unit = with(AppSettingsSchema) {

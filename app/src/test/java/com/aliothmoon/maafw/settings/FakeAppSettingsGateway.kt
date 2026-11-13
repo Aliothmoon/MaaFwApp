@@ -54,6 +54,12 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         closeAppAfterTask.value = enabled
     }
 
+    override val releaseDisplayOnAutoClose = MutableStateFlow(true)
+
+    override suspend fun setReleaseDisplayOnAutoClose(enabled: Boolean) {
+        releaseDisplayOnAutoClose.value = enabled
+    }
+
     override val touchPreviewEnabled = MutableStateFlow(true)
 
     override suspend fun setTouchPreviewEnabled(enabled: Boolean) {
