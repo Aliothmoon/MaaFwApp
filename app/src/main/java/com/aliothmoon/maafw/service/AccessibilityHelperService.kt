@@ -16,25 +16,22 @@ import kotlin.math.abs
 
 /**
  * 两件事：
- * - 前台模式下同时按音量 ± 唤起控制面板。前台模式把屏幕让给了目标应用，没有这条快捷键
- *   就只剩悬浮球一条路，而悬浮球会挡住画面
+ * - 前台模式下同时按音量 ± 唤起控制面板
+ * - 后台真实熄屏时，单按音量减恢复物理屏幕
  * - InputText 里按键打不出来的文本经 [AccessibilityTextWriter] 写进输入框
  *
- * 服务本身不认识执行状态，收到组合键就调 [onVolumeUpDownPressed]，由
- * [com.aliothmoon.maafw.overlay.OverlayController] 决定做什么
+ * 按键监听只在对应功能启用时打开；没有监听者时音量键原样交给系统。
  */
 class AccessibilityHelperService : AccessibilityService() {
 
     private var volumeUpPressTime = 0L
     private var volumeDownPressTime = 0L
-
-    /** 一次组合按下只触发一次；两个键都抬起才复位 */
     private var triggered = false
+    private var volumeDownTriggered = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        // 连上之前就可能已经装了监听，按当前状态补一次
         applyKeyFiltering()
         _isConnected.value = true
         Timber.d("Accessibility service connected")
@@ -45,30 +42,45 @@ class AccessibilityHelperService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        // 没人监听就原样放行，别把音量键吞了
-        if (onVolumeUpDownPressed.get() == null) return super.onKeyEvent(event)
+        val comboListener = onVolumeUpDownPressed.get()
+        if (comboListener != null) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP -> when (event.action) {
+                    KeyEvent.ACTION_DOWN -> if (recordAndCheck { volumeUpPressTime = it }) return true
+                    KeyEvent.ACTION_UP -> reset { volumeUpPressTime = 0L }
+                }
 
-        when (event.keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP -> when (event.action) {
-                KeyEvent.ACTION_DOWN -> if (recordAndCheck { volumeUpPressTime = it }) return true
-                KeyEvent.ACTION_UP -> reset { volumeUpPressTime = 0L }
+                KeyEvent.KEYCODE_VOLUME_DOWN -> when (event.action) {
+                    KeyEvent.ACTION_DOWN -> if (recordAndCheck { volumeDownPressTime = it }) return true
+                    KeyEvent.ACTION_UP -> reset { volumeDownPressTime = 0L }
+                }
             }
-
-            KeyEvent.KEYCODE_VOLUME_DOWN -> when (event.action) {
-                KeyEvent.ACTION_DOWN -> if (recordAndCheck { volumeDownPressTime = it }) return true
-                KeyEvent.ACTION_UP -> reset { volumeDownPressTime = 0L }
-            }
+            return super.onKeyEvent(event)
         }
-        return super.onKeyEvent(event)
+
+        // 熄屏时只接管音量减；按下时触发一次，抬起时消费事件，避免系统音量条闪现。
+        val wakeListener = onVolumeDownPressed.get() ?: return super.onKeyEvent(event)
+        if (event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) return super.onKeyEvent(event)
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (!volumeDownTriggered) {
+                    volumeDownTriggered = true
+                    Timber.d("Volume-down wake key triggered")
+                    wakeListener.invoke()
+                }
+                true
+            }
+            KeyEvent.ACTION_UP -> {
+                volumeDownTriggered = false
+                true
+            }
+            else -> true
+        }
     }
 
-    /**
-     * 只在有人监听组合键时才让系统把按键先交给本服务；没人监听时按键根本不经过这里
-     *
-     * 常开的话，服务一启用所有物理按键都要先绕本服务一圈，哪怕最后原样放行
-     */
+    /** 只有有人监听时才请求系统把实体按键交给本服务。 */
     private fun applyKeyFiltering() {
-        val wanted = onVolumeUpDownPressed.get() != null
+        val wanted = onVolumeUpDownPressed.get() != null || onVolumeDownPressed.get() != null
         if (!wanted) resetCombo()
         val info = serviceInfo ?: return
         val filtering = info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0
@@ -82,11 +94,11 @@ class AccessibilityHelperService : AccessibilityService() {
         Timber.d("Key event filtering %s", if (wanted) "on" else "off")
     }
 
-    /** 过滤关掉时半截的组合状态不能留到下次打开 */
     private fun resetCombo() {
         volumeUpPressTime = 0L
         volumeDownPressTime = 0L
         triggered = false
+        volumeDownTriggered = false
     }
 
     private inline fun recordAndCheck(record: (Long) -> Unit): Boolean {
@@ -99,11 +111,6 @@ class AccessibilityHelperService : AccessibilityService() {
         triggered = false
     }
 
-    /**
-     * 两键按下时间差在容差内即算组合键
-     *
-     * 触发后一直返回 true 直到抬起：不然长按期间的重复事件会漏给系统，音量条会弹出来
-     */
     private fun checkSimultaneousPress(): Boolean {
         if (triggered) return true
         if (volumeUpPressTime <= 0L || volumeDownPressTime <= 0L) return false
@@ -125,10 +132,6 @@ class AccessibilityHelperService : AccessibilityService() {
     companion object {
         private const val SIMULTANEOUS_PRESS_THRESHOLD_MS = 300L
 
-        /**
-         * 写进 `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` 的组件名，代授时要用
-         * 必须跟 applicationId 走：写死包名的话，分包出去的包会去启用一个不存在的组件
-         */
         val SERVICE_ID: String =
             BuildConfig.APPLICATION_ID + "/" + AccessibilityHelperService::class.java.name
 
@@ -136,23 +139,23 @@ class AccessibilityHelperService : AccessibilityService() {
         var instance: AccessibilityHelperService? = null
             private set
 
-        private val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>()
-
+        private val onVolumeUpDownPressed = AtomicReference<(() -> Unit)?>(null)
+        private val onVolumeDownPressed = AtomicReference<(() -> Unit)?>(null)
         private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
-        /**
-         * 由 OverlayController 装卸；null 表示当前不需要拦截，按键过滤随之关掉
-         *
-         * 切到主线程改 serviceInfo：组合键状态只在主线程的 onKeyEvent 里读写
-         */
+        /** 前台控制层的原有音量组合快捷键。 */
         fun setVolumeComboListener(listener: (() -> Unit)?) {
             onVolumeUpDownPressed.set(listener)
             mainHandler.post { instance?.applyKeyFiltering() }
         }
 
-        private val _isConnected = MutableStateFlow(false)
+        /** 后台真实熄屏时使用；与前台组合键监听相互独立。 */
+        fun setVolumeDownListener(listener: (() -> Unit)?) {
+            onVolumeDownPressed.set(listener)
+            mainHandler.post { instance?.applyKeyFiltering() }
+        }
 
-        /** 代授之后要等它变 true 才算真连上，系统绑定是异步的 */
+        private val _isConnected = MutableStateFlow(false)
         val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
     }
 }
