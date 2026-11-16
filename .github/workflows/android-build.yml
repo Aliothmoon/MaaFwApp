@@ -29,7 +29,9 @@ jobs:
 
       - name: Install Android SDK components
         run: |
-          sdkmanager "platforms;android-37" "build-tools;37.0.0" "cmake;3.22.1"
+          sdkmanager "platforms;android-37.0" "build-tools;37.0.0" "cmake;3.22.1"
+          # AGP resolves compileSdk 37 as android-37; the published SDK folder is android-37.0.
+          ln -s android-37.0 "$ANDROID_SDK_ROOT/platforms/android-37"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
