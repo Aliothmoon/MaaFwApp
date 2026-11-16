@@ -29,15 +29,10 @@ jobs:
 
       - name: Install Android SDK components
         run: |
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1"
+          sdkmanager "platforms;android-37" "build-tools;37.0.0" "cmake;3.22.1"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-
-      # API 37 is not yet published in the public SDK repository used by hosted runners.
-      # Compile the source against API 36 in CI; the project SDK baseline remains unchanged.
-      - name: Use available SDK for CI compile check
-        run: sed -i 's/internal const val COMPILE_SDK = 37/internal const val COMPILE_SDK = 36/' build-logic/convention/src/main/kotlin/com/aliothmoon/maafw/gradle/AndroidCommon.kt
 
       - name: Build debug APK and run unit tests
         run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest
