@@ -1,0 +1,36 @@
+name: Android build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, "feature/real-screen-off-volume-down-wake"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager "platforms;android-37" "build-tools;37.0.0" "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK and run unit tests
+        run: ./gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest
