@@ -124,9 +124,10 @@ class ScreenSaverOverlayManager(
     private suspend fun wakeScreen() {
         if (!_isShowing.value) return
         try {
-            withContext(Dispatchers.IO) {
-                servicePort.useService { it.setDisplayPower(true) }
+            val applied = withContext(Dispatchers.IO) {
+                servicePort.useService { it.setDisplayPowerAndReport(true) }
             }
+            check(applied) { "SurfaceControl rejected physical screen-on request" }
             finishWake()
             Timber.i("Physical display restored by volume-down key")
         } catch (e: CancellationException) {
