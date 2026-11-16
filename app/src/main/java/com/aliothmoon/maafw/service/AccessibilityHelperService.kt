@@ -81,7 +81,7 @@ class AccessibilityHelperService : AccessibilityService() {
     /** 只有有人监听时才请求系统把实体按键交给本服务。 */
     private fun applyKeyFiltering() {
         val wanted = onVolumeUpDownPressed.get() != null || onVolumeDownPressed.get() != null
-        if (!wanted) resetCombo()
+        if (onVolumeUpDownPressed.get() == null) resetCombo()
         val info = serviceInfo ?: return
         val filtering = info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS != 0
         if (filtering == wanted) return
