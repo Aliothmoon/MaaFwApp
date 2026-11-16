@@ -28,6 +28,7 @@ class AccessibilityHelperService : AccessibilityService() {
     private var volumeDownPressTime = 0L
     private var triggered = false
     private var volumeDownTriggered = false
+    private var pendingWakeRunnable: Runnable? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -43,24 +44,45 @@ class AccessibilityHelperService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val comboListener = onVolumeUpDownPressed.get()
+        val wakeListener = onVolumeDownPressed.get()
+
+        // 两种监听可以同时存在：音量减先短暂等待组合键窗口，
+        // 若没有形成音量 ± 组合，再执行单键唤醒。
         if (comboListener != null) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP -> when (event.action) {
-                    KeyEvent.ACTION_DOWN -> if (recordAndCheck { volumeUpPressTime = it }) return true
+                    KeyEvent.ACTION_DOWN -> {
+                        if (recordAndCheck { volumeUpPressTime = it }) {
+                            cancelPendingWake()
+                            return true
+                        }
+                    }
                     KeyEvent.ACTION_UP -> reset { volumeUpPressTime = 0L }
                 }
 
                 KeyEvent.KEYCODE_VOLUME_DOWN -> when (event.action) {
-                    KeyEvent.ACTION_DOWN -> if (recordAndCheck { volumeDownPressTime = it }) return true
-                    KeyEvent.ACTION_UP -> reset { volumeDownPressTime = 0L }
+                    KeyEvent.ACTION_DOWN -> {
+                        if (recordAndCheck { volumeDownPressTime = it }) {
+                            cancelPendingWake()
+                            return true
+                        }
+                        if (wakeListener != null && pendingWakeRunnable == null) {
+                            scheduleWake(wakeListener)
+                            return true
+                        }
+                    }
+                    KeyEvent.ACTION_UP -> {
+                        reset { volumeDownPressTime = 0L }
+                        if (wakeListener != null) return true
+                    }
                 }
             }
             return super.onKeyEvent(event)
         }
 
-        // 熄屏时只接管音量减；按下时触发一次，抬起时消费事件，避免系统音量条闪现。
-        val wakeListener = onVolumeDownPressed.get() ?: return super.onKeyEvent(event)
-        if (event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) return super.onKeyEvent(event)
+        if (wakeListener == null || event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
+            return super.onKeyEvent(event)
+        }
         return when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (!volumeDownTriggered) {
@@ -76,6 +98,23 @@ class AccessibilityHelperService : AccessibilityService() {
             }
             else -> true
         }
+    }
+
+    private fun scheduleWake(listener: () -> Unit) {
+        val task = Runnable {
+            pendingWakeRunnable = null
+            if (!triggered && onVolumeDownPressed.get() != null) {
+                Timber.d("Volume-down wake key triggered after combo window")
+                listener.invoke()
+            }
+        }
+        pendingWakeRunnable = task
+        mainHandler.postDelayed(task, SIMULTANEOUS_PRESS_THRESHOLD_MS + 30L)
+    }
+
+    private fun cancelPendingWake() {
+        pendingWakeRunnable?.let(mainHandler::removeCallbacks)
+        pendingWakeRunnable = null
     }
 
     /** 只有有人监听时才请求系统把实体按键交给本服务。 */
@@ -99,6 +138,7 @@ class AccessibilityHelperService : AccessibilityService() {
         volumeDownPressTime = 0L
         triggered = false
         volumeDownTriggered = false
+        cancelPendingWake()
     }
 
     private inline fun recordAndCheck(record: (Long) -> Unit): Boolean {
