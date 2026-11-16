@@ -84,8 +84,13 @@ class ScreenSaverOverlayManager(
         }
 
         return try {
-            withContext(Dispatchers.IO) {
-                servicePort.useService { it.setDisplayPower(false) }
+            val applied = withContext(Dispatchers.IO) {
+                servicePort.useService { it.setDisplayPowerAndReport(false) }
+            }
+            if (!applied) {
+                AccessibilityHelperService.setVolumeDownListener(null)
+                Timber.e("SurfaceControl rejected physical screen-off request")
+                return false
             }
             _isShowing.value = true
             Timber.i("Physical display powered off; volume-down wake listener armed")
@@ -104,9 +109,10 @@ class ScreenSaverOverlayManager(
     suspend fun hide() {
         if (!_isShowing.value) return
         try {
-            withContext(Dispatchers.IO) {
-                servicePort.useService { it.setDisplayPower(true) }
+            val applied = withContext(Dispatchers.IO) {
+                servicePort.useService { it.setDisplayPowerAndReport(true) }
             }
+            check(applied) { "SurfaceControl rejected physical screen-on request" }
             finishWake()
         } catch (e: CancellationException) {
             throw e
