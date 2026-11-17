@@ -20,6 +20,8 @@ import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
@@ -659,6 +661,64 @@ class RunLauncherTest {
         override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
             entries += Entry(priority, message, t)
         }
+    }
+
+    // ── 排队 ─────────────────────────────────────────────────────────
+
+    /** 两条定时同一刻到：后到的先等前一发投递完，再等那一轮连收尾都走完 */
+    @Test
+    fun `a queued launch waits for the earlier round to dispatch, run and release`() = runTest(testDispatcher) {
+        val log = mutableListOf<String>()
+        val slowEngage = object : RunEnvHook {
+            override val id = "slow"
+            override val anchor = Anchor.BeforeDispatch
+            override val order = 0
+            override val gating = false
+            override suspend fun engage(ctx: RunContext): EngageResult {
+                log += "engage"
+                delay(500)
+                return EngageResult.Engaged(Release { log += "release" })
+            }
+        }
+        val waits = mutableListOf<String>()
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = slowStub(backgroundScope),
+            hooks = listOf(slowEngage),
+        )
+        fun queued(strategyId: String) = async {
+            launcher.launch(
+                RunTrigger.Schedule(strategyId),
+                whenBusy = WhenBusy.Queue(60_000),
+                progress = RunProgress { hookId, _ -> waits += "$strategyId:$hookId" },
+            )
+        }
+
+        val first = queued("s1")
+        val second = queued("s2")
+        advanceTimeBy(2_000)
+
+        assertEquals(RunLaunchResult.Started, first.await())
+        assertEquals(RunLaunchResult.Started, second.await())
+        assertEquals(listOf("engage", "release", "engage", "release"), log)
+        assertEquals(listOf("s2:${WhenBusy.Queue.PROGRESS_ID}"), waits)
+    }
+
+    @Test
+    fun `a queued launch gives up once its window passes`() = runTest(testDispatcher) {
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val launcher = launcher(scope = backgroundScope, runner = runner)
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+
+        val queued = async {
+            launcher.launch(RunTrigger.Schedule("s1"), whenBusy = WhenBusy.Queue(1_000))
+        }
+        advanceTimeBy(2_000)
+
+        assertEquals(RunLaunchResult.QueueTimedOut, queued.await())
     }
 
     private class RecordingHook(

@@ -31,6 +31,7 @@ class ScheduleLaunchOutcomeTest {
             RunLaunchResult.Rejected(uiTextFromFramework("busy")) to TriggerFailureReason.REJECTED,
             RunLaunchResult.Blocked(uiTextOf(R.string.run_countdown_cancelled)) to
                 TriggerFailureReason.BLOCKED,
+            RunLaunchResult.QueueTimedOut to TriggerFailureReason.EXPIRED,
         )
 
         for ((result, expected) in results) {

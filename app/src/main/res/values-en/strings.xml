@@ -381,6 +381,7 @@
     <string name="run_countdown_start_now">Start now</string>
     <string name="run_countdown_cancel">Skip this run</string>
     <string name="run_countdown_cancelled">This scheduled run was cancelled</string>
+    <string name="run_queue_waiting">Waiting for the current run to finish</string>
     <string name="run_log_screen_saver_skipped">Screen-off overlay did not show; it will not be dismissed automatically</string>
     <string name="run_log_auto_sleep_skipped_not_run">The run did not start; skip auto-sleep</string>
     <string name="run_log_auto_sleep_skipped_awake">The screen was already on at start; skip auto-sleep</string>
@@ -405,6 +406,7 @@
     <string name="schedule_reason_invalid_plan_detail">Configuration error (%1$s): %2$s</string>
     <string name="schedule_reason_blocked">A start check did not pass</string>
     <string name="schedule_reason_rejected">A run is already in progress</string>
+    <string name="schedule_reason_expired">Not started within %1$d hours of the scheduled time; dropped</string>
     <string name="schedule_edit_configuration">Run configuration</string>
     <string name="schedule_edit_configuration_required">Pick the configuration this rule runs</string>
     <string name="schedule_configuration_missing">Bound configuration was deleted</string>

@@ -31,6 +31,7 @@ import com.aliothmoon.maafw.runner.ScheduleRunOptions
 import com.aliothmoon.maafw.runner.RunSignals
 import com.aliothmoon.maafw.runner.RunStepSink
 import com.aliothmoon.maafw.runner.RunTrigger
+import com.aliothmoon.maafw.runner.WhenBusy
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -118,8 +119,11 @@ class ScheduleExecutionService : Service() {
 
         val scheduledTime = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0L)
         val retryCount = intent.getIntExtra(EXTRA_RETRY_COUNT, 0)
-        // 锁覆盖到 launch 受理为止：亮屏解锁、倒计时、投递都在这段，之后的保活归 RunForegroundService
-        val wakeLock = ScheduleWakeLock.acquire(this, TRIGGER_WAKE_TIMEOUT_MS)
+        // 锁覆盖到 launch 受理为止：排队、亮屏解锁、倒计时、投递都在这段，之后的保活归 RunForegroundService。
+        // 排队也得持锁：前一轮收尾放掉它的锁后 CPU 随时会睡，本轮就拖到下次有人亮屏
+        val queueWindowMs = triggerTimeLeftMs(scheduledTime, System.currentTimeMillis())
+            .coerceIn(0L, TRIGGER_EXPIRE_AFTER_MS)
+        val wakeLock = ScheduleWakeLock.acquire(this, TRIGGER_WAKE_TIMEOUT_MS + queueWindowMs)
         // 必须先于 launch：协程调度前计数还是 0，会被并发触发的收尾停掉
         inFlight.incrementAndGet()
         serviceScope.launch {
@@ -186,6 +190,19 @@ class ScheduleExecutionService : Service() {
         alarms.markDelivered(strategy.id, scheduledTimeMs)
         alarms.scheduleNext(strategy, scheduledTimeMs)
 
+        val timeLeftMs = triggerTimeLeftMs(scheduledTimeMs, now)
+        if (timeLeftMs <= 0L) {
+            Timber.w("Schedule %s delivered %d min late; dropped", strategy.id, (now - scheduledTimeMs) / 60_000L)
+            record(
+                strategy,
+                scheduledTimeMs,
+                now,
+                ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.EXPIRED),
+                steps = emptyList(),
+            )
+            return
+        }
+
         val steps = mutableListOf<TriggerStep>()
         val signals = RunSignals()
         // 倒计时期间用户要能打断，而那会儿 Activity 多半不在——落点只能是本服务的通知
@@ -207,7 +224,7 @@ class ScheduleExecutionService : Service() {
                 ),
                 configurationId = RunConfigurationId(strategy.runConfigurationId),
                 requestId = scheduleRequestId(strategy.id, scheduledTimeMs),
-                force = strategy.forceStart,
+                whenBusy = if (strategy.forceStart) WhenBusy.Preempt else WhenBusy.Queue(timeLeftMs),
                 steps = RunStepSink {
                     steps += TriggerStep(
                         it.hookId,
@@ -215,8 +232,12 @@ class ScheduleExecutionService : Service() {
                     )
                 },
                 signals = signals,
-                progress = RunProgress { _, detail ->
-                    updateNotification(detail.resolve(this), strategy.id, interruptible = true)
+                progress = RunProgress { hookId, detail ->
+                    updateNotification(
+                        detail.resolve(this),
+                        strategy.id,
+                        interruptible = hookId != WhenBusy.Queue.PROGRESS_ID,
+                    )
                 },
             )
         } finally {
@@ -236,8 +257,17 @@ class ScheduleExecutionService : Service() {
         if (outcome.result != TriggerResult.STARTED) {
             Timber.w("Schedule %s did not start: %s", strategy.id, launchResult)
         }
-        val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
+        record(strategy, scheduledTimeMs, now, outcome, steps)
+    }
 
+    private suspend fun record(
+        strategy: ScheduleStrategy,
+        scheduledTimeMs: Long,
+        now: Long,
+        outcome: ScheduleLaunchOutcome,
+        steps: List<TriggerStep>,
+    ) {
+        val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
         triggerLog.append(
             TriggerLogEntry(
                 strategyId = strategy.id,

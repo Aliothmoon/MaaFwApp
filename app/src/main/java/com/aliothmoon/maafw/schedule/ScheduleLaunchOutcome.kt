@@ -59,7 +59,16 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
 
     is RunLaunchResult.NeedsConfirmation ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt)
+
+    RunLaunchResult.QueueTimedOut ->
+        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.EXPIRED)
 }
+
+/** 原定时刻过去这么久还没开跑就作废：送达太晚，或排队等前一轮等到了这个点 */
+const val TRIGGER_EXPIRE_AFTER_MS = 12 * 3_600_000L
+
+fun triggerTimeLeftMs(scheduledTimeMs: Long, nowMs: Long): Long =
+    scheduledTimeMs + TRIGGER_EXPIRE_AFTER_MS - nowMs
 
 /** 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id */
 fun scheduleRequestId(strategyId: String, scheduledTimeMs: Long): RunRequestId =

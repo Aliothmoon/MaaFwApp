@@ -133,6 +133,9 @@ enum class TriggerFailureReason {
 
     /** RunnerPort 拒绝，多半是已有执行在跑 */
     REJECTED,
+
+    /** 超过 [TRIGGER_EXPIRE_AFTER_MS] 还没开跑，作废 */
+    EXPIRED,
 }
 /** 编辑期字段级校验；空集 = 可保存 */
 enum class ScheduleFieldError { NAME, CONFIGURATION, DAYS, TIMES, START, INTERVAL }

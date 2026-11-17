@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicReference
 
@@ -56,12 +57,30 @@ sealed interface RunLaunchResult {
     /** 同一个 [RunRequestId] 已经处理过；不是失败，是这次请求本就该被丢掉 */
     data object DuplicateRequest : RunLaunchResult
 
+    /** [WhenBusy.Queue] 等到时限也没轮到 */
+    data object QueueTimedOut : RunLaunchResult
+
     /**
      * 要用户点头。调用方弹框，用户同意后带上 token 重新 [RunLauncher.launch]
      *
      * 只有 [RunTrigger.Manual] 会拿到；定时与悬浮窗没人可问，编排层已把它放行（提醒）或降级成 [Blocked]
      */
     data class NeedsConfirmation(val token: ConfirmToken, val prompt: UiText) : RunLaunchResult
+}
+
+sealed interface WhenBusy {
+    /** 当场报「正在启动中」或由 RunnerPort 拒 */
+    data object Reject : WhenBusy
+
+    /** 掐掉在跑的那一轮，等它收尾完再上 */
+    data object Preempt : WhenBusy
+
+    /** 等前一轮连收尾都走完再上；[maxWaitMs] 内没轮到就 [RunLaunchResult.QueueTimedOut] */
+    data class Queue(val maxWaitMs: Long) : WhenBusy {
+        companion object {
+            const val PROGRESS_ID = "queue"
+        }
+    }
 }
 
 /**
@@ -100,7 +119,6 @@ class RunLauncher(
     /**
      * @param configurationId null 跑当前激活的那份；定时规则可以指定别的
      * @param requestId 非 null 时做幂等：同一个 id 第二次进来直接 [RunLaunchResult.DuplicateRequest]
-     * @param force 已有执行在跑时是否掐掉它再上；false 就让 RunnerPort 拒
      * @param steps 非 null 时把每个挂载物的落点抄一份给调用方，用于记账
      * @param signals 用户的打断面；只有会等待的挂载物（倒计时）读它
      * @param progress 挂载物的进度上报口；调用方决定往哪显示
@@ -110,12 +128,12 @@ class RunLauncher(
         acknowledged: Set<ConfirmToken> = emptySet(),
         configurationId: RunConfigurationId? = null,
         requestId: RunRequestId? = null,
-        force: Boolean = false,
+        whenBusy: WhenBusy = WhenBusy.Reject,
         steps: RunStepSink? = null,
         signals: RunSignals = RunSignals(),
         progress: RunProgress = RunProgress { _, _ -> },
     ): RunLaunchResult =
-        dispatch(trigger, acknowledged, configurationId, requestId, force, steps, signals, progress)
+        dispatch(trigger, acknowledged, configurationId, requestId, whenBusy, steps, signals, progress)
             .also { logOutcome(trigger, configurationId, it) }
 
     private suspend fun dispatch(
@@ -123,12 +141,15 @@ class RunLauncher(
         acknowledged: Set<ConfirmToken>,
         configurationId: RunConfigurationId?,
         requestId: RunRequestId?,
-        force: Boolean,
+        whenBusy: WhenBusy,
         steps: RunStepSink?,
         signals: RunSignals,
         progress: RunProgress,
     ): RunLaunchResult {
-        if (!gate.tryLock()) {
+        if (whenBusy is WhenBusy.Queue) {
+            withTimeoutOrNull(whenBusy.maxWaitMs) { awaitTurn(progress) }
+                ?: return RunLaunchResult.QueueTimedOut
+        } else if (!gate.tryLock()) {
             return RunLaunchResult.Blocked(uiTextOf(R.string.msg_launch_in_progress))
         }
         val engaged = ArrayDeque<Release>()
@@ -162,7 +183,7 @@ class RunLauncher(
             val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal)
             runPrechecks(ctx)?.let { return it }
 
-            if (force) preemptRunning()
+            if (whenBusy == WhenBusy.Preempt) preemptRunning()
 
             engage(Anchor.BeforeDispatch, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
@@ -214,7 +235,8 @@ class RunLauncher(
                 Timber.w(result.error, "run %s blocked: %s", label, renderText(result.reason))
             is RunLaunchResult.Invalid ->
                 Timber.w("run %s not started: %d plan diagnostics", label, result.diagnostics.size)
-            RunLaunchResult.ProjectNotReady, RunLaunchResult.NoExecutableTasks, RunLaunchResult.ConfigurationMissing ->
+            RunLaunchResult.ProjectNotReady, RunLaunchResult.NoExecutableTasks, RunLaunchResult.ConfigurationMissing,
+            RunLaunchResult.QueueTimedOut ->
                 Timber.w("run %s not started: %s", label, result)
         }
     }
@@ -234,6 +256,30 @@ class RunLauncher(
         handled.addLast(requestId)
         while (handled.size > HANDLED_HISTORY) handled.removeFirst()
     }
+
+    /**
+     * 返回时持有 [gate]
+     *
+     * 只等闸门不够：前一轮受理后闸门就放了，那时它还在跑；只等 phase 也不够，
+     * 落回 Idle 后它的收尾还在撤屏保、熄屏，与本轮的 engage 交错
+     */
+    private suspend fun awaitTurn(progress: RunProgress) {
+        if (gate.tryLock()) {
+            if (previousRoundSettled()) return
+            gate.unlock()
+        }
+        progress.report(WhenBusy.Queue.PROGRESS_ID, uiTextOf(R.string.run_queue_waiting))
+        while (true) {
+            gate.lock()
+            if (previousRoundSettled()) return
+            gate.unlock()
+            runnerPort.state.first { !it.phase.isBusy }
+            settling.get()?.join()
+        }
+    }
+
+    private fun previousRoundSettled(): Boolean =
+        !runnerPort.state.value.phase.isBusy && settling.get()?.isCompleted != false
 
     /**
      * 掐掉在跑的那一轮并等它停稳，然后把它的收尾跑完
@@ -324,9 +370,6 @@ class RunLauncher(
 
     private class Halt(val reason: UiText, val cause: RunEndReason.NotRun)
 
-    /**
-     * 等待任务结束直到
-     */
     private suspend fun awaitSettledThenFinalize(pending: List<Release>, label: String) {
         val settled = runnerPort.state.first { !it.phase.isBusy }
         val result = settled.latestResult ?: run {

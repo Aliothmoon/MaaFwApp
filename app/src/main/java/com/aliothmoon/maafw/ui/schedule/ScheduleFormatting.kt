@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.i18n.uiTextJoin
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.schedule.ScheduleStrategy
 import com.aliothmoon.maafw.schedule.ScheduleType
+import com.aliothmoon.maafw.schedule.TRIGGER_EXPIRE_AFTER_MS
 import com.aliothmoon.maafw.schedule.TriggerFailureReason
 import com.aliothmoon.maafw.schedule.TriggerResult
 import java.time.DayOfWeek
@@ -81,6 +82,8 @@ fun TriggerFailureReason.asUiText(): UiText = when (this) {
     TriggerFailureReason.INVALID_PLAN -> uiTextOf(R.string.schedule_reason_invalid_plan)
     TriggerFailureReason.BLOCKED -> uiTextOf(R.string.schedule_reason_blocked)
     TriggerFailureReason.REJECTED -> uiTextOf(R.string.schedule_reason_rejected)
+    TriggerFailureReason.EXPIRED ->
+        uiTextOf(R.string.schedule_reason_expired, (TRIGGER_EXPIRE_AFTER_MS / 3_600_000L).toInt())
 }
 
 /**

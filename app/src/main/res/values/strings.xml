@@ -374,6 +374,7 @@
     <string name="run_countdown_start_now">立即开始</string>
     <string name="run_countdown_cancel">取消本次</string>
     <string name="run_countdown_cancelled">已取消本次定时触发</string>
+    <string name="run_queue_waiting">等上一轮跑完再开始</string>
     <string name="run_log_screen_saver_skipped">熄屏挂机未能打开，本轮不自动关闭</string>
     <string name="run_log_auto_sleep_skipped_not_run">任务未开始，跳过自动熄屏</string>
     <string name="run_log_auto_sleep_skipped_awake">启动时屏幕已亮，跳过自动熄屏</string>
@@ -398,6 +399,7 @@
     <string name="schedule_reason_invalid_plan_detail">配置有错（%1$s）：%2$s</string>
     <string name="schedule_reason_blocked">启动前检查未通过</string>
     <string name="schedule_reason_rejected">已有执行在进行中</string>
+    <string name="schedule_reason_expired">超过原定时刻 %1$d 小时仍未开始，本次作废</string>
     <string name="schedule_edit_configuration">运行配置</string>
     <string name="schedule_edit_configuration_required">请选择这条规则要跑的配置</string>
     <string name="schedule_configuration_missing">绑定的配置已删除</string>
