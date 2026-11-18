@@ -24,6 +24,7 @@ import com.aliothmoon.maafw.remote.internal.ScreenManager
 import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.log.LogExportCollector
+import com.aliothmoon.maafw.remote.internal.LogcatRetention
 import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
@@ -178,6 +179,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
             Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")
         }
         pruneMaafwBackups()
+        logDir?.let { pruneLogcatCaptures(File(it).parentFile) }
         Ln.i("$TAG: setup ok, piRoot=$piRoot")
         return true
     }
@@ -191,6 +193,16 @@ class RemoteServiceImpl : RemoteService.Stub() {
                 .onSuccess { if (it > 0) Ln.i("$TAG: pruned $it old maafw log backups") }
                 .onFailure { Ln.w("$TAG: prune maafw log backups failed: ${it.message}") }
         }.apply { name = "maafw-log-prune"; isDaemon = true }.start()
+    }
+
+    /** 放在这里而非 logcat 进程：调试模式关掉后不再起 logcat 进程，旧文件也得有人收 */
+    private fun pruneLogcatCaptures(root: File?) {
+        root ?: return
+        Thread {
+            runCatching { LogcatRetention.prune(File(File(root, AppFiles.DEBUG_DIR), AppFiles.LOGCAT_DIR)) }
+                .onSuccess { if (it > 0) Ln.i("$TAG: pruned $it old logcat captures") }
+                .onFailure { Ln.w("$TAG: prune logcat captures failed: ${it.message}") }
+        }.apply { name = "logcat-prune"; isDaemon = true }.start()
     }
 
     override fun setSaveOnError(enabled: Boolean): Boolean {

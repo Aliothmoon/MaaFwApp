@@ -18,13 +18,14 @@ import com.aliothmoon.maafw.log.CrashHandler
 import com.aliothmoon.maafw.log.LogTreeHolder
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
-import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
+import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.schedule.ShizukuDownMonitor
 import com.aliothmoon.maafw.schedule.resyncScheduleAlarms
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.telemetry.TelemetryController
+import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -37,6 +38,7 @@ import org.koin.core.Koin
 import org.koin.core.context.startKoin
 import org.koin.core.logger.Level
 import org.koin.core.qualifier.named
+import timber.log.Timber
 
 class MaaFwApp : Application() {
 
@@ -78,6 +80,11 @@ class MaaFwApp : Application() {
         // 也会杀进程、清闹钟。只靠 ScheduleBootReceiver，这些情况下定时会一直哑到下次覆盖安装
         appScope.launch {
             resyncScheduleAlarms(koin.get(), koin.get(), reason = "process start")
+        }
+        // 只靠历史页的清理入口的话，不进那一页的用户会一直攒下去
+        appScope.launch {
+            runCatching { koin.get<RunSessionLogStore>().cleanup() }
+                .onFailure { Timber.w(it, "run session log cleanup failed") }
         }
     }
 
