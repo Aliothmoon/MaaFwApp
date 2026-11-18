@@ -21,7 +21,9 @@ import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.service.AccessibilityHelperService
+import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionViewModel
+import com.aliothmoon.maafw.session.TaskSurface
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.theme.MaaFwTheme
 import com.aliothmoon.maafw.theme.ProvideUiScale
@@ -36,12 +38,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -220,11 +225,16 @@ class OverlayController(
                         onExportLog = ::requestExportLog,
                         onLockToggle = { setPanelLocked(it) },
                         onHide = ::onPanelClosed,
+                        showLogRequests = overlayLogRequests,
                     )
                 }
             }
         }
     }
+
+    private val overlayLogRequests: Flow<Unit> = sessionViewModel.effects
+        .filter { it is SessionEffect.ShowRunLog && it.surface == TaskSurface.Overlay }
+        .map { }
 
     private fun createBallView(): ComposeView = newComposeView().apply {
         setContent {

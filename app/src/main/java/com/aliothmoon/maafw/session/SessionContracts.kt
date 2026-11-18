@@ -384,6 +384,9 @@ sealed interface SessionEffect {
      */
     data class ConfirmStart(val prompt: UiText, val acknowledged: Set<ConfirmToken>) : SessionEffect
 
+    /** 手动发起被受理：从 [surface] 那一侧切到日志，人就在跟前；定时触发不切 */
+    data class ShowRunLog(val surface: TaskSurface) : SessionEffect
+
     /** 运行中点了「关闭目标应用」：拆屏会让正在跑的这一轮中断，同意就发 [SessionIntent.CloseTargetAppConfirmed] */
     data object ConfirmCloseTargetApp : SessionEffect
 

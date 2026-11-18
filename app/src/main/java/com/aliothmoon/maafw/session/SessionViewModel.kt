@@ -873,8 +873,10 @@ class SessionViewModel(
             TaskSurface.Overlay -> RunTrigger.Overlay
         }
         when (val result = runLauncher.launch(trigger, acknowledged)) {
-            // 手动发起不传 requestId、不排队，后两条到不了
-            RunLaunchResult.Started, RunLaunchResult.DuplicateRequest, RunLaunchResult.QueueTimedOut -> Unit
+            RunLaunchResult.Started -> emitEffect(SessionEffect.ShowRunLog(surface))
+
+            // 手动发起不传 requestId、不排队，这两条到不了
+            RunLaunchResult.DuplicateRequest, RunLaunchResult.QueueTimedOut -> Unit
 
             RunLaunchResult.ProjectNotReady ->
                 emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))

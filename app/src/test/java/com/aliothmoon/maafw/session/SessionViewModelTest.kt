@@ -987,6 +987,20 @@ class SessionViewModelTest {
         assertEquals(before, project.reloadCount)
     }
 
+    /** 手动发起被受理就切到日志，从哪一侧点的就切哪一侧 */
+    @Test
+    fun `accepted manual start asks to show the run log`() = runTest(mainDispatcher) {
+        val (vm, _, _) = createVm()
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+
+        assertTrue(SessionEffect.ShowRunLog(TaskSurface.InApp) in effects)
+    }
+
     /** 关目标应用：空闲时先强停再关屏；运行中只发确认，点了头才动 */
     @Test
     fun `close target app stops the app before the display and asks first while running`() = runTest(mainDispatcher) {

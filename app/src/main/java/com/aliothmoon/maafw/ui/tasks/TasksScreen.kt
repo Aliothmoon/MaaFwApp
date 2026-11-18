@@ -71,6 +71,8 @@ fun TasksScreen(
     pipOnHome: Boolean,
     /** 取值而不是值：日志面板没开时这一层不该跟着日志频率重组 */
     runLog: () -> RunLogSnapshot,
+    /** 变了就打开日志：手动启动被受理时由 Route 递增 */
+    runLogRequest: Int,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
@@ -112,6 +114,7 @@ fun TasksScreen(
                 backEnabled = backEnabled,
                 pipOnHome = pipOnHome,
                 runLog = runLog,
+                runLogRequest = runLogRequest,
                 onEnterFullscreen = onEnterFullscreen,
                 onExportLogs = onExportLogs,
                 onIntent = onIntent,
@@ -129,6 +132,7 @@ private fun TasksContent(
     backEnabled: Boolean,
     pipOnHome: Boolean,
     runLog: () -> RunLogSnapshot,
+    runLogRequest: Int,
     onEnterFullscreen: () -> Unit,
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
@@ -223,6 +227,7 @@ private fun TasksContent(
                     TaskWorkspace(
                         state = state,
                         runLog = runLog,
+                        runLogRequest = runLogRequest,
                         onExportLogs = onExportLogs,
                         onIntent = onIntent,
                         showLogToggle = true,

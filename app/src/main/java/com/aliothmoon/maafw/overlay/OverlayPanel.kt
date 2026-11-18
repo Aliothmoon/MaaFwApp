@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,8 @@ import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.tasks.RunLogPanel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -50,10 +53,15 @@ fun OverlayPanel(
     onExportLog: () -> Unit,
     onLockToggle: (Boolean) -> Unit,
     onHide: () -> Unit,
+    /** 每来一次就翻到日志页：从悬浮窗手动启动被受理时 */
+    showLogRequests: Flow<Unit> = emptyFlow(),
     modifier: Modifier = Modifier,
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { OverlayPanelTab.entries.size }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(showLogRequests) {
+        showLogRequests.collect { pagerState.animateScrollToPage(OverlayPanelTab.LOG.ordinal) }
+    }
     val phase = state.runner.phase
 
     Surface(

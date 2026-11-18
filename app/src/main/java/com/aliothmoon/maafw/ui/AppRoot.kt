@@ -60,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -112,6 +113,7 @@ import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
+import com.aliothmoon.maafw.session.TaskSurface
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsEffect
 import com.aliothmoon.maafw.settings.SettingsViewModel
@@ -292,6 +294,8 @@ fun AppRoot(
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var confirmStartDialog by remember { mutableStateOf<SessionEffect.ConfirmStart?>(null) }
         var confirmCloseTargetApp by remember { mutableStateOf(false) }
+        // 递增即「打开任务页日志」；Saveable 免得转屏后 TaskWorkspace 把同一次当成新的
+        var runLogRequest by rememberSaveable { mutableIntStateOf(0) }
         var exportSheetVisible by remember { mutableStateOf(false) }
         var configBackupAction by remember { mutableStateOf<ConfigBackupAction?>(null) }
 
@@ -341,6 +345,8 @@ fun AppRoot(
 
                     is SessionEffect.ConfirmStart -> confirmStartDialog = effect
                     SessionEffect.ConfirmCloseTargetApp -> confirmCloseTargetApp = true
+                    // 悬浮窗那份由 OverlayController 自己收
+                    is SessionEffect.ShowRunLog -> if (effect.surface == TaskSurface.InApp) runLogRequest++
 
                     // 拉起外部 Activity 要 Context，只能落在 Route 层
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
@@ -565,6 +571,7 @@ fun AppRoot(
                         backEnabled = pagerState.settledPage == page && !onSubPage,
                         pipOnHome = settingsState.pipOnHome,
                         runLog = { runLogState.value },
+                        runLogRequest = runLogRequest,
                         onEnterFullscreen = { previewFullscreen = true },
                         onExportLogs = { exportSheetVisible = true },
                         onIntent = viewModel::onIntent,
