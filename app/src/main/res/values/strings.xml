@@ -439,8 +439,13 @@
     <string name="msg_backend_auth_rejected">%1$s 未授权</string>
     <string name="msg_backend_not_running">%1$s 未运行</string>
     <string name="msg_backend_connect_failed">连接 %1$s 特权进程失败：%2$s</string>
+    <string name="msg_backend_connect_failed_brief">连接 %1$s 特权进程失败</string>
     <string name="notification_action_open_shizuku">打开 Shizuku</string>
     <string name="notification_shizuku_down_title">Shizuku 未运行</string>
+    <string name="notification_schedule_failed">定时任务未能启动</string>
+    <string name="notification_schedule_skipped">定时任务已跳过</string>
+    <string name="notification_schedule_detail">「%1$s」：%2$s</string>
+    <string name="schedule_missed_many">%1$d 次定时没有执行，最近一次：%2$s</string>
     <string name="notification_shizuku_down_after_boot">手机重启后需要重新启动 Shizuku，否则定时任务无法执行</string>
     <string name="notification_shizuku_down_stopped">Shizuku 已停止，重新启动前定时任务无法执行</string>
     <string name="msg_bind_service_failed">连接特权进程失败：%1$s</string>

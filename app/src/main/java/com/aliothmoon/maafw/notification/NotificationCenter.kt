@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.i18n.uiTextPlural
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.withoutConnectCause
 import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.RunEndReason
 import com.aliothmoon.maafw.runner.RunLogRecorder
@@ -79,6 +80,25 @@ class NotificationCenter(
     }
 
     fun withdrawShizukuDown() = eventNotifier.cancelShizukuDown()
+
+    /**
+     * 定时没跑起来：失败外推（跟「出错」开关），跳过只发系统通知
+     *
+     * 独占一格通知 id：不被下一轮的结局顶掉，凌晨失败到早上还在。连接失败拼的英文短原因只进触发日志
+     */
+    suspend fun onScheduleNotStarted(strategyName: String, reason: UiText, notice: ScheduleNotice) {
+        val skipped = notice == ScheduleNotice.SKIPPED
+        val title = renderText(
+            uiTextOf(if (skipped) R.string.notification_schedule_skipped else R.string.notification_schedule_failed),
+        )
+        val text = renderText(uiTextOf(R.string.notification_schedule_detail, strategyName, reason.withoutConnectCause()))
+        val backendDown = notice == ScheduleNotice.BACKEND_DOWN
+        // 同一件事报两条只是吵：这一条说清了是哪条规则、为什么，提前提醒那条撤掉
+        if (backendDown) eventNotifier.cancelShizukuDown()
+        eventNotifier.notifyScheduleNotStarted(title, text, isError = !skipped, offerShizuku = backendDown)
+        if (skipped) return
+        if (settings.current().sendOnError.toPrefBoolean(default = true)) external.send(title, text)
+    }
 
     /**
      * 特权进程死掉这一档单独判，不与普通失败混在一起

@@ -4,7 +4,10 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.ScheduleNotice
 import com.aliothmoon.maafw.runner.BlockSource
+import com.aliothmoon.maafw.runner.PrivilegedAccessPrecheck
+import com.aliothmoon.maafw.runner.PrivilegedConnectHook
 import com.aliothmoon.maafw.runner.ConfirmToken
 import com.aliothmoon.maafw.runner.NotRunCause
 import com.aliothmoon.maafw.runner.RunLaunchResult
@@ -43,6 +46,32 @@ class ScheduleLaunchOutcomeTest {
             val outcome = result.toScheduleOutcome()
             assertEquals(result.toString(), TriggerResult.FAILED_START, outcome.result)
             assertEquals(result.toString(), expected, outcome.failureReason)
+        }
+    }
+
+    /** 失败外推、已在运行算跳过、用户在倒计时里取消的不发；后端没就绪单独一档，好顶替提前提醒 */
+    @Test
+    fun `notice separates failures, skips, user cancels and backend outages`() {
+        val reason = uiTextFromFramework("x")
+        val cases = listOf(
+            RunLaunchResult.Started to null,
+            RunLaunchResult.DuplicateRequest to null,
+            RunLaunchResult.ProjectNotReady to ScheduleNotice.FAILED,
+            RunLaunchResult.QueueTimedOut to ScheduleNotice.FAILED,
+            RunLaunchResult.Rejected(reason) to ScheduleNotice.SKIPPED,
+            RunLaunchResult.Blocked(reason, BlockSource.Busy) to ScheduleNotice.SKIPPED,
+            RunLaunchResult.Blocked(reason, BlockSource.Hook("countdown", NotRunCause.Cancelled)) to null,
+            RunLaunchResult.Blocked(reason, BlockSource.Hook("wake-unlock", NotRunCause.HookFailed)) to
+                ScheduleNotice.FAILED,
+            RunLaunchResult.Blocked(reason, BlockSource.Hook(PrivilegedConnectHook.ID, NotRunCause.HookFailed)) to
+                ScheduleNotice.BACKEND_DOWN,
+            RunLaunchResult.Blocked(reason, BlockSource.Precheck(PrivilegedAccessPrecheck.ID)) to
+                ScheduleNotice.BACKEND_DOWN,
+            RunLaunchResult.Blocked(reason, BlockSource.Precheck("background-mode")) to ScheduleNotice.FAILED,
+        )
+
+        for ((result, expected) in cases) {
+            assertEquals(result.toString(), expected, result.toScheduleOutcome().notice)
         }
     }
 

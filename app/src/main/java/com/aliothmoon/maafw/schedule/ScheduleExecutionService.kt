@@ -11,10 +11,14 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.notification.NotificationCenter
+import com.aliothmoon.maafw.notification.ScheduleNotice
 import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
+import com.aliothmoon.maafw.ui.schedule.asUiText
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.i18n.resolve
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
@@ -67,6 +71,7 @@ class ScheduleExecutionService : Service() {
     private val appSettings: AppSettingsManager by inject()
     private val projectRepository: ProjectRepository by inject()
     private val piInstall: PiInstallCoordinator by inject()
+    private val notifications: NotificationCenter by inject()
 
     /** 记账写盘的 IOException 不能把进程带崩：那会连同刚受理的这一轮一起杀掉 */
     private val serviceScope = CoroutineScope(
@@ -281,6 +286,9 @@ class ScheduleExecutionService : Service() {
             ),
         )
         store.recordTrigger(strategy.id, outcome.result, message = frozen, triggeredAt = now)
+        val notice = outcome.notice ?: return
+        val reason = outcome.detail ?: outcome.failureReason?.asUiText() ?: outcome.result.asUiText()
+        notifications.onScheduleNotStarted(strategy.name, reason, notice)
     }
 
     /**
@@ -330,6 +338,11 @@ class ScheduleExecutionService : Service() {
             }
         }
         Timber.w("Schedule data unavailable: %s, attempt=%d, retried=%s", strategyId, retryCount, retried)
+        val detail = when {
+            retried -> uiTextOf(R.string.schedule_detail_data_unavailable_retry, retryCount + 1)
+            reconnecting -> uiTextOf(R.string.schedule_detail_data_unavailable_waiting)
+            else -> uiTextOf(R.string.schedule_detail_data_unavailable_gave_up)
+        }
         triggerLog.append(
             TriggerLogEntry(
                 strategyId = strategyId,
@@ -337,13 +350,11 @@ class ScheduleExecutionService : Service() {
                 scheduledAt = scheduledTimeMs,
                 actualAt = now,
                 result = TriggerResult.FAILED_VALIDATION,
-                detail = when {
-                    retried -> getString(R.string.schedule_detail_data_unavailable_retry, retryCount + 1)
-                    reconnecting -> getString(R.string.schedule_detail_data_unavailable_waiting)
-                    else -> getString(R.string.schedule_detail_data_unavailable_gave_up)
-                },
+                detail = detail.resolve(this),
             ),
         )
+        // 排了重试就先别报：重试成了，这条就是误报。规则已删的也不报，通知里只剩个 id
+        if (!retried && (strategy != null || reconnecting)) notifications.onScheduleNotStarted(strategy?.name ?: strategyId, detail, ScheduleNotice.FAILED)
     }
 
     /**

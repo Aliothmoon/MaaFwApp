@@ -1,5 +1,10 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.NotificationCenter
+import com.aliothmoon.maafw.notification.ScheduleNotice
+import com.aliothmoon.maafw.ui.schedule.asUiText
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 
@@ -13,13 +18,14 @@ class ScheduleMissedReporter(
     private val alarms: ScheduleAlarmManager,
     private val store: ScheduleStrategyStore,
     private val triggerLog: ScheduleTriggerLog,
+    private val notifications: NotificationCenter,
 ) {
 
     /** 规则读盘之后调：漏掉的是哪条规则得在规则表里查得到，查不到的（已删）丢掉 */
     suspend fun reportMissed() {
         store.isLoaded.first { it }
-        alarms.drainMissed().forEach { missed ->
-            val strategy = store.findById(missed.strategyId) ?: return@forEach
+        val reported = alarms.drainMissed().mapNotNull { missed ->
+            val strategy = store.findById(missed.strategyId) ?: return@mapNotNull null
             val reason = if (missed.rebooted) TriggerFailureReason.MISSED_REBOOTED else TriggerFailureReason.MISSED
             Timber.w("Schedule %s missed at %d (%s)", strategy.id, missed.scheduledTimeMs, reason)
             triggerLog.append(
@@ -34,6 +40,22 @@ class ScheduleMissedReporter(
                 ),
             )
             store.recordTrigger(strategy.id, TriggerResult.FAILED_START, triggeredAt = missed.scheduledTimeMs)
+            strategy.name to reason
         }
+        notifyMissed(reported)
+    }
+
+    /** 关机一夜可能漏好几次：合成一条，按原定时刻排好的最后一条就是最近那次 */
+    private suspend fun notifyMissed(reported: List<Pair<String, TriggerFailureReason>>) {
+        val (latestName, latestReason) = reported.lastOrNull() ?: return
+        if (reported.size == 1) {
+            notifications.onScheduleNotStarted(latestName, latestReason.asUiText(), ScheduleNotice.FAILED)
+            return
+        }
+        notifications.onScheduleNotStarted(
+            reported.map { it.first }.distinct().joinToString("、"),
+            uiTextOf(R.string.schedule_missed_many, reported.size, latestReason.asUiText()),
+            ScheduleNotice.FAILED,
+        )
     }
 }

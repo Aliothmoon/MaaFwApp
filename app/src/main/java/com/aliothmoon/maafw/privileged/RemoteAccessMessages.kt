@@ -27,6 +27,13 @@ fun ServiceConnectResult.Failed.message(): UiText = uiTextOf(
         ?: error.javaClass.simpleName,
 )
 
+/** 通知里不放 [message] 拼上的连接器短原因：那截多是英文技术细节，只留给触发日志排障 */
+fun UiText.withoutConnectCause(): UiText {
+    val resource = this as? UiText.Resource ?: return this
+    if (resource.resId != R.string.msg_backend_connect_failed) return this
+    return uiTextOf(R.string.msg_backend_connect_failed_brief, resource.args.firstOrNull())
+}
+
 /** 连接路径上抛出来的异常 → 文案；认不出的返回 null，由调用方决定怎么兜 */
 fun Throwable.remoteAccessMessageOrNull(): UiText? =
     (this as? RemoteAccessException)?.let { remoteAccessMessage(it.backend, it.failure) }

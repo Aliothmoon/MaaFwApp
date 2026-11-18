@@ -16,7 +16,7 @@ val scheduleModule = module {
     single { ScheduleStrategyStore(androidContext()) }
     single { ScheduleAlarmManager(androidContext()) }
     single { ScheduleTriggerLog() }
-    single { ScheduleMissedReporter(alarms = get(), store = get(), triggerLog = get()) }
+    single { ScheduleMissedReporter(alarms = get(), store = get(), triggerLog = get(), notifications = get()) }
     // 手势：解锁 hook（进程级）与唤醒解锁页共用一份，录完回来两边立刻看到
     single { UnlockGestureStore(androidContext()) }
     single { WakeUnlockEngine(get()) }

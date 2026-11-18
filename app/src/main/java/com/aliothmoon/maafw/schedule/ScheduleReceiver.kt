@@ -10,6 +10,9 @@ import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHED
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
+import com.aliothmoon.maafw.notification.NotificationCenter
+import com.aliothmoon.maafw.notification.ScheduleNotice
+import com.aliothmoon.maafw.ui.schedule.asUiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -94,6 +97,12 @@ class ScheduleReceiver : BroadcastReceiver() {
                             result = TriggerResult.FAILED_SERVICE_START,
                             detail = reason,
                         ),
+                    )
+                    // 异常原文只进触发日志
+                    koin.get<NotificationCenter>().onScheduleNotStarted(
+                        strategy.name,
+                        TriggerResult.FAILED_SERVICE_START.asUiText(),
+                        ScheduleNotice.FAILED,
                     )
                 }
             } finally {

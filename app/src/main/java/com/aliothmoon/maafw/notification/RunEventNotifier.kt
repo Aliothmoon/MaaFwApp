@@ -11,6 +11,7 @@ import androidx.core.graphics.drawable.IconCompat
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.EventNotificationLevel
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import timber.log.Timber
@@ -46,6 +47,16 @@ class RunEventNotifier(
     /** 不随整轮结局覆盖：它说的是「下一次会跑不起来」，与上一轮的结果各占一格 */
     fun notifyShizukuDown(title: String, text: String) {
         send(title, text, ID_SHIZUKU_DOWN, isError = true, action = openShizukuAction())
+    }
+
+    /** 不随整轮结局覆盖：一轮的结局与「这次定时没跑」是两件事 */
+    fun notifyScheduleNotStarted(title: String, text: String, isError: Boolean, offerShizuku: Boolean) {
+        val action = if (offerShizuku && appSettingsManager.startupBackend.value == RemoteBackend.SHIZUKU) {
+            openShizukuAction()
+        } else {
+            null
+        }
+        send(title, text, ID_SCHEDULE, isError, action)
     }
 
     fun cancelShizukuDown() {
@@ -155,5 +166,6 @@ class RunEventNotifier(
         const val ID_RUN_RESULT = 9001
         const val ID_RUN = 9002
         const val ID_SHIZUKU_DOWN = 9003
+        const val ID_SCHEDULE = 9004
     }
 }
