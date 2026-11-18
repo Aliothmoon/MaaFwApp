@@ -22,6 +22,7 @@ import timber.log.Timber
  */
 object AutoStartHelper {
 
+    /** [id] 须唯一：同厂商多个候选页要分开取 id，[intentFor] 按 id 取回 */
     data class OemEntry(val id: String, val intent: Intent)
 
     private val AUTOSTART_INTENTS = listOf(
@@ -40,6 +41,11 @@ object AutoStartHelper {
             "oppo",
             component("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"),
         ),
+        // OnePlus 并入 ColorOS 前
+        OemEntry(
+            "oneplus",
+            component("com.oneplus.security", "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity"),
+        ),
         // Vivo OriginOS / FuntouchOS
         OemEntry(
             "vivo",
@@ -48,6 +54,11 @@ object AutoStartHelper {
                 "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
             ),
         ),
+        // Vivo 旧版 i管家
+        OemEntry(
+            "vivo_iqoo",
+            component("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager"),
+        ),
         // Huawei EMUI / HarmonyOS
         OemEntry(
             "huawei",
@@ -55,6 +66,18 @@ object AutoStartHelper {
                 "com.huawei.systemmanager",
                 "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
             ),
+        ),
+        // Huawei 旧版 EMUI
+        OemEntry(
+            "huawei_appcontrol",
+            component(
+                "com.huawei.systemmanager",
+                "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity",
+            ),
+        ),
+        OemEntry(
+            "huawei_protect",
+            component("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"),
         ),
         // Honor（独立后）
         OemEntry(
@@ -79,6 +102,10 @@ object AutoStartHelper {
             "zte",
             component("com.zte.heartyservice", "com.zte.heartyservice.autostart.HeartifyAutoStartActivity"),
         ),
+        OemEntry(
+            "zte_autorun",
+            component("com.zte.heartyservice", "com.zte.heartyservice.autorun.AppAutoRunManager"),
+        ),
     )
 
     private val RESTRICTIVE_MANUFACTURERS = setOf(
@@ -93,7 +120,7 @@ object AutoStartHelper {
     private fun isKnownRestrictiveManufacturer(): Boolean =
         Build.MANUFACTURER.lowercase() in RESTRICTIVE_MANUFACTURERS
 
-    /** 命中即停：一台设备只会属于一家厂商，全扫要白做 8 次跨进程 resolveActivity */
+    /** 命中即停：一台设备只会属于一家厂商，全扫要白做多次跨进程 resolveActivity */
     private fun resolvableOemIds(context: Context): List<String> = listOfNotNull(
         AUTOSTART_INTENTS.firstOrNull { isLaunchable(context, it.intent) }?.id,
     )
