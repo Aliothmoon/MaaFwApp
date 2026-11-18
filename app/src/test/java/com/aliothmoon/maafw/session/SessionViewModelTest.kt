@@ -987,6 +987,42 @@ class SessionViewModelTest {
         assertEquals(before, project.reloadCount)
     }
 
+    /** 关目标应用：空闲时先强停再关屏；运行中只发确认，点了头才动 */
+    @Test
+    fun `close target app stops the app before the display and asks first while running`() = runTest(mainDispatcher) {
+        val calls = mutableListOf<String>()
+        val service = object : FakePrivilegedService() {
+            override fun stopTargetApp(): Boolean = true.also { calls += "stopTargetApp" }
+            override fun stopVirtualDisplay() {
+                calls += "stopVirtualDisplay"
+            }
+        }
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), runner = runner)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.CloseTargetApp)
+        advanceUntilIdle()
+        assertEquals(listOf("stopTargetApp", "stopVirtualDisplay"), calls)
+
+        calls.clear()
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        vm.onIntent(SessionIntent.CloseTargetApp)
+        advanceUntilIdle()
+        assertTrue(calls.isEmpty())
+        assertTrue(SessionEffect.ConfirmCloseTargetApp in effects)
+
+        vm.onIntent(SessionIntent.CloseTargetAppConfirmed)
+        advanceUntilIdle()
+        assertEquals(listOf("stopTargetApp", "stopVirtualDisplay"), calls)
+    }
+
     /** 运行中系统语言被改：不弹锁定提示、当场不重载，这一轮结束再按新语言重载 */
     @Test
     fun `locale change while busy reloads once the run ends`() = runTest(mainDispatcher) {

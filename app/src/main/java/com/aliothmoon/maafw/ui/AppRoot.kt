@@ -291,6 +291,7 @@ fun AppRoot(
         val scope = rememberCoroutineScope()
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var confirmStartDialog by remember { mutableStateOf<SessionEffect.ConfirmStart?>(null) }
+        var confirmCloseTargetApp by remember { mutableStateOf(false) }
         var exportSheetVisible by remember { mutableStateOf(false) }
         var configBackupAction by remember { mutableStateOf<ConfigBackupAction?>(null) }
 
@@ -339,6 +340,7 @@ fun AppRoot(
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
 
                     is SessionEffect.ConfirmStart -> confirmStartDialog = effect
+                    SessionEffect.ConfirmCloseTargetApp -> confirmCloseTargetApp = true
 
                     // 拉起外部 Activity 要 Context，只能落在 Route 层
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
@@ -789,6 +791,23 @@ fun AppRoot(
                 dismissText = stringResource(R.string.dialog_cancel),
                 onDismissRequest = { confirmStartDialog = null },
                 dismissOnOutsideClick = true,
+            )
+        }
+
+        if (confirmCloseTargetApp) {
+            MaaPromptDialog(
+                title = stringResource(R.string.close_target_confirm_title),
+                message = stringResource(R.string.close_target_confirm_message),
+                icon = Icons.Outlined.WarningAmber,
+                confirmText = stringResource(R.string.quick_action_close_app),
+                onConfirm = {
+                    confirmCloseTargetApp = false
+                    viewModel.onIntent(SessionIntent.CloseTargetAppConfirmed)
+                },
+                dismissText = stringResource(R.string.dialog_cancel),
+                onDismissRequest = { confirmCloseTargetApp = false },
+                dismissOnOutsideClick = true,
+                iconTint = MaterialTheme.colorScheme.error,
             )
         }
 

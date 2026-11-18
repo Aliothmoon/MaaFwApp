@@ -273,8 +273,11 @@ sealed interface SessionIntent {
 
     data class SetTelemetryEnabled(val enabled: Boolean) : SessionIntent
 
-    /** 立刻关掉目标应用：停虚拟屏，屏上的应用跟着一起没 */
+    /** 关掉目标应用：先强停它再停虚拟屏；运行中先要用户点头（[SessionEffect.ConfirmCloseTargetApp]） */
     data object CloseTargetApp : SessionIntent
+
+    /** 运行中点过头的那次，不再问 */
+    data object CloseTargetAppConfirmed : SessionIntent
 
 
 
@@ -380,6 +383,9 @@ sealed interface SessionEffect {
      * [acknowledged] 已含本次这项：几项都要问时逐个弹，前面点过的跟着累积，VM 不必记
      */
     data class ConfirmStart(val prompt: UiText, val acknowledged: Set<ConfirmToken>) : SessionEffect
+
+    /** 运行中点了「关闭目标应用」：拆屏会让正在跑的这一轮中断，同意就发 [SessionIntent.CloseTargetAppConfirmed] */
+    data object ConfirmCloseTargetApp : SessionEffect
 
     /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
     data object InstallShizuku : SessionEffect

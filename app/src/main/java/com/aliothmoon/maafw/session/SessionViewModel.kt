@@ -623,7 +623,9 @@ class SessionViewModel(
             SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
-            SessionIntent.CloseTargetApp -> closeTargetApp()
+            SessionIntent.CloseTargetApp ->
+                if (locked()) emitEffect(SessionEffect.ConfirmCloseTargetApp) else closeTargetApp()
+            SessionIntent.CloseTargetAppConfirmed -> closeTargetApp()
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {
@@ -677,11 +679,15 @@ class SessionViewModel(
     }
 
     /**
-     * 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
+     * 先强停看门狗盯着的目标应用，再停虚拟屏：只停屏的话按钮名不副实，应用还在后台活着。
+     * 没有目标包（还没跑过一轮）或强停失败都照样关屏——屏一没，屏上的应用也跟着走
+     *
      * 只用现成连接：一颗次级按钮，不值得为它弹授权请求
      */
     private suspend fun closeTargetApp() {
         val service = servicePort.serviceOrNull() ?: return
+        val stopped = servicePort.callWithTimeout(CLOSE_TARGET_TIMEOUT) { it.stopTargetApp() }
+        if (stopped != true) Timber.w("stopTargetApp did not succeed (%s), closing the display anyway", stopped)
         try {
             servicePort.callOrRestart(service, "stopVirtualDisplay", DISPLAY_CALL_TIMEOUT_MS) { it.stopVirtualDisplay() }
         } catch (e: CancellationException) {
@@ -932,6 +938,7 @@ class SessionViewModel(
     private companion object {
         // 整帧 PNG 编码在特权进程里做，高分辨率下要几百毫秒
         val CAPTURE_TIMEOUT = 5.seconds
+        val CLOSE_TARGET_TIMEOUT = 5.seconds
         const val MANUAL_SCREENSHOT_KEEP = 20
         val SCREENSHOT_STAMP = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
     }
