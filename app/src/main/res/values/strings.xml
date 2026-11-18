@@ -639,6 +639,7 @@
     <string name="config_export_saved">配置已导出：%1$s</string>
     <string name="config_export_failed">导出配置失败</string>
     <string name="config_import_unreadable">无法读取该文件</string>
+    <string name="config_import_too_large">文件超过 %1$d MB，不是配置文件</string>
     <string name="config_import_unrecognized">无法识别的配置格式</string>
     <string name="config_import_project_mismatch">这是 %1$s 的配置，与当前项目 %2$s 不符</string>
     <string name="config_import_newer">该备份由更新版本的应用导出，请先更新应用</string>

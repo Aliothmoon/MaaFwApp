@@ -63,7 +63,8 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
          * 随配置导出、导入的设置：和这台设备无关、也不含凭据的那些
          *
          * 不在列：提权后端与 Shizuku 几项（换台设备不一定有 Root / Shizuku）、虚拟屏分辨率（看屏幕）、
-         * 运行通知样式（超级岛、实时更新看 ROM）、背景图（图不进文件）、唤醒解锁、Mirror酱 CDK。
+         * 运行通知样式（超级岛、实时更新看 ROM）、背景图（图不进文件）、唤醒解锁、Mirror酱 CDK、
+         * 遥测开关（本机关了的，导入一份开着的备份不能被重新打开）。
          * 不在列的项导入时一律不碰，本机填好的不会被清掉
          */
         private val PORTABLE_SETTINGS: List<Pair<Preferences.Key<String>, (AppSettings) -> String>> =
@@ -84,7 +85,6 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                     eventNotificationLevel to AppSettings::eventNotificationLevel,
                     runDurationLimitEnabled to AppSettings::runDurationLimitEnabled,
                     runDurationLimitMinutes to AppSettings::runDurationLimitMinutes,
-                    telemetryEnabled to AppSettings::telemetryEnabled,
                     autoCheckUpdate to AppSettings::autoCheckUpdate,
                     autoDownloadUpdate to AppSettings::autoDownloadUpdate,
                     updateChannel to AppSettings::updateChannel,

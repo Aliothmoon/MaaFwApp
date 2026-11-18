@@ -649,6 +649,7 @@
     <string name="config_export_saved">Configuration exported: %1$s</string>
     <string name="config_export_failed">Couldn\'t export the configuration</string>
     <string name="config_import_unreadable">Couldn\'t read the file</string>
+    <string name="config_import_too_large">The file is larger than %1$d MB; it is not a configuration file</string>
     <string name="config_import_unrecognized">Unrecognized configuration format</string>
     <string name="config_import_project_mismatch">This configuration is for %1$s, not the current project %2$s</string>
     <string name="config_import_newer">This backup was exported by a newer version of the app. Update the app first</string>
