@@ -21,8 +21,6 @@ object VirtualDisplayManager {
     private const val STATE_CAPTURING = 1
 
     private const val VIRTUAL_DISPLAY_FLAG_PUBLIC: Int = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
-    private const val VIRTUAL_DISPLAY_FLAG_PRESENTATION: Int =
-        DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
     private const val VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY: Int =
         DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
     private const val VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH: Int = 1 shl 6
@@ -41,6 +39,7 @@ object VirtualDisplayManager {
     private const val VD_DESTROY_CONTENT = true
 
     const val DISPLAY_NONE = -1
+    const val FLAG_TIER_NONE = -1
 
     data class DisplayConfig(
         val width: Int = DefaultDisplayConfig.WIDTH,
@@ -51,6 +50,7 @@ object VirtualDisplayManager {
     private val state = AtomicInteger(STATE_IDLE)
     private val config = AtomicReference(DisplayConfig())
     private val displayId = AtomicInteger(DISPLAY_NONE)
+    private val flagTier = AtomicInteger(FLAG_TIER_NONE)
     private val virtualDisplay = AtomicReference<VirtualDisplay?>()
 
     fun start(): Int {
@@ -110,23 +110,25 @@ object VirtualDisplayManager {
         virtualDisplay.getAndSet(null)?.release()
         NativeBridgeLib.releaseNativeCapturer()
         displayId.set(DISPLAY_NONE)
+        flagTier.set(FLAG_TIER_NONE)
     }
 
+    /** 0 为完整权限，大于 0 是兼容档；没建屏返回 [FLAG_TIER_NONE] */
+    fun getFlagTier(): Int = flagTier.get()
+
     private fun createVirtualDisplay(surface: Surface, cfg: DisplayConfig) {
-        val flags = buildDisplayFlags()
         val wm = ServiceManager.getWindowManager()
         val physicalRotation = runCatching { wm.rotation }.getOrDefault(-1)
         Ln.i("Physical display rotation: $physicalRotation")
 
-        val vd = ServiceManager.getDisplayManager()
-            .createNewVirtualDisplay(
-                VD_NAME,
-                cfg.width,
-                cfg.height,
-                cfg.dpi,
-                surface,
-                flags
-            )
+        val base = baseFlags()
+        val tiers = flagTiers(Build.VERSION.SDK_INT).map { tier -> tier.fold(base, Int::or) }
+        val (tier, vd) = createWithFallback(tiers) { flags ->
+            ServiceManager.getDisplayManager()
+                .createNewVirtualDisplay(VD_NAME, cfg.width, cfg.height, cfg.dpi, surface, flags)
+        }
+        val flags = tiers[tier]
+        flagTier.set(tier)
         virtualDisplay.set(vd)
         val vdId = vd.display.displayId
         displayId.set(vdId)
@@ -137,8 +139,9 @@ object VirtualDisplayManager {
             ", configured=${cfg.width}x${cfg.height}" +
             ", actual=${d.width}x${d.height}" +
             ", rotation=${d.rotation}" +
-            ", flags=0x${flags.toString(16)}"
+            ", flags=0x${flags.toString(16)}, tier=$tier"
         )
+        logEffective(vdId, flags, d.flags)
 
         // 不设的话虚拟屏上的输入框一拿焦点，用户的输入法就弹到主屏且收不回去；HIDE 这一档 Android 12 起才有
         if (Build.VERSION.SDK_INT >= AndroidVersions.API_31_ANDROID_12) {
@@ -170,9 +173,29 @@ object VirtualDisplayManager {
         }
     }
 
-    private fun buildDisplayFlags(): Int {
+    /** 部分 ROM 会悄悄不给申请的 flag */
+    private fun logEffective(vdId: Int, requested: Int, displayFlags: Int) {
+        val groupId = runCatching { ServiceManager.getDisplayManager().getDisplayGroupId(vdId) }.getOrDefault(-1)
+        Ln.i("VD effective: group=$groupId, flags=${describeDisplayFlags(displayFlags)}")
+        if (requested and VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP != 0 && groupId == 0) {
+            Ln.w("VD requested OWN_DISPLAY_GROUP but landed in group 0, it will follow the main screen power state")
+        }
+    }
+
+    /** Display 的隐藏位，13～17 未变 */
+    internal fun describeDisplayFlags(flags: Int): String = listOf(
+        1 shl 7 to "TRUSTED",
+        1 shl 8 to "OWN_DISPLAY_GROUP",
+        1 shl 9 to "ALWAYS_UNLOCKED",
+        1 shl 10 to "TOUCH_FEEDBACK_DISABLED",
+        1 shl 11 to "OWN_FOCUS",
+        1 shl 12 to "STEAL_TOP_FOCUS_DISABLED",
+    ).filter { (bit, _) -> flags and bit != 0 }
+        .joinToString(prefix = "[", postfix = "]") { it.second }
+
+    /** 不加 PRESENTATION：会被别的应用当成投屏目标 */
+    private fun baseFlags(): Int {
         var flags = (VIRTUAL_DISPLAY_FLAG_PUBLIC
-                or VIRTUAL_DISPLAY_FLAG_PRESENTATION
                 or VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
                 or VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH)
 
@@ -182,17 +205,49 @@ object VirtualDisplayManager {
         if (VD_SYSTEM_DECORATIONS) {
             flags = flags or VIRTUAL_DISPLAY_FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS
         }
-        if (Build.VERSION.SDK_INT >= AndroidVersions.API_33_ANDROID_13) {
-            flags = flags or (VIRTUAL_DISPLAY_FLAG_TRUSTED
-                    or VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP
-                    or VIRTUAL_DISPLAY_FLAG_ALWAYS_UNLOCKED
-                    or VIRTUAL_DISPLAY_FLAG_TOUCH_FEEDBACK_DISABLED)
-            if (Build.VERSION.SDK_INT >= AndroidVersions.API_34_ANDROID_14) {
-                flags = flags or (VIRTUAL_DISPLAY_FLAG_OWN_FOCUS
-                        or VIRTUAL_DISPLAY_FLAG_DEVICE_DISPLAY_GROUP
-                        or VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED)
+        return flags
+    }
+
+    /**
+     * 只在 SecurityException 时降档。末档给 Shell 缺 ADD_TRUSTED_DISPLAY 的 15 QPR2（MuMu 15、redroid 15）：
+     * 留在 group 0，熄屏锁屏随主屏停，注入会抢主屏焦点
+     */
+    internal fun flagTiers(sdkInt: Int): Array<IntArray> = when {
+        sdkInt >= AndroidVersions.API_34_ANDROID_14 -> arrayOf(
+            intArrayOf(
+                VIRTUAL_DISPLAY_FLAG_TRUSTED,
+                VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP,
+                VIRTUAL_DISPLAY_FLAG_ALWAYS_UNLOCKED,
+                VIRTUAL_DISPLAY_FLAG_TOUCH_FEEDBACK_DISABLED,
+                VIRTUAL_DISPLAY_FLAG_OWN_FOCUS,
+                VIRTUAL_DISPLAY_FLAG_DEVICE_DISPLAY_GROUP,
+                VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED,
+            ),
+            intArrayOf(VIRTUAL_DISPLAY_FLAG_TOUCH_FEEDBACK_DISABLED),
+        )
+
+        sdkInt >= AndroidVersions.API_33_ANDROID_13 -> arrayOf(
+            intArrayOf(
+                VIRTUAL_DISPLAY_FLAG_TRUSTED,
+                VIRTUAL_DISPLAY_FLAG_OWN_DISPLAY_GROUP,
+                VIRTUAL_DISPLAY_FLAG_ALWAYS_UNLOCKED,
+                VIRTUAL_DISPLAY_FLAG_TOUCH_FEEDBACK_DISABLED,
+            ),
+            intArrayOf(VIRTUAL_DISPLAY_FLAG_TOUCH_FEEDBACK_DISABLED),
+        )
+
+        else -> arrayOf(intArrayOf())
+    }
+
+    internal fun <T> createWithFallback(tiers: List<Int>, create: (flags: Int) -> T): Pair<Int, T> {
+        for ((index, flags) in tiers.withIndex()) {
+            try {
+                return index to create(flags)
+            } catch (e: SecurityException) {
+                if (index == tiers.lastIndex) throw e
+                Ln.w("createVirtualDisplay rejected at tier $index (flags=0x${flags.toString(16)}): ${e.message}")
             }
         }
-        return flags
+        throw IllegalArgumentException("no flag tier")
     }
 }

@@ -164,6 +164,9 @@ open class FakePrivilegedService : RemoteService {
 
     override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String = ""
 
+    var flagTier: Int = -1
+    override fun getVirtualDisplayFlagTier(): Int = flagTier
+
     override fun saveDisplayFrame(path: String?): Boolean {
         savedFramePaths += path.orEmpty()
         return saveDisplayFrameResult

@@ -132,6 +132,20 @@ class DisplayHazardsTest {
         assertTrue(journal.notes[0].second.isResource(R.string.run_log_adb_input_restricted))
     }
 
+    /** 兼容档只会出现在后台虚拟屏上；前台模式没有虚拟屏，旧屏的档位不该记进这一轮 */
+    @Test
+    fun `notice hook warns about a compat virtual display only in background mode`() = runTest {
+        val journal = RecordingRunJournal()
+        val hook = DisplayHazardNoticeHook({ DisplayHazards(virtualDisplayCompat = true) }, journal)
+
+        hook.engage(context(RunMode.BACKGROUND, journal = journal))
+        assertTrue(journal.notes.single().second.isResource(R.string.run_log_virtual_display_compat))
+
+        journal.notes.clear()
+        assertTrue(hook.engage(context(RunMode.FOREGROUND, journal = journal)) is EngageResult.Skipped)
+        assertTrue(journal.notes.isEmpty())
+    }
+
     @Test
     fun `notice hook ignores smart resolution in foreground mode`() = runTest {
         val journal = RecordingRunJournal()

@@ -22,6 +22,11 @@ data class DisplayHazards(
      * 注入照样报成功，表现为「任务点了没反应」
      */
     val adbInputRestricted: Boolean = false,
+    /**
+     * 后台虚拟屏建在兼容档：系统缺建屏所需权限（15 QPR2 的 Shell 没有 ADD_TRUSTED_DISPLAY），
+     * 屏留在主屏的显示组里，熄屏锁屏时任务暂停、主屏可能丢输入焦点。建屏之后才有，投递前恒为 false
+     */
+    val virtualDisplayCompat: Boolean = false,
 )
 
 /** 现读，不缓存：两项用户随时会在系统设置里改 */
@@ -42,13 +47,20 @@ class SystemDisplayHazardProbe(
 ) : DisplayHazardProbe {
 
     override suspend fun read(): DisplayHazards = withContext(MaaDispatchers.IO) {
+        val service = servicePort.serviceOrNull()
         val smartResolution = try {
-            servicePort.serviceOrNull()?.isSmartResolutionEnabled() == true
+            service?.isSmartResolutionEnabled() == true
         } catch (e: Exception) {
             Timber.w(e, "isSmartResolutionEnabled failed")
             false
         }
-        DisplayHazards(smartResolution, EyeProtectionDetector.detect(context), XiaomiAdbInput.isRestricted(servicePort))
+        val compatTier = runCatching { (service?.virtualDisplayFlagTier ?: 0) > 0 }.getOrDefault(false)
+        DisplayHazards(
+            smartResolution,
+            EyeProtectionDetector.detect(context),
+            XiaomiAdbInput.isRestricted(servicePort),
+            compatTier,
+        )
     }
 }
 
@@ -120,10 +132,14 @@ class DisplayHazardNoticeHook(
     override suspend fun engage(ctx: RunContext): EngageResult {
         val hazards = probe.read()
         val smartResolution = hazards.smartResolution && ctx.runMode == RunMode.BACKGROUND
-        if (!hazards.adbInputRestricted && !smartResolution && hazards.eyeProtectionSource == null) {
+        val compatDisplay = hazards.virtualDisplayCompat && ctx.runMode == RunMode.BACKGROUND
+        if (!hazards.adbInputRestricted && !smartResolution && hazards.eyeProtectionSource == null && !compatDisplay) {
             return EngageResult.Skipped()
         }
 
+        if (compatDisplay) {
+            journal.warn(ctx.executionId, uiTextOf(R.string.run_log_virtual_display_compat))
+        }
         if (hazards.adbInputRestricted) {
             journal.warn(ctx.executionId, uiTextOf(R.string.run_log_adb_input_restricted))
         }

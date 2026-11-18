@@ -214,6 +214,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun getProcessExitRecords(packageName: String?, sinceMs: Long, maxNum: Int): String =
         ProcessExitQuery.query(packageName, sinceMs, maxNum).toWireJson()
 
+    override fun getVirtualDisplayFlagTier(): Int = VirtualDisplayManager.getFlagTier()
+
     override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String =
         SystemLogDump.dump(sinceMs, untilMs, pid, processPrefix.orEmpty())
 
