@@ -31,7 +31,10 @@ object PrivilegedGrant {
     /** specialUse 前台服务的 AppOps 放行；Android 14+ 上被 ROM 或管控工具拒绝时 FGS 起不来 */
     const val FGS_SPECIAL_USE = 1 shl 6
 
+    /** 定时所需：12+ 精确闹钟，小米另放开自启动（10008）与后台弹出界面（10021）；结果不进返回位，读健康卡 */
+    const val SCHEDULE = 1 shl 7
+
     /** 全集；特权进程上线即全代授，对齐 MaaMeow */
     const val ALL = NOTIFICATION or BATTERY or BACKGROUND or OVERLAY or ACCESSIBILITY or
-            STORAGE or FGS_SPECIAL_USE
+            STORAGE or FGS_SPECIAL_USE or SCHEDULE
 }

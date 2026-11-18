@@ -423,7 +423,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
         var granted = 0
         // 结果不进返回位免改 AIDL 返回协议；放开失败由 App 侧预检兜底
         if (permissions and PrivilegedGrant.FGS_SPECIAL_USE != 0) {
-            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName)
+            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName, uid)
+        }
+        if (permissions and PrivilegedGrant.SCHEDULE != 0) {
+            PermissionGrantHelper.grantScheduleOps(packageName, uid)
         }
         if (permissions and PrivilegedGrant.NOTIFICATION != 0 &&
             PermissionGrantHelper.grantNotificationPermission(packageName, uid)
