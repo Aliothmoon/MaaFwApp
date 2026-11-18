@@ -75,6 +75,21 @@ class ScheduleLaunchOutcomeTest {
         }
     }
 
+    /** 前置检查拦的要记下是哪一道：触发日志的「去修复」靠它认出后端没就绪 */
+    @Test
+    fun `precheck block records which check stopped it`() {
+        val reason = uiTextFromFramework("x")
+
+        assertEquals(
+            PrivilegedAccessPrecheck.ID,
+            RunLaunchResult.Blocked(reason, BlockSource.Precheck(PrivilegedAccessPrecheck.ID)).toScheduleOutcome().blockedBy,
+        )
+        assertNull(
+            RunLaunchResult.Blocked(reason, BlockSource.Hook(PrivilegedConnectHook.ID, NotRunCause.HookFailed))
+                .toScheduleOutcome().blockedBy,
+        )
+    }
+
     /** 定时触发本该在 RunLauncher 里被降级；真漏过来也得记成失败而不是当成功 */
     @Test
     fun `needs confirmation is recorded as blocked rather than started`() {

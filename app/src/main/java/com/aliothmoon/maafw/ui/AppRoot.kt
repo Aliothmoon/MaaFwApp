@@ -99,7 +99,9 @@ import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.privileged.SystemPermission
+import com.aliothmoon.maafw.schedule.AutoStartHelper
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
@@ -147,6 +149,7 @@ import com.aliothmoon.maafw.ui.tasks.TasksScreen
 import com.aliothmoon.maafw.ui.tasks.rememberMovablePreview
 import com.aliothmoon.maafw.util.Misc
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
@@ -670,6 +673,18 @@ fun AppRoot(
                                     }
                                 ScheduleFixAction.EDIT_RULE ->
                                     navController.navigate(Routes.scheduleEdit(entry.strategyId))
+                                ScheduleFixAction.BACKEND -> viewModel.onIntent(SessionIntent.RequestRemoteAccess)
+                                // 查不到厂商页（原生系统一类）就只剩电池白名单可给
+                                ScheduleFixAction.AUTO_START -> scope.launch {
+                                    val target = withContext(MaaDispatchers.IO) { AutoStartHelper.resolveTarget(context) }
+                                    if (target != null) {
+                                        AutoStartHelper.open(context, target)
+                                    } else {
+                                        viewModel.onIntent(
+                                            SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
+                                        )
+                                    }
+                                }
                             }
                         },
                     )

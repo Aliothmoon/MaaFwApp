@@ -20,6 +20,8 @@ data class ScheduleLaunchOutcome(
     val detail: UiText? = null,
     /** null = 不发通知：起跑了、重投，或用户自己取消的 */
     val notice: ScheduleNotice? = null,
+    /** 拦下这次的前置检查 id，进 [TriggerLogEntry.blockedBy] */
+    val blockedBy: String? = null,
 )
 
 /**
@@ -64,7 +66,13 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason, ScheduleNotice.SKIPPED)
 
     is RunLaunchResult.Blocked ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, reason, source.notice())
+        ScheduleLaunchOutcome(
+            TriggerResult.FAILED_START,
+            TriggerFailureReason.BLOCKED,
+            reason,
+            source.notice(),
+            blockedBy = (source as? BlockSource.Precheck)?.id,
+        )
 
     is RunLaunchResult.NeedsConfirmation ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt, ScheduleNotice.FAILED)

@@ -30,6 +30,8 @@ data class TriggerLogEntry(
     val failureReason: TriggerFailureReason? = null,
     /** 写入时由 UiText 解析冻住；老记录为 null，展示回落到 [failureReason] */
     val detail: String? = null,
+    /** 拦下这次的前置检查 id（`RunPrecheck.id`）；挂载物拦的看 [steps]，老记录为 null */
+    val blockedBy: String? = null,
     /**
      * 发起过程里每个环境挂载物的落点，按 engage 顺序
      *

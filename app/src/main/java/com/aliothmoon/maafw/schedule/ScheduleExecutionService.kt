@@ -282,6 +282,7 @@ class ScheduleExecutionService : Service() {
                 result = outcome.result,
                 failureReason = outcome.failureReason,
                 detail = frozen,
+                blockedBy = outcome.blockedBy,
                 steps = steps,
             ),
         )

@@ -113,7 +113,7 @@ enum class TriggerResult {
  * [TriggerResult.FAILED_START] 的细分
  *
  * 存枚举而不是文案：与 [TriggerLogEntry] 同一条理由，落盘的字符串会把语言冻住。
- * 拦截来自哪道检查存不下（那是 `UiText`），只进 Timber
+ * 拦下的是哪道检查记在 [TriggerLogEntry.blockedBy]
  */
 @Serializable
 enum class TriggerFailureReason {
