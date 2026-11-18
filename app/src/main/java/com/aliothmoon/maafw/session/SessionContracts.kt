@@ -250,7 +250,7 @@ sealed interface SessionIntent {
 
     /**
      * null = 跟随系统；事实来源 AppLocales
-     * 落地：Activity 重建 → AppRoot 检测 locale → ReloadProject
+     * 落地：Activity 重建 → AppRoot 检测 locale → [LocaleChanged]
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
     data class SetDebugMode(val enabled: Boolean) : SessionIntent
@@ -301,6 +301,13 @@ sealed interface SessionIntent {
     data object CaptureVirtualDisplay : SessionIntent
 
     data object ReloadProject : SessionIntent
+
+    /**
+     * Activity 重建后发现语言变了，要按新语言重载 PI；与手点的 [ReloadProject] 分开
+     *
+     * 运行中系统语言被改、或 13+ 在系统设置改应用语言也会到这：那时只记一笔、不弹锁定提示，一轮结束再重载
+     */
+    data object LocaleChanged : SessionIntent
 
     data object DismissWelcome : SessionIntent
 

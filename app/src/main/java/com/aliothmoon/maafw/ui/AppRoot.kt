@@ -231,7 +231,7 @@ fun AppRoot(
     LaunchedEffect(localeTag) {
         if (lastLocaleTag != localeTag) {
             lastLocaleTag = localeTag
-            viewModel.onIntent(SessionIntent.ReloadProject)
+            viewModel.onIntent(SessionIntent.LocaleChanged)
         }
     }
 

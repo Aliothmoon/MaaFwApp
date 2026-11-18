@@ -96,6 +96,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
 private data class SettingsSnapshot(
@@ -261,7 +262,15 @@ class SessionViewModel(
     // Intent 串行消费，保证配置写入不交错
     private val intents = Channel<SessionIntent>(Channel.UNLIMITED)
 
+    /** 运行中到的语言切换；这一轮结束时补重载，否则 PI 文案停在旧语言直到进程重启 */
+    private val localeReloadPending = AtomicBoolean(false)
+
     init {
+        viewModelScope.launch {
+            runnerPort.state.map { it.phase.isBusy }.distinctUntilChanged().collect { busy ->
+                if (!busy && localeReloadPending.compareAndSet(true, false)) projectRepository.reload()
+            }
+        }
         // 解包在前、加载在后；解包没成不要 reload，半包会被当成已解包
         viewModelScope.launch {
             if (piInstall.ensureInstalled()) projectRepository.ensureLoaded()
@@ -625,6 +634,8 @@ class SessionViewModel(
                 projectRepository.reload()
             }
 
+            SessionIntent.LocaleChanged -> reloadForLocale()
+
             SessionIntent.DismissWelcome -> {
                 val fingerprint = resolvedWelcome.value?.fingerprint
                 if (fingerprint != null) {
@@ -718,6 +729,16 @@ class SessionViewModel(
     }
 
     private fun locked(): Boolean = runnerPort.state.value.phase.isBusy
+
+    private suspend fun reloadForLocale() {
+        if (!locked()) {
+            projectRepository.reload()
+            return
+        }
+        localeReloadPending.set(true)
+        // 记账与这一轮落回 Idle 可能前后脚：收集器已经过去了的话，这里自己补
+        if (!locked() && localeReloadPending.compareAndSet(true, false)) projectRepository.reload()
+    }
 
     private suspend fun appendAndActivate(configuration: RunConfiguration) {
         configurationStore.update { config ->

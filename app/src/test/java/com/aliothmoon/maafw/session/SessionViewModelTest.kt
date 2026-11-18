@@ -987,6 +987,35 @@ class SessionViewModelTest {
         assertEquals(before, project.reloadCount)
     }
 
+    /** 运行中系统语言被改：不弹锁定提示、当场不重载，这一轮结束再按新语言重载 */
+    @Test
+    fun `locale change while busy reloads once the run ends`() = runTest(mainDispatcher) {
+        val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(project = project, runner = runner)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        val before = project.reloadCount
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        vm.onIntent(SessionIntent.LocaleChanged)
+        advanceUntilIdle()
+        assertEquals(before, project.reloadCount)
+        assertTrue(effects.none { it is SessionEffect.ShowMessage && it.message.isResource(R.string.msg_locked_while_running) })
+
+        // 桩跑在 backgroundScope 里，advanceUntilIdle 不等它，推虚拟时间让它走完准备段、看到停止
+        vm.onIntent(SessionIntent.Stop)
+        advanceTimeBy(130_000)
+        advanceUntilIdle()
+        assertFalse(runner.state.value.phase.isBusy)
+        assertEquals(before + 1, project.reloadCount)
+    }
+
     @Test
     fun `canStart false without active configuration`() = runTest(mainDispatcher) {
         val store = InMemoryUserConfigurationStore(
