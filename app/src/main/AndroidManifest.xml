@@ -84,6 +84,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 重启中转：主进程自己拉起的任务会随进程一起被系统移除，交给独立进程杀主进程再拉起 -->
+        <activity
+            android:name=".util.RestartActivity"
+            android:exported="false"
+            android:process=":restart"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- API 32- 的 per-app locale 由 appcompat 持久化并在 Activity 附着前回放（33+ 走系统） -->
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"

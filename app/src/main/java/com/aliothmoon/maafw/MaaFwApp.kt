@@ -47,6 +47,8 @@ class MaaFwApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // 重启中转等子进程不初始化
+        if (getProcessName() != packageName) return
         AppPaths.init(this)
         CrashHandler().install()
         val app = this
