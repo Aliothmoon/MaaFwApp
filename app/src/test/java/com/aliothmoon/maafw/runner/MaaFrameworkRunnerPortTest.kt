@@ -374,4 +374,57 @@ class MaaFrameworkRunnerPortTest {
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
         assertEquals(listOf("e1"), events.filter { it.event is RunnerEvent.ExecutionFinished }.map { it.executionId })
     }
+
+    /** 主动断开会 destroy 远端，死亡通知先解绑了，只看得到 Disconnected；不收回就永远锁着 */
+    @Test
+    fun `an unbind mid-run aborts instead of waiting forever`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort()
+        val (runner, _) = port(this, servicePort = servicePort)
+
+        runner.start(plan(), "e1")
+        servicePort.emit(PrivilegedServiceState.Disconnected)
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        val result = runner.state.value.latestResult as ExecutionResult.Failed
+        assertTrue(result.reason.isResource(R.string.msg_fail_privileged_exited))
+    }
+
+    /** 换身份重起：旧进程被 destroy，状态从 Connected 直接进 Connecting，同样要收回 */
+    @Test
+    fun `a respawn mid-run aborts the round`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort()
+        val (runner, _) = port(this, servicePort = servicePort)
+
+        runner.start(plan(), "e1")
+        assertEquals(RunnerPhase.Running, runner.state.value.phase)
+        servicePort.emit(PrivilegedServiceState.Connecting)
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+    }
+
+    /** 投递前那段在连特权进程，换后端时先断再连是正常过程，不能当成远端没了 */
+    @Test
+    fun `reconnecting while preparing does not abort`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val hold = CompletableDeferred<Unit>()
+        val servicePort = FakePrivilegedServicePort(service).apply { holdUseService = hold }
+        val (runner, _) = port(this, service, servicePort)
+
+        val started = async { runner.start(plan(), "e1") }
+        advanceUntilIdle()
+        assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
+        servicePort.emit(PrivilegedServiceState.Disconnected)
+        advanceUntilIdle()
+        servicePort.emit(PrivilegedServiceState.Connecting)
+        advanceUntilIdle()
+        assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
+        servicePort.emit(PrivilegedServiceState.Connected)
+        hold.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(RunnerCommandResult.Accepted, started.await())
+        assertEquals(RunnerPhase.Running, runner.state.value.phase)
+    }
 }

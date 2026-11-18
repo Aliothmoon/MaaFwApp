@@ -99,13 +99,13 @@ class MaaFrameworkRunnerPort(
     }
 
     init {
-        // 特权进程死了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
-        // 跟着卡死，UI 全灰且再也发不起下一轮。只认 Died：主动 unbind 只是断了 app 这侧的
-        // binder，远端仍握着我们的 callback stub，那一轮还在跑、结果照样会回来
+        // 特权进程没了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
+        // 跟着卡死，UI 全灰且再也发不起下一轮。没了不只 Died 一种：主动 unbind 与换身份重起
+        // 都会 destroy 远端，而死亡通知在那之前就解绑了，状态只落到 Disconnected / Connecting
         scope.launch {
             servicePort.serviceState.collect { serviceState ->
-                if (serviceState == PrivilegedServiceState.Died) {
-                    abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died mid-run, forcing abort")
+                if (remoteGone(serviceState)) {
+                    abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process gone mid-run ($serviceState), forcing abort")
                 }
             }
         }
@@ -139,6 +139,18 @@ class MaaFrameworkRunnerPort(
     }
 
     /** null = 问不出来（没连上或调用失败），不能据此判定，只有明确的 false 才算数 */
+    /**
+     * Preparing 里 `start` 自己在连：换后端时 `connect` 会先 unbind 再重绑，冒出来的
+     * Disconnected / Connecting 是正常过程，那时收回执行态会让 `start` 在新进程上投出孤儿轮；
+     * 这段的失败由 `start` 自己的错误路径收。投出去之后再见到它们，只能是远端被 destroy 了
+     */
+    private fun remoteGone(serviceState: PrivilegedServiceState): Boolean = when (serviceState) {
+        PrivilegedServiceState.Died -> true
+        PrivilegedServiceState.Disconnected, PrivilegedServiceState.Connecting ->
+            _state.value.phase == RunnerPhase.Running || _state.value.phase == RunnerPhase.Stopping
+        else -> false
+    }
+
     private suspend fun remoteRunning(): Boolean? = withContext(MaaDispatchers.IO) {
         runCatching { servicePort.serviceOrNull()?.isRunning() }.getOrNull()
     }

@@ -735,7 +735,7 @@ class SessionViewModel(
     }
 
     /**
-     * 断开只是解绑，特权进程本体还在（它有自己的看门狗）
+     * 断开会 destroy 特权进程，在跑的那一轮随之结束，Runner 见到 Disconnected 自己收回
      * 运行中不拦：跑飞了的时候用户就该能一脚踹开这条连接
      */
     private suspend fun togglePrivilegedService() {
