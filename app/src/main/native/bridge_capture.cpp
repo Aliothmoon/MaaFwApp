@@ -8,6 +8,10 @@
 #include <media/NdkImage.h>
 #include <media/NdkImageReader.h>
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 struct NativeCapturer {
     AImageReader *reader = nullptr;
     ANativeWindow *window = nullptr;
@@ -18,9 +22,12 @@ struct NativeCapturer {
 
 static NativeCapturer *g_capturer = nullptr;
 
-static void onImageAvailable(void *context, AImageReader *reader) {
-    (void) context;
+// AImageReader_delete 持 reader 锁等回调线程退出，回调里 acquire 也要这把锁
+// 关闭前须让进行中的回调放完，之后到来的回调不再碰 reader
+static std::atomic<bool> g_closing{false};
+static std::atomic<int> g_callbacks_in_flight{0};
 
+static void ConsumeLatestImage(AImageReader *reader) {
     AImage *image = nullptr;
     if (AImageReader_acquireLatestImage(reader, &image) != AMEDIA_OK || !image) {
         return;
@@ -39,6 +46,16 @@ static void onImageAvailable(void *context, AImageReader *reader) {
     if (!handedOver) {
         AImage_delete(image);
     }
+}
+
+static void onImageAvailable(void *context, AImageReader *reader) {
+    (void) context;
+    // 先登记再看标志，与 Release 的先置标志再等归零配对
+    g_callbacks_in_flight.fetch_add(1);
+    if (!g_closing.load()) {
+        ConsumeLatestImage(reader);
+    }
+    g_callbacks_in_flight.fetch_sub(1);
 }
 
 jobject SetupNativeCapturer(JNIEnv *env, int width, int height) {
@@ -61,6 +78,7 @@ jobject SetupNativeCapturer(JNIEnv *env, int width, int height) {
         return nullptr;
     }
 
+    g_closing.store(false);
     g_capturer->listener.context = g_capturer;
     g_capturer->listener.onImageAvailable = onImageAvailable;
     status = AImageReader_setImageListener(g_capturer->reader, &g_capturer->listener);
@@ -89,12 +107,18 @@ jobject SetupNativeCapturer(JNIEnv *env, int width, int height) {
 }
 
 void ReleaseNativeCapturer() {
+    if (g_capturer && g_capturer->reader) {
+        g_closing.store(true);
+        AImageReader_setImageListener(g_capturer->reader, nullptr);
+        while (g_callbacks_in_flight.load() != 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
+    // 回调已放完，不会再往队里塞图
     DrainPreviewQueue();
 
     if (g_capturer) {
-        if (g_capturer->reader) {
-            AImageReader_setImageListener(g_capturer->reader, nullptr);
-        }
         if (g_capturer->reader) {
             AImageReader_delete(g_capturer->reader);
         }
