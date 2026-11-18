@@ -455,6 +455,7 @@
     <string name="msg_launch_in_progress">Launch already in progress</string>
     <string name="msg_precheck_ignored_confirmation">A start check ignored the confirmation; aborted</string>
     <string name="precheck_confirm_title">Before you start</string>
+    <string name="precheck_adb_input_restricted">“USB debugging (Security settings)” is off, so the system blocks touch input from this app. Turn it on in Developer options (restart the phone if it does not take effect). Start anyway?</string>
     <string name="precheck_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off in the system display settings first. Start anyway?</string>
     <string name="precheck_eye_protection_enabled">Eye comfort / night mode is enabled, which may affect color recognition accuracy. Start anyway?</string>
     <string name="precheck_start_anyway">Start anyway</string>
@@ -581,6 +582,7 @@
     <string name="run_log_game_fps_low">The target app is running at only %1$d FPS, below 30; recognition and input may fail. Turn on high frame rate in that app if it has one, and turn off power saving</string>
     <string name="run_log_game_fps_degraded">The target app is running at %1$d FPS, below 50; timing-sensitive steps may drift. Turn on high frame rate in that app if it has one, and turn off power saving</string>
     <string name="run_log_task_skipped">Skipped task "%1$s": %2$s</string>
+    <string name="run_log_adb_input_restricted">“USB debugging (Security settings)” is off, so the system blocks touch input. Turn it on in Developer options (restart the phone if it does not take effect)</string>
     <string name="run_log_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off manually in the system display settings</string>
     <string name="run_log_eye_protection_enabled">Eye comfort / night mode is active (%1$s), which may affect normal image recognition. Please turn it off manually</string>
 

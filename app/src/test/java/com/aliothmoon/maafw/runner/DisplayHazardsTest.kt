@@ -65,6 +65,17 @@ class DisplayHazardsTest {
         assertEquals(DisplayHazardPrecheck.EYE_PROTECTION, (foreground as Verdict.NeedsConfirmation).token)
     }
 
+    /** 点了没反应最难查，排在最前；只是提醒，定时照跑 */
+    @Test
+    fun `restricted adb input is asked before display settings`() = runTest {
+        val verdict = precheck(both.copy(adbInputRestricted = true)).evaluate(context())
+
+        verdict as Verdict.NeedsConfirmation
+        assertEquals(DisplayHazardPrecheck.ADB_INPUT, verdict.token)
+        assertTrue(verdict.prompt.isResource(R.string.precheck_adb_input_restricted))
+        assertTrue(verdict.advisory)
+    }
+
     @Test
     fun `eye protection is still asked after smart resolution is acknowledged`() = runTest {
         val verdict = precheck(both).evaluate(context(acknowledged = setOf(DisplayHazardPrecheck.SMART_RESOLUTION)))
@@ -80,7 +91,11 @@ class DisplayHazardsTest {
             reads++
             both
         }
-        val acked = setOf(DisplayHazardPrecheck.SMART_RESOLUTION, DisplayHazardPrecheck.EYE_PROTECTION)
+        val acked = setOf(
+            DisplayHazardPrecheck.ADB_INPUT,
+            DisplayHazardPrecheck.SMART_RESOLUTION,
+            DisplayHazardPrecheck.EYE_PROTECTION,
+        )
 
         assertEquals(Verdict.Pass, check.evaluate(context(acknowledged = acked)))
         assertEquals(0, reads)
@@ -103,6 +118,18 @@ class DisplayHazardsTest {
                 uiTextFormatted("xiaomi:screen_paper_mode_enabled"),
             ),
         )
+    }
+
+    @Test
+    fun `notice hook warns about restricted adb input first`() = runTest {
+        val journal = RecordingRunJournal()
+
+        val result = DisplayHazardNoticeHook({ DisplayHazards(adbInputRestricted = true) }, journal)
+            .engage(context(RunMode.FOREGROUND, journal = journal))
+
+        assertTrue(result is EngageResult.Engaged)
+        assertEquals(1, journal.notes.size)
+        assertTrue(journal.notes[0].second.isResource(R.string.run_log_adb_input_restricted))
     }
 
     @Test

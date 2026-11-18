@@ -11,12 +11,17 @@ import com.aliothmoon.maafw.util.EyeProtectionDetector
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
-/** 会让识别出错的系统显示设置（对齐 MaaMeow 的启动前检查） */
+/** 会让识别或操作出错的设备设置（对齐 MaaMeow 的启动前检查） */
 data class DisplayHazards(
     /** 荣耀「智能分辨率」：降了应用的渲染分辨率，后台虚拟屏上识别会出错 */
     val smartResolution: Boolean = false,
     /** 护眼 / 夜光模式命中的设置项；null = 没开。偏色会影响图像识别 */
     val eyeProtectionSource: String? = null,
+    /**
+     * 小米没开「USB 调试（安全设置）」：shell 身份的触控注入被系统拦下，
+     * 注入照样报成功，表现为「任务点了没反应」
+     */
+    val adbInputRestricted: Boolean = false,
 )
 
 /** 现读，不缓存：两项用户随时会在系统设置里改 */
@@ -25,7 +30,7 @@ fun interface DisplayHazardProbe {
 }
 
 /**
- * 护眼在 app 里读，智能分辨率问特权进程：前者是各厂商自定义的键，app 读得到；
+ * 护眼与 adbinput 在 app 里读，智能分辨率问特权进程：前两者 app 读得到；
  * 后者对齐 MaaMeow 走 shell 身份读
  *
  * 只用已有连接，不发起绑定：检查必须零副作用（见 [RunPrecheck]）。没连上就当没开——
@@ -43,26 +48,33 @@ class SystemDisplayHazardProbe(
             Timber.w(e, "isSmartResolutionEnabled failed")
             false
         }
-        DisplayHazards(smartResolution, EyeProtectionDetector.detect(context))
+        DisplayHazards(smartResolution, EyeProtectionDetector.detect(context), XiaomiAdbInput.isRestricted(servicePort))
     }
 }
 
 /**
- * 开跑前问一句：先智能分辨率（只坑后台模式）、再护眼
+ * 开跑前问一句：先 adbinput（点了没反应最难查）、再智能分辨率（只坑后台模式）、再护眼
  *
- * 两项都是提醒：定时与悬浮窗没人能点头，照常开跑，由 [DisplayHazardNoticeHook] 记进运行日志
+ * 都是提醒：定时与悬浮窗没人能点头，照常开跑，由 [DisplayHazardNoticeHook] 记进运行日志
  */
 class DisplayHazardPrecheck(private val probe: DisplayHazardProbe) : RunPrecheck {
 
     override val id: String = ID
 
     override suspend fun evaluate(ctx: RunContext): Verdict {
+        val askAdbInput = ADB_INPUT !in ctx.acknowledged
         val askSmartResolution = ctx.runMode == RunMode.BACKGROUND && SMART_RESOLUTION !in ctx.acknowledged
         val askEyeProtection = EYE_PROTECTION !in ctx.acknowledged
-        if (!askSmartResolution && !askEyeProtection) return Verdict.Pass
+        if (!askAdbInput && !askSmartResolution && !askEyeProtection) return Verdict.Pass
 
         val hazards = probe.read()
         return when {
+            askAdbInput && hazards.adbInputRestricted -> Verdict.NeedsConfirmation(
+                ADB_INPUT,
+                uiTextOf(R.string.precheck_adb_input_restricted),
+                advisory = true,
+            )
+
             askSmartResolution && hazards.smartResolution -> Verdict.NeedsConfirmation(
                 SMART_RESOLUTION,
                 uiTextOf(R.string.precheck_smart_resolution_enabled),
@@ -81,6 +93,7 @@ class DisplayHazardPrecheck(private val probe: DisplayHazardProbe) : RunPrecheck
 
     companion object {
         const val ID = "display-hazard"
+        val ADB_INPUT = ConfirmToken("adb-input")
         val SMART_RESOLUTION = ConfirmToken("smart-resolution")
         val EYE_PROTECTION = ConfirmToken("eye-protection")
     }
@@ -107,8 +120,13 @@ class DisplayHazardNoticeHook(
     override suspend fun engage(ctx: RunContext): EngageResult {
         val hazards = probe.read()
         val smartResolution = hazards.smartResolution && ctx.runMode == RunMode.BACKGROUND
-        if (!smartResolution && hazards.eyeProtectionSource == null) return EngageResult.Skipped()
+        if (!hazards.adbInputRestricted && !smartResolution && hazards.eyeProtectionSource == null) {
+            return EngageResult.Skipped()
+        }
 
+        if (hazards.adbInputRestricted) {
+            journal.warn(ctx.executionId, uiTextOf(R.string.run_log_adb_input_restricted))
+        }
         if (smartResolution) {
             journal.warn(ctx.executionId, uiTextOf(R.string.run_log_smart_resolution_enabled))
         }

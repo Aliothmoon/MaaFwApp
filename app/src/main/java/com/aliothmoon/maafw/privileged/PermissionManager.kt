@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.util.RomInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -151,8 +152,22 @@ class PermissionManager(
         }
         // 特权进程一上线就代授，省掉用户逐个点系统页
         scope.launch {
-            serviceConnected.filter { it }.collect { grantViaPrivileged(PrivilegedGrant.ALL) }
+            serviceConnected.filter { it }.collect {
+                grantViaPrivileged(PrivilegedGrant.ALL)
+                enableXiaomiAdbInputIfRoot()
+            }
         }
+    }
+
+    /**
+     * 特权进程以 shell 跑，小米没开「USB 调试（安全设置）」时触控输入全被拦；Root 后端连上时直接开掉，
+     * 定时任务也就不受影响。Shizuku 下 shell 写不了这几个属性，只能靠启动前提醒
+     */
+    private suspend fun enableXiaomiAdbInputIfRoot() {
+        if (accessPort.state.value.configuredBackend != RemoteBackend.ROOT) return
+        if (!RomInfo.isXiaomi || RomInfo.systemProperty("persist.security.adbinput") == "1") return
+        val enabled = MiuiAdbInputEnabler.enable()
+        Timber.w("Xiaomi USB debugging (Security settings) is off and blocks shell input; enabled with root: %s", enabled)
     }
 
     /** 从 Shizuku 的授权界面切回来时状态已变，但没有回调会通知我们 */
