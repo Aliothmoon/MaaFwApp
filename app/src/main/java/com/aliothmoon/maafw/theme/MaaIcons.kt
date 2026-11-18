@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.DoNotDisturbOn
@@ -190,6 +191,10 @@ object MaaIcons {
     val KeyboardArrowRight: ImageVector
         @Composable get() =
             themed(SemiIconRes.Mono.chevron_right, Icons.AutoMirrored.Filled.KeyboardArrowRight)
+
+    /** 离开本应用的链接行尾标，与进二级页的 › 分开 */
+    val ExternalLink: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.external_open, Icons.AutoMirrored.Outlined.OpenInNew)
 
     @Composable
     fun mono(@DrawableRes resId: Int): ImageVector = SemiIcons.mono(resId)

@@ -662,6 +662,7 @@ private fun AboutLinks(
         MaaNavigationRow(
             label = stringResource(R.string.settings_about_repository),
             onClick = { context.openLink(url) },
+            external = true,
         )
     }
 }
