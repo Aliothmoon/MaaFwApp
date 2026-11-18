@@ -119,7 +119,7 @@
     <string name="settings_duration_limit_hint">范围 %1$d–%2$d 分钟；运行中改动下一轮生效</string>
     <string name="settings_section_other">其他设置</string>
     <string name="settings_pip_on_home">后台运行时自动画中画</string>
-    <string name="settings_pip_on_home_desc">后台模式任务运行中，停在任务页时按 Home 或手势回桌面，自动缩为画中画小窗继续显示画面。小窗内无法操作游戏</string>
+    <string name="settings_pip_on_home_desc">后台模式任务运行中，停在任务页时按 Home 或手势回桌面，自动缩为画中画小窗继续显示画面。小窗内无法操作目标应用</string>
     <string name="settings_theme">主题</string>
     <string name="settings_theme_style">主题风格</string>
     <string name="settings_follow_system">跟随系统</string>
@@ -499,7 +499,7 @@
     <string name="permission_overlay">悬浮窗</string>
     <string name="permission_storage">存储访问</string>
     <string name="permission_accessibility">无障碍服务</string>
-    <string name="permission_keepalive_hint">后台任务运行期间，应用或游戏有可能会被系统策略清理。建议在系统最近任务里锁定游戏后台、并在游戏电池设置里允许后台高耗电运行</string>
+    <string name="permission_keepalive_hint">后台任务运行期间，本应用或目标应用有可能会被系统策略清理。建议在系统最近任务里锁定目标应用、并在它的电池设置里允许后台高耗电运行</string>
     <string name="home_overview">概览</string>
     <string name="home_display_resolution">屏幕分辨率</string>
     <string name="home_service_status">服务状态</string>
@@ -569,8 +569,8 @@
     <string name="run_log_app_process_gone">目标应用进程未启动或被异常关闭(%1$s)</string>
     <string name="run_log_app_unknown">未知应用</string>
     <string name="run_log_agent_flood_recovered">Agent 输出已恢复正常</string>
-    <string name="run_log_game_fps_low">游戏画面帧率仅 %1$d FPS，低于 30，自动战斗可能出错；请在游戏设置中开启高帧率模式，并关闭省电模式</string>
-    <string name="run_log_game_fps_degraded">游戏画面帧率 %1$d FPS，低于 50，战斗时机可能不准；建议在游戏设置中开启高帧率模式，并关闭省电模式</string>
+    <string name="run_log_game_fps_low">目标应用画面帧率仅 %1$d FPS，低于 30，识别与操作可能出错；可在该应用设置里开启高帧率，并关闭系统省电模式</string>
+    <string name="run_log_game_fps_degraded">目标应用画面帧率 %1$d FPS，低于 50，对时机敏感的操作可能不准；可在该应用设置里开启高帧率，并关闭系统省电模式</string>
     <string name="run_log_task_skipped">已跳过任务「%1$s」：%2$s</string>
     <string name="run_log_smart_resolution_enabled">系统已开启「智能分辨率」，后台模式下会导致识别出错，请在系统显示设置中手动关闭</string>
     <string name="run_log_eye_protection_enabled">设备当前处于护眼/夜光模式 (%1$s)，可能影响正常图像识别，请手动关闭</string>

@@ -125,7 +125,7 @@
     <string name="settings_duration_limit_hint">%1$d–%2$d minutes; changes while a run is in progress apply to the next run</string>
     <string name="settings_section_other">Other</string>
     <string name="settings_pip_on_home">Auto picture-in-picture while running</string>
-    <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The game cannot be controlled inside the window</string>
+    <string name="settings_pip_on_home_desc">While a background-mode task is running and you are on the Tasks page, pressing Home or swiping to the desktop shrinks the app into a picture-in-picture window showing the virtual display. The target app cannot be controlled inside the window</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_style">Theme style</string>
     <string name="settings_follow_system">System default</string>
@@ -506,7 +506,7 @@
     <string name="permission_overlay">Display over other apps</string>
     <string name="permission_storage">All files access</string>
     <string name="permission_accessibility">Accessibility service</string>
-    <string name="permission_keepalive_hint">While a background task is running, the app or the game may be cleared by system power-management policies. Lock the game in the recent-apps screen and allow it high-power background running in its battery settings.</string>
+    <string name="permission_keepalive_hint">While a background task is running, this app or the target app may be cleared by system power-management policies. Lock the target app in the recent-apps screen and allow it high-power background running in its battery settings.</string>
     <string name="home_overview">Overview</string>
     <string name="home_display_resolution">Screen resolution</string>
     <string name="home_service_status">Service status</string>
@@ -578,8 +578,8 @@
     <string name="run_log_app_process_gone">The target app process is not running or was closed unexpectedly (%1$s).</string>
     <string name="run_log_app_unknown">unknown app</string>
     <string name="run_log_agent_flood_recovered">Agent output is back to normal</string>
-    <string name="run_log_game_fps_low">The game is running at only %1$d FPS, below 30; automation may fail. Enable high frame rate mode in the game and disable power saving mode</string>
-    <string name="run_log_game_fps_degraded">The game is running at %1$d FPS, below 50; battle timing may drift. Enable high frame rate mode in the game and disable power saving mode</string>
+    <string name="run_log_game_fps_low">The target app is running at only %1$d FPS, below 30; recognition and input may fail. Turn on high frame rate in that app if it has one, and turn off power saving</string>
+    <string name="run_log_game_fps_degraded">The target app is running at %1$d FPS, below 50; timing-sensitive steps may drift. Turn on high frame rate in that app if it has one, and turn off power saving</string>
     <string name="run_log_task_skipped">Skipped task "%1$s": %2$s</string>
     <string name="run_log_smart_resolution_enabled">System “Smart resolution” is enabled, which breaks recognition in background mode. Please turn it off manually in the system display settings</string>
     <string name="run_log_eye_protection_enabled">Eye comfort / night mode is active (%1$s), which may affect normal image recognition. Please turn it off manually</string>
