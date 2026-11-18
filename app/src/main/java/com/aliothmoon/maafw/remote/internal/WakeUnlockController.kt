@@ -297,24 +297,31 @@ object WakeUnlockController {
             return WakeUnlockResult.OK
         }
         // 槽位与任务注入共用：给在途的一笔留点时间抬起。等不到也照样回放——任务被中途停掉时
-        // 残留的槽位不会自己清，在这拒绝就永远解不了锁；冲突交给 plan 的「先整体 CANCEL」自愈
+        // 残留的槽位不会自己清，在这拒绝就永远解不了锁；回放前后各整体 CANCEL 一次
         if (!pollUntil(CONTACTS_IDLE_TIMEOUT_MS) { !InputControlUtils.hasActiveContacts() }) {
             Ln.w("$TAG: other contacts still down, replay will cancel them")
         }
         val actions = UnlockGestureReplay.timeline(gesture, screen.width, screen.height)
         // 不报步数：点按录的手势步数就是 PIN 位数
         Ln.i("$TAG: replaying gesture after ${GESTURE_SETTLE_MS}ms settle")
-        if (!UnlockGestureReplay.execute(actions) { !keyguardGone(wm) }) {
+        val stats = UnlockGestureReplay.execute(actions) { !keyguardGone(wm) }
+        if (stats == null) {
             Ln.i("$TAG: keyguard gone mid-replay, stopped")
             return WakeUnlockResult.OK
         }
+        Ln.i("$TAG: replay done, injected $stats")
 
         return if (pollUntil(KEYGUARD_GONE_TIMEOUT_MS) { wm.isKeyguardLocked == false }) {
             Ln.i("$TAG: unlocked (gesture accepted)")
             WakeUnlockResult.OK
         } else {
             // 与 PIN 一致：不重试，避免连错触发系统锁定
-            Ln.w("$TAG: still locked after gesture replay — 轨迹失效，或 keyguard 忽略注入事件")
+            val cause = if (stats.allAccepted) {
+                "all injected: stale trajectory, or keyguard ignores injected events"
+            } else {
+                "some injections not delivered: events likely blocked by the system"
+            }
+            Ln.w("$TAG: still locked after gesture replay — $cause")
             WakeUnlockResult.CREDENTIAL_REJECTED
         }
     }

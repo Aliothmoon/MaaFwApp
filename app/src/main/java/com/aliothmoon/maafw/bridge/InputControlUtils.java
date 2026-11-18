@@ -146,6 +146,11 @@ public final class InputControlUtils {
         return !slots.isEmpty();
     }
 
+    /** 整体 CANCEL 并清空槽位；没按着时什么也不发 */
+    public static synchronized void cancel(int displayId) {
+        cancelGesture(displayId);
+    }
+
     private static void notifyTouchCallback(MotionEvent event, int index) {
         ITouchEventCallback callback = touchCallback;
         if (callback == null || isSensitiveInput()) {

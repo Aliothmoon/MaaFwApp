@@ -6,10 +6,13 @@ import com.aliothmoon.maafw.domain.UnlockGestureJson
 import com.aliothmoon.maafw.domain.UnlockStep
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 步骤 → 注入时间轴，以及持久化往返 */
+/** 步骤 → 注入时间轴、注入结果统计，以及持久化往返 */
 class UnlockGestureReplayTest {
 
     @Test
@@ -71,13 +74,13 @@ class UnlockGestureReplayTest {
             1080,
             2220,
         )
-        val injected = mutableListOf<InjectAction>()
+        val touch = FakeTouch()
         var asks = 0
         // 第一笔放行，第二笔前锁屏已经没了
-        val finished = UnlockGestureReplay.play(actions, proceed = { asks++ == 0 }) { injected += it }
+        val stats = UnlockGestureReplay.play(actions, proceed = { asks++ == 0 }, touch)
 
-        assertFalse(finished)
-        assertEquals(actions.take(3), injected)
+        assertNull(stats)
+        assertEquals(listOf("cancel", "down", "up", "cancel"), touch.calls)
     }
 
     @Test
@@ -87,14 +90,86 @@ class UnlockGestureReplayTest {
             InjectAction.Move(2, 2),
             InjectAction.Up(3, 3),
         )
-        val injected = mutableListOf<InjectAction>()
+        val touch = FakeTouch()
         var asks = 0
-        val finished = UnlockGestureReplay.play(actions, proceed = { asks++ == 0 }) { injected += it }
+        val stats = UnlockGestureReplay.play(actions, proceed = { asks++ == 0 }, touch)
 
         // 只在按下前问，按下后不会半路丢掉抬起留下悬空触点
-        assertTrue(finished)
-        assertEquals(actions, injected)
+        assertNotNull(stats)
+        assertEquals(listOf("cancel", "down", "move", "up", "cancel"), touch.calls)
         assertEquals(1, asks)
+    }
+
+    @Test
+    fun executeCountsAcceptedEventsAndClearsSlotsAround() {
+        val touch = FakeTouch()
+        val stats = play(swipe, touch)
+        assertEquals(ReplayStats(downs = Delivery.ALL, events = Delivery.ALL), stats)
+        assertTrue(stats.allAccepted)
+        assertEquals(listOf("cancel", "down", "move", "up", "cancel"), touch.calls)
+    }
+
+    @Test
+    fun rejectedDownDropsTheRestOfStroke() {
+        val stats = play(swipe, FakeTouch(acceptDown = false))
+        assertEquals(ReplayStats(downs = Delivery.NONE, events = Delivery.NONE), stats)
+        assertFalse(stats.allAccepted)
+        assertEquals("downs none, events none", stats.toString())
+    }
+
+    @Test
+    fun emptyReplayIsNotAllAccepted() {
+        val stats = play(emptyList(), FakeTouch())
+        assertFalse(stats.allAccepted)
+    }
+
+    @Test
+    fun interruptedReplayStillLiftsFinger() {
+        val touch = FakeTouch(failOnMove = true)
+        assertThrows(IllegalStateException::class.java) {
+            play(swipe, touch)
+        }
+        assertEquals("cancel", touch.calls.last())
+    }
+
+    private fun play(actions: List<InjectAction>, touch: ReplayTouch): ReplayStats =
+        checkNotNull(UnlockGestureReplay.play(actions, proceed = { true }, touch))
+
+    private val swipe = listOf(
+        InjectAction.Down(1, 2),
+        InjectAction.Move(3, 4),
+        InjectAction.Up(5, 6),
+    )
+
+    /** 与 InputControlUtils 一致：没按下时 move/up 不会注入 */
+    private class FakeTouch(
+        private val acceptDown: Boolean = true,
+        private val failOnMove: Boolean = false,
+    ) : ReplayTouch {
+        val calls = mutableListOf<String>()
+        private var pressed = false
+
+        override fun down(x: Int, y: Int): Boolean {
+            calls += "down"
+            pressed = acceptDown
+            return acceptDown
+        }
+
+        override fun move(x: Int, y: Int): Boolean {
+            calls += "move"
+            check(!failOnMove) { "interrupted" }
+            return pressed
+        }
+
+        override fun up(x: Int, y: Int): Boolean {
+            calls += "up"
+            return pressed.also { pressed = false }
+        }
+
+        override fun cancel() {
+            calls += "cancel"
+            pressed = false
+        }
     }
 
     @Test

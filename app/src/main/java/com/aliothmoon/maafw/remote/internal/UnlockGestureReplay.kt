@@ -68,35 +68,47 @@ internal object UnlockGestureReplay {
     /**
      * 按时间轴注入到主屏；解锁发生在任务启动前，不会和 MAA 的触控抢 [InputControlUtils]
      * @param proceed 每一笔按下前问一次，false 即停；已按下的那笔照常走到抬起，触摸焦点在按下时就定在锁屏窗口
-     * @return false 表示被 [proceed] 叫停
+     * @return 送达统计；null 表示被 [proceed] 叫停
      */
-    fun execute(actions: List<InjectAction>, proceed: () -> Boolean = { true }): Boolean =
-        withSensitiveInput { play(actions, proceed, ::inject) }
+    fun execute(actions: List<InjectAction>, proceed: () -> Boolean = { true }): ReplayStats? =
+        withSensitiveInput { play(actions, proceed, MainDisplayTouch) }
 
     internal fun play(
         actions: List<InjectAction>,
         proceed: () -> Boolean,
-        sink: (InjectAction) -> Unit,
-    ): Boolean {
-        for (action in actions) {
-            if (action is InjectAction.Down && !proceed()) return false
-            sink(action)
+        touch: ReplayTouch,
+    ): ReplayStats? {
+        // 残留的多指槽位会把这一笔规划成 POINTER_DOWN，先清掉
+        touch.cancel()
+        var downs = 0
+        var downsOk = 0
+        var events = 0
+        var eventsOk = 0
+        try {
+            for (action in actions) {
+                if (action is InjectAction.Down && !proceed()) return null
+                val ok = when (action) {
+                    is InjectAction.Sleep -> {
+                        Thread.sleep(action.ms)
+                        continue
+                    }
+
+                    is InjectAction.Down -> touch.down(action.x, action.y).also {
+                        downs++
+                        if (it) downsOk++
+                    }
+
+                    is InjectAction.Move -> touch.move(action.x, action.y)
+                    is InjectAction.Up -> touch.up(action.x, action.y)
+                }
+                events++
+                if (ok) eventsOk++
+            }
+        } finally {
+            // 中途被打断或 UP 没送达，别把手指留在屏上
+            touch.cancel()
         }
-        return true
-    }
-
-    private fun inject(action: InjectAction) {
-        when (action) {
-            is InjectAction.Sleep -> Thread.sleep(action.ms)
-            is InjectAction.Down ->
-                InputControlUtils.down(action.x, action.y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
-
-            is InjectAction.Move ->
-                InputControlUtils.move(action.x, action.y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
-
-            is InjectAction.Up ->
-                InputControlUtils.up(action.x, action.y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
-        }
+        return ReplayStats(downs = Delivery.of(downsOk, downs), events = Delivery.of(eventsOk, events))
     }
 
     private fun press(x: Int, y: Int, holdMs: Long): List<InjectAction> = listOf(
@@ -104,4 +116,48 @@ internal object UnlockGestureReplay {
         InjectAction.Sleep(holdMs.coerceAtLeast(0)),
         InjectAction.Up(x, y),
     )
+
+    /** 主屏单指 */
+    private object MainDisplayTouch : ReplayTouch {
+        override fun down(x: Int, y: Int) =
+            InputControlUtils.down(x, y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY) == InputControlUtils.TouchResult.DELIVERED
+
+        override fun move(x: Int, y: Int) =
+            InputControlUtils.move(x, y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
+
+        override fun up(x: Int, y: Int) =
+            InputControlUtils.up(x, y, SINGLE_CONTACT, Display.DEFAULT_DISPLAY)
+
+        override fun cancel() = InputControlUtils.cancel(Display.DEFAULT_DISPLAY)
+    }
+}
+
+/** 送达情况只分全部/部分/没有，不带个数：点按录的手势个数就是 PIN 位数 */
+internal enum class Delivery(val label: String) {
+    NONE("none"),
+    PARTIAL("partial"),
+    ALL("all");
+
+    companion object {
+        fun of(ok: Int, total: Int) = when {
+            ok == 0 -> NONE
+            ok == total -> ALL
+            else -> PARTIAL
+        }
+    }
+}
+
+/** 一次回放的注入结果；不带坐标，轨迹等价于凭证 */
+internal data class ReplayStats(val downs: Delivery, val events: Delivery) {
+    val allAccepted: Boolean get() = events == Delivery.ALL
+
+    override fun toString() = "downs ${downs.label}, events ${events.label}"
+}
+
+/** 回放的注入出口，单测替换 */
+internal interface ReplayTouch {
+    fun down(x: Int, y: Int): Boolean
+    fun move(x: Int, y: Int): Boolean
+    fun up(x: Int, y: Int): Boolean
+    fun cancel()
 }
