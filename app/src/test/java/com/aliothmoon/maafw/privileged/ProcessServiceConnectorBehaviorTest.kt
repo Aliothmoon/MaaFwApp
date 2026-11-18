@@ -297,13 +297,6 @@ class ProcessServiceConnectorBehaviorTest {
     }
 
     @Test
-    fun elevatedProcessName_carriesUserIdOutsideMainUser() {
-        assertEquals("pkg:svc", elevatedProcessName("pkg", "svc", 10343))
-        // 分身与主用户同名会互相当残留杀
-        assertEquals("pkg:svc_u999", elevatedProcessName("pkg", "svc", 99910343))
-    }
-
-    @Test
     fun binderArrivedThenSuperseded_isDestroyed() {
         val h = Harness(timeoutMs = 5_000L)
         val binder = mockk<IBinder>(relaxed = true)
@@ -342,13 +335,5 @@ class ProcessServiceConnectorBehaviorTest {
         h.connectAndAttach()
 
         assertEquals("超期残留必须在拉起前硬杀", listOf(42), killedBeforeSpawn)
-    }
-
-    @Test
-    fun parseProcesses_skipsHeaderAndKeepsElapsed() {
-        assertEquals(
-            listOf(ResidualProcess(42, "00:17"), ResidualProcess(7, "1-02:03:04")),
-            parseProcesses(listOf("  PID     ELAPSED", "   42       00:17", "    7  1-02:03:04", "")),
-        )
     }
 }

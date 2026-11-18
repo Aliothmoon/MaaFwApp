@@ -8,6 +8,7 @@ import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.constant.ShellDirs
 import com.aliothmoon.maafw.root.BootstrapRegistry
 import com.aliothmoon.maafw.root.ProcessExit
 import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
@@ -158,7 +159,9 @@ abstract class ProcessServiceConnectorBackend(
                 append(" --debug-name=").append(shellQuote(processName))
             }
         }
-        return spawner.wrapCommand(launcher.absolutePath, invocation)
+        // 14+ 留 root 时解出的 agent 目录归 0，降到 shell 的那一份（另一后端、或以后不留 root）写不进去，先修回
+        val repair = if (keepRoot) "" else "${shellOwnershipRepairCommand(ShellDirs.AGENT_DIR.absolutePath)}; "
+        return repair + spawner.wrapCommand(launcher.absolutePath, invocation)
     }
 
     /** 取消会盖掉 await 的结果，回投是否已到还得看 deferred */

@@ -32,6 +32,13 @@ class ProcessExitedException(val exitCode: Int?) :
 
 internal fun shellQuote(value: String): String = "'${value.replace("'", "'\"'\"'")}'"
 
+/**
+ * root 执行时把 [dir] 下不归 shell 的条目修回 2000：root 建的目录降到 shell 后写不进去
+ * 以 shell 身份执行时没权限也用不着，直接跳过；`-h` 改链接本身，不跟进链接指向的文件
+ */
+internal fun shellOwnershipRepairCommand(dir: String): String =
+    $$"[ \"$(id -u)\" = 0 ] && find $${shellQuote(dir)} ! -user 2000 -exec chown -h 2000:2000 {} + 2>/dev/null"
+
 /** SIGTERM 触发服务进程 shutdown hook 优雅清理 */
 internal fun killByNameCommand(processName: String): String =
     "kill $(pidof ${shellQuote(processName)}) 2>/dev/null"
