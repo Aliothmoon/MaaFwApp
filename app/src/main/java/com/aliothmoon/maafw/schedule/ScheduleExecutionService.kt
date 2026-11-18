@@ -374,8 +374,9 @@ class ScheduleExecutionService : Service() {
     private fun startAsForeground(notification: Notification) {
         try {
             SpecialUseFgsGate.startForeground(this, NOTIFICATION_ID, notification)
-        } catch (e: SecurityException) {
-            // specialUse 被系统拒绝：尽力继续触发，uid 转空闲后服务可能被系统停掉
+        } catch (e: RuntimeException) {
+            // specialUse 被系统拒绝（SecurityException），或 12+ 后台起前台被拒
+            // （ForegroundServiceStartNotAllowedException）：尽力继续触发，uid 转空闲后服务可能被系统停掉
             Timber.w(e, "ScheduleExecutionService: startForeground denied, continue without FGS")
         }
     }

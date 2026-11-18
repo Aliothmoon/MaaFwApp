@@ -258,8 +258,9 @@ class RunForegroundService : Service() {
         try {
             SpecialUseFgsGate.startForeground(this, NOTIFICATION_ID, notification)
             return true
-        } catch (e: SecurityException) {
-            // 预检放行但系统仍拒（如 appop 为 FOREGROUND）；AOSP 抛出前已清 fgRequired，
+        } catch (e: RuntimeException) {
+            // 预检放行但系统仍拒：appop 为 FOREGROUND 抛 SecurityException，12+ 后台重建抛
+            // ForegroundServiceStartNotAllowedException（IllegalStateException）。AOSP 抛出前已清 fgRequired，
             // stopSelf 不会触发 ForegroundServiceDidNotStartInTimeException
             Timber.w(e, "RunForegroundService: startForeground denied, run without FGS")
             foregroundDenied = true
