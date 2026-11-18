@@ -27,6 +27,7 @@ import com.aliothmoon.maafw.log.LogExportCollector
 import com.aliothmoon.maafw.log.toWireJson
 import com.aliothmoon.maafw.remote.internal.LogcatRetention
 import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
+import com.aliothmoon.maafw.remote.internal.PathDiagnosis
 import com.aliothmoon.maafw.remote.internal.ProcessExitQuery
 import com.aliothmoon.maafw.remote.internal.SystemLogDump
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
@@ -164,7 +165,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun setup(piRoot: String?, logDir: String?, isDebug: Boolean): Boolean {
         if (piRoot.isNullOrBlank() || !File(piRoot).isDirectory) {
-            Ln.e("$TAG: setup failed - PI root not readable: $piRoot")
+            // 属主与挂载点能分清是 root 建坏的目录，还是存储栈不让 shell 进 Android/data
+            val diagnosis = piRoot?.takeIf { it.isNotBlank() }?.let { PathDiagnosis.diagnose(File(it)) } ?: "no path"
+            Ln.e("$TAG: setup failed - PI root not readable: $piRoot ($diagnosis)")
             return false
         }
         this.piRoot = piRoot
