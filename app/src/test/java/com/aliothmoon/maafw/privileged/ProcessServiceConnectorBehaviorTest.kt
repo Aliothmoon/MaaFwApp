@@ -277,4 +277,11 @@ class ProcessServiceConnectorBehaviorTest {
         assertTrue(h.callbacks.connected.isEmpty())
         h.connector.disconnect(null)
     }
+
+    @Test
+    fun elevatedProcessName_carriesUserIdOutsideMainUser() {
+        assertEquals("pkg:svc", elevatedProcessName("pkg", "svc", 10343))
+        // 分身与主用户同名会互相当残留杀
+        assertEquals("pkg:svc_u999", elevatedProcessName("pkg", "svc", 99910343))
+    }
 }
