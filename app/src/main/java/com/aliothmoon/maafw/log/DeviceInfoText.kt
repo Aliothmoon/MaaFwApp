@@ -23,6 +23,7 @@ data class DeviceInfo(
     val memory: String,
     val storage: String,
     val batteryOptimization: String,
+    val exactAlarm: String,
     val selinux: String,
 )
 
@@ -50,6 +51,7 @@ object DeviceInfoText {
         append("RAM         : ").append(info.memory).append('\n')
         append("Storage     : ").append(info.storage).append('\n')
         append("Battery Opt : ").append(info.batteryOptimization).append('\n')
+        append("Exact Alarm : ").append(info.exactAlarm).append('\n')
         append("SELinux     : ").append(info.selinux).append('\n')
         append(line).append('\n')
     }

@@ -135,7 +135,7 @@ class ConfigBackupService(
         val restored = configurationStore.update { ConfigBackupCodec.restore(backup, it, definition) }
         val schedules = ConfigBackupCodec.restoreSchedules(backup, restored.configurations.mapTo(HashSet()) { it.id })
         val kept = schedules.mapTo(HashSet()) { it.id }
-        // 账本只记投递过、在重试的规则，没响过的闹钟 rescheduleAll 认不出来，得在这里撤
+        // rescheduleAll 只撤账本里认得出的孤儿；被删的规则按规则表直接撤，不依赖账本记全
         scheduleStore.strategies.value.map { it.id }.filterNot { it in kept }.forEach(alarms::forget)
         scheduleStore.replaceAll(schedules)
         alarms.rescheduleAll(schedules)

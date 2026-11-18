@@ -22,6 +22,8 @@ import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.PermissionManager
 import com.aliothmoon.maafw.privileged.RemoteServiceManager
 import com.aliothmoon.maafw.runner.RunSessionLogStore
+import com.aliothmoon.maafw.schedule.ScheduleAlarmManager
+import com.aliothmoon.maafw.schedule.ScheduleMissedReporter
 import com.aliothmoon.maafw.schedule.ShizukuDownMonitor
 import com.aliothmoon.maafw.schedule.resyncScheduleAlarms
 import com.aliothmoon.maafw.settings.AppSettingsManager
@@ -30,6 +32,7 @@ import com.aliothmoon.maafw.ui.SessionMessagePresenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
@@ -84,6 +87,11 @@ class MaaFwApp : Application() {
         // 也会杀进程、清闹钟。只靠 ScheduleBootReceiver，这些情况下定时会一直哑到下次覆盖安装
         appScope.launch {
             resyncScheduleAlarms(koin.get(), koin.get(), reason = "process start")
+            // 开机广播、导入备份那几次重排判出来的漏触发也在这里取走；onStart 收上个进程没来得及补记的
+            val reporter = koin.get<ScheduleMissedReporter>()
+            koin.get<ScheduleAlarmManager>().missedQueued
+                .onStart { emit(Unit) }
+                .collect { reporter.reportMissed() }
         }
         // 只靠历史页的清理入口的话，不进那一页的用户会一直攒下去
         appScope.launch {

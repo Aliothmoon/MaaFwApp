@@ -400,6 +400,8 @@
     <string name="schedule_reason_blocked">启动前检查未通过</string>
     <string name="schedule_reason_rejected">已有执行在进行中</string>
     <string name="schedule_reason_expired">超过原定时刻 %1$d 小时仍未开始，本次作废</string>
+    <string name="schedule_reason_missed">到点未被系统唤起：应用可能被省电或后台管控清理，请允许自启动与后台运行</string>
+    <string name="schedule_reason_missed_rebooted">未执行：此后设备关机或重启过，到点时可能处于关机状态</string>
     <string name="schedule_edit_configuration">运行配置</string>
     <string name="schedule_edit_configuration_required">请选择这条规则要跑的配置</string>
     <string name="schedule_configuration_missing">绑定的配置已删除</string>

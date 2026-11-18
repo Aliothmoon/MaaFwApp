@@ -136,6 +136,12 @@ enum class TriggerFailureReason {
 
     /** 超过 [TRIGGER_EXPIRE_AFTER_MS] 还没开跑，作废 */
     EXPIRED,
+
+    /** 到点没被系统唤起（进程被杀清了闹钟），事后重排时补记 */
+    MISSED,
+
+    /** 同上，但触发点之后设备重启过，多半到点时关着机 */
+    MISSED_REBOOTED,
 }
 /** 编辑期字段级校验；空集 = 可保存 */
 enum class ScheduleFieldError { NAME, CONFIGURATION, DAYS, TIMES, START, INTERVAL }

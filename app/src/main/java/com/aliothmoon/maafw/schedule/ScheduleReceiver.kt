@@ -28,6 +28,8 @@ class ScheduleReceiver : BroadcastReceiver() {
         val scheduledTime = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0L)
         val retryCount = intent.getIntExtra(EXTRA_RETRY_COUNT, 0)
         Timber.i("Schedule alarm fired: %s, retry=%d", strategyId, retryCount)
+        runCatching { GlobalContext.get().get<ScheduleAlarmManager>().markFired(strategyId, scheduledTime) }
+            .onFailure { Timber.w(it, "markFired failed: %s", strategyId) }
 
         val serviceIntent = Intent(context, ScheduleExecutionService::class.java).apply {
             action = ACTION_SCHEDULE_TRIGGER

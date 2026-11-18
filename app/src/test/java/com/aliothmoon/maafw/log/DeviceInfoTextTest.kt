@@ -23,6 +23,7 @@ class DeviceInfoTextTest {
         assertTrue("Android     : 16 (API 36)" in text.lines())
         assertTrue("Screen      : 1920 x 1080 @ 120Hz (density 480dpi)" in text.lines())
         assertTrue("RAM         : 8.0 GB total, 1.5 GB free" in text.lines())
+        assertTrue("Exact Alarm : allowed" in text.lines())
         assertTrue("SELinux     : enforcing" in text.lines())
     }
 
@@ -63,6 +64,7 @@ class DeviceInfoTextTest {
         memory = memory,
         storage = "20.0 GB usable / 128.0 GB total",
         batteryOptimization = "NOT ignored (schedule may be killed)",
+        exactAlarm = "allowed",
         selinux = selinux,
     )
 }

@@ -407,6 +407,8 @@
     <string name="schedule_reason_blocked">A start check did not pass</string>
     <string name="schedule_reason_rejected">A run is already in progress</string>
     <string name="schedule_reason_expired">Not started within %1$d hours of the scheduled time; dropped</string>
+    <string name="schedule_reason_missed">The system did not wake the app on time; battery saving or background management may have cleared it. Allow auto-start and background activity</string>
+    <string name="schedule_reason_missed_rebooted">Not run: the device was shut down or restarted afterwards and may have been off at the scheduled time</string>
     <string name="schedule_edit_configuration">Run configuration</string>
     <string name="schedule_edit_configuration_required">Pick the configuration this rule runs</string>
     <string name="schedule_configuration_missing">Bound configuration was deleted</string>
