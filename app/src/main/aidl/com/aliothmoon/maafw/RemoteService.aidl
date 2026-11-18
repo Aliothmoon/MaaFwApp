@@ -161,6 +161,9 @@ interface RemoteService {
     /** 后台虚拟屏的 flag 档位，0 为完整权限，大于 0 是兼容档，没建屏返回 -1 */
     int getVirtualDisplayFlagTier() = 88;
 
+    /** 显示调用卡死时取线程栈：只留在处理 binder 调用或等锁的线程，带 native 采集收尾停在哪一步；不能加锁 */
+    String dumpThreads() = 89;
+
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;
     /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */

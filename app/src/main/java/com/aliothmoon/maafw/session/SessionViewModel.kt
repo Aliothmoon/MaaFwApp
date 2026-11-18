@@ -22,6 +22,7 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
+import com.aliothmoon.maafw.privileged.DISPLAY_CALL_TIMEOUT_MS
 import com.aliothmoon.maafw.privileged.DisplaySizeGateway
 import com.aliothmoon.maafw.privileged.DisplaySizeResult
 import com.aliothmoon.maafw.privileged.PermissionGateway
@@ -69,6 +70,7 @@ import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.AppLocales
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -612,11 +614,7 @@ class SessionViewModel(
             SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
-            // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
-            // 只用现成连接：一颗次级按钮，不值得为它弹授权请求。stopVirtualDisplay 不是 oneway，远端卡住会挂住调用方
-            SessionIntent.CloseTargetApp -> servicePort.callWithTimeout(CLOSE_TARGET_TIMEOUT) {
-                it.stopVirtualDisplay()
-            }
+            SessionIntent.CloseTargetApp -> closeTargetApp()
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {
@@ -664,6 +662,22 @@ class SessionViewModel(
             SessionIntent.RefreshPermissions -> permissionGateway.refresh()
 
             SessionIntent.ClearRunLog -> recorder.clear()
+        }
+    }
+
+    /**
+     * 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
+     * 只用现成连接：一颗次级按钮，不值得为它弹授权请求
+     */
+    private suspend fun closeTargetApp() {
+        val service = servicePort.serviceOrNull() ?: return
+        try {
+            servicePort.callOrRestart(service, "stopVirtualDisplay", DISPLAY_CALL_TIMEOUT_MS) { it.stopVirtualDisplay() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 卡死已重启特权进程、进程已死，两种情况屏都随进程没了
+            Timber.w(e, "stopVirtualDisplay failed")
         }
     }
 
@@ -897,7 +911,6 @@ class SessionViewModel(
     private companion object {
         // 整帧 PNG 编码在特权进程里做，高分辨率下要几百毫秒
         val CAPTURE_TIMEOUT = 5.seconds
-        val CLOSE_TARGET_TIMEOUT = 5.seconds
         const val MANUAL_SCREENSHOT_KEEP = 20
         val SCREENSHOT_STAMP = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
     }

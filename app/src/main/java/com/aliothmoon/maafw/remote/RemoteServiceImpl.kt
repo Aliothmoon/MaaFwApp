@@ -30,6 +30,7 @@ import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
 import com.aliothmoon.maafw.remote.internal.PathDiagnosis
 import com.aliothmoon.maafw.remote.internal.ProcessExitQuery
 import com.aliothmoon.maafw.remote.internal.SystemLogDump
+import com.aliothmoon.maafw.remote.internal.ThreadDump
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
 import com.aliothmoon.maafw.remote.internal.XmsfFirewall
@@ -218,6 +219,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String =
         SystemLogDump.dump(sinceMs, untilMs, pid, processPrefix.orEmpty())
+
+    override fun dumpThreads(): String = ThreadDump.capture()
 
     override fun setSaveOnError(enabled: Boolean): Boolean {
         runner.setSaveOnError(enabled)

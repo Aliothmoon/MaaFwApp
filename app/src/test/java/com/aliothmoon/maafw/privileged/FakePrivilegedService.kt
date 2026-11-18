@@ -166,6 +166,7 @@ open class FakePrivilegedService : RemoteService {
 
     var flagTier: Int = -1
     override fun getVirtualDisplayFlagTier(): Int = flagTier
+    override fun dumpThreads(): String = ""
 
     override fun saveDisplayFrame(path: String?): Boolean {
         savedFramePaths += path.orEmpty()
@@ -198,6 +199,19 @@ class FakePrivilegedServicePort(
     override suspend fun <R> useService(action: suspend (RemoteService) -> R): R {
         holdUseService?.await()
         return action(checkNotNull(service) { "fake service unavailable" })
+    }
+
+    /** 非 null 时 [callOrRestart] 遇到同名调用就当它卡死，抛 [RemoteCallStuckException] 而不调 */
+    var stuckCall: String? = null
+
+    override suspend fun <R> callOrRestart(
+        service: RemoteService,
+        call: String,
+        timeoutMs: Long,
+        block: (RemoteService) -> R,
+    ): R {
+        if (call == stuckCall) throw RemoteCallStuckException(call, threadDump = null)
+        return block(service)
     }
 
     /** 非 null 时 [connect] 直接交回它；null 时按 [service] 在不在给 Connected / Failed */

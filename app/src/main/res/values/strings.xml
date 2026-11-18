@@ -462,6 +462,7 @@
     <string name="msg_fail_agent_launch_any">Agent 启动失败</string>
     <string name="msg_fail_debug_hint">%1$s。在设置里打开调试模式后重试，可记录失败原因</string>
     <string name="msg_fail_privileged_exited">特权进程已退出</string>
+    <string name="msg_fail_privileged_stuck">特权进程无响应，已自动重启，请重新开始</string>
     <string name="msg_fail_privileged_reported_finished">特权进程报告本轮已结束</string>
     <string name="msg_reject_already_running">已有执行在进行中</string>
     <string name="msg_reject_stop_failed">停止失败</string>

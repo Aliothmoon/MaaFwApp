@@ -11,9 +11,12 @@ import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.privileged.DISPLAY_CALL_TIMEOUT_MS
 import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.RemoteCallStuckException
+import com.aliothmoon.maafw.privileged.START_DISPLAY_TIMEOUT_MS
 import com.aliothmoon.maafw.privileged.ServiceConnectResult
 import com.aliothmoon.maafw.privileged.message
 import com.aliothmoon.maafw.privileged.remoteAccessMessage
@@ -337,6 +340,9 @@ class MaaFrameworkRunnerPort(
             } catch (cancellation: CancellationException) {
                 failPreparation(uiTextOf(R.string.msg_fail_default), executionId)
                 throw cancellation
+            } catch (stuck: RemoteCallStuckException) {
+                Timber.e(stuck, "Privileged process stuck during start")
+                failPreparation(uiTextOf(R.string.msg_fail_privileged_stuck), executionId, error = stuck)
             } catch (throwable: Throwable) {
                 Timber.e(throwable, "Failed to start run")
                 failPreparation(
@@ -387,7 +393,7 @@ class MaaFrameworkRunnerPort(
         return servicePort.useService { service -> prepareAndStart(plan, piRoot, service, executionId) }
     }
 
-    private fun prepareAndStart(
+    private suspend fun prepareAndStart(
         plan: RunPlan,
         piRoot: File,
         service: RemoteService,
@@ -418,19 +424,20 @@ class MaaFrameworkRunnerPort(
         runCatching { service.setTextInputSink(textInputSink()) }
             .onFailure { Timber.w(it, "setTextInputSink failed") }
         val mode = runMode()
-        if (!service.setVirtualDisplayMode(mode.displayMode)) {
+        if (!service.bounded("setVirtualDisplayMode") { it.setVirtualDisplayMode(mode.displayMode) }) {
             return uiTextOf(R.string.msg_reject_switch_display_mode, mode)
         }
         // 主屏模式不建屏也不设分辨率：尺寸是设备当下的物理尺寸，由特权进程侧的采集器供数
         val (width, height) = if (mode == RunMode.BACKGROUND) {
             val preset = resolutionPreset()
             preset.resolution.also { (w, h) ->
-                service.setVirtualDisplayResolution(w, h, preset.dpi)
+                // 屏还在时改分辨率会重建采集，同样可能卡在 native 收尾
+                service.bounded("setVirtualDisplayResolution") { it.setVirtualDisplayResolution(w, h, preset.dpi) }
             }
         } else {
             DisplayResolution(0, 0)
         }
-        if (service.startVirtualDisplay() == DefaultDisplayConfig.DISPLAY_NONE) {
+        if (service.bounded("startVirtualDisplay", START_DISPLAY_TIMEOUT_MS) { it.startVirtualDisplay() } == DefaultDisplayConfig.DISPLAY_NONE) {
             return if (mode == RunMode.FOREGROUND) uiTextOf(R.string.msg_reject_primary_capture) else uiTextOf(R.string.msg_reject_virtual_display)
         }
 
@@ -462,6 +469,12 @@ class MaaFrameworkRunnerPort(
         }
         return null
     }
+
+    private suspend fun <R> RemoteService.bounded(
+        call: String,
+        timeoutMs: Long = DISPLAY_CALL_TIMEOUT_MS,
+        block: (RemoteService) -> R,
+    ): R = servicePort.callOrRestart(this, call, timeoutMs, block)
 
     private fun shouldRetryStop(executionId: String): Boolean {
         val current = _state.value

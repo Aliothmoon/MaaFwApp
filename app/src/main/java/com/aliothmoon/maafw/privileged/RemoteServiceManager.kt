@@ -10,6 +10,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -22,10 +23,37 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * binder 阻塞取消不掉：超时只是不再等，交给 [onStuck] 善后
+ * 判卡在 [scope] 里进行，调用方中途取消也照样善后，此时结果交给 [onAbandoned]
+ */
+internal suspend fun <R, E : Throwable> awaitOrAbandon(
+    scope: CoroutineScope,
+    timeoutMs: Long,
+    block: () -> R,
+    onAbandoned: (E) -> Unit,
+    onStuck: suspend () -> E,
+): R {
+    val pending = scope.async { block() }
+    val verdict = scope.async {
+        if (withTimeoutOrNull(timeoutMs.milliseconds) { pending.join() } == null) onStuck() else null
+    }
+    val stuck = try {
+        verdict.await()
+    } catch (e: CancellationException) {
+        scope.launch { runCatching { verdict.await()?.let(onAbandoned) } }
+        throw e
+    }
+    if (stuck != null) throw stuck
+    return pending.await()
+}
 
 object RemoteServiceManager : PrivilegedServicePort {
 
@@ -43,6 +71,8 @@ object RemoteServiceManager : PrivilegedServicePort {
     // 调用方默认等待须晚于兜底：先于连接器超时就只剩裸超时，launcher 日志尾部等根因全被截胡
     private const val CALLER_WAIT_MARGIN_MS = 1_000L
 
+    private const val DUMP_TIMEOUT_MS = 3_000L
+
     // 状态迁移（boundBackend / currentBinder / _state）统一在此锁内完成
     private val lock = Any()
 
@@ -51,6 +81,9 @@ object RemoteServiceManager : PrivilegedServicePort {
     private val _state = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
 
     private val timeoutScope = CoroutineScope(MaaDispatchers.Default + SupervisorJob())
+
+    // 卡住的调用挂在这，不拖住调用方
+    private val callScope = CoroutineScope(MaaDispatchers.IO + SupervisorJob())
     private val connectAttempt = AtomicInteger(0)
 
     private val connectors: Map<RemoteBackend, RemoteServiceConnectorBackend> = mapOf(
@@ -301,6 +334,29 @@ object RemoteServiceManager : PrivilegedServicePort {
                 _state.value = ServiceState.Disconnected
             }
         }
+    }
+
+    private fun unbindIf(binder: IBinder) {
+        synchronized(lock) {
+            if (currentBinder.get() !== binder) return
+            unbind()
+        }
+    }
+
+    // 线程栈只进 service_boot_debug.log，不发 PI 作者的 Sentry。调用方走了就没人要这个结论，判卡时已经记过
+    override suspend fun <R> callOrRestart(
+        service: RemoteService,
+        call: String,
+        timeoutMs: Long,
+        block: (RemoteService) -> R,
+    ): R = awaitOrAbandon<R, RemoteCallStuckException>(callScope, timeoutMs, { block(service) }, onAbandoned = {}) {
+        val dump = withTimeoutOrNull(DUMP_TIMEOUT_MS.milliseconds) {
+            callScope.async { runCatching { service.dumpThreads() }.getOrNull() }.await()
+        }
+        ServiceBootLogger.event("CALL_STUCK", "call=$call after ${timeoutMs}ms" + dump?.let { "\n$it" }.orEmpty())
+        Timber.e("Remote call %s stuck for %dms, restarting privileged process", call, timeoutMs)
+        unbindIf(service.asBinder())
+        RemoteCallStuckException(call, dump)
     }
 
     suspend fun getInstance(timeoutMs: Long? = null): RemoteService {

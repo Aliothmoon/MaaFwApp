@@ -169,6 +169,21 @@ class MaaFrameworkRunnerPortTest {
         assertEquals(Triple(1920, 1080, 280), service.lastVirtualDisplayResolution)
     }
 
+    /** 卡死的那次调用由 callOrRestart 重启特权进程，这一轮按「无响应」拒绝收尾，不再往下投 startRun */
+    @Test
+    fun `stuck display call rejects the run and returns to Idle`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val servicePort = FakePrivilegedServicePort(service).apply { stuckCall = "startVirtualDisplay" }
+        val (runner, _) = port(this, service, servicePort)
+
+        val rejected = runner.start(plan(), "e1") as RunnerCommandResult.Rejected
+        advanceUntilIdle()
+
+        assertTrue(rejected.reason.isResource(R.string.msg_fail_privileged_stuck))
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertEquals(null, service.lastRunPlanJson)
+    }
+
     /** 对齐 MaaPiCli：先 resource.path，再 controller.attach_resource_path */
     @Test
     fun `controller attach resource paths are loaded after resource paths`() = runTest(dispatcher) {
