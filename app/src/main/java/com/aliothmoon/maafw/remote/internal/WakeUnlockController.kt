@@ -33,6 +33,9 @@ object WakeUnlockController {
     private const val BOUNCER_SETTLE_MAX_MS = 5_000L
     private const val DIGIT_GAP_MS = 50L
 
+    /** PIN 注入补足到固定时长，日志里的耗时推不出位数；常见位数都在预算内 */
+    private const val PIN_INJECT_BUDGET_MS = 1_000L
+
     /** 手势回放前等锁屏首屏稳定；不弹 bouncer，比 PIN 那条路要短 */
     private const val GESTURE_SETTLE_MS = 800L
 
@@ -212,17 +215,17 @@ object WakeUnlockController {
             Ln.i("$TAG: keyguard gone during ${settleMs}ms settle, skip PIN injection")
             return WakeUnlockResult.OK
         }
-        Ln.i(
-            "$TAG: injecting ${credential.length} PIN digits after ${settleMs}ms settle" +
-                    " (wake ${wakeCostMs}ms)"
-        )
+        // 位数不进任何日志：logcat 随日志导出
+        Ln.i("$TAG: injecting PIN after ${settleMs}ms settle (wake ${wakeCostMs}ms)")
 
         val injectStartMs = SystemClock.elapsedRealtime()
         if (!withSensitiveInput { injectPin(wm, credential) }) {
             Ln.i("$TAG: keyguard gone mid-injection, stopped")
             return WakeUnlockResult.OK
         }
-        Ln.i("$TAG: injection done in ${SystemClock.elapsedRealtime() - injectStartMs}ms")
+        val padMs = PIN_INJECT_BUDGET_MS - (SystemClock.elapsedRealtime() - injectStartMs)
+        if (padMs > 0) Thread.sleep(padMs)
+        Ln.i("$TAG: PIN injected")
 
         val pollStartMs = SystemClock.elapsedRealtime()
         return if (pollUntil(KEYGUARD_GONE_TIMEOUT_MS) { wm.isKeyguardLocked == false }) {
@@ -299,7 +302,8 @@ object WakeUnlockController {
             Ln.w("$TAG: other contacts still down, replay will cancel them")
         }
         val actions = UnlockGestureReplay.timeline(gesture, screen.width, screen.height)
-        Ln.i("$TAG: replaying ${gesture.steps.size} steps / ${actions.size} actions")
+        // 不报步数：点按录的手势步数就是 PIN 位数
+        Ln.i("$TAG: replaying gesture after ${GESTURE_SETTLE_MS}ms settle")
         if (!UnlockGestureReplay.execute(actions) { !keyguardGone(wm) }) {
             Ln.i("$TAG: keyguard gone mid-replay, stopped")
             return WakeUnlockResult.OK
