@@ -195,6 +195,8 @@ class SettingsViewModel(
      * 启动自检：等设置读盘与 PI 就绪后查一次；VM 存活期内只跑这一回。
      * 不写 checkResult（首页不出现结果行）；已是最新弹 Toast（与手动检查同一句），失败照弹错误窗，
      * 发现新版本按自动下载开关走静默下载或弹「发现新版本」dialog
+     *
+     * 例外是「更新源缺少配置」：PI 不配更新源是合法选择，用户改不了，每次启动都弹只是噪音；手动检查照常报
      */
     private suspend fun startupUpdateCheck() {
         appSettings.loaded.first { it }
@@ -216,8 +218,13 @@ class SettingsViewModel(
         val available = result as? UpdateCheckResult.UpdateAvailable
         if (available == null) {
             Timber.tag("UpdateCheck").w("startup check found no update: %s", result)
+            val unconfigured = result is UpdateCheckResult.SourceFailed &&
+                result.reason == UpdateCheckFailure.MISSING_CONFIGURATION
             updateOperation.update {
-                it.copy(checking = false, errorPrompt = result.message()?.let(UpdateErrorPrompt::check))
+                it.copy(
+                    checking = false,
+                    errorPrompt = result.message()?.takeUnless { unconfigured }?.let(UpdateErrorPrompt::check),
+                )
             }
             if (result is UpdateCheckResult.UpToDate) {
                 effectChannel.trySend(SettingsEffect.ShowMessage(uiTextOf(R.string.settings_update_up_to_date)))

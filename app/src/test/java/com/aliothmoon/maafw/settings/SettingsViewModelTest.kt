@@ -312,6 +312,23 @@ class SettingsViewModelTest {
         assertNull(panel.updatePrompt)
     }
 
+    /** PI 没配更新源是合法的，每次启动都弹错误窗用户也无从下手 */
+    @Test
+    fun `startup check stays quiet when the source is not configured`() = runTest {
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { check(any()) } returns
+                    UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.MISSING_CONFIGURATION)
+            },
+            settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+        )
+        advanceUntilIdle()
+
+        val panel = latestPanel(viewModel)
+        assertNull(panel.errorPrompt)
+        assertFalse(panel.checking)
+    }
+
     @Test
     fun `startup auto download downloads and installs without prompt`() = runTest {
         var downloaded = false
