@@ -19,5 +19,5 @@ class NotificationHook(private val center: NotificationCenter) : RunEnvHook {
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): EngageResult =
-        EngageResult.Engaged { reason -> center.onRunFinished(reason) }
+        EngageResult.Engaged { reason -> center.onRunFinished(reason, stoppedAtLimit = ctx.stoppedAtLimit.get()) }
 }

@@ -871,6 +871,8 @@
     <string name="notification_event_run_partial">Run ended with failures</string>
     <string tools:ignore="PluralsCandidate" name="notification_event_run_partial_body">%1$d of %2$d succeeded; failed: %3$s</string>
     <string name="notification_event_run_failed">Run failed</string>
+    <string name="notification_event_run_time_limit">Run time limit reached</string>
+    <string name="notification_event_run_time_limit_body">Reached the per-run time limit; tasks were stopped</string>
     <string name="notification_event_service_died">Background service stopped</string>
     <string name="notification_event_service_died_body">The background service ended unexpectedly and this run was aborted</string>
 

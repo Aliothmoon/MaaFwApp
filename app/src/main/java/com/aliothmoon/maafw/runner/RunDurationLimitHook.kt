@@ -26,8 +26,8 @@ object RunDurationLimit {
  * 挂 [Anchor.AfterAccepted]：只计真正受理的那一轮，准备阶段的失败不该消耗它。
  * 分钟数在 engage 时捕获进闭包，运行中改设置只影响下一轮
  *
- * 到点停下的结局仍是 [ExecutionResult.Cancelled]，与手动停一样不播报；
- * 只借 [RunContext.stoppedAtLimit] 让「跑完关应用」照常执行
+ * 到点停下的结局仍是 [ExecutionResult.Cancelled]，与手动停同一档；
+ * 借 [RunContext.stoppedAtLimit] 让「跑完关应用」照常执行、通知照报
  */
 class RunDurationLimitHook(
     private val settings: AppSettingsGateway,

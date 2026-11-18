@@ -37,11 +37,23 @@ class NotificationCenter(
      * 一轮**只播报一条**：内部通知共用同一个 notify id，两条会互相顶掉；外部推送发两条则是纯吵。
      * 有失败的那一轮同时命中「完成」与「出错」两个开关，任一开着就发——只认其中一个的话，
      * 只开了「完成」的用户在任务挂掉那轮反而收不到任何东西
+     *
+     * [stoppedAtLimit]：到达运行时长上限停下的也落在 Cancelled，但那时多半没人看着，要说一声；
+     * 只发系统通知不外推，同上游
      */
-    suspend fun onRunFinished(reason: RunEndReason) {
+    suspend fun onRunFinished(reason: RunEndReason, stoppedAtLimit: Boolean = false) {
         // 没投出去 / 用户自己按的停：都不是要播报的结局
         val result = (reason as? RunEndReason.Ran)?.result ?: return
-        if (result is ExecutionResult.Cancelled) return
+        if (result is ExecutionResult.Cancelled) {
+            if (stoppedAtLimit) {
+                eventNotifier.notifyRunFinished(
+                    renderText(uiTextOf(R.string.notification_event_run_time_limit)),
+                    renderText(uiTextOf(R.string.notification_event_run_time_limit_body)),
+                    isError = false,
+                )
+            }
+            return
+        }
 
         val outcome = describe(result)
         val title = renderText(outcome.title)
