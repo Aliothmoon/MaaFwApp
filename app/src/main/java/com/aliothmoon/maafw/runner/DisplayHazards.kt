@@ -54,6 +54,8 @@ class SystemDisplayHazardProbe(
  */
 class DisplayHazardPrecheck(private val probe: DisplayHazardProbe) : RunPrecheck {
 
+    override val id: String = ID
+
     override suspend fun evaluate(ctx: RunContext): Verdict {
         val askSmartResolution = ctx.runMode == RunMode.BACKGROUND && SMART_RESOLUTION !in ctx.acknowledged
         val askEyeProtection = EYE_PROTECTION !in ctx.acknowledged
@@ -78,6 +80,7 @@ class DisplayHazardPrecheck(private val probe: DisplayHazardProbe) : RunPrecheck
     }
 
     companion object {
+        const val ID = "display-hazard"
         val SMART_RESOLUTION = ConfirmToken("smart-resolution")
         val EYE_PROTECTION = ConfirmToken("eye-protection")
     }

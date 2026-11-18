@@ -12,6 +12,10 @@ import com.aliothmoon.maafw.i18n.uiTextOf
  */
 object ForegroundModePrecheck : RunPrecheck {
 
+    const val ID = "foreground-mode"
+
+    override val id: String = ID
+
     override suspend fun evaluate(ctx: RunContext): Verdict =
         if (ctx.runMode == RunMode.FOREGROUND && ctx.trigger is RunTrigger.Schedule) {
             Verdict.Block(uiTextOf(R.string.runner_foreground_blocked))

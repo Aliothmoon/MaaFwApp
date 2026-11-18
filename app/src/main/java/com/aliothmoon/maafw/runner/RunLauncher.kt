@@ -51,8 +51,8 @@ sealed interface RunLaunchResult {
     /** RunnerPort 拒绝原因；UiText 随 locale 解析（外壳自产走 resId，底层原文走 uiTextFromFramework） */
     data class Rejected(val reason: UiText, val error: Throwable? = null) : RunLaunchResult
 
-    /** 被某道 [RunPrecheck] 拦下，或 gating 挂载物挂了 */
-    data class Blocked(val reason: UiText, val error: Throwable? = null) : RunLaunchResult
+    /** 被某道 [RunPrecheck] 拦下，或 gating 挂载物挂了；[source] 指明是哪一道 */
+    data class Blocked(val reason: UiText, val source: BlockSource, val error: Throwable? = null) : RunLaunchResult
 
     /** 同一个 [RunRequestId] 已经处理过；不是失败，是这次请求本就该被丢掉 */
     data object DuplicateRequest : RunLaunchResult
@@ -66,6 +66,23 @@ sealed interface RunLaunchResult {
      * 只有 [RunTrigger.Manual] 会拿到；定时与悬浮窗没人可问，编排层已把它放行（提醒）或降级成 [Blocked]
      */
     data class NeedsConfirmation(val token: ConfirmToken, val prompt: UiText) : RunLaunchResult
+}
+
+/**
+ * [RunLaunchResult.Blocked] 拦在哪一道
+ *
+ * 定时记账、触发日志的「去修复」、没跑起来的通知都要按它分档；[RunLaunchResult.Blocked.reason]
+ * 是给人看的，随语言变，不能拿来判断
+ */
+sealed interface BlockSource {
+    /** 投递段被占着：另一次 launch 正在检查或挂载，还没交棒 */
+    data object Busy : BlockSource
+
+    /** [RunPrecheck] 的 Block，或没人能点头时降级来的 NeedsConfirmation；[id] 即 [RunPrecheck.id] */
+    data class Precheck(val id: String) : BlockSource
+
+    /** gating 挂载物失败；[cause] 分开用户取消（倒计时）与真失败，[id] 即 [RunEnvHook.id] */
+    data class Hook(val id: String, val cause: NotRunCause) : BlockSource
 }
 
 sealed interface WhenBusy {
@@ -150,7 +167,7 @@ class RunLauncher(
             withTimeoutOrNull(whenBusy.maxWaitMs) { awaitTurn(progress) }
                 ?: return RunLaunchResult.QueueTimedOut
         } else if (!gate.tryLock()) {
-            return RunLaunchResult.Blocked(uiTextOf(R.string.msg_launch_in_progress))
+            return RunLaunchResult.Blocked(uiTextOf(R.string.msg_launch_in_progress), BlockSource.Busy)
         }
         val engaged = ArrayDeque<Release>()
         try {
@@ -187,7 +204,7 @@ class RunLauncher(
 
             engage(Anchor.BeforeDispatch, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
-                return RunLaunchResult.Blocked(halt.reason, halt.cause.error)
+                return halt.toBlocked()
             }
 
             when (val command = runnerPort.start(plan, ctx.executionId)) {
@@ -201,7 +218,7 @@ class RunLauncher(
 
             engage(Anchor.AfterAccepted, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
-                return RunLaunchResult.Blocked(halt.reason, halt.cause.error)
+                return halt.toBlocked()
             }
 
             // 交棒给守着整轮的协程。此刻 phase 一定是 busy——两个 RunnerPort 实现都在
@@ -232,7 +249,7 @@ class RunLauncher(
             is RunLaunchResult.Rejected ->
                 Timber.w(result.error, "run %s rejected: %s", label, renderText(result.reason))
             is RunLaunchResult.Blocked ->
-                Timber.w(result.error, "run %s blocked: %s", label, renderText(result.reason))
+                Timber.w(result.error, "run %s blocked by %s: %s", label, result.source, renderText(result.reason))
             is RunLaunchResult.Invalid ->
                 Timber.w("run %s not started: %d plan diagnostics", label, result.diagnostics.size)
             RunLaunchResult.ProjectNotReady, RunLaunchResult.NoExecutableTasks, RunLaunchResult.ConfigurationMissing,
@@ -300,16 +317,17 @@ class RunLauncher(
      */
     private suspend fun runPrechecks(ctx: RunContext): RunLaunchResult? {
         for (check in prechecks) {
+            val source = BlockSource.Precheck(check.id)
             when (val verdict = check.evaluate(ctx)) {
                 Verdict.Pass -> Unit
 
-                is Verdict.Block -> return RunLaunchResult.Blocked(verdict.reason)
+                is Verdict.Block -> return RunLaunchResult.Blocked(verdict.reason, source)
 
                 is Verdict.NeedsConfirmation -> when {
                     // 检查没认出自己上一轮问过的 token，再放行就是死循环弹框。
                     // 把编程错误挡成一次明确失败，而不是让用户点到手软
                     verdict.token in ctx.acknowledged ->
-                        return RunLaunchResult.Blocked(uiTextOf(R.string.msg_precheck_ignored_confirmation))
+                        return RunLaunchResult.Blocked(uiTextOf(R.string.msg_precheck_ignored_confirmation), source)
 
                     ctx.trigger == RunTrigger.Manual ->
                         return RunLaunchResult.NeedsConfirmation(verdict.token, verdict.prompt)
@@ -319,7 +337,7 @@ class RunLauncher(
                     // 忘一次就在定时触发时弹出没人能点的框
                     verdict.advisory -> Unit
 
-                    else -> return RunLaunchResult.Blocked(verdict.prompt)
+                    else -> return RunLaunchResult.Blocked(verdict.prompt, source)
                 }
             }
         }
@@ -362,13 +380,15 @@ class RunLauncher(
             steps?.record(RunStep(hook.id, outcome))
             if (release != null) engaged.addLast(release)
             if (result is EngageResult.Failed && hook.gating) {
-                return Halt(result.reason, RunEndReason.NotRun(result.notRun, result.reason, result.error))
+                return Halt(hook.id, result.reason, RunEndReason.NotRun(result.notRun, result.reason, result.error))
             }
         }
         return null
     }
 
-    private class Halt(val reason: UiText, val cause: RunEndReason.NotRun)
+    private class Halt(val hookId: String, val reason: UiText, val cause: RunEndReason.NotRun) {
+        fun toBlocked() = RunLaunchResult.Blocked(reason, BlockSource.Hook(hookId, cause.cause), cause.error)
+    }
 
     private suspend fun awaitSettledThenFinalize(pending: List<Release>, label: String) {
         val settled = runnerPort.state.first { !it.phase.isBusy }

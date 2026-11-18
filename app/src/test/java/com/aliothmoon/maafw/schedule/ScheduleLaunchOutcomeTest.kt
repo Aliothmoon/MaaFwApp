@@ -4,7 +4,9 @@ import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.runner.BlockSource
 import com.aliothmoon.maafw.runner.ConfirmToken
+import com.aliothmoon.maafw.runner.NotRunCause
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -29,7 +31,10 @@ class ScheduleLaunchOutcomeTest {
             RunLaunchResult.NoExecutableTasks to TriggerFailureReason.NO_EXECUTABLE_TASKS,
             RunLaunchResult.Invalid(emptyList()) to TriggerFailureReason.INVALID_PLAN,
             RunLaunchResult.Rejected(uiTextFromFramework("busy")) to TriggerFailureReason.REJECTED,
-            RunLaunchResult.Blocked(uiTextOf(R.string.run_countdown_cancelled)) to
+            RunLaunchResult.Blocked(
+                uiTextOf(R.string.run_countdown_cancelled),
+                BlockSource.Hook("countdown", NotRunCause.Cancelled),
+            ) to
                 TriggerFailureReason.BLOCKED,
             RunLaunchResult.QueueTimedOut to TriggerFailureReason.EXPIRED,
         )

@@ -26,6 +26,8 @@ class PrivilegedAccessPrecheck(
     private val settleTimeoutMs: Long = SETTLE_TIMEOUT_MS,
 ) : RunPrecheck {
 
+    override val id: String = ID
+
     override suspend fun evaluate(ctx: RunContext): Verdict {
         var state = access.refresh()
         if (servicePort.serviceOrNull() != null && servicePort.currentBackend == state.configuredBackend) {
@@ -59,8 +61,9 @@ class PrivilegedAccessPrecheck(
 
     private fun RemoteAccessState.ready(): Boolean = isGranted(configuredBackend)
 
-    private companion object {
-        const val SETTLE_TIMEOUT_MS = 5_000L
-        const val POLL_INTERVAL_MS = 250L
+    companion object {
+        const val ID = "privileged-access"
+        private const val SETTLE_TIMEOUT_MS = 5_000L
+        private const val POLL_INTERVAL_MS = 250L
     }
 }
