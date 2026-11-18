@@ -18,7 +18,10 @@ enum class WatchdogState(val aidlValue: Int) {
     DISPLAY_DRIFT(2),
 
     /** pidof 查不到进程 */
-    APP_DIED(3);
+    APP_DIED(3),
+
+    /** 没有一轮在跑，目标应用还在虚拟屏上；旧特权进程不回这个值，落 [IDLE] */
+    READY(4);
 
     /** 两者都表示这一轮已经跑不下去了，UI 与运行日志按同一档处理 */
     val isLost: Boolean get() = this == DISPLAY_DRIFT || this == APP_DIED

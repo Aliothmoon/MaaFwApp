@@ -33,6 +33,9 @@ object AppWatchdog {
     /** pidof 查不到进程 */
     const val STATE_APP_DIED = 3
 
+    /** 不是看门狗自己的状态：它空闲时目标应用还在虚拟屏上，由 `RemoteServiceImpl.watchdogState` 现查 */
+    const val STATE_READY = 4
+
     private const val POLL_INTERVAL_MS = 5000L
     private const val REPIN_GRACE_MS = 5000L
     private const val MAX_REPIN_ATTEMPTS = 3

@@ -109,7 +109,18 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun pid(): Int = Process.myPid()
 
-    override fun watchdogState(): Int = AppWatchdog.state.value
+    /**
+     * 看门狗一轮跑完就回空闲，虚拟屏却不拆：目标应用还在屏上、点全屏也能操作时报「就绪」，
+     * 免得预览盖着「未在运行」。直接问 isAppOnDisplay，不走 isAppOnVirtualDisplay——那个没屏时回 true、命中还拉起帧率监控
+     */
+    override fun watchdogState(): Int {
+        val state = AppWatchdog.state.value
+        if (state != AppWatchdog.STATE_IDLE) return state
+        val target = AppWatchdog.targetPackage ?: return state
+        val displayId = VirtualDisplayManager.getDisplayId()
+        if (displayId == DefaultDisplayConfig.DISPLAY_NONE) return state
+        return if (ActivityUtils.isAppOnDisplay(target, displayId)) AppWatchdog.STATE_READY else state
+    }
 
     override fun watchdogTargetPackage(): String = AppWatchdog.targetPackage.orEmpty()
 

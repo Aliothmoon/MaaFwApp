@@ -187,7 +187,8 @@ internal fun LivePreview(
         ) {
             Box(Modifier.fillMaxSize()) {
                 content()
-                PreviewStatusMask(surfaceReady = surfaceReady, running = running)
+                // 跑完了目标应用还在屏上，画面本身就是要看的，不盖「未在运行」
+                PreviewStatusMask(surfaceReady = surfaceReady, active = running || watchdogState == WatchdogState.READY)
                 WatchdogStatusBadge(
                     state = watchdogState,
                     modifier = Modifier
@@ -209,6 +210,8 @@ private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modif
             Color(0xFFF44336) to stringResource(R.string.virtual_display_game_stopped)
         WatchdogState.DISPLAY_DRIFT ->
             Color(0xFFF44336) to stringResource(R.string.virtual_display_app_drifted)
+        WatchdogState.READY ->
+            Color(0xFF2196F3) to stringResource(R.string.virtual_display_ready)
         WatchdogState.IDLE ->
             Color(0xFF9E9E9E) to stringResource(R.string.virtual_display_idle)
     }
@@ -374,10 +377,10 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 
 /** 画面还没上来时盖一层说明，免得黑屏看着像坏了 */
 @Composable
-private fun PreviewStatusMask(surfaceReady: Boolean, running: Boolean) {
+private fun PreviewStatusMask(surfaceReady: Boolean, active: Boolean) {
     val text = when {
         !surfaceReady -> stringResource(R.string.tasks_preview_waiting_surface)
-        !running -> stringResource(R.string.tasks_preview_idle)
+        !active -> stringResource(R.string.tasks_preview_idle)
         else -> return
     }
     Box(

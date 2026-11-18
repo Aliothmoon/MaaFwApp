@@ -29,6 +29,7 @@
     <string name="virtual_display_game_stopped">Stopped</string>
     <string name="virtual_display_app_drifted">Off-display</string>
     <string name="virtual_display_idle">Idle</string>
+    <string name="virtual_display_ready">Ready</string>
     <string name="tasks_preview_exit_fullscreen">Exit fullscreen</string>
     <string name="tasks_preview_idle">Not running</string>
     <string name="tasks_remove">Remove</string>
