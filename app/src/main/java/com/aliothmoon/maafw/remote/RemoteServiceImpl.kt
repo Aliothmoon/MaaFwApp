@@ -230,12 +230,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun startVirtualDisplay(): Int = when (virtualDisplayMode.get()) {
         DisplayMode.PRIMARY -> PrimaryDisplayManager.start()
-        DisplayMode.BACKGROUND -> VirtualDisplayManager.start().also { displayId ->
-            if (displayId != DefaultDisplayConfig.DISPLAY_NONE) {
-                PowerController.startUserActivityKeepAlive(displayId)
-            }
-        }
-
+        DisplayMode.BACKGROUND -> VirtualDisplayManager.start()
         else -> DefaultDisplayConfig.DISPLAY_NONE
     }
 
@@ -341,8 +336,22 @@ class RemoteServiceImpl : RemoteService.Stub() {
         if (started) {
             AppWatchdog.startWatching(runner::isRunning)
             StaleFrameGuard.start(runner::isRunning)
+            startUserActivityKeepAlive()
         }
         return started
+    }
+
+    /**
+     * 只在一轮期间续亮：30 及以下 userActivity 不分屏，31–32 的虚拟屏没有独立显示组，
+     * 跑完还续着的话主屏一直不息屏
+     */
+    private fun startUserActivityKeepAlive() {
+        val displayId = VirtualDisplayManager.getDisplayId()
+        if (virtualDisplayMode.get() != DisplayMode.BACKGROUND || displayId == DefaultDisplayConfig.DISPLAY_NONE) {
+            PowerController.stopUserActivityKeepAlive()
+            return
+        }
+        PowerController.startUserActivityKeepAlive(displayId, runner::isRunning)
     }
 
     override fun stopRun(): Boolean {

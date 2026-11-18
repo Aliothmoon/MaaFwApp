@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.wrappers.SurfaceControl
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 object PowerController {
     private const val TAG = "PowerController"
@@ -20,6 +21,7 @@ object PowerController {
 
     private val keepAliveDisplayId = AtomicInteger(DefaultDisplayConfig.DISPLAY_NONE)
     private val keepAliveRunning = AtomicBoolean(false)
+    private val keepAliveWhile = AtomicReference<() -> Boolean> { false }
 
     fun setDisplayPower(on: Boolean): Boolean {
         poweredOff.set(!on)
@@ -71,7 +73,9 @@ object PowerController {
         return SurfaceControl.setDisplayPowerMode(d, mode)
     }
 
-    fun startUserActivityKeepAlive(displayId: Int) {
+    /** [isActive] 转 false 即自停；接着排队的下一轮在线程醒来前到达时，换上新的判定继续续 */
+    fun startUserActivityKeepAlive(displayId: Int, isActive: () -> Boolean) {
+        keepAliveWhile.set(isActive)
         keepAliveDisplayId.set(displayId)
         if (!keepAliveRunning.compareAndSet(false, true)) return
         Thread {
@@ -85,7 +89,7 @@ object PowerController {
                     break
                 }
                 val currentId = keepAliveDisplayId.get()
-                if (currentId == DefaultDisplayConfig.DISPLAY_NONE) break
+                if (currentId == DefaultDisplayConfig.DISPLAY_NONE || !keepAliveWhile.get()()) break
                 runCatching { ServiceManager.getPowerManager().userActivity(currentId) }
                     .onFailure { Ln.e("$TAG: userActivity failed", it) }
             }
