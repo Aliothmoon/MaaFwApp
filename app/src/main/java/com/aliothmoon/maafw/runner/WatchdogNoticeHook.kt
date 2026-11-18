@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextFormatted
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.log.ProcessExitRecorder
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.WatchdogState
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +31,8 @@ class WatchdogNoticeHook(
     private val servicePort: PrivilegedServicePort,
     private val journal: RunJournal,
     private val scope: CoroutineScope,
+    /** 进程被杀时把系统记下的死因写进应用日志；运行日志里只留一句提示 */
+    private val exitRecorder: ProcessExitRecorder,
 ) : RunEnvHook {
 
     override val id: String = "watchdog-notice"
@@ -46,25 +49,27 @@ class WatchdogNoticeHook(
                 .dropWhile { it.isLost }
                 .distinctUntilChanged()
                 .filter { it.isLost }
-                .collect { state -> journal.note(ctx.executionId, RunNote.Warning, describe(state)) }
+                .collect { state ->
+                    val packageName = targetPackage()
+                    journal.note(ctx.executionId, RunNote.Warning, describe(state, packageName))
+                    if (state == WatchdogState.APP_DIED && packageName != null) exitRecorder.recordTarget(packageName)
+                }
         }
         return EngageResult.Engaged { job.cancel() }
     }
 
-    private suspend fun describe(state: WatchdogState) = uiTextOf(
+    private fun describe(state: WatchdogState, packageName: String?) = uiTextOf(
         when (state) {
             WatchdogState.APP_DIED -> R.string.run_log_app_process_gone
             else -> R.string.run_log_app_left_display
         },
-        targetPackage(),
+        packageName?.let(::uiTextFormatted) ?: uiTextOf(R.string.run_log_app_unknown),
     )
 
     /** 包名只有特权进程知道：外壳不维护包名表，`start_app` 的目标来自 pipeline */
-    private suspend fun targetPackage() = withContext(MaaDispatchers.IO) {
+    private suspend fun targetPackage(): String? = withContext(MaaDispatchers.IO) {
         runCatching { servicePort.serviceOrNull()?.watchdogTargetPackage() }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
-            ?.let(::uiTextFormatted)
-            ?: uiTextOf(R.string.run_log_app_unknown)
     }
 }

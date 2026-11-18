@@ -160,6 +160,10 @@ open class FakePrivilegedService : RemoteService {
     /** 缓存帧要真 controller 才有；测试里没有可落盘的东西 */
     override fun saveCachedImage(path: String?): Boolean = false
 
+    override fun getProcessExitRecords(packageName: String?, sinceMs: Long, maxNum: Int): String = "[]"
+
+    override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String = ""
+
     override fun saveDisplayFrame(path: String?): Boolean {
         savedFramePaths += path.orEmpty()
         return saveDisplayFrameResult

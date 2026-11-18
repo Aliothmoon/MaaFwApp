@@ -16,6 +16,7 @@ import com.aliothmoon.maafw.di.viewModelModule
 import com.aliothmoon.maafw.log.AppLogWriter
 import com.aliothmoon.maafw.log.CrashHandler
 import com.aliothmoon.maafw.log.LogTreeHolder
+import com.aliothmoon.maafw.log.ProcessForensics
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.PermissionManager
@@ -100,5 +101,7 @@ class MaaFwApp : Application() {
         koin.get<TelemetryController>().setup()
         // 要在 RemoteServiceManager.initialize 之后：状态监听挂上了，Shizuku 掉线才看得见
         koin.get<ShizukuDownMonitor>().start(koin.get(named<AppCoroutineScope>()))
+        // 同上：特权进程的死讯与重连都要看着
+        koin.get<ProcessForensics>().start(koin.get(named<AppCoroutineScope>()))
     }
 }

@@ -24,8 +24,11 @@ import com.aliothmoon.maafw.remote.internal.ScreenManager
 import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.log.LogExportCollector
+import com.aliothmoon.maafw.log.toWireJson
 import com.aliothmoon.maafw.remote.internal.LogcatRetention
 import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
+import com.aliothmoon.maafw.remote.internal.ProcessExitQuery
+import com.aliothmoon.maafw.remote.internal.SystemLogDump
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
 import com.aliothmoon.maafw.remote.internal.XmsfFirewall
@@ -204,6 +207,12 @@ class RemoteServiceImpl : RemoteService.Stub() {
                 .onFailure { Ln.w("$TAG: prune logcat captures failed: ${it.message}") }
         }.apply { name = "logcat-prune"; isDaemon = true }.start()
     }
+
+    override fun getProcessExitRecords(packageName: String?, sinceMs: Long, maxNum: Int): String =
+        ProcessExitQuery.query(packageName, sinceMs, maxNum).toWireJson()
+
+    override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String =
+        SystemLogDump.dump(sinceMs, untilMs, pid, processPrefix.orEmpty())
 
     override fun setSaveOnError(enabled: Boolean): Boolean {
         runner.setSaveOnError(enabled)
