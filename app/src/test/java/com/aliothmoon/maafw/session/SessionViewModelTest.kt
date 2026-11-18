@@ -24,6 +24,10 @@ import com.aliothmoon.maafw.privileged.FakePermissionGateway
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.ShizukuReadiness
+import com.aliothmoon.maafw.privileged.ShizukuReadinessStage
+import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.PiInstallCoordinator
@@ -726,6 +730,62 @@ class SessionViewModelTest {
      * 三条都断言**没发出** [SessionEffect.ShowOverlay]：面板真接通之前，
      * 任何一条漏到那儿都会挂出一个空壳窗口
      */
+    // ── 首页「请求权限」：Shizuku 没装 / 没起时照样引导（上游 359f49f8）──────────
+
+    /** 点过「跳过检查」后首页按钮不该白点：没起来就弹引导，不去请求 */
+    @Test
+    fun `requesting access while Shizuku is not running shows the guide even after skipping`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway().apply {
+            readiness.value = ShizukuReadiness(ShizukuReadinessStage.Ready)
+            readinessIgnoringSkip.value = ShizukuReadiness(ShizukuReadinessStage.NotRunning)
+        }
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.RequestRemoteAccess)
+        advanceUntilIdle()
+
+        assertEquals(ShizukuReadinessStage.NotRunning, vm.uiState.value.shizukuReadiness.stage)
+        assertEquals(0, permissions.requestCount)
+
+        // 关掉只是收起，跳过早就记过了，不再写一遍
+        vm.onIntent(SessionIntent.SkipShizukuCheck)
+        advanceUntilIdle()
+        assertEquals(ShizukuReadinessStage.Ready, vm.uiState.value.shizukuReadiness.stage)
+        assertEquals(0, permissions.skipCount)
+    }
+
+    @Test
+    fun `requesting access when only authorization is missing asks directly`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway().apply {
+            readinessIgnoringSkip.value = ShizukuReadiness(ShizukuReadinessStage.NeedAuth)
+        }
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.RequestRemoteAccess)
+        advanceUntilIdle()
+
+        assertEquals(1, permissions.requestCount)
+        assertEquals(ShizukuReadinessStage.Ready, vm.uiState.value.shizukuReadiness.stage)
+    }
+
+    /** Root 各家管理器不同，引导不了 */
+    @Test
+    fun `requesting root access asks directly`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway().apply {
+            state.value = RemoteAccessState(configuredBackend = RemoteBackend.ROOT)
+            readinessIgnoringSkip.value = ShizukuReadiness(ShizukuReadinessStage.NotInstalled)
+        }
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.RequestRemoteAccess)
+        advanceUntilIdle()
+
+        assertEquals(1, permissions.requestCount)
+    }
+
     @Test
     fun `overlay is blocked until the privileged service is connected`() = runTest(mainDispatcher) {
         val permissions = FakePermissionGateway()

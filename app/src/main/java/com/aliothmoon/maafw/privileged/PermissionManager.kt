@@ -116,6 +116,18 @@ class PermissionManager(
         initialValue = ShizukuReadiness(),
     )
 
+    override val readinessIgnoringSkip: StateFlow<ShizukuReadiness> = combine(
+        accessPort.state,
+        appSettings.shizukuLaunchPackage,
+        refreshTrigger,
+    ) { remoteState, launchPackage, _ ->
+        resolveReadiness(remoteState, skipCheck = false, launchPackage)
+    }.stateIn(
+        scope = scope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ShizukuReadiness(),
+    )
+
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         // drop(1)：首值是启动时的当前后端，不该被当成"用户切了后端"而去解绑

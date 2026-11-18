@@ -35,12 +35,14 @@ import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.privileged.callWithTimeout
+import com.aliothmoon.maafw.privileged.ShizukuReadinessStage
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.project.ResolvedWelcome
 import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
@@ -82,7 +84,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -142,10 +147,21 @@ class SessionViewModel(
     private val welcomeResolver: WelcomeResolver,
 ) : ViewModel() {
 
+    /**
+     * 首页「请求权限」在 Shizuku 没装 / 没起时置位：照样弹引导，点过「跳过检查」也弹（照上游 359f49f8）。
+     * 置位期间引导跟着不看跳过的那份就绪状态走，用户去启动了 Shizuku 回来，弹窗自己往下一步走
+     */
+    private val shizukuGuideForced = MutableStateFlow(false)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val shownReadiness: Flow<ShizukuReadiness> = shizukuGuideForced.flatMapLatest { forced ->
+        if (forced) permissionGateway.readinessIgnoringSkip else permissionGateway.readiness
+    }
+
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
         permissionGateway.state,
         permissionGateway.isGranting,
-        permissionGateway.readiness,
+        shownReadiness,
         permissionGateway.serviceState,
         permissionGateway.systemPermissions,
     ) { access, granting, readiness, service, system ->
@@ -636,9 +652,11 @@ class SessionViewModel(
             }
 
             // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授
-            SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
+            SessionIntent.RequestRemoteAccess -> requestRemoteAccess()
             SessionIntent.TogglePrivilegedService -> togglePrivilegedService()
-            SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
+            // 强制弹出来的那次关掉只是收起：用户早就点过跳过，不必再写一遍
+            SessionIntent.SkipShizukuCheck ->
+                if (shizukuGuideForced.value) shizukuGuideForced.value = false else permissionGateway.skipShizukuCheck()
             SessionIntent.InstallShizuku -> emitEffect(SessionEffect.InstallShizuku)
             SessionIntent.OpenShizuku -> emitEffect(SessionEffect.OpenShizuku)
             is SessionIntent.RequestSystemPermission -> requestSystemPermission(intent.permission)
@@ -850,6 +868,22 @@ class SessionViewModel(
             is RunLaunchResult.NeedsConfirmation ->
                 emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token))
         }
+    }
+
+    /**
+     * 差授权就直接请求；Shizuku 没装 / 没起时请求只会白返回 false、界面毫无反应，改弹引导。
+     * Root 各家管理器不同，引导不了，照旧直接请求
+     */
+    private suspend fun requestRemoteAccess() {
+        if (permissionGateway.state.value.configuredBackend == RemoteBackend.SHIZUKU) {
+            val stage = permissionGateway.readinessIgnoringSkip.first().stage
+            if (stage == ShizukuReadinessStage.NotInstalled || stage == ShizukuReadinessStage.NotRunning) {
+                shizukuGuideForced.value = true
+                return
+            }
+        }
+        shizukuGuideForced.value = false
+        permissionGateway.requestRemoteAccess()
     }
 
     private suspend fun stop() {
