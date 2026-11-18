@@ -28,6 +28,7 @@ import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
 import com.aliothmoon.maafw.remote.internal.XmsfFirewall
+import com.aliothmoon.maafw.root.ProcessExit
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
@@ -39,7 +40,6 @@ import android.provider.Settings
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.system.exitProcess
 
 /**
  * 特权进程的入口对象：由 Shizuku 或 root starter 反射实例化，实例化即完成进程内初始化
@@ -69,6 +69,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     init {
         RemoteBootTrace.mark("CTOR_START")
         Workarounds.apply()
+        // 正常退出走 ProcessExit 的 halt 不经这里，只兜直接 System.exit 的路径
         Runtime.getRuntime().addShutdownHook(
             Thread { runCatching(::cleanup) }.apply { name = "remote-shutdown-hook" }
         )
@@ -80,14 +81,15 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     override fun destroy() {
-        if (!destroyed.compareAndSet(false, true)) return
-        Ln.i("$TAG: destroy()")
-        stopDisplayWatchers()
-        InputControlUtils.setTouchCallback(null)
-        TextInputDispatcher.sink = null
-        runner.destroy()
-        cleanup()
-        exitProcess(0)
+        destroyed.set(true)
+        ProcessExit.exit("destroy requested") {
+            stopDisplayWatchers()
+            InputControlUtils.setTouchCallback(null)
+            TextInputDispatcher.sink = null
+            cleanup()
+            // 最可能卡住、又随进程释放：垫底，卡住了由退出期限收场，别挡住前面撤主屏尺寸与电源
+            step("runner") { runner.destroy() }
+        }
     }
 
     override fun exit() = destroy()

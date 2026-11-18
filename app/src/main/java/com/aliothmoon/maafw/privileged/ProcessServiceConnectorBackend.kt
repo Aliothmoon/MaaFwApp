@@ -9,10 +9,12 @@ import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.root.BootstrapRegistry
+import com.aliothmoon.maafw.root.ProcessExit
 import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
 import com.aliothmoon.maafw.root.RootServiceStarter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
@@ -44,8 +46,12 @@ abstract class ProcessServiceConnectorBackend(
 
     protected open val spawnTimeoutMs: Long = 15_000L
 
-    // spawn 同步调用与超时后的 kill / dump 不在 withTimeout 内，另计余量
-    override val worstCaseConnectMs: Long get() = spawnTimeoutMs + SPAWN_OVERHEAD_MS
+    /** 同名残留的退出宽限：比服务退出期限长，正在收尾的旧进程不误杀 */
+    protected open val residualGraceMs: Long = ProcessExit.DEADLINE_MS + 1_000L
+
+    // spawn 同步调用、残留等待与超时后的 kill / dump 不在 withTimeout 内，另计余量
+    override val worstCaseConnectMs: Long
+        get() = spawnTimeoutMs + residualGraceMs + SPAWN_OVERHEAD_MS
 
     protected abstract val eventPrefix: String
 
@@ -88,6 +94,7 @@ abstract class ProcessServiceConnectorBackend(
             var spawned = false
             // 整段包住：check(launcherFile) 等异常逃逸会让协程未捕获致崩溃
             val result = runCatching {
+                reapResidual()
                 // 先清旧日志，确保 dump 到的一定是本次启动的产物
                 logFile.delete()
                 val command = buildStartCommand(token, logFile)
@@ -98,7 +105,8 @@ abstract class ProcessServiceConnectorBackend(
             }
             if (activeLaunch?.token != token) {
                 registry.unregister(token)
-                result.getOrNull()?.let { binder ->
+                // 被取代前已回投的进程没人认领，不收就成了孤儿
+                arrivedBinder(result, deferred)?.let { binder ->
                     runCatching { destroyRemote(binder) }
                         .onFailure { Timber.w(it, "destroy superseded %s binder failed", backend) }
                 }
@@ -151,6 +159,35 @@ abstract class ProcessServiceConnectorBackend(
             }
         }
         return spawner.wrapCommand(launcher.absolutePath, invocation)
+    }
+
+    /** 取消会盖掉 await 的结果，回投是否已到还得看 deferred */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun arrivedBinder(result: Result<IBinder>, deferred: Deferred<IBinder>): IBinder? =
+        result.getOrNull() ?: deferred.takeIf { it.isCompleted && !it.isCancelled }?.getCompleted()
+
+    /**
+     * 拉起前清同名残留：正常退出的进程宽限内会自己走，超期还在就是孤儿，硬杀并留痕
+     * 所在队列单并发，不会误杀本连接器随后拉起的新进程
+     */
+    private suspend fun reapResidual() {
+        var residual = spawner.findProcesses(processName)
+        if (residual.isEmpty()) return
+        val found = residual.joinToString { "pid=${it.pid} etime=${it.elapsed}" }
+        ServiceBootLogger.event("${eventPrefix}_RESIDUAL_FOUND", found)
+        Timber.w("Residual %s found before spawn: %s", processName, found)
+        repeat((residualGraceMs / RESIDUAL_POLL_MS).toInt()) {
+            delay(RESIDUAL_POLL_MS)
+            residual = spawner.findProcesses(processName)
+            if (residual.isEmpty()) {
+                ServiceBootLogger.event("${eventPrefix}_RESIDUAL_EXITED", found)
+                return
+            }
+        }
+        val pids = residual.map { it.pid }
+        ServiceBootLogger.event("${eventPrefix}_RESIDUAL_KILLED", "pids=$pids")
+        Timber.e("Residual %s still alive after %dms, force killing %s", processName, residualGraceMs, pids)
+        spawner.forceKill(pids)
     }
 
     protected open fun debugLogFile(): File {
@@ -266,6 +303,7 @@ abstract class ProcessServiceConnectorBackend(
     private companion object {
         const val SPAWN_OVERHEAD_MS = 3_000L
         const val ALIVE_POLL_INTERVAL_MS = 400L
+        const val RESIDUAL_POLL_MS = 300L
         const val LOG_TAIL_LINES = 5
     }
 }

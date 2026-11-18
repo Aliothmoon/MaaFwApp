@@ -58,13 +58,9 @@ public final class RootServiceStarter {
 
         primeHeartbeat(createdService.service(), result.appPid());
 
+        IBinder service = createdService.service();
         try {
-            IBinder.DeathRecipient recipient = () -> {
-                Ln.i(TAG + ": app process died, destroying root service");
-                destroyService(createdService.service());
-                Ln.i(TAG + ": root service destroy signal sent, exiting");
-                System.exit(0);
-            };
+            IBinder.DeathRecipient recipient = () -> onAppGone("app binder died", service);
             IBinder lifecycleBinder = result.lifecycleBinder();
             lifecycleBinder.linkToDeath(recipient, 0);
             appLifecycleBinder = lifecycleBinder;
@@ -74,6 +70,10 @@ public final class RootServiceStarter {
             Ln.e(TAG + ": failed to link app lifecycle binder", tr);
             return false;
         }
+    }
+
+    private static void onAppGone(String reason, IBinder service) {
+        ProcessExit.exit(reason, () -> destroyService(service));
     }
 
     /**

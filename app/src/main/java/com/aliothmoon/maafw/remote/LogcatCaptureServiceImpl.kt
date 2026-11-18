@@ -3,13 +3,13 @@ package com.aliothmoon.maafw.remote
 import android.util.Log
 import com.aliothmoon.maafw.ILogcatService
 import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.root.ProcessExit
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.system.exitProcess
 
 /**
  * 跑在独立特权进程（:logcat / :root_logcat）里的 logcat 抓取实现
@@ -41,7 +41,10 @@ class LogcatCaptureServiceImpl : ILogcatService.Stub() {
         }.apply { name = "logcat-watchdog"; isDaemon = true }.start()
     }
 
-    override fun destroy() = exitProcess(0)
+    override fun destroy() {
+        // logcat --pid 盯着的进程死后不再有输出，等不来 SIGPIPE，不收就成了孤儿
+        ProcessExit.exit("destroy requested") { watchTargets.values.forEach { it.destroyForcibly() } }
+    }
 
     override fun startCapture(appPid: Int, servicePid: Int, userDir: String) {
         val debugDir = File(userDir, AppFiles.DEBUG_DIR).apply { mkdirs() }

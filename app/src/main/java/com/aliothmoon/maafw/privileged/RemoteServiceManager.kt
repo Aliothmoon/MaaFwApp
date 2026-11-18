@@ -86,6 +86,8 @@ object RemoteServiceManager : PrivilegedServicePort {
                 if (boundBackend != backend) {
                     ServiceBootLogger.event("CB_ON_CONNECTED_STALE", "backend=$backend bound=$boundBackend")
                     Timber.w("Ignoring stale %s connection", backend)
+                    // 没人认领的进程不收就成了孤儿
+                    runCatching { RemoteService.Stub.asInterface(binder).destroy() }
                     return
                 }
                 ServiceBootLogger.event("CB_ON_CONNECTED", "backend=$backend")
