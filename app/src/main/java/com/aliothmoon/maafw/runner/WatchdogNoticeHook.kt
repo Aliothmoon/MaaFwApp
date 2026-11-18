@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.log.ProcessExitRecorder
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.WatchdogState
+import com.aliothmoon.maafw.notification.NotificationCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -21,7 +22,8 @@ import kotlinx.coroutines.withContext
  * 特权进程侧的 `AppWatchdog` 一直在记 `Ln.w`，但那份日志用户看不到；跑飞的那一刻
  * 运行日志里没有任何线索，只剩识别一路超时
  *
- * 两种结局分开报：进程被杀与窗口离屏，用户要做的事完全不同
+ * 两种结局分开报：进程被杀与窗口离屏，用户要做的事完全不同。同一句话另发一条「运行中提醒」通知，
+ * 但不中止整轮：PI 的 StopApp、主动重启目标应用都是正常动作，看门狗的目标包又是从屏上反推的，中止容易误杀
  *
  * 挂 [Anchor.AfterAccepted]：看门狗是 `startRun` 里跟着虚拟屏一起起来的，
  * 投递之前它还没有目标可盯
@@ -33,6 +35,7 @@ class WatchdogNoticeHook(
     private val scope: CoroutineScope,
     /** 进程被杀时把系统记下的死因写进应用日志；运行日志里只留一句提示 */
     private val exitRecorder: ProcessExitRecorder,
+    private val notifications: NotificationCenter,
 ) : RunEnvHook {
 
     override val id: String = "watchdog-notice"
@@ -51,7 +54,9 @@ class WatchdogNoticeHook(
                 .filter { it.isLost }
                 .collect { state ->
                     val packageName = targetPackage()
-                    journal.note(ctx.executionId, RunNote.Warning, describe(state, packageName))
+                    val notice = describe(state, packageName)
+                    journal.note(ctx.executionId, RunNote.Warning, notice)
+                    notifications.onRunAlert(notice)
                     if (state == WatchdogState.APP_DIED && packageName != null) exitRecorder.recordTarget(packageName)
                 }
         }

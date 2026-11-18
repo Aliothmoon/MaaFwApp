@@ -183,6 +183,7 @@ val runnerModule = module {
                     journal = get(),
                     scope = get(named<AppCoroutineScope>()),
                     exitRecorder = get(),
+                    notifications = get(),
                 ),
                 RunDurationLimitHook(
                     settings = get<AppSettingsManager>(),

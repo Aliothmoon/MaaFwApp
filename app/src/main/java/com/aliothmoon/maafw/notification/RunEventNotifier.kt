@@ -49,6 +49,11 @@ class RunEventNotifier(
         send(title, text, ID_SHIZUKU_DOWN, isError = true, action = openShizukuAction())
     }
 
+    /** 一轮里可能报好几次（反复退出、离屏），同一格后到覆盖先到 */
+    fun notifyRunAlert(title: String, text: String) {
+        send(title, text, ID_RUN_ALERT, isError = true)
+    }
+
     /** 不随整轮结局覆盖：一轮的结局与「这次定时没跑」是两件事 */
     fun notifyScheduleNotStarted(title: String, text: String, isError: Boolean, offerShizuku: Boolean) {
         val action = if (offerShizuku && appSettingsManager.startupBackend.value == RemoteBackend.SHIZUKU) {
@@ -167,5 +172,6 @@ class RunEventNotifier(
         const val ID_RUN = 9002
         const val ID_SHIZUKU_DOWN = 9003
         const val ID_SCHEDULE = 9004
+        const val ID_RUN_ALERT = 9005
     }
 }

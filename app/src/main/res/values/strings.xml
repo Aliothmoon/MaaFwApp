@@ -860,6 +860,7 @@
     <string name="notification_event_run_partial_body">成功 %1$d/%2$d；失败：%3$s</string>
     <string name="notification_event_run_failed">任务执行失败</string>
     <string name="notification_event_run_time_limit">已到运行时长上限</string>
+    <string name="notification_run_alert_title">运行中提醒</string>
     <string name="notification_event_run_time_limit_body">已达到单次运行时长上限，任务已停止</string>
     <string name="notification_event_service_died">后台服务中断</string>
     <string name="notification_event_service_died_body">运行中的后台服务意外结束，本轮任务已中止</string>

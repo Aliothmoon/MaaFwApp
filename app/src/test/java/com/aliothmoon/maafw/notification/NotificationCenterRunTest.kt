@@ -26,6 +26,18 @@ class NotificationCenterRunTest {
     )
 
     @Test
+    fun runAlertPostsTheSameSentenceWithoutPush() {
+        val message = uiTextOf(R.string.run_log_app_left_display, "pkg")
+
+        center.onRunAlert(message)
+
+        verify(exactly = 1) {
+            notifier.notifyRunAlert(uiTextOf(R.string.notification_run_alert_title).toString(), message.toString())
+        }
+        verify(exactly = 0) { external.send(any(), any()) }
+    }
+
+    @Test
     fun manualStopIsNotReported() = runTest {
         center.onRunFinished(RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())))
 

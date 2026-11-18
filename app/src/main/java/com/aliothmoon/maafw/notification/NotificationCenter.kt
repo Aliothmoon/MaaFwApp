@@ -93,6 +93,11 @@ class NotificationCenter(
 
     fun withdrawShizukuDown() = eventNotifier.cancelShizukuDown()
 
+    /** 运行中要用户留意、但不中止整轮的事（目标应用退出 / 离屏）；只发系统通知，跑完的结局另有一条 */
+    fun onRunAlert(message: UiText) {
+        eventNotifier.notifyRunAlert(renderText(uiTextOf(R.string.notification_run_alert_title)), renderText(message))
+    }
+
     /**
      * 定时没跑起来：失败外推（跟「出错」开关），跳过只发系统通知
      *
