@@ -62,14 +62,6 @@ class HttpClientHelper(
         return okHttpClient.newCall(request).await()
     }
 
-    suspend inline fun <reified T> getEntity(
-        url: String,
-        query: Map<String, String?> = emptyMap(),
-        headers: Map<String, String> = emptyMap()
-    ): T {
-        return JsonUtils.common.decodeFromString<T>(get(url, query, headers).readBody())
-    }
-
     /**
      * [headers] 里的 Content-Type 会被拿来当请求体的 media type：
      * OkHttp 的 BridgeInterceptor 在请求体 contentType 非空时会无条件覆盖同名请求头，
