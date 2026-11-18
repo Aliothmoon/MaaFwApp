@@ -295,6 +295,21 @@ class RunLauncher(
         }
     }
 
+    /**
+     * 改特权进程会读的文件（重新解压 PI）只能走这里：等上一轮连收尾都走完，持着投递闸门做完 [block]
+     *
+     * 只在入口查一次 busy 不够：解包那几秒项目仍是旧的 Ready，到点的定时、悬浮窗的开始照常投递，
+     * 特权进程读到的是删了一半的 PI 根。持闸期间 Reject 模式的起跑报「正在启动中」，排队的定时等它做完
+     */
+    suspend fun <T> whenIdle(block: suspend () -> T): T {
+        awaitTurn(RunProgress { _, _ -> })
+        try {
+            return block()
+        } finally {
+            gate.unlock()
+        }
+    }
+
     private fun previousRoundSettled(): Boolean =
         !runnerPort.state.value.phase.isBusy && settling.get()?.isCompleted != false
 

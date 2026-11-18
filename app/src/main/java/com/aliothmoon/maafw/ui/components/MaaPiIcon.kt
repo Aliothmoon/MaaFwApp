@@ -6,6 +6,7 @@ import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -17,10 +18,10 @@ import androidx.compose.ui.unit.Dp
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.project.PiUnpackGeneration
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 
@@ -42,8 +43,10 @@ fun MaaPiIcon(
     if (path.isNullOrBlank()) return
     val sizePx = with(LocalDensity.current) { size.roundToPx() }
     val key = "$path@$sizePx"
-    val bitmap by produceState(initialValue = PiIconCache.peek(key), key) {
-        if (value == null) value = PiIconCache.load(path, sizePx, key)
+    // 重新解压后代数变了：没读到的重来一遍，读到的照旧命中缓存
+    val generation by PiUnpackGeneration.value.collectAsState()
+    val bitmap by produceState(initialValue = PiIconCache.peek(key), key, generation) {
+        if (value == null) value = PiIconCache.load(path, sizePx, key, generation)
     }
     bitmap?.let {
         Image(
@@ -64,15 +67,15 @@ private object PiIconCache {
         override fun sizeOf(key: String, value: ImageBitmap): Int = value.width * value.height * 4
     }
 
-    /** 取不到的也记一笔：PI 写错路径时，列表每滚一次都会重来一遍 open + decode */
-    private val missing = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+    /** 取不到的也记一笔（记在哪一代解包上）：PI 写错路径时，列表每滚一次都会重来一遍 open + decode */
+    private val missing = ConcurrentHashMap<String, Int>()
 
     /** 命中即同步返回，否则一列 chip 每次重组都要先闪一次无图 */
     fun peek(key: String): ImageBitmap? = cache.get(key)
 
-    suspend fun load(path: String, sizePx: Int, key: String): ImageBitmap? =
+    suspend fun load(path: String, sizePx: Int, key: String, generation: Int): ImageBitmap? =
         withContext(MaaDispatchers.IO) {
-            if (key in missing) return@withContext null
+            if (missing[key] == generation) return@withContext null
             val file = File(AppPaths.ROOT, "${AppFiles.PI_DIR}/$path")
             runCatching {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -87,7 +90,7 @@ private object PiIconCache {
                 // PI 写错图标路径或 profile 漏配 include 都落这里；不产诊断，图标缺失不该拦住加载
                 Timber.w("PI icon unavailable: %s (%s)", file.path, it.message)
             }.getOrNull()?.also { cache.put(key, it) } ?: run {
-                missing += key
+                missing[key] = generation
                 null
             }
         }

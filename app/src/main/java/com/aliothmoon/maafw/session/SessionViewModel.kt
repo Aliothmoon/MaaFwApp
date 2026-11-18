@@ -633,7 +633,7 @@ class SessionViewModel(
             }
 
             SessionIntent.ReinstallPi -> guarded {
-                if (piInstall.reinstall()) projectRepository.reload()
+                runLauncher.whenIdle { if (piInstall.reinstall()) projectRepository.reload() }
             }
 
             is SessionIntent.Start -> start(intent.surface, intent.acknowledged)

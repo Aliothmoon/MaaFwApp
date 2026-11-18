@@ -83,6 +83,7 @@ class PiInstallCoordinator(private val installer: PiInstaller) {
                 }
             }
             _state.value = PiInstallState.Ready
+            PiUnpackGeneration.bump()
             true
         } catch (e: CancellationException) {
             // 作用域被取消不是解包失败，状态留在原处交给下一次

@@ -744,6 +744,32 @@ class RunLauncherTest {
         assertEquals(RunLaunchResult.Started, first.await())
     }
 
+    /** 重新解压持着闸门：当场起跑的报正在启动，排队的定时等它解完才投 */
+    @Test
+    fun `launches wait out a whenIdle block`() = runTest(testDispatcher) {
+        val launcher = launcher(scope = backgroundScope, runner = fastStub(backgroundScope))
+        val log = mutableListOf<String>()
+
+        val reinstall = async {
+            launcher.whenIdle {
+                log += "unpack start"
+                delay(1_000)
+                log += "unpack end"
+            }
+        }
+        advanceTimeBy(100)
+        val rejected = launcher.launch(RunTrigger.Overlay)
+        val queued = async {
+            launcher.launch(RunTrigger.Schedule("s1"), whenBusy = WhenBusy.Queue(60_000)).also { log += "queued started" }
+        }
+        advanceTimeBy(2_000)
+        reinstall.await()
+
+        assertEquals(BlockSource.Busy, (rejected as RunLaunchResult.Blocked).source)
+        assertEquals(RunLaunchResult.Started, queued.await())
+        assertEquals(listOf("unpack start", "unpack end", "queued started"), log)
+    }
+
     @Test
     fun `a queued launch gives up once its window passes`() = runTest(testDispatcher) {
         val runner = StubRunnerPort(
