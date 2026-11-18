@@ -103,6 +103,7 @@ val runnerModule = module {
             projectRepository = get(),
             settings = get(),
             runnerPort = get(),
+            servicePort = get(),
             scope = get(named<AppCoroutineScope>()),
             secrets = { configurationStore.data.first().passwordPlaintexts() },
         )
