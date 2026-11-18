@@ -85,6 +85,8 @@ class ScheduleReceiver : BroadcastReceiver() {
                     Timber.w("Schedule strategy no longer exists: %s", strategyId)
                     alarms.forget(strategyId)
                 } else {
+                    // 这一次已记成失败，算投递过：整批重排不会再把它挂回来，挂着的重试也不再续
+                    alarms.markDelivered(strategy.id, scheduledTime)
                     alarms.scheduleNext(strategy, scheduledTime)
                     store.recordTrigger(strategyId, TriggerResult.FAILED_SERVICE_START, reason)
                     // 用户查「昨晚为什么没跑」看的是触发日志，只记在规则上等于没记

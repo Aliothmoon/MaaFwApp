@@ -121,6 +121,23 @@ class ScheduleAlarmManagerTest {
         assertTrue(alarms.drainMissed().isEmpty())
     }
 
+    /** 编辑保存：挂着的重试补的是错过的那一次，留着；没有才撤了重排，旧触发点一起撤 */
+    @Test
+    fun editKeepsAPendingRetryOtherwiseRearms() {
+        val now = System.currentTimeMillis()
+        ledger.data["retry:${hourly.id}"] = PendingRetry(now - 60_000L, retryCount = 1, triggerMs = now + 60_000L).encode()
+        ledger.data["armed:${hourly.id}"] = now - 60_000L
+
+        alarms.replace(hourly)
+        assertTrue(ledger.data.containsKey("retry:${hourly.id}"))
+        assertEquals(now - 60_000L, ledger.data["armed:${hourly.id}"])
+
+        ledger.data.remove("retry:${hourly.id}")
+        alarms.replace(hourly)
+        assertTrue((ledger.data["armed:${hourly.id}"] as Long) > now)
+        assertTrue(alarms.drainMissed().isEmpty())
+    }
+
     @Test
     fun forgetDropsTheWholeLedgerOfAStrategy() {
         ledger.data["armed:${hourly.id}"] = 1L

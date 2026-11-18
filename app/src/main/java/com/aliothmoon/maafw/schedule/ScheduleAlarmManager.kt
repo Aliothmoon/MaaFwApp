@@ -213,6 +213,28 @@ class ScheduleAlarmManager(private val context: Context) {
     /** 31 以下没有那个系统开关页，入口要藏掉，否则点了什么也不会发生 */
     fun hasExactAlarmToggle(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+    /**
+     * 编辑保存后换上新规则的闹钟
+     *
+     * 挂着的重试原样留着（连同旧触发点）：它补的是规则读不出时错过的那一次，投递时读到的就是新规则，
+     * 那次投递再接上下一环。重试与正常闹钟共用一个槽位，留它就不能同时排下一环。没有可续的重试才撤了重排
+     */
+    fun replace(strategy: ScheduleStrategy) {
+        if (!strategy.enabled) {
+            cancel(strategy.id)
+            return
+        }
+        synchronized(ledgerLock) {
+            val retry = pendingRetry(strategy.id)
+            if (retry != null && retry.isResumable(lastDelivered(strategy.id), System.currentTimeMillis())) {
+                Timber.i("Strategy %s keeps pending retry #%d across the edit", strategy.id, retry.retryCount)
+                return
+            }
+            cancel(strategy.id)
+            scheduleNext(strategy)
+        }
+    }
+
     /** 禁用、删除、改规则：撤掉槽位与挂着的重试，旧触发点也不再算漏触发 */
     fun cancel(strategyId: String) {
         cancelSlot(strategyId)

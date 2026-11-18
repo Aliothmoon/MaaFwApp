@@ -201,9 +201,8 @@ class ScheduleViewModel(
                 if (!intent.strategy.isValid) return
                 val existing = store.findById(intent.strategy.id)
                 if (existing == null) store.add(intent.strategy) else store.update(intent.strategy)
-                // 规则变了旧闹钟就不作数了，先撤后立
-                alarms.cancel(intent.strategy.id)
-                if (intent.strategy.enabled) alarms.scheduleNext(intent.strategy)
+                // 规则变了旧闹钟就不作数了，先撤后立；挂着的重试留着
+                alarms.replace(intent.strategy)
             }
 
             is ScheduleIntent.Delete -> {
