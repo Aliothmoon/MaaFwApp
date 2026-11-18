@@ -53,6 +53,8 @@ data class NotificationSettings(
     @PrefKey(default = "") val qmsgKey: String = "",
     @PrefKey(default = "") val qmsgUser: String = "",
     @PrefKey(default = "") val qmsgBot: String = "",
+    @PrefKey(default = "") val qmsgV3Key: String = "",
+    @PrefKey(default = "") val qmsgV3Group: String = "",
     @PrefKey(default = "") val gotifyServer: String = "",
     @PrefKey(default = "") val gotifyToken: String = "",
     @PrefKey(default = "") val customWebhookUrl: String = "",

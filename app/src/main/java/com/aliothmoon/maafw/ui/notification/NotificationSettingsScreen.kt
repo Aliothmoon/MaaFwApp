@@ -407,6 +407,20 @@ private fun ProviderConfig(
             )
         }
 
+        "QmsgV3" -> {
+            Field(
+                value = settings.qmsgV3Key,
+                label = stringResource(R.string.notification_label_qmsg_key),
+                onValueChange = { v -> onIntent(NotificationIntent.UpdateSettings { copy(qmsgV3Key = v) }) },
+            )
+            Field(
+                value = settings.qmsgV3Group,
+                label = stringResource(R.string.notification_label_qmsg_group),
+                placeholder = stringResource(R.string.notification_placeholder_qmsg_group),
+                onValueChange = { v -> onIntent(NotificationIntent.UpdateSettings { copy(qmsgV3Group = v) }) },
+            )
+        }
+
         "Gotify" -> {
             Field(
                 value = settings.gotifyServer,
@@ -479,6 +493,7 @@ private fun providerNameRes(id: String): Int = when (id) {
     "SMTP" -> R.string.notification_provider_smtp
     "Bark" -> R.string.notification_provider_bark
     "Qmsg" -> R.string.notification_provider_qmsg
+    "QmsgV3" -> R.string.notification_provider_qmsg_v3
     "Gotify" -> R.string.notification_provider_gotify
     else -> R.string.notification_provider_custom_webhook
 }

@@ -817,7 +817,8 @@
     <string name="notification_provider_discord_webhook">Discord Webhook</string>
     <string name="notification_provider_smtp">Email (SMTP)</string>
     <string name="notification_provider_bark">Bark</string>
-    <string name="notification_provider_qmsg">Qmsg</string>
+    <string name="notification_provider_qmsg">Qmsg (legacy API)</string>
+    <string name="notification_provider_qmsg_v3">Qmsg 3.0</string>
     <string name="notification_provider_gotify">Gotify</string>
     <string name="notification_provider_custom_webhook">Custom webhook</string>
 
@@ -848,6 +849,8 @@
     <string name="notification_label_qmsg_key">Qmsg Key</string>
     <string name="notification_label_user_qq">Recipient QQ</string>
     <string name="notification_label_bot_qq">Bot QQ</string>
+    <string name="notification_label_qmsg_group">QQ group</string>
+    <string name="notification_placeholder_qmsg_group">Optional; leave empty to send to the direct chat</string>
     <string name="notification_label_application_token">Application Token</string>
     <string name="notification_placeholder_optional">Optional</string>
     <string name="notification_placeholder_optional_signing_secret">Optional, for bots set to signed mode</string>
