@@ -104,8 +104,6 @@ object LogcatServiceManager {
         override val serviceClass: Class<*> = LogcatCaptureServiceImpl::class.java
         override val logFileName = "${processNameSuffix}_launch_debug.log"
 
-        // logcat 无需输入注入，shell 身份自带 log 组权限
-        override val keepRoot: Boolean get() = false
 
         override fun destroyRemote(binder: IBinder) {
             ILogcatService.Stub.asInterface(binder)?.destroy()

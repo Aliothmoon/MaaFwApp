@@ -534,11 +534,8 @@
     <string name="dialog_shizuku_not_running_title">Shizuku Not Running</string>
     <string name="dialog_shizuku_not_running_message">Shizuku is installed but the service is not running. Please open Shizuku and start the service.</string>
     <string name="dialog_shizuku_open_app">Open Shizuku</string>
-    <string name="dialog_sui_detected_title">Sui Detected</string>
-    <string name="dialog_sui_detected_message">Sui is providing the Shizuku service with root privileges. This app may not work correctly; please verify by actual testing.</string>
     <string name="dialog_shizuku_need_auth_title">Shizuku Not Authorized</string>
     <string name="dialog_shizuku_need_auth_message">Shizuku is running but has not authorized this app yet. Please grant access. This prompt keeps showing until access is granted.</string>
-    <string name="common_got_it">Got it</string>
     <string name="common_later">Later</string>
 
     <!-- Run log -->

@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.remote.internal
 
 import android.annotation.SuppressLint
+import android.os.Build
 import android.os.IBinder
 import com.aliothmoon.maafw.third.Command
 import com.aliothmoon.maafw.third.FakeContext
@@ -11,7 +12,8 @@ import java.lang.reflect.Method
  * 提权进程内断/复 xmsf 网络（移植自 MaaMeow）：HyperOS 焦点岛云端鉴权为 fail-open，
  * 断网让鉴权拿 -400(No network) 即视为通过；联网被查到 -200 会移除岛
  *
- * 三级后端：系统服务 binder（shell 可用，OEM deny 链）→ cmd connectivity → iptables（仅 root）
+ * 两级后端，shell 都能用：系统服务 binder（OEM deny 链）→ cmd connectivity。特权进程一律降到 shell，
+ * 以前只有 root 才走得到的 iptables 那档删了；旧版 root 进程插下的 iptables 规则 shell 删不掉，重启才消失
  * 规则落在系统侧 netd，进程死亡不会自动失效：
  * 断网时记下实际生效的后端，恢复只回滚它；新实例启动后 [ensureRestored] 做一次全量兜底，
  * 兜底还没跑完就来了断网请求时先补跑它，免得兜底晚到把刚断的网又放开
@@ -19,7 +21,6 @@ import java.lang.reflect.Method
 object XmsfFirewall {
     private const val TAG = "XmsfFirewall"
     const val XMSF_PACKAGE = "com.xiaomi.xmsf"
-    private const val COMMENT = "maa_xmsf_cut"
 
     private const val RULE_DEFAULT = 0
     private const val RULE_DENY = 2
@@ -32,7 +33,7 @@ object XmsfFirewall {
         ServiceBackend("network_management", $$"android.os.INetworkManagementService$Stub"),
     )
 
-    private enum class Backend { BINDER, CMD, IPTABLES }
+    private enum class Backend { BINDER, CMD }
 
     private val applied = mutableSetOf<Backend>()
 
@@ -74,13 +75,8 @@ object XmsfFirewall {
             ok = currentState() == STATE_DENY
         }
         if (!ok) {
-            // iptables 不进 currentState 的可见范围，插了就记账，否则残留没人删
-            applyIptablesRules(uid, insert = true)
-            applied += Backend.IPTABLES
-            ok = iptablesHasRule(uid)
-        }
-        if (!ok) {
-            // 没断成也要把已下发的痕迹清掉，别留半截规则
+            // 没断成也要把已下发的痕迹清掉，别留半截规则；两级都失效时留证据
+            Ln.w("$TAG: cut xmsf failed sdk=${Build.VERSION.SDK_INT}")
             restore(full = false)
         }
         Ln.i("$TAG: cut xmsf uid=$uid ok=$ok via=$applied")
@@ -101,14 +97,8 @@ object XmsfFirewall {
         }
         if (Backend.BINDER in targets) binderApply(uid, deny = false)
         if (Backend.CMD in targets) cmdApply(deny = false)
-        // 全量兜底时先探一次哨兵规则，没有就不跑那一串必然失败的删除
-        var iptablesTouched = false
-        if (Backend.IPTABLES in targets && (!full || iptablesHasRule(uid))) {
-            iptablesClear(uid)
-            iptablesTouched = true
-        }
         applied.clear()
-        val restored = currentState() != STATE_DENY && (!iptablesTouched || !iptablesHasRule(uid))
+        val restored = currentState() != STATE_DENY
         Ln.i("$TAG: restore xmsf uid=$uid full=$full restored=$restored")
         return restored
     }
@@ -235,44 +225,6 @@ object XmsfFirewall {
         false
     }
 
-    /** 哨兵：四条规则总是一起下发，探 iptables/OUTPUT 一条即可判断有无残留 */
-    private fun iptablesHasRule(uid: Int): Boolean =
-        runCatching { Command.exec(*iptablesArgs("iptables", "-C", "OUTPUT", uid)) }.isSuccess
-
-    /** 逐条确认后再删：清掉历史重复插入，也不做必然失败的空转 */
-    private fun iptablesClear(uid: Int) {
-        for (bin in IPTABLES_BINARIES) {
-            for (chain in IPTABLES_CHAINS) {
-                var guard = 0
-                while (guard++ < IPTABLES_MAX_DELETES) {
-                    val present =
-                        runCatching { Command.exec(*iptablesArgs(bin, "-C", chain, uid)) }.isSuccess
-                    if (!present) break
-                    runCatching { Command.exec(*iptablesArgs(bin, "-D", chain, uid)) }
-                        .onFailure { Ln.w("$TAG: $bin -D $chain failed: ${it.message}") }
-                }
-            }
-        }
-    }
-
-    private fun applyIptablesRules(uid: Int, insert: Boolean) {
-        val flag = if (insert) "-I" else "-D"
-        for (bin in IPTABLES_BINARIES) {
-            for (chain in IPTABLES_CHAINS) {
-                runCatching { Command.exec(*iptablesArgs(bin, flag, chain, uid)) }
-                    .onFailure { Ln.w("$TAG: $bin $flag $chain failed: ${it.message}") }
-            }
-        }
-    }
-
-    private fun iptablesArgs(bin: String, flag: String, chain: String, uid: Int): Array<String> =
-        arrayOf(
-            bin, "-w", flag, chain,
-            "-m", "owner", "--uid-owner", uid.toString(),
-            "-m", "comment", "--comment", COMMENT,
-            "-j", "REJECT",
-        )
-
     private fun resolveUid(): Int? = runCatching {
         FakeContext.get().packageManager.getApplicationInfo(XMSF_PACKAGE, 0).uid
     }.onFailure {
@@ -281,7 +233,4 @@ object XmsfFirewall {
 
     private const val STATE_ALLOW = "allow"
     private const val STATE_DENY = "deny"
-    private const val IPTABLES_MAX_DELETES = 8
-    private val IPTABLES_BINARIES = listOf("iptables", "ip6tables")
-    private val IPTABLES_CHAINS = listOf("OUTPUT", "INPUT")
 }

@@ -58,7 +58,7 @@ class SystemDisplayHazardProbe(
         DisplayHazards(
             smartResolution,
             EyeProtectionDetector.detect(context),
-            XiaomiAdbInput.isRestricted(servicePort),
+            XiaomiAdbInput.isRestricted(),
             compatTier,
         )
     }

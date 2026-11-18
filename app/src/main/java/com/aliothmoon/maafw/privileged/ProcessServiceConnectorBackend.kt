@@ -2,7 +2,6 @@ package com.aliothmoon.maafw.privileged
 
 import com.aliothmoon.maafw.MaaDispatchers
 import android.content.Context
-import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
@@ -28,10 +27,6 @@ import timber.log.Timber
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeoutException
-
-/** Android 14+ 输入注入需要 Root UID；launcher 在 shell 身份下忽略该标志 */
-internal val keepRootForInputInjection: Boolean
-    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
 /**
  * 自研 starter 进程路径的公共基座：launcher 拉起 app_process，
@@ -63,8 +58,6 @@ abstract class ProcessServiceConnectorBackend(
 
     /** 各连接器独立，launcher O_TRUNC 打开，共用会互相覆盖 */
     protected abstract val logFileName: String
-
-    protected open val keepRoot: Boolean get() = false
 
     // 单并发：spawn 与 killResidual 都是阻塞调用，独占队列位，先入队者先做完
     private val scope = CoroutineScope(MaaDispatchers.IO.limitedParallelism(1) + SupervisorJob())
@@ -153,15 +146,14 @@ abstract class ProcessServiceConnectorBackend(
             append(" --package=").append(shellQuote(appContext.packageName))
             append(" --class=").append(shellQuote(serviceClass.name))
             append(" --uid=").append(Process.myUid())
-            if (keepRoot) append(" --keep-root")
             append(" --log-file=").append(shellQuote(logFile.absolutePath))
             if (BuildConfig.DEBUG) {
                 append(" --debug-name=").append(shellQuote(processName))
             }
         }
-        // 14+ 留 root 时解出的 agent 目录归 0，降到 shell 的那一份（另一后端、或以后不留 root）写不进去，先修回
-        val repair = if (keepRoot) "" else "${shellOwnershipRepairCommand(ShellDirs.AGENT_DIR.absolutePath)}; "
-        return repair + spawner.wrapCommand(launcher.absolutePath, invocation)
+        // 两个后端都降到 shell；以前留 root 时解出的 agent 目录归 0，降权后写不进去，每次拉起都修回
+        return "${shellOwnershipRepairCommand(ShellDirs.AGENT_DIR.absolutePath)}; " +
+            spawner.wrapCommand(launcher.absolutePath, invocation)
     }
 
     /** 取消会盖掉 await 的结果，回投是否已到还得看 deferred */

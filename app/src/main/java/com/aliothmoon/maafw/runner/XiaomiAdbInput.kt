@@ -1,8 +1,5 @@
 package com.aliothmoon.maafw.runner
 
-import com.aliothmoon.maafw.domain.RemoteBackend
-import com.aliothmoon.maafw.privileged.PrivilegedServicePort
-import com.aliothmoon.maafw.privileged.keepRootForInputInjection
 import com.aliothmoon.maafw.util.RomInfo
 
 /**
@@ -11,8 +8,6 @@ import com.aliothmoon.maafw.util.RomInfo
  */
 internal object XiaomiAdbInput {
 
-    fun isRestricted(servicePort: PrivilegedServicePort): Boolean =
-        RomInfo.isXiaomi && RomInfo.systemProperty("persist.security.adbinput") != "1" &&
-            // 14+ Root 后端特权进程留着 root，注入不受这一项管；两个后端都降到 shell 之后这一条随之删
-            !(servicePort.currentBackend == RemoteBackend.ROOT && keepRootForInputInjection)
+    fun isRestricted(): Boolean =
+        RomInfo.isXiaomi && RomInfo.systemProperty("persist.security.adbinput") != "1"
 }
