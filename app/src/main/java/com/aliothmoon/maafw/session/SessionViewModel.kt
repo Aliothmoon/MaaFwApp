@@ -876,7 +876,7 @@ class SessionViewModel(
      */
     private suspend fun requestRemoteAccess() {
         if (permissionGateway.state.value.configuredBackend == RemoteBackend.SHIZUKU) {
-            val stage = permissionGateway.readinessIgnoringSkip.first().stage
+            val stage = permissionGateway.resolveReadinessIgnoringSkip().stage
             if (stage == ShizukuReadinessStage.NotInstalled || stage == ShizukuReadinessStage.NotRunning) {
                 shizukuGuideForced.value = true
                 return

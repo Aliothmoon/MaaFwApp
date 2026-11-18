@@ -17,6 +17,9 @@ interface PermissionGateway {
 
     /** 同 [readiness] 但不看「跳过检查」：用户自己点了「请求权限」，没装 / 没起就该照样引导 */
     val readinessIgnoringSkip: StateFlow<ShizukuReadiness>
+
+    /** 当场算一次 [readinessIgnoringSkip]：那份流没人订阅时停在初始值，判不了 */
+    suspend fun resolveReadinessIgnoringSkip(): ShizukuReadiness
     val serviceState: StateFlow<PrivilegedServiceState>
 
     /** 目标 app 在虚拟屏上的看门狗状态（特权进程轮询，app 侧只读） */

@@ -10,6 +10,8 @@ class FakePermissionGateway : PermissionGateway {
     override val isGranting = MutableStateFlow(false)
     override val readiness = MutableStateFlow(ShizukuReadiness())
     override val readinessIgnoringSkip = MutableStateFlow(ShizukuReadiness())
+
+    override suspend fun resolveReadinessIgnoringSkip(): ShizukuReadiness = readinessIgnoringSkip.value
     override val serviceState = MutableStateFlow(PrivilegedServiceState.Disconnected)
 
     override val watchdogState = MutableStateFlow(WatchdogState.IDLE)

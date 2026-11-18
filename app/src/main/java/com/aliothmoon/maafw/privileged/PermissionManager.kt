@@ -128,6 +128,9 @@ class PermissionManager(
         initialValue = ShizukuReadiness(),
     )
 
+    override suspend fun resolveReadinessIgnoringSkip(): ShizukuReadiness =
+        resolveReadiness(accessPort.refresh(), skipCheck = false, appSettings.shizukuLaunchPackage.value)
+
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         // drop(1)：首值是启动时的当前后端，不该被当成"用户切了后端"而去解绑
