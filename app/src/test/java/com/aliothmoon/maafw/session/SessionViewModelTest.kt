@@ -866,6 +866,22 @@ class SessionViewModelTest {
         )
     }
 
+    @Test
+    fun `automatic display release setting follows the quick option`() = runTest(mainDispatcher) {
+        val settings = FakeAppSettingsGateway()
+        val (vm, _, _) = createVm(settings = settings)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.releaseDisplayOnAutoClose)
+
+        vm.onIntent(SessionIntent.SetReleaseDisplayOnAutoClose(false))
+        advanceUntilIdle()
+
+        assertFalse(settings.releaseDisplayOnAutoClose.value)
+        assertFalse(vm.uiState.value.releaseDisplayOnAutoClose)
+    }
+
     /** 虚拟屏尺寸改由用户选之后，这条是它进 UiState 的唯一通路 */
     @Test
     fun `preview resolution follows the resolution preset`() = runTest(mainDispatcher) {

@@ -103,9 +103,10 @@ private data class SettingsSnapshot(
 )
 
 
-/** 快捷面板「自动设置」那两项；同样只为压元数 */
+/** 快捷面板设置；同样只为压元数 */
 private data class QuickSnapshot(
     val closeAppAfterTask: Boolean = false,
+    val releaseDisplayOnAutoClose: Boolean = true,
     val touchPreviewEnabled: Boolean = true,
     val telemetryEnabled: Boolean = true,
 )
@@ -167,6 +168,7 @@ class SessionViewModel(
     }.combine(
             combine(
                 appSettings.closeAppAfterTask,
+                appSettings.releaseDisplayOnAutoClose,
                 appSettings.touchPreviewEnabled,
                 appSettings.telemetryEnabled,
                 ::QuickSnapshot,
@@ -357,6 +359,7 @@ class SessionViewModel(
             overlayControlMode = settings.overlayControlMode,
             screenSaverEnabled = settings.screenSaverEnabled,
             closeAppAfterTask = settings.quick.closeAppAfterTask,
+            releaseDisplayOnAutoClose = settings.quick.releaseDisplayOnAutoClose,
             touchPreviewEnabled = settings.quick.touchPreviewEnabled,
             telemetryEnabled = settings.quick.telemetryEnabled,
             resolutionPreset = settings.resolutionPreset,
@@ -584,6 +587,9 @@ class SessionViewModel(
 
             is SessionIntent.SetCloseAppAfterTask ->
                 appSettings.setCloseAppAfterTask(intent.enabled)
+
+            is SessionIntent.SetReleaseDisplayOnAutoClose ->
+                appSettings.setReleaseDisplayOnAutoClose(intent.enabled)
 
             is SessionIntent.SetTelemetryEnabled ->
                 appSettings.setTelemetryEnabled(intent.enabled)

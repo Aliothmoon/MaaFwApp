@@ -33,6 +33,8 @@ open class FakePrivilegedService : RemoteService {
         private set
     var stopTargetAppCount: Int = 0
         private set
+    var stopVirtualDisplayCount: Int = 0
+        private set
 
     var saveDisplayFrameResult: Boolean = true
     var savedFramePaths: MutableList<String> = mutableListOf()
@@ -114,7 +116,9 @@ open class FakePrivilegedService : RemoteService {
         lastVirtualDisplayResolution = Triple(width, height, dpi)
     }
     override fun startVirtualDisplay(): Int = 1
-    override fun stopVirtualDisplay() = Unit
+    override fun stopVirtualDisplay() {
+        stopVirtualDisplayCount++
+    }
     override fun isAppOnVirtualDisplay(packageName: String?): Boolean = true
     override fun moveAppToVirtualDisplay(packageName: String?): Boolean = true
     override fun setForceFullscreenOnVirtualDisplay(enabled: Boolean) = Unit

@@ -267,6 +267,15 @@ internal fun TasksQuickOptionsPanel(
                             onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterTask(it)) },
                         )
                     }
+                    SettingSearchTarget(SettingAnchors.RELEASE_DISPLAY_ON_AUTO_CLOSE) {
+                        SettingToggleRow(
+                            icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                            label = stringResource(R.string.quick_setting_release_display_on_auto_close),
+                            checked = state.releaseDisplayOnAutoClose,
+                            onCheckedChange = { onIntent(SessionIntent.SetReleaseDisplayOnAutoClose(it)) },
+                            description = stringResource(R.string.quick_setting_release_display_on_auto_close_desc),
+                        )
+                    }
                 }
                 SettingSearchTarget(SettingAnchors.TOUCH_PREVIEW) {
                     SettingToggleRow(
@@ -355,6 +364,7 @@ private fun SettingToggleRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    description: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -370,11 +380,16 @@ private fun SettingToggleRow(
             modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
             MaaCheckbox(
                 checked = checked,

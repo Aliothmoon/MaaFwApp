@@ -381,7 +381,7 @@ class EnvironmentHooksTest {
     // ── 关目标应用 ──────────────────────────────────────────────────
 
     @Test
-    fun `target app is closed after a completed run`() = runTest {
+    fun `virtual display is stopped after a completed run`() = runTest {
         val service = FakePrivilegedService()
         val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
 
@@ -389,12 +389,40 @@ class EnvironmentHooksTest {
             RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
         )
 
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
+    }
+
+    @Test
+    fun `virtual display is stopped after a failed run`() = runTest {
+        val service = FakePrivilegedService()
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
+
+        hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))).releaseOrNull()!!(
+            RunEndReason.Ran(ExecutionResult.Failed(uiTextOf(R.string.msg_fail_default))),
+        )
+
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
+    }
+
+    @Test
+    fun `disabled display release only force stops the target app`() = runTest {
+        val service = FakePrivilegedService()
+        val settings = FakeAppSettingsGateway().apply { releaseDisplayOnAutoClose.value = false }
+        val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), settings)
+
+        hook.engage(scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))).releaseOrNull()!!(
+            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
+        )
+
+        assertEquals(0, service.stopVirtualDisplayCount)
         assertEquals(1, service.stopTargetAppCount)
     }
 
     /** 用户手动停多半是想接手看看现场，别把人家应用关了 */
     @Test
-    fun `target app survives a manual stop`() = runTest {
+    fun `virtual display survives a manual stop`() = runTest {
         val service = FakePrivilegedService()
         val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
 
@@ -402,12 +430,13 @@ class EnvironmentHooksTest {
             RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())),
         )
 
+        assertEquals(0, service.stopVirtualDisplayCount)
         assertEquals(0, service.stopTargetAppCount)
     }
 
     /** 时长上限停的结局同样是 Cancelled，但那不是用户接手，应用照关 */
     @Test
-    fun `target app is closed after a stop at the duration limit`() = runTest {
+    fun `virtual display is stopped after a stop at the duration limit`() = runTest {
         val service = FakePrivilegedService()
         val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), FakeAppSettingsGateway())
         val ctx = scheduleContext(ScheduleRunOptions(closeAppAfterTask = true))
@@ -416,7 +445,8 @@ class EnvironmentHooksTest {
         ctx.stoppedAtLimit.set(true)
         release(RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())))
 
-        assertEquals(1, service.stopTargetAppCount)
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
     }
 
     /** 特权进程断了时收尾不该反过来触发重连 */
@@ -431,14 +461,15 @@ class EnvironmentHooksTest {
 
     /** 全局开关管每一轮，手动 Start 那轮压根没有 ScheduleRunOptions 可看 */
     @Test
-    fun `the global switch closes the target app on a manual run`() = runTest {
+    fun `the global switch stops the virtual display on a manual run`() = runTest {
         val service = FakePrivilegedService()
         val settings = FakeAppSettingsGateway().apply { closeAppAfterTask.value = true }
         val hook = CloseTargetAppHook(FakePrivilegedServicePort(service), settings)
 
         hook.engage(context()).releaseOrNull()!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
-        assertEquals(1, service.stopTargetAppCount)
+        assertEquals(1, service.stopVirtualDisplayCount)
+        assertEquals(0, service.stopTargetAppCount)
     }
 
     @Test
@@ -452,7 +483,7 @@ class EnvironmentHooksTest {
         )
     }
 
-    /** 前台模式没有虚拟屏，看门狗从不起来，全局开着也没有目标可关 */
+    /** 前台模式没有虚拟屏，看门狗也不记录自动关闭所需的目标包名 */
     @Test
     fun `foreground mode ignores the global switch`() = runTest {
         val port = FakePrivilegedServicePort(FakePrivilegedService())
