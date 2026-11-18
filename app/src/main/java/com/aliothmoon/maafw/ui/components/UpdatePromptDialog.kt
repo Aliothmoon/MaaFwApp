@@ -19,6 +19,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.settings.UpdatePanelState
@@ -85,8 +90,20 @@ OpaqueTheme {
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.dialog_update_later))
+                val later = stringResource(R.string.dialog_update_later)
+                // 无障碍节点只留内容描述：GKD 的全局「更新提示」规则按文字找「稍后」自动点掉，读屏照常能读能点
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.clearAndSetSemantics {
+                        contentDescription = later
+                        role = Role.Button
+                        onClick {
+                            onDismiss()
+                            true
+                        }
+                    },
+                ) {
+                    Text(later)
                 }
             },
         )
