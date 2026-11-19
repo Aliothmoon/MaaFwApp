@@ -652,6 +652,13 @@
     <string name="config_import_unreadable">Couldn\'t read the file</string>
     <string name="close_target_confirm_title">Close the target app?</string>
     <string name="tasks_run_from_here">Run from here</string>
+    <string name="run_log_screen_power_off">Screen power turned off; press the power button to light it</string>
+    <string name="run_log_screen_power_off_failed">Could not turn off screen power; the screen stays on for this run</string>
+    <string name="run_log_screen_power_off_skipped_awake">The device was in use at the start; screen power left on</string>
+    <string name="schedule_edit_hardware_screen_off">Turn off screen power while running</string>
+    <string name="schedule_edit_hardware_screen_off_tip">Instead of the screen saver: after the countdown, once tasks start, the panel is turned off and not restored afterwards; press the power button to light it. Background mode only, and only if the device is not in use at the scheduled time</string>
+    <string name="schedule_edit_hardware_screen_off_confirm_title">Turn off screen power?</string>
+    <string name="schedule_edit_hardware_screen_off_confirm_message">The screen goes completely black while the system keeps running; press the power button to light it. It may not work on some devices, or need a second press after waking</string>
     <string name="close_target_confirm_message">A run is in progress; closing the target app interrupts it</string>
     <string name="config_import_too_large">The file is larger than %1$d MB; it is not a configuration file</string>
     <string name="config_import_unrecognized">Unrecognized configuration format</string>

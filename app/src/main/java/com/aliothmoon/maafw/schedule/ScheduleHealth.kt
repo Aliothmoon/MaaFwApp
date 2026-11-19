@@ -46,9 +46,12 @@ data class ScheduleHealthSnapshot(
 
 object ScheduleHealthLogic {
 
-    /** 屏保只在后台模式挂（见 `ScreenSaverHook`），前台模式开着也用不上悬浮窗 */
-    fun overlayNeeded(backgroundMode: Boolean, screenSaverEnabled: Boolean): Boolean =
-        backgroundMode && screenSaverEnabled
+    /**
+     * 屏保只在后台模式挂（见 `ScreenSaverHook`），前台模式开着也用不上悬浮窗；
+     * 启用的规则都改用关屏幕电源时屏保也让位，[anyRuleUsesScreenSaver] 为 false
+     */
+    fun overlayNeeded(backgroundMode: Boolean, screenSaverEnabled: Boolean, anyRuleUsesScreenSaver: Boolean = true): Boolean =
+        backgroundMode && screenSaverEnabled && anyRuleUsesScreenSaver
 
     /**
      * 与 `WakeUnlockHook` 同一份凭证判定（[UnlockCredential.isReady]）：

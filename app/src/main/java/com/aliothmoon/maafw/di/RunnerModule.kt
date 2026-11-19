@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.runner.AutoSleepHook
+import com.aliothmoon.maafw.runner.IdleProbeHook
 import com.aliothmoon.maafw.runner.BackgroundModePrecheck
 import com.aliothmoon.maafw.runner.CloseTargetAppHook
 import com.aliothmoon.maafw.runner.CountdownHook
@@ -39,6 +40,7 @@ import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunScreenSaver
 import com.aliothmoon.maafw.runner.RunSessionLogStore
+import com.aliothmoon.maafw.runner.ScreenPowerOffHook
 import com.aliothmoon.maafw.runner.ScreenSaverHook
 import com.aliothmoon.maafw.runner.SessionLogHook
 import com.aliothmoon.maafw.runner.SystemDisplayHazardProbe
@@ -166,6 +168,9 @@ val runnerModule = module {
                 TelemetryHook(get()),
                 NotificationHook(get()),
                 PrivilegedConnectHook(get()),
+                IdleProbeHook(get()) {
+                    androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+                },
                 AutoSleepHook(get()),
                 WakeUnlockHook(get(), get<AppSettingsManager>(), get<UnlockGestureStore>()) {
                     androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
@@ -176,6 +181,7 @@ val runnerModule = module {
                 // 调用时才取：OverlayController 经 SessionViewModel 依赖 RunLauncher，构造期取会成环
                 OverlayClearHook { get<OverlayController>().awaitPanelCleared() },
                 KeepAliveHook(get()),
+                ScreenPowerOffHook(get()),
                 GameFpsHook(get()),
                 DisplayHazardNoticeHook(get(), get()),
                 WatchdogNoticeHook(

@@ -164,6 +164,9 @@ interface RemoteService {
     /** 显示调用卡死时取线程栈：只留在处理 binder 调用或等锁的线程，带 native 采集收尾停在哪一步；不能加锁 */
     String dumpThreads() = 89;
 
+    /** 同 setDisplayPower，但等做完并回结果：17 号是 oneway，改不了签名 */
+    boolean setDisplayPowerSync(boolean on) = 90;
+
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;
     /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */

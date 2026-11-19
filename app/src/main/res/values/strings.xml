@@ -642,6 +642,13 @@
     <string name="config_import_unreadable">无法读取该文件</string>
     <string name="close_target_confirm_title">关闭目标应用？</string>
     <string name="tasks_run_from_here">从此处运行</string>
+    <string name="run_log_screen_power_off">已关闭屏幕电源，按电源键可点亮</string>
+    <string name="run_log_screen_power_off_failed">关闭屏幕电源失败，本轮屏幕保持亮着</string>
+    <string name="run_log_screen_power_off_skipped_awake">开始时设备正在使用，未关闭屏幕电源</string>
+    <string name="schedule_edit_hardware_screen_off">运行时关闭屏幕电源</string>
+    <string name="schedule_edit_hardware_screen_off_tip">代替屏保：倒计时结束、任务开始后关掉屏幕面板，结束后不恢复，按电源键点亮。仅后台模式，且到点时设备没在使用才关</string>
+    <string name="schedule_edit_hardware_screen_off_confirm_title">关闭屏幕电源？</string>
+    <string name="schedule_edit_hardware_screen_off_confirm_message">屏幕会完全变黑但系统仍在运行，需要按电源键点亮。部分设备可能不生效，或点亮后需要再按一次</string>
     <string name="close_target_confirm_message">任务正在运行，关闭目标应用会让这一轮中断</string>
     <string name="config_import_too_large">文件超过 %1$d MB，不是配置文件</string>
     <string name="config_import_unrecognized">无法识别的配置格式</string>

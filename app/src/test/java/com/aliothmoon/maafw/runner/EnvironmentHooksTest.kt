@@ -271,16 +271,37 @@ class EnvironmentHooksTest {
 
     // ── 自动熄屏：采样必须发生在唤醒之前 ────────────────────────────
 
+    /** 采样排在唤醒之前；手动发起人就在跟前，不采 */
+    @Test
+    fun `idle probe treats a dark or locked screen as idle and skips manual runs`() = runTest {
+        val service = FakePrivilegedService().apply { screenOn = false }
+        val dark = scheduleContext()
+        IdleProbeHook(FakePrivilegedServicePort(service)) { false }.engage(dark)
+        assertEquals(true, dark.idleAtStart.get())
+
+        service.screenOn = true
+        val locked = scheduleContext()
+        IdleProbeHook(FakePrivilegedServicePort(service)) { true }.engage(locked)
+        assertEquals(true, locked.idleAtStart.get())
+
+        val inUse = scheduleContext()
+        IdleProbeHook(FakePrivilegedServicePort(service)) { false }.engage(inUse)
+        assertEquals(false, inUse.idleAtStart.get())
+
+        val manual = context()
+        IdleProbeHook(FakePrivilegedServicePort(service)) { false }.engage(manual)
+        assertNull(manual.idleAtStart.get())
+    }
+
     @Test
     fun `auto sleep is skipped when the phone was already awake`() = runTest {
-        val service = FakePrivilegedService().apply { screenOn = true }
-        val hook = AutoSleepHook(FakePrivilegedServicePort(service))
+        val service = FakePrivilegedService()
+        val ctx = scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true))
+        ctx.idleAtStart.set(false)
 
-        val release = hook.engage(
-            scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true)),
-        ).releaseOrNull()
-        // 采样之后屏幕状态怎么变都不影响判断——值已经在闭包里了
-        service.screenOn = false
+        val release = AutoSleepHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()
+        // 收尾时读到的不是此刻的屏幕：值在 engage 时已捕进闭包
+        ctx.idleAtStart.set(true)
         release!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
         assertEquals(0, service.lockAndSleepCount)
@@ -288,12 +309,13 @@ class EnvironmentHooksTest {
 
     @Test
     fun `auto sleep fires when the run took over an idle phone`() = runTest {
-        val service = FakePrivilegedService().apply { screenOn = false }
-        val hook = AutoSleepHook(FakePrivilegedServicePort(service))
+        val service = FakePrivilegedService()
+        val ctx = scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true))
+        ctx.idleAtStart.set(true)
 
-        hook.engage(
-            scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true)),
-        ).releaseOrNull()!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+        AutoSleepHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()!!(
+            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
+        )
 
         assertEquals(1, service.lockAndSleepCount)
     }
@@ -301,14 +323,70 @@ class EnvironmentHooksTest {
     /** 压根没跑起来就别熄屏：用户点了 Start 看到失败，屏幕还黑了 */
     @Test
     fun `auto sleep does not fire when the run never started`() = runTest {
-        val service = FakePrivilegedService().apply { screenOn = false }
-        val hook = AutoSleepHook(FakePrivilegedServicePort(service))
+        val service = FakePrivilegedService()
+        val ctx = scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true))
+        ctx.idleAtStart.set(true)
 
-        hook.engage(scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true))).releaseOrNull()!!(
+        AutoSleepHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()!!(
             RunEndReason.NotRun(NotRunCause.Rejected),
         )
 
         assertEquals(0, service.lockAndSleepCount)
+    }
+
+    // ── 关屏幕电源 ──────────────────────────────────────────────────
+
+    /** 只关不恢复：没有收尾要撤 */
+    @Test
+    fun `screen power off turns the panel off for an idle background run`() = runTest {
+        val service = FakePrivilegedService()
+        val ctx = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
+        ctx.idleAtStart.set(true)
+
+        val result = ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(ctx)
+
+        assertEquals(listOf(false), service.displayPowerSyncCalls)
+        assertNull(result.releaseOrNull())
+    }
+
+    @Test
+    fun `screen power off leaves an in-use or foreground run alone`() = runTest {
+        val service = FakePrivilegedService()
+        val awake = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
+        awake.idleAtStart.set(false)
+        val foreground = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true), runMode = RunMode.FOREGROUND)
+        foreground.idleAtStart.set(true)
+
+        ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(awake)
+        ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(foreground)
+
+        assertTrue(service.displayPowerSyncCalls.isEmpty())
+    }
+
+    /** 失败如实记进触发日志的步骤，但不拦整轮 */
+    @Test
+    fun `screen power off failure is reported`() = runTest {
+        val service = FakePrivilegedService().apply { displayPowerSyncResult = false }
+        val ctx = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
+        ctx.idleAtStart.set(true)
+
+        assertTrue(ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(ctx) is EngageResult.Failed)
+    }
+
+    /** 规则改用关屏幕电源、设备没在用：屏保让位；在用时照盖 */
+    @Test
+    fun `screen saver steps aside for screen power off`() = runTest {
+        val settings = FakeAppSettingsGateway().apply { screenSaverEnabled.value = true }
+        val saver = RecordingScreenSaver()
+        val idle = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
+        idle.idleAtStart.set(true)
+        val inUse = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
+        inUse.idleAtStart.set(false)
+
+        ScreenSaverHook(settings, saver).engage(idle)
+        assertEquals(0, saver.shown)
+        ScreenSaverHook(settings, saver).engage(inUse)
+        assertEquals(1, saver.shown)
     }
 
     // ── 倒计时 ──────────────────────────────────────────────────────

@@ -85,6 +85,10 @@ class ScheduleHealthLogicTest {
         assertTrue(ScheduleHealthLogic.overlayNeeded(backgroundMode = true, screenSaverEnabled = true))
         assertFalse(ScheduleHealthLogic.overlayNeeded(backgroundMode = false, screenSaverEnabled = true))
         assertFalse(ScheduleHealthLogic.overlayNeeded(backgroundMode = true, screenSaverEnabled = false))
+        // 启用的规则都改用关屏幕电源，屏保用不上
+        assertFalse(
+            ScheduleHealthLogic.overlayNeeded(backgroundMode = true, screenSaverEnabled = true, anyRuleUsesScreenSaver = false),
+        )
     }
 
     @Test

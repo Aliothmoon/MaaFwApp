@@ -105,9 +105,20 @@ object PowerController {
         keepAliveDisplayId.set(DefaultDisplayConfig.DISPLAY_NONE)
     }
 
+    /** 判不出按醒着处理，宁可点亮 */
+    internal var systemAwake: () -> Boolean = {
+        runCatching { ServiceManager.getPowerManager().isScreenOnOrNull(0) }.getOrNull() ?: true
+    }
+
     fun destroy() {
         stopUserActivityKeepAlive()
         if (poweredOff.get()) {
+            // 系统已休眠就别点亮：用户关了屏走开，进程这时退出不该把屏点亮；下次唤醒由系统恢复面板
+            if (!systemAwake()) {
+                Ln.i("$TAG: System asleep, leave display power to the system")
+                poweredOff.set(false)
+                return
+            }
             Ln.i("$TAG: Emergency recovering screen power...")
             runCatching {
                 setDisplayPower(true)

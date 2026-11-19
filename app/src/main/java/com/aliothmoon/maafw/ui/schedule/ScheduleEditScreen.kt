@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.DatePicker
@@ -63,6 +64,7 @@ import com.aliothmoon.maafw.ui.components.CardExpand
 import com.aliothmoon.maafw.ui.components.ExpandableTipContent
 import com.aliothmoon.maafw.ui.components.ExpandableTipIcon
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
+import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.ITextField
@@ -118,6 +120,7 @@ fun ScheduleEditScreen(
         mutableStateOf(initial.intervalHours?.takeIf { it > 0 }?.toString().orEmpty())
     }
     var pickingTimeIndex by remember { mutableStateOf<Int?>(null) }
+    var confirmScreenPowerOff by remember { mutableStateOf(false) }
     var pickingStartDate by remember { mutableStateOf(false) }
     var pickingStartTime by remember { mutableStateOf(false) }
 
@@ -312,6 +315,15 @@ fun ScheduleEditScreen(
                     }
                 }
                 ScheduleToggleRow(
+                    label = stringResource(R.string.schedule_edit_hardware_screen_off),
+                    tip = stringResource(R.string.schedule_edit_hardware_screen_off_tip),
+                    checked = draft.hardwareScreenOff,
+                    // 打开先确认：屏幕全黑、要按电源键才亮，误开了会以为手机死机
+                    onCheckedChange = { on ->
+                        if (on) confirmScreenPowerOff = true else draft = draft.copy(hardwareScreenOff = false)
+                    },
+                )
+                ScheduleToggleRow(
                     label = stringResource(R.string.schedule_edit_close_app),
                     tip = stringResource(R.string.schedule_edit_close_app_tip),
                     // 与快捷选项的优先级容易踩坑，默认展开（对齐 MaaMeow）
@@ -326,6 +338,22 @@ fun ScheduleEditScreen(
                 )
             }
         }
+    }
+
+    if (confirmScreenPowerOff) {
+        MaaPromptDialog(
+            title = stringResource(R.string.schedule_edit_hardware_screen_off_confirm_title),
+            message = stringResource(R.string.schedule_edit_hardware_screen_off_confirm_message),
+            icon = Icons.Outlined.PowerSettingsNew,
+            confirmText = stringResource(R.string.dialog_confirm),
+            onConfirm = {
+                confirmScreenPowerOff = false
+                draft = draft.copy(hardwareScreenOff = true)
+            },
+            dismissText = stringResource(R.string.dialog_cancel),
+            onDismissRequest = { confirmScreenPowerOff = false },
+            dismissOnOutsideClick = true,
+        )
     }
 
     pickingTimeIndex?.let { index ->

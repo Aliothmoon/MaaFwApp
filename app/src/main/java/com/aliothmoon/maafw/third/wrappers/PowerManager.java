@@ -69,6 +69,11 @@ public final class PowerManager {
     }
 
     public boolean isScreenOn(int displayId) {
+        return Boolean.TRUE.equals(isScreenOnOrNull(displayId));
+    }
+
+    /** 反射失败返回 null，与灭屏区分开 */
+    public Boolean isScreenOnOrNull(int displayId) {
 
         try {
             Method method = getIsScreenOnMethod();
@@ -78,7 +83,7 @@ public final class PowerManager {
             return (boolean) method.invoke(manager);
         } catch (ReflectiveOperationException e) {
             Ln.e("Could not invoke method", e);
-            return false;
+            return null;
         }
     }
 

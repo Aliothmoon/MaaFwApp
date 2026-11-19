@@ -93,6 +93,9 @@ internal object HookOrder {
 
     /** 不改环境，排在四个环境挂载物之前：它们都要特权进程 */
     const val PRIVILEGED_CONNECT = -2
+
+    /** 连上之后、唤醒之前：唤醒之后再采，屏幕永远是亮的 */
+    const val IDLE_PROBE = -1
     const val AUTO_SLEEP = 0
     const val WAKE_UNLOCK = 10
     const val SCREEN_SAVER = 20
@@ -101,6 +104,9 @@ internal object HookOrder {
 
     /** 紧挨投递：倒计时期间用户还可能点开面板 */
     const val OVERLAY_CLEAR = 45
+
+    /** 受理之后最先做：倒计时早已走完，目标应用还没起来 */
+    const val SCREEN_POWER_OFF = 48
 
     /** 只是挂一个监听，排在最后，收尾时最先摘掉 */
     const val WATCHDOG_NOTICE = 50
@@ -224,6 +230,10 @@ class ScreenSaverHook(
         if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
         if (!settings.screenSaverEnabled.value) return EngageResult.Skipped()
 
+        // 这条定时规则改用关屏幕电源，由 ScreenPowerOffHook 接手；开始时设备在用的不关屏，屏保照盖
+        val powerOff = (ctx.trigger as? RunTrigger.Schedule)?.options?.hardwareScreenOff == true
+        if (powerOff && ctx.idleAtStart.get() == true) return EngageResult.Skipped()
+
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
         if (!screenSaver.show()) {
             ctx.journal.warn(ctx.executionId, uiTextOf(R.string.run_log_screen_saver_skipped))
@@ -267,11 +277,30 @@ class CloseTargetAppHook(
 }
 
 /**
- * 跑完自动上锁息屏
+ * 唤醒之前采「设备在不在用」，写进 [RunContext.idleAtStart]
  *
- * order 最小不是因为它先做事——engage 只采样。它要在**唤醒之前**读到屏幕状态，
- * 唤醒之后 isScreenOn 永远是 true，「用户本来就在用手机」就判不出来了
+ * 只采不改，只采定时触发：手动发起时人就在跟前。熄屏或锁屏都算没在用——没设锁屏的机器熄了屏也不上锁，
+ * 只看 keyguard 会把它判成在用
  */
+class IdleProbeHook(
+    private val servicePort: PrivilegedServicePort,
+    private val keyguardLocked: () -> Boolean,
+) : RunEnvHook {
+
+    override val id: String = "idle-probe"
+    override val anchor: Anchor = Anchor.BeforeDispatch
+    override val order: Int = HookOrder.IDLE_PROBE
+    override val gating: Boolean = false
+
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
+        val screenOn = servicePort.callConnecting("isScreenOn", true) { it.isScreenOn() }
+        ctx.idleAtStart.set(!screenOn || keyguardLocked())
+        return EngageResult.Skipped()
+    }
+}
+
+/** 跑完自动上锁息屏；「用户本来就在用手机」读 [RunContext.idleAtStart]，engage 时就捕进闭包 */
 class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
 
     override val id: String = "auto-sleep"
@@ -283,7 +312,7 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
         val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
         if (!options.autoSleepAfterTask) return EngageResult.Skipped()
 
-        val tookOverIdleDevice = !servicePort.callConnecting("isScreenOn", true) { it.isScreenOn() }
+        val tookOverIdleDevice = ctx.idleAtStart.get() == true
         val skipIfAwake = options.skipAutoSleepIfAwake
         // 两个采样值都在这里捕进闭包：收尾时再去读，读到的是那时的屏幕状态与开关，不是本轮开始时的
         return EngageResult.Engaged(Release { reason ->
@@ -299,6 +328,37 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
                 }
             }
         })
+    }
+}
+
+/**
+ * 定时规则开了「关闭屏幕电源」：受理之后（倒计时早已走完）关掉物理屏，只关不恢复，代替屏保
+ *
+ * 只在后台模式、且本轮开始时设备没在用才关：人正拿着手机就把屏关了说不过去。面板关着时系统仍算亮屏，
+ * 按电源键由系统点亮；特权进程退出时系统还醒着才兜底点亮。结果如实落进触发日志的步骤
+ */
+class ScreenPowerOffHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
+
+    override val id: String = "screen-power-off"
+    override val anchor: Anchor = Anchor.AfterAccepted
+    override val order: Int = HookOrder.SCREEN_POWER_OFF
+    override val gating: Boolean = false
+
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
+        if (!options.hardwareScreenOff || ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
+        if (ctx.idleAtStart.get() != true) {
+            ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_screen_power_off_skipped_awake))
+            return EngageResult.Skipped()
+        }
+        if (!servicePort.callOrDefault("setDisplayPowerSync", false) { it.setDisplayPowerSync(false) }) {
+            val reason = uiTextOf(R.string.run_log_screen_power_off_failed)
+            ctx.journal.warn(ctx.executionId, reason)
+            return EngageResult.Failed(reason)
+        }
+        ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_screen_power_off))
+        // 不恢复：同手动熄屏挂机，一轮跑完屏幕仍关着，由用户按电源键点亮
+        return EngageResult.Skipped()
     }
 }
 

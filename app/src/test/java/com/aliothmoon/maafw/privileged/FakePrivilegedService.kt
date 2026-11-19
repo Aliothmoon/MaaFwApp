@@ -168,6 +168,15 @@ open class FakePrivilegedService : RemoteService {
     override fun getVirtualDisplayFlagTier(): Int = flagTier
     override fun dumpThreads(): String = ""
 
+    var displayPowerSyncResult: Boolean = true
+    var displayPowerSyncCalls: MutableList<Boolean> = mutableListOf()
+        private set
+
+    override fun setDisplayPowerSync(on: Boolean): Boolean {
+        displayPowerSyncCalls += on
+        return displayPowerSyncResult
+    }
+
     override fun saveDisplayFrame(path: String?): Boolean {
         savedFramePaths += path.orEmpty()
         return saveDisplayFrameResult

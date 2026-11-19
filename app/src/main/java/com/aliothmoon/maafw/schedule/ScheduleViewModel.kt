@@ -46,6 +46,7 @@ private data class ConfigurationSnapshot(
 private data class HealthSettings(
     val backgroundMode: Boolean,
     val screenSaverEnabled: Boolean,
+    val anyRuleUsesScreenSaver: Boolean,
     val wakeUnlockType: String,
     val wakeCredential: String,
     val hasGesture: Boolean,
@@ -80,12 +81,14 @@ class ScheduleViewModel(
 
     private val healthSettings: Flow<HealthSettings> = combine(
         appSettings.runMode,
-        appSettings.screenSaverEnabled,
+        combine(appSettings.screenSaverEnabled, store.strategies) { saver, rules ->
+            saver to rules.any { it.enabled && !it.hardwareScreenOff }
+        },
         appSettings.wakeUnlockType,
         appSettings.wakeCredential,
         gestureStore.gesture,
-    ) { runMode, screenSaver, unlockType, credential, gesture ->
-        HealthSettings(runMode == RunMode.BACKGROUND, screenSaver, unlockType, credential, gesture != null)
+    ) { runMode, (screenSaver, anyRuleUsesSaver), unlockType, credential, gesture ->
+        HealthSettings(runMode == RunMode.BACKGROUND, screenSaver, anyRuleUsesSaver, unlockType, credential, gesture != null)
     }
 
     private val health: Flow<HealthState> = combine(
@@ -104,6 +107,7 @@ class ScheduleViewModel(
             overlayNeeded = ScheduleHealthLogic.overlayNeeded(
                 settings.backgroundMode,
                 settings.screenSaverEnabled,
+                settings.anyRuleUsesScreenSaver,
             ),
             wakeCredentialMissing = ScheduleHealthLogic.wakeCredentialMissing(
                 unlockType = settings.wakeUnlockType,
