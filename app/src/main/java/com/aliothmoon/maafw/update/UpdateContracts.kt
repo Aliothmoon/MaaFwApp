@@ -173,11 +173,6 @@ sealed interface CdkVerification {
     data object Unverified : CdkVerification
 }
 
-/** 能校验 CDK 的源（只有 Mirror酱）；检查与解析之外的第三件事，不进 [UpdateSourceClient] */
-interface CdkVerifier {
-    suspend fun verifyCdk(request: CdkVerifyRequest): CdkVerification
-}
-
 /**
  * 每源一个实现；[source] 是路由键，只被 [UpdateService] 消费，实现自身不读 request.source。
  * 「检查匿名、CDK 只在解析带上」的约束长在两个请求类型上，与实现无关

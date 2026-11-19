@@ -66,6 +66,8 @@ class ProcessServiceConnectorBehaviorTest {
 
         override fun wrapCommand(launcherPath: String, invocation: String): String = invocation
 
+        override fun run(command: String): List<String> = emptyList()
+
         override fun spawn(command: String): SpawnHandle? {
             spawnCalls.incrementAndGet()
             onSpawn()

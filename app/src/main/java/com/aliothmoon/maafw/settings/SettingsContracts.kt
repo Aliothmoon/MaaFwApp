@@ -8,7 +8,7 @@ import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
-import com.aliothmoon.maafw.update.UpdateCheckFailure
+import com.aliothmoon.maafw.update.CdkVerification
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
 
@@ -65,13 +65,7 @@ sealed interface CdkStatus {
     /** 没填，或刚改过还没开始查 */
     data object None : CdkStatus
     data object Checking : CdkStatus
-
-    /** [expiresAtSec] 为 Unix 秒，服务端没给时为 null */
-    data class Valid(val expiresAtSec: Long?) : CdkStatus
-    data class Rejected(val reason: UpdateCheckFailure) : CdkStatus
-
-    /** 网络或服务端问题，判不出对错 */
-    data object Unverified : CdkStatus
+    data class Done(val result: CdkVerification) : CdkStatus
 }
 
 /** 还剩几天到期（不足一天算一天）；已过期为 0，没有到期时间为 null */

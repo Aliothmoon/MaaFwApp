@@ -10,7 +10,6 @@ import com.aliothmoon.maafw.service.AccessibilityHelperService
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.settings.AppSettingsManager
-import com.aliothmoon.maafw.util.RomInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -34,6 +33,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.aliothmoon.maafw.runner.XiaomiAdbInput
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -165,7 +165,7 @@ class PermissionManager(
      */
     private suspend fun enableXiaomiAdbInputIfRoot() {
         if (accessPort.state.value.configuredBackend != RemoteBackend.ROOT) return
-        if (!RomInfo.isXiaomi || RomInfo.systemProperty("persist.security.adbinput") == "1") return
+        if (!XiaomiAdbInput.isRestricted()) return
         val enabled = MiuiAdbInputEnabler.enable()
         Timber.w("Xiaomi USB debugging (Security settings) is off and blocks shell input; enabled with root: %s", enabled)
     }

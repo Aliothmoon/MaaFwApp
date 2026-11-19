@@ -27,6 +27,7 @@ import timber.log.Timber
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeoutException
+import com.aliothmoon.maafw.util.userIdOf
 
 /**
  * 自研 starter 进程路径的公共基座：launcher 拉起 app_process，
@@ -308,8 +309,7 @@ abstract class ProcessServiceConnectorBackend(
  * 主用户保持原名，升级前的残留照清
  */
 internal fun elevatedProcessName(packageName: String, suffix: String, uid: Int): String {
-    val userId = uid / PER_USER_RANGE
+    val userId = userIdOf(uid)
     return if (userId == 0) "$packageName:$suffix" else "$packageName:${suffix}_u$userId"
 }
 
-private const val PER_USER_RANGE = 100_000

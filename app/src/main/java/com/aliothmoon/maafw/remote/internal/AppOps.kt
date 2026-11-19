@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.remote.internal
 
 import android.app.AppOpsManager
-import android.os.Build
 import com.aliothmoon.maafw.util.RomInfo
 import com.aliothmoon.maafw.third.Ln
 import java.lang.reflect.InvocationTargetException
@@ -36,17 +35,14 @@ object AppOps {
 
     val SCHEDULE = arrayOf(SCHEDULE_EXACT_ALARM, MIUI_AUTO_START, MIUI_BACKGROUND_START_ACTIVITY)
 
-    private val isXiaomi by lazy { RomInfo.isXiaomi }
-
     private val strOpToOp by lazy {
         runCatching { AppOpsManager::class.java.getMethod("strOpToOp", String::class.java) }
             .onFailure { Ln.w("AppOps: strOpToOp unavailable: $it") }
             .getOrNull()
     }
 
-    private fun aosp(opStr: String, uidScoped: Boolean = false, maxSdk: Int = Int.MAX_VALUE) =
+    private fun aosp(opStr: String, uidScoped: Boolean = false) =
         AppOp(opStr.removePrefix("android:"), uidScoped) {
-            if (Build.VERSION.SDK_INT > maxSdk) return@AppOp null
             try {
                 strOpToOp?.invoke(null, opStr) as Int?
             } catch (e: InvocationTargetException) {
@@ -56,5 +52,5 @@ object AppOps {
             }
         }
 
-    private fun xiaomi(label: String, code: Int) = AppOp(label) { code.takeIf { isXiaomi } }
+    private fun xiaomi(label: String, code: Int) = AppOp(label) { code.takeIf { RomInfo.isXiaomi } }
 }

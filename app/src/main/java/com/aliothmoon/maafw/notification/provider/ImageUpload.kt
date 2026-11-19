@@ -22,6 +22,19 @@ internal fun discordMultipart(content: String, image: NotificationImage): Multip
  * 文字和图片同一次请求发出的渠道用：附件被拒就退回纯文字
  * 网络异常默认不重发，对端可能其实已经收到
  */
+/** 图片单独发一条的渠道用：文字发成了才补图，图发不出去不影响结果 */
+internal suspend fun NotificationProvider.sendThenAttach(
+    title: String,
+    content: String,
+    attach: suspend () -> Unit,
+): NotificationSendResult {
+    val result = send(title, content)
+    if (result is NotificationSendResult.Success) {
+        runCatching { attach() }.onFailure { Timber.e(it, "%s image send failed", id) }
+    }
+    return result
+}
+
 internal suspend fun NotificationProvider.sendWithTextFallback(
     title: String,
     content: String,

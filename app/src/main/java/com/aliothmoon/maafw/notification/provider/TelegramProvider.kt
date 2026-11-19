@@ -20,11 +20,8 @@ class TelegramProvider(
     override val supportsImage = true
 
     /** sendPhoto 的 caption 只有 1024 字，放不下日志，文字和图片分两条发 */
-    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult {
-        val result = send(title, content)
-        if (result is NotificationSendResult.Success) sendPhoto(image)
-        return result
-    }
+    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        sendThenAttach(title, content) { sendPhoto(image) }
 
     private suspend fun sendPhoto(image: NotificationImage) {
         val settings = settingsManager.current()

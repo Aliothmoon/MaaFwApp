@@ -197,12 +197,12 @@ internal fun RunLogPanel(
                 items(rows, key = { it.key }, contentType = { it.contentType }) { row ->
                     when (row) {
                         is RunLogHeaderRow -> MaaRunLogTaskHeader(
-                            title = row.group.title.orEmpty(),
+                            title = row.title,
                             status = row.status,
-                            elapsed = row.group.elapsedMillis?.let(::elapsedText),
-                            warnings = row.group.warnings,
+                            elapsed = row.elapsedMillis?.let(::elapsedText),
+                            warnings = row.warnings,
                             expanded = row.expanded,
-                            expandable = row.group.lines.isNotEmpty(),
+                            expandable = row.expandable,
                             style = cardStyle,
                             closesCard = row.closesCard,
                             onToggle = { toggled[row.startId] = !row.expanded },

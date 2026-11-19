@@ -37,8 +37,15 @@ internal sealed interface RunLogPanelRow {
     val contentType: Int
 }
 
+/**
+ * 只放表头要画的值，不放 [RunLogGroup]：它没有 equals，每批日志都是新实例，
+ * 放进来的话表头每批都判不等、跟着重组
+ */
 internal data class RunLogHeaderRow(
-    val group: RunLogGroup<RunLogEntry>,
+    val title: String,
+    val elapsedMillis: Long?,
+    val warnings: Int,
+    val expandable: Boolean,
     val startId: Long,
     val status: RunLogTaskStatus,
     val expanded: Boolean,
@@ -83,7 +90,16 @@ internal fun buildRunLogRows(
         val isLast = index == groups.lastIndex
         val expanded = toggled[start.id] ?: group.expandedByDefault(running, isLast)
         val showLines = expanded && group.lines.isNotEmpty()
-        rows += RunLogHeaderRow(group, start.id, group.status(running, isLast), expanded, closesCard = !showLines)
+        rows += RunLogHeaderRow(
+            title = group.title.orEmpty(),
+            elapsedMillis = group.elapsedMillis,
+            warnings = group.warnings,
+            expandable = group.lines.isNotEmpty(),
+            startId = start.id,
+            status = group.status(running, isLast),
+            expanded = expanded,
+            closesCard = !showLines,
+        )
         if (showLines) addLines(group.lines, inCard = true)
     }
     return rows

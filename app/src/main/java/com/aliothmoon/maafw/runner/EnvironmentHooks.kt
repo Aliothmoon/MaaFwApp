@@ -134,6 +134,14 @@ internal object HookOrder {
     const val RUN_DURATION_LIMIT = 60
 }
 
+/** 规则开了关屏幕电源、且是后台模式；真关还要开始时设备没在用，见 [screenPowerOffPlanned] */
+private val RunContext.wantsScreenPowerOff: Boolean
+    get() = (trigger as? RunTrigger.Schedule)?.options?.hardwareScreenOff == true && runMode == RunMode.BACKGROUND
+
+/** 本轮会关屏幕电源：关屏、屏保让位、收起前先上锁都按这一条判 */
+internal val RunContext.screenPowerOffPlanned: Boolean
+    get() = wantsScreenPowerOff && deviceAtStart.get()?.idle == true
+
 /**
  * 投递前先把特权进程连上
  *
@@ -268,9 +276,8 @@ class ScreenSaverHook(
         if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
         if (!settings.screenSaverEnabled.value) return EngageResult.Skipped()
 
-        // 这条定时规则改用关屏幕电源，由 ScreenPowerOffHook 接手；开始时设备在用的不关屏，屏保照盖
-        val powerOff = (ctx.trigger as? RunTrigger.Schedule)?.options?.hardwareScreenOff == true
-        if (powerOff && ctx.deviceAtStart.get()?.idle == true) return EngageResult.Skipped()
+        // 本轮由 ScreenPowerOffHook 关屏；开始时设备在用的不关屏，屏保照盖
+        if (ctx.screenPowerOffPlanned) return EngageResult.Skipped()
 
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
         if (!screenSaver.show()) {
@@ -369,10 +376,8 @@ class CollapseAfterRunHook(
                 Timber.i("collapse skipped: another run is waiting")
                 return@Release
             }
-            // 关过屏幕电源而系统还醒着：特权进程一退面板就被点亮，先上锁休眠。与 ScreenPowerOffHook 同一判据
-            val panelOff = options.hardwareScreenOff && ctx.runMode == RunMode.BACKGROUND &&
-                ctx.deviceAtStart.get()?.idle == true
-            if (panelOff) {
+            // 关过屏幕电源而系统还醒着：特权进程一退面板就被点亮，先上锁休眠
+            if (ctx.screenPowerOffPlanned) {
                 servicePort.callOrDefault("lockAndSleep", WakeUnlockResult.IPC_FAILED) { it.lockAndSleep() }
             }
             Timber.i("collapsing after run: unbinding the privileged process")
@@ -427,9 +432,8 @@ class ScreenPowerOffHook(private val servicePort: PrivilegedServicePort) : RunEn
     override val gating: Boolean = false
 
     override suspend fun engage(ctx: RunContext): EngageResult {
-        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
-        if (!options.hardwareScreenOff || ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
-        if (ctx.deviceAtStart.get()?.idle != true) {
+        if (!ctx.wantsScreenPowerOff) return EngageResult.Skipped()
+        if (!ctx.screenPowerOffPlanned) {
             ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_screen_power_off_skipped_awake))
             return EngageResult.Skipped()
         }

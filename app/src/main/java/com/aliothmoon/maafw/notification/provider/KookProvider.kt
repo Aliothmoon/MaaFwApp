@@ -23,13 +23,8 @@ class KookProvider(
 
     override val supportsImage = true
 
-    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult {
-        val result = send(title, content)
-        if (result is NotificationSendResult.Success) {
-            runCatching { sendImage(image) }.onFailure { Timber.e(it, "KOOK image send failed") }
-        }
-        return result
-    }
+    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        sendThenAttach(title, content) { sendImage(image) }
 
     private suspend fun sendImage(image: NotificationImage) {
         val settings = settingsManager.current()

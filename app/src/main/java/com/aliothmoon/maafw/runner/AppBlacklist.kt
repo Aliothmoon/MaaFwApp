@@ -14,9 +14,8 @@ sealed interface BlacklistScan {
     /** 特权进程没连着、旧版特权进程、读不到任务表：放行 */
     data object Unknown : BlacklistScan
 
-    data class Clear(val packages: List<String>) : BlacklistScan
-
-    data class Hit(val packageName: String, val packages: List<String>) : BlacklistScan
+    /** 读到了主屏上的可见应用；[hit] 是其中命中名单的那个 */
+    data class Visible(val packages: List<String>, val hit: String?) : BlacklistScan
 }
 
 /**
@@ -51,11 +50,10 @@ class AppBlacklist(
             it.getVisiblePackages(Display.DEFAULT_DISPLAY).orEmpty()
         }
         if (packages.isNullOrEmpty()) return BlacklistScan.Unknown
-        val hit = packages.firstOrNull { it in names } ?: return BlacklistScan.Clear(packages)
-        return BlacklistScan.Hit(hit, packages)
+        return BlacklistScan.Visible(packages, hit = packages.firstOrNull { it in names })
     }
 
-    fun hitReason(hit: BlacklistScan.Hit): UiText = uiTextOf(R.string.run_blacklist_hit, appLabel(hit.packageName))
+    fun hitReason(packageName: String): UiText = uiTextOf(R.string.run_blacklist_hit, appLabel(packageName))
 
     private companion object {
         val PROBE_TIMEOUT = 3.seconds
@@ -78,9 +76,10 @@ class AppBlacklistPrecheck(
     override suspend fun evaluate(ctx: RunContext): Verdict {
         if (!blacklist.applies(ctx) || servicePort.serviceOrNull() == null) return Verdict.Pass
         if (!blacklist.inUseNow()) return Verdict.Pass
-        val scan = blacklist.scan() as? BlacklistScan.Hit ?: return Verdict.Pass
+        val scan = blacklist.scan() as? BlacklistScan.Visible ?: return Verdict.Pass
+        val hit = scan.hit ?: return Verdict.Pass
         return Verdict.Block(
-            uiTextOf(R.string.run_blacklist_blocked, blacklist.hitReason(scan), scan.packages.joinToString(", ")),
+            uiTextOf(R.string.run_blacklist_blocked, blacklist.hitReason(hit), scan.packages.joinToString(", ")),
         )
     }
 
@@ -113,15 +112,12 @@ class AppBlacklistHook(
             return EngageResult.Skipped()
         }
         val scan = blacklist.scan()
-        ctx.journal.info(
-            ctx.executionId,
-            when (scan) {
-                BlacklistScan.Unknown -> uiTextOf(R.string.run_log_blacklist_unknown)
-                is BlacklistScan.Clear -> uiTextOf(R.string.run_log_visible_apps, scan.packages.joinToString(", "))
-                is BlacklistScan.Hit -> uiTextOf(R.string.run_log_visible_apps, scan.packages.joinToString(", "))
-            },
-        )
-        return if (scan is BlacklistScan.Hit) EngageResult.Failed(blacklist.hitReason(scan)) else EngageResult.Skipped()
+        if (scan !is BlacklistScan.Visible) {
+            ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_blacklist_unknown))
+            return EngageResult.Skipped()
+        }
+        ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_visible_apps, scan.packages.joinToString(", ")))
+        return scan.hit?.let { EngageResult.Failed(blacklist.hitReason(it)) } ?: EngageResult.Skipped()
     }
 
     companion object {

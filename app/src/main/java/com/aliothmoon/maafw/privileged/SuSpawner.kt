@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.privileged
 
 import com.topjohnwu.superuser.Shell
-import timber.log.Timber
 
 /**
  * libsu 共享 root shell 拉起：必须后台化，前台会阻塞整个 shell
@@ -26,18 +25,5 @@ object SuSpawner : ProcessSpawner {
         return null
     }
 
-    override fun killResidual(processName: String) {
-        runCatching { Shell.cmd(killByNameCommand(processName)).exec() }
-            .onFailure { Timber.w(it, "kill residual %s failed", processName) }
-    }
-
-    override fun findProcesses(processName: String): List<ResidualProcess> =
-        runCatching { parseProcesses(Shell.cmd(findProcessesCommand(processName)).exec().out) }
-            .onFailure { Timber.w(it, "find %s failed", processName) }
-            .getOrDefault(emptyList())
-
-    override fun forceKill(pids: List<Int>) {
-        runCatching { Shell.cmd(forceKillCommand(pids)).exec() }
-            .onFailure { Timber.w(it, "force kill %s failed", pids) }
-    }
+    override fun run(command: String): List<String> = Shell.cmd(command).exec().out
 }

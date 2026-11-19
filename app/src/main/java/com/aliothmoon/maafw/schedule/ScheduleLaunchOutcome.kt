@@ -66,24 +66,14 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
     is RunLaunchResult.Rejected ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason, ScheduleNotice.SKIPPED)
 
-    // 用户正用着名单里的应用：是本来就要的跳过，不算失败
-    is RunLaunchResult.Blocked -> if (source.isAppBlacklist) {
+    is RunLaunchResult.Blocked ->
         ScheduleLaunchOutcome(
             TriggerResult.FAILED_START,
-            TriggerFailureReason.BLACKLISTED,
-            reason,
-            ScheduleNotice.SKIPPED,
-            blockedBy = (source as? BlockSource.Precheck)?.id,
-        )
-    } else {
-        ScheduleLaunchOutcome(
-            TriggerResult.FAILED_START,
-            TriggerFailureReason.BLOCKED,
+            if (source.isAppBlacklist) TriggerFailureReason.BLACKLISTED else TriggerFailureReason.BLOCKED,
             reason,
             source.notice(),
             blockedBy = (source as? BlockSource.Precheck)?.id,
         )
-    }
 
     is RunLaunchResult.NeedsConfirmation ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt, ScheduleNotice.FAILED)
@@ -95,7 +85,8 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
 private fun failed(reason: TriggerFailureReason) =
     ScheduleLaunchOutcome(TriggerResult.FAILED_START, reason, notice = ScheduleNotice.FAILED)
 
-private fun BlockSource.notice(): ScheduleNotice? = when (this) {
+// 用户正用着名单里的应用：是本来就要的跳过，不算失败
+private fun BlockSource.notice(): ScheduleNotice? = if (isAppBlacklist) ScheduleNotice.SKIPPED else when (this) {
     // 另一发正在投递：与已有一轮在跑同一回事
     BlockSource.Busy -> ScheduleNotice.SKIPPED
     is BlockSource.Hook -> when {

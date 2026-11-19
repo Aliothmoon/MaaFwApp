@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.Bitmap
 import android.graphics.drawable.Icon
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
@@ -120,6 +121,7 @@ class RunNotificationFactory(
     ): Notification {
         ensureChannels()
         val style = appSettings.liveStyle.value
+        val trackerBitmap = trackerIcons.icon.value
         val barColor = style.progressColor ?: content.barColor
         val island = backend == LiveBackend.HYPER_ISLAND
         val builder = NotificationCompat.Builder(appContext, if (island) ISLAND_CHANNEL_ID else RUN_CHANNEL_ID)
@@ -138,13 +140,13 @@ class RunNotificationFactory(
         if (island) {
             builder.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             // 岛上状态栏图标跟随设置，实时更新与标准通知栏保持原来的小图标
-            customIconCompat()?.let(builder::setSmallIcon)
-            runCatching { islandExtras(content, style, notifyId, firstFloat) }
+            trackerBitmap?.let { builder.setSmallIcon(IconCompat.createWithBitmap(it)) }
+            runCatching { islandExtras(content, style, trackerBitmap, notifyId, firstFloat) }
                 .onFailure { Timber.e(it, "Failed to build HyperOS focus extras") }
                 .getOrNull()
                 ?.let(builder::addExtras)
         } else {
-            builder.setSilent(true).setStyle(progressStyle(content, barColor))
+            builder.setSilent(true).setStyle(progressStyle(content, barColor, trackerBitmap))
             if (backend == LiveBackend.LIVE_UPDATE) {
                 builder.setRequestPromotedOngoing(manager.canRequestPromotedOngoing())
                 style.chipText(content)?.let(builder::setShortCriticalText)
@@ -153,26 +155,25 @@ class RunNotificationFactory(
         return builder.build()
     }
 
-    private fun progressStyle(content: RunNotificationContent, barColor: Int): NotificationCompat.ProgressStyle {
+    /** [trackerBitmap] 为 null 是 DEFAULT，用圆点游标 */
+    private fun progressStyle(
+        content: RunNotificationContent,
+        barColor: Int,
+        trackerBitmap: Bitmap?,
+    ): NotificationCompat.ProgressStyle {
         val style = NotificationCompat.ProgressStyle()
             .setStyledByProgress(true)
             .setProgressIndeterminate(content.indeterminate)
-            .setProgressTrackerIcon(trackerIconCompat())
+            .setProgressTrackerIcon(
+                trackerBitmap?.let(IconCompat::createWithBitmap)
+                    ?: IconCompat.createWithResource(appContext, R.drawable.ic_progress_tracker),
+            )
             .addProgressSegment(
                 NotificationCompat.ProgressStyle.Segment(RunProgressSnapshots.PROGRESS_MAX).setColor(barColor),
             )
         if (!content.indeterminate) style.setProgress(content.progress)
         return style
     }
-
-    /** DEFAULT 为 null，由调用方用各自的默认图 */
-    private fun customIconCompat(): IconCompat? = trackerIcons.bitmapOrNull()?.let(IconCompat::createWithBitmap)
-
-    private fun trackerIconCompat(): IconCompat =
-        customIconCompat() ?: IconCompat.createWithResource(appContext, R.drawable.ic_progress_tracker)
-
-    /** DEFAULT 为 null，岛沿用应用图标 */
-    private fun trackerIcon(): Icon? = trackerIcons.bitmapOrNull()?.let(Icon::createWithBitmap)
 
     /**
      * 焦点通知 V3 模板
@@ -183,6 +184,8 @@ class RunNotificationFactory(
     private fun islandExtras(
         frame: RunNotificationContent,
         style: LiveStyle,
+        /** null 是 DEFAULT，岛沿用应用图标 */
+        trackerBitmap: Bitmap?,
         notifyId: Int,
         firstFloat: Boolean,
     ): Bundle {
@@ -196,7 +199,7 @@ class RunNotificationFactory(
         val progressColor = style.progressColorHex ?: PROGRESS_COLOR
         return FocusNotification.buildV3 {
             val appPic = createPicture(PIC_APP, appIcon)
-            val capsulePic = createPicture(PIC_CAPSULE, trackerIcon() ?: appIcon)
+            val capsulePic = createPicture(PIC_CAPSULE, trackerBitmap?.let(Icon::createWithBitmap) ?: appIcon)
             business = BUSINESS_PROGRESS
             this.notifyId = notifyId.toString()
             updatable = true

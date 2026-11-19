@@ -406,7 +406,7 @@ class SettingsViewModelTest {
         assertEquals("cdk-1", verified.single().cdk)
         assertEquals("mirror-rid", verified.single().mirrorchyanRid)
         val panel = latestPanel(viewModel)
-        assertEquals(CdkStatus.Valid(1_900_000_000L), panel.cdkStatus)
+        assertEquals(CdkStatus.Done(CdkVerification.Valid(1_900_000_000L)), panel.cdkStatus)
         assertNull(panel.updatePrompt)
         assertNull(panel.errorPrompt)
 
@@ -433,7 +433,7 @@ class SettingsViewModelTest {
         viewModel.onIntent(SettingsIntent.VerifyCdk)
         advanceUntilIdle()
 
-        assertEquals(CdkStatus.Valid(null), latestPanel(viewModel).cdkStatus)
+        assertEquals(CdkStatus.Done(CdkVerification.Valid(null)), latestPanel(viewModel).cdkStatus)
     }
 
     @Test

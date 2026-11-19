@@ -138,21 +138,7 @@ fun MaaCard(
             ) {
                 // 动画状态放在 chevron 内部：不可折叠的卡片压根不组合它，也就不必付一个
                 // Animatable 与常驻协程（全仓 24 个调用点里只有 8 个可折叠）
-                val chevron: @Composable () -> Unit = {
-                    val rotation by animateFloatAsState(
-                        targetValue = if (expanded) 180f else 0f,
-                        animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
-                        label = "chevron",
-                    )
-                    Icon(
-                        imageVector = MaaIcons.ChevronDown,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .size(MaaDesignTokens.IconSize.sm)
-                            .rotate(rotation),
-                    )
-                }
+                val chevron: @Composable () -> Unit = { MaaExpandChevron(expanded) }
                 when {
                     // trailing 已占住表头右侧，此时只有箭头本身可点，避免与开关抢同一片区域
                     trailing != null -> MaaLabeledControlRow(
@@ -708,4 +694,22 @@ fun MaaToneBadge(
             color = tone.content,
         )
     }
+}
+
+/** 折叠区块的展开箭头：收起朝下，展开转 180° */
+@Composable
+fun MaaExpandChevron(expanded: Boolean, modifier: Modifier = Modifier) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
+        label = "chevron",
+    )
+    Icon(
+        imageVector = MaaIcons.ChevronDown,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+            .size(MaaDesignTokens.IconSize.sm)
+            .rotate(rotation),
+    )
 }

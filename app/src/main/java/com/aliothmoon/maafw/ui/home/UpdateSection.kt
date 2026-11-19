@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.ui.home
 
+import com.aliothmoon.maafw.update.CdkVerification
 import com.aliothmoon.maafw.update.UpdateCheckFailure
 import com.aliothmoon.maafw.settings.cdkDaysLeft
 import com.aliothmoon.maafw.settings.CDK_EXPIRY_WARNING_DAYS
@@ -308,17 +309,20 @@ private fun CdkInputBlock(
 @Composable
 private fun CdkStatusLine(status: CdkStatus) {
     val palette = MaaTheme.palette
-    val (text, color) = when (status) {
+    val result = when (status) {
         CdkStatus.None -> return
-        CdkStatus.Checking ->
-            stringResource(R.string.settings_update_cdk_checking) to MaterialTheme.colorScheme.onSurfaceVariant
+        CdkStatus.Checking -> null
+        is CdkStatus.Done -> status.result
+    }
+    val (text, color) = when (result) {
+        null -> stringResource(R.string.settings_update_cdk_checking) to MaterialTheme.colorScheme.onSurfaceVariant
 
-        CdkStatus.Unverified ->
+        CdkVerification.Unverified ->
             stringResource(R.string.settings_update_cdk_unverified) to MaterialTheme.colorScheme.onSurfaceVariant
 
-        is CdkStatus.Rejected -> status.reason.message.asString() to MaterialTheme.colorScheme.error
+        is CdkVerification.Rejected -> result.reason.message.asString() to MaterialTheme.colorScheme.error
 
-        is CdkStatus.Valid -> when (val days = cdkDaysLeft(status.expiresAtSec, System.currentTimeMillis())) {
+        is CdkVerification.Valid -> when (val days = cdkDaysLeft(result.expiresAtSec, System.currentTimeMillis())) {
             null -> stringResource(R.string.settings_update_cdk_valid_no_expiry) to palette.success.content
             0 -> UpdateCheckFailure.CDK_EXPIRED.message.asString() to MaterialTheme.colorScheme.error
             else -> pluralStringResource(R.plurals.settings_update_cdk_days_left, days, days) to

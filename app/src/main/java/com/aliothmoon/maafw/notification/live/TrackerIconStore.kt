@@ -41,7 +41,6 @@ class TrackerIconStore(
         .mapLatest { (type, path) -> load(type, path) }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    fun bitmapOrNull(): Bitmap? = icon.value
 
     /** 导入选中的图片；不是图片或复制失败返回 false，设置不变 */
     suspend fun importCustom(uri: Uri): Boolean = withContext(MaaDispatchers.IO) {

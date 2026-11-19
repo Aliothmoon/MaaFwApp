@@ -68,10 +68,17 @@ object AppLocales : LocaleController {
     @Volatile
     private var appContext: Context? = null
 
+    /** 备份在内存里的那份，每行日志都要渲染，不能每次读 prefs；只在 32 及以下有值 */
+    @Volatile
+    private var backupTag: String? = null
+
     /** Application.onCreate 里最先调：之后渲染的通知、悬浮窗才是应用语言 */
     fun init(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
         appContext = context.applicationContext
-        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).also {
+            backupTag = it.getString(KEY_TAG, null)
+        }
         syncApplicationResources(context)
     }
 
@@ -79,7 +86,7 @@ object AppLocales : LocaleController {
     fun currentTag(): String? = AppLanguagePolicy.resolveTag(
         sdkInt = Build.VERSION.SDK_INT,
         androidx = AppCompatDelegate.getApplicationLocales()[0]?.toLanguageTag(),
-        backup = prefs?.getString(KEY_TAG, null),
+        backup = backupTag,
     )
 
     fun currentProjectTag(): String = AppLanguagePolicy.projectLocaleTag(
@@ -89,7 +96,7 @@ object AppLocales : LocaleController {
 
     /** null 恢复跟随系统；已启动 Activity 会重建 */
     override fun apply(tag: String?) {
-        prefs?.edit { putString(KEY_TAG, tag.orEmpty()) }
+        saveBackup(tag.orEmpty())
         // 必须先于 setApplicationLocales：32 及以下 appcompat 把 Application 的 Configuration 当「系统语言」，
         // 跟随系统时就拿它当结果。先换的话它读到的还是上一种语言，切回跟随系统会停在那一种
         appContext?.let { syncApplicationResources(it, tag) }
@@ -106,8 +113,13 @@ object AppLocales : LocaleController {
     fun backupFromAndroidx() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
         val tag = AppCompatDelegate.getApplicationLocales()[0]?.toLanguageTag().orEmpty()
+        if (backupTag != tag) saveBackup(tag)
+    }
+
+    private fun saveBackup(tag: String) {
         val store = prefs ?: return
-        if (store.getString(KEY_TAG, null) != tag) store.edit { putString(KEY_TAG, tag) }
+        backupTag = tag
+        store.edit { putString(KEY_TAG, tag) }
     }
 
     /**
@@ -115,8 +127,14 @@ object AppLocales : LocaleController {
      * Service 的通知、悬浮窗、屏保、Toast、通知渠道名都会露系统语言。系统配置一变就被重置回去，
      * 所以 onConfigurationChanged 里也要再同步一次
      */
+    fun syncApplicationResources(context: Context) {
+        // 先判版本再读语言：33 起读一次就是一趟 LocaleManager IPC，结果又用不上
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+        syncApplicationResources(context, currentTag())
+    }
+
     @Suppress("DEPRECATION")
-    fun syncApplicationResources(context: Context, tag: String? = currentTag()) {
+    private fun syncApplicationResources(context: Context, tag: String?) {
         val res = context.applicationContext.resources
         val target = AppLanguagePolicy.localesToSync(
             sdkInt = Build.VERSION.SDK_INT,

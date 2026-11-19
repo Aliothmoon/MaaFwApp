@@ -8,6 +8,8 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.provider.NotificationProvider
 import com.aliothmoon.maafw.notification.provider.NotificationSendResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -50,21 +52,20 @@ class ExternalNotificationService(
 
         val prefixedTitle = "$TITLE_PREFIX $title"
 
-        for (id in enabledIds) {
-            val provider = providers[id]
-            if (provider == null) {
-                // 渠道被下架或 id 改过，盘上留着旧值；跳过而不是报错，别让一个陈旧条目挡住其余渠道
-                Timber.w("unknown notification provider: %s", id)
-                continue
-            }
-            val result = runCatching {
-                if (image != null) provider.send(prefixedTitle, content, image) else provider.send(prefixedTitle, content)
-            }
-                .getOrElse {
-                    Timber.e(it, "notification provider %s threw", id)
-                    NotificationSendResult.Transient(uiTextOf(R.string.notification_err_network))
+        // 各渠道并发发：一个慢或超时不该拖住后面的，带结束截图时每家还要传一两百 KB。结果仍按启用顺序报
+        val sent = coroutineScope {
+            enabledIds.mapNotNull { id ->
+                val provider = providers[id]
+                if (provider == null) {
+                    // 渠道被下架或 id 改过，盘上留着旧值；跳过而不是报错，别让一个陈旧条目挡住其余渠道
+                    Timber.w("unknown notification provider: %s", id)
+                    return@mapNotNull null
                 }
+                id to async { sendOne(id, provider, prefixedTitle, content, image) }
+            }.map { (id, result) -> id to result.await() }
+        }
 
+        for ((id, result) in sent) {
             when (result) {
                 NotificationSendResult.Success ->
                     if (isTest) {
@@ -85,6 +86,19 @@ class ExternalNotificationService(
                 }
             }
         }
+    }
+
+    private suspend fun sendOne(
+        id: String,
+        provider: NotificationProvider,
+        title: String,
+        content: String,
+        image: NotificationImage?,
+    ): NotificationSendResult = runCatching {
+        if (image != null) provider.send(title, content, image) else provider.send(title, content)
+    }.getOrElse {
+        Timber.e(it, "notification provider %s threw", id)
+        NotificationSendResult.Transient(uiTextOf(R.string.notification_err_network))
     }
 
     private fun emitFailure(id: String, message: UiText) {

@@ -18,11 +18,10 @@ class UpdateService(
 
     private val clientsBySource = clients.associateBy(UpdateSourceClient::source)
 
-    /** 源里能验 CDK 的那个；没有就一律判不出 */
-    private val cdkVerifier = clients.filterIsInstance<CdkVerifier>().singleOrNull()
-
+    /** 检查与解析之外的第三件事，只有 Mirror酱 有：不进 [UpdateSourceClient] */
     suspend fun verifyCdk(request: CdkVerifyRequest): CdkVerification = withContext(MaaDispatchers.Default) {
-        cdkVerifier?.verifyCdk(request) ?: CdkVerification.Unverified
+        (clientsBySource[UpdateSource.MIRRORCHYAN] as? MirrorChyanUpdateClient)?.verifyCdk(request)
+            ?: CdkVerification.Unverified
     }
 
     suspend fun check(request: UpdateCheckRequest): UpdateCheckResult {

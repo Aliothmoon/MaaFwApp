@@ -6,12 +6,11 @@ import android.os.Build
 import android.provider.Settings
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
+import com.aliothmoon.maafw.util.userIdOf
 
 object PermissionGrantHelper {
     private const val TAG = "PermissionGrantHelper"
 
-    // UserHandle.PER_USER_RANGE，隐藏常量
-    private const val PER_USER_RANGE = 100_000
 
     fun grantAccessibilityService(serviceId: String): Boolean {
         if (serviceId == "") {
@@ -68,7 +67,7 @@ object PermissionGrantHelper {
 
     /** 授完读回，userId 由 uid 推出 */
     private fun grantRuntimePermission(packageName: String, permission: String, uid: Int): Boolean {
-        val userId = uid / PER_USER_RANGE
+        val userId = userIdOf(uid)
         return runCatching {
             RemoteUtils.packageManager.grantRuntimePermission(packageName, permission, userId)
             RemoteUtils.packageManager.checkPermission(permission, packageName, userId) ==

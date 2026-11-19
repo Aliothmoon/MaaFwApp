@@ -79,7 +79,7 @@ class SettingsViewModel(
     private var cdkJob: Job? = null
 
     /** 本进程里最近一次验成有效的 CDK 与结果 */
-    private var verifiedCdk: Pair<String, CdkStatus.Valid>? = null
+    private var verifiedCdk: Pair<String, CdkVerification.Valid>? = null
 
     init {
         viewModelScope.launch { startupUpdateCheck() }
@@ -416,12 +416,12 @@ class SettingsViewModel(
                 ),
             )
             if (appSettings.mirrorchyanCdk.value != cdk) return@launch
-            val status = when (result) {
-                is CdkVerification.Valid -> CdkStatus.Valid(result.expiresAtSec).also { verifiedCdk = cdk to it }
-                is CdkVerification.Rejected -> CdkStatus.Rejected(result.reason).also { verifiedCdk = null }
-                CdkVerification.Unverified -> verifiedCdk?.takeIf { it.first == cdk }?.second ?: CdkStatus.Unverified
+            val shown = when (result) {
+                is CdkVerification.Valid -> result.also { verifiedCdk = cdk to it }
+                is CdkVerification.Rejected -> result.also { verifiedCdk = null }
+                CdkVerification.Unverified -> verifiedCdk?.takeIf { it.first == cdk }?.second ?: result
             }
-            updateOperation.update { it.copy(cdkStatus = status) }
+            updateOperation.update { it.copy(cdkStatus = CdkStatus.Done(shown)) }
         }
     }
 

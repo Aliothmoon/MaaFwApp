@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -14,13 +13,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -46,7 +43,6 @@ import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.RunLogTaskStatus
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaIcons
-import com.aliothmoon.maafw.theme.MaaMotion
 import com.aliothmoon.maafw.theme.MaaTheme
 
 /**
@@ -267,21 +263,7 @@ fun MaaRunLogTaskHeader(
                 maxLines = 1,
             )
         }
-        if (expandable) {
-            val rotation by animateFloatAsState(
-                targetValue = if (expanded) 180f else 0f,
-                animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
-                label = "runLogGroupChevron",
-            )
-            Icon(
-                imageVector = MaaIcons.ChevronDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(MaaDesignTokens.IconSize.sm)
-                    .rotate(rotation),
-            )
-        }
+        if (expandable) MaaExpandChevron(expanded)
     }
 }
 

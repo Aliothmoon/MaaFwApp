@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.remote.internal
 
+import com.aliothmoon.maafw.log.LogExportCollector
 import java.io.File
 
 /** logcat 抓取目录的保留策略：先按天数，再按总量从旧到新删 */
@@ -7,7 +8,8 @@ internal object LogcatRetention {
 
     private const val MS_PER_DAY = 24L * 60 * 60 * 1000
 
-    const val KEEP_DAYS = 7
+    /** 与导出同一口径：导出只收这么多天内的抓取 */
+    const val KEEP_DAYS = LogExportCollector.ROLLING_KEEP_DAYS
 
     const val MAX_TOTAL_BYTES = 64L * 1024 * 1024
 

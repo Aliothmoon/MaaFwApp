@@ -116,7 +116,7 @@ internal class MirrorChyanLatestApi(
 
 internal class MirrorChyanUpdateClient(
     private val api: MirrorChyanLatestApi,
-) : UpdateSourceClient, CdkVerifier {
+) : UpdateSourceClient {
 
     override val source: UpdateSource = UpdateSource.MIRRORCHYAN
 
@@ -187,7 +187,7 @@ internal class MirrorChyanUpdateClient(
      * 先匿名问出最新版本号，再带 CDK、把 current_version 写成它问一次：已是最新时服务端不签发下载地址，
      * 按第三方实测（Mirror酱 官方文档没写）不占当日下载次数，又能拿到 cdk_expired_time
      */
-    override suspend fun verifyCdk(request: CdkVerifyRequest): CdkVerification = try {
+    suspend fun verifyCdk(request: CdkVerifyRequest): CdkVerification = try {
         val rid = request.mirrorchyanRid?.trim()?.takeIf(String::isNotBlank)
         val cdk = request.cdk.trim()
         if (rid == null || cdk.isEmpty()) {

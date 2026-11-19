@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.privileged
 
+
+import timber.log.Timber
 /** 提权进程的拉起方式（su / Shizuku newProcess），与服务规格解耦 */
 interface ProcessSpawner {
 
@@ -9,13 +11,25 @@ interface ProcessSpawner {
     /** 执行拉起，失败抛异常；返回探活句柄，拉起方式不支持探活时返回 null */
     fun spawn(command: String): SpawnHandle?
 
-    fun killResidual(processName: String)
+    /** 同步跑完一条命令再返回 stdout，避免与下一次拉起交错；失败抛异常 */
+    fun run(command: String): List<String>
+
+    fun killResidual(processName: String) {
+        runCatching { run(killByNameCommand(processName)) }
+            .onFailure { Timber.w(it, "kill residual %s failed", processName) }
+    }
 
     /** 同名进程及其已运行时长，查不了返回空 */
-    fun findProcesses(processName: String): List<ResidualProcess>
+    fun findProcesses(processName: String): List<ResidualProcess> =
+        runCatching { parseProcesses(run(findProcessesCommand(processName))) }
+            .onFailure { Timber.w(it, "find %s failed", processName) }
+            .getOrDefault(emptyList())
 
     /** 按 pid 硬杀：被 SIGSTOP 停住的也杀得掉 */
-    fun forceKill(pids: List<Int>)
+    fun forceKill(pids: List<Int>) {
+        runCatching { run(forceKillCommand(pids)) }
+            .onFailure { Timber.w(it, "force kill %s failed", pids) }
+    }
 }
 
 data class ResidualProcess(val pid: Int, val elapsed: String)
