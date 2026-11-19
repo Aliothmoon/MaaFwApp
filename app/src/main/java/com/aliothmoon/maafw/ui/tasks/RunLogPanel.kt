@@ -32,9 +32,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -141,9 +143,10 @@ internal fun RunLogPanel(
         }
 
         // 一次只展开一条：details_json 展开就是十来行，多条同时展开这个列表没法看了
-        var expandedId by remember { mutableStateOf<Long?>(null) }
+        // 两者都要 saveable：悬浮窗切到别的页会把这块撤掉，回来还得是原样
+        var expandedId by rememberSaveable { mutableStateOf<Long?>(null) }
         // 用户点过的分组以点过的为准，按起点行 id 记；没点过的走 RunLogGroup.expandedByDefault
-        val toggled = remember { mutableStateMapOf<Long, Boolean>() }
+        val toggled = rememberSaveable(saver = ToggledGroupsSaver) { mutableStateMapOf() }
         val rows by remember(groups, running, omittedBefore) {
             derivedStateOf { buildRunLogRows(groups, running, toggled, omittedBefore) }
         }
@@ -283,3 +286,13 @@ private fun LogToolbarAction(label: String, enabled: Boolean, onClick: () -> Uni
             .padding(horizontal = MaaDesignTokens.Spacing.md, vertical = MaaDesignTokens.Spacing.sm),
     )
 }
+
+/** 只存用户点过的分组，摊平成 [id, expanded, id, expanded, …]；Long 与 Boolean 都进得了 Bundle */
+private val ToggledGroupsSaver = listSaver<SnapshotStateMap<Long, Boolean>, Any>(
+    save = { map -> map.flatMap { (id, expanded) -> listOf(id, expanded) } },
+    restore = { flat ->
+        mutableStateMapOf<Long, Boolean>().apply {
+            flat.chunked(2).forEach { (id, expanded) -> put(id as Long, expanded as Boolean) }
+        }
+    },
+)

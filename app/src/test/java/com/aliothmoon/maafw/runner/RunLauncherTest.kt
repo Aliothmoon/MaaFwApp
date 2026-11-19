@@ -779,6 +779,45 @@ class RunLauncherTest {
         }
     }
 
+    /** 进门时上一轮还在跑、检查期间才停下：挂载前仍要等它收尾，检查那段也要算作有人在等 */
+    @Test
+    fun `a round that stops during prechecks is still waited out`() = runTest(testDispatcher) {
+        val log = mutableListOf<String>()
+        var waitersSeenInRelease: Boolean? = null
+        var slowCheck = false
+        lateinit var launcher: RunLauncher
+        val slowRelease = object : RunEnvHook {
+            override val id = "slow-release"
+            override val anchor = Anchor.BeforeDispatch
+            override val order = 0
+            override val gating = false
+            override suspend fun engage(ctx: RunContext): EngageResult {
+                log += "engage"
+                return EngageResult.Engaged(Release {
+                    delay(2_000)
+                    if (waitersSeenInRelease == null) waitersSeenInRelease = launcher.hasWaiters
+                    log += "release"
+                })
+            }
+        }
+        launcher = launcher(
+            scope = backgroundScope,
+            runner = slowStub(backgroundScope),
+            prechecks = listOf(precheck { if (slowCheck) delay(1_000); Verdict.Pass }),
+            hooks = listOf(slowRelease),
+        )
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+        slowCheck = true
+        // 此刻上一轮还在跑；它在本轮检查的那一秒里停下并开始收尾
+        val second = async { launcher.launch(RunTrigger.Manual) }
+        advanceTimeBy(8_000)
+
+        assertEquals(RunLaunchResult.Started, second.await())
+        assertEquals(listOf("engage", "release", "engage", "release"), log)
+        assertEquals(true, waitersSeenInRelease)
+    }
+
     /** 重新解压持着闸门：当场起跑的报正在启动，排队的定时等它解完才投 */
     @Test
     fun `launches wait out a whenIdle block`() = runTest(testDispatcher) {

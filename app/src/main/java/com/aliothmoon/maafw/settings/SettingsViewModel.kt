@@ -424,7 +424,12 @@ class SettingsViewModel(
                     mirrorchyanRid = rid,
                 ),
             )
-            if (appSettings.mirrorchyanCdk.value != cdk) return@launch
+            if (appSettings.mirrorchyanCdk.value != cdk) {
+                // 改 CDK 时先清状态再异步落盘：防抖赶在落盘前吐出旧值的话，这一轮是在清状态之后才置的「正在验证」，
+                // 不复位就一直挂着。更新一轮的验证会先取消这一轮，走到这里的不会盖掉别人的 Checking
+                updateOperation.update { if (it.cdkStatus is CdkStatus.Checking) it.copy(cdkStatus = CdkStatus.None) else it }
+                return@launch
+            }
             val shown = when (result) {
                 is CdkVerification.Valid -> result.also { verifiedCdk = cdk to it }
                 is CdkVerification.Rejected -> result.also { verifiedCdk = null }

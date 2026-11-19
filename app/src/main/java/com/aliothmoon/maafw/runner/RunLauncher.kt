@@ -134,10 +134,14 @@ class RunLauncher(
     /** 抢占时要撤掉上一轮的收尾登记，否则旧的自动熄屏会落到新一轮头上 */
     private val settling = AtomicReference<Job?>(null)
 
-    /** 在 [awaitTurn] 里等着的个数：排队的定时、等着重解 PI 的 */
+    /** 正在投递的 launch 与在 [awaitTurn] 里等着的（排队的定时、等着重解 PI 的）个数 */
     private val waiting = AtomicInteger(0)
 
-    /** 有人在等上一轮收尾；收尾里要断开特权进程的挂载物看它，免得把后一轮要用的连接断掉 */
+    /**
+     * 后面还有一轮要上；收尾里要断开特权进程、收起界面的挂载物看它，免得把那一轮要用的连接断掉
+     *
+     * 投递全程都算，不只等收尾那一下：本轮的检查与挂载期间，上一轮的收尾随时可能正好走到那一项
+     */
     val hasWaiters: Boolean get() = waiting.get() > 0
 
     /**
@@ -157,9 +161,15 @@ class RunLauncher(
         signals: RunSignals = RunSignals(),
         progress: RunProgress = RunProgress { _, _ -> },
         startFromInstanceId: String? = null,
-    ): RunLaunchResult =
-        dispatch(trigger, acknowledged, configurationId, requestId, whenBusy, steps, signals, progress, startFromInstanceId)
-            .also { logOutcome(trigger, configurationId, it) }
+    ): RunLaunchResult {
+        waiting.incrementAndGet()
+        val result = try {
+            dispatch(trigger, acknowledged, configurationId, requestId, whenBusy, steps, signals, progress, startFromInstanceId)
+        } finally {
+            waiting.decrementAndGet()
+        }
+        return result.also { logOutcome(trigger, configurationId, it) }
+    }
 
     private suspend fun dispatch(
         trigger: RunTrigger,
@@ -179,14 +189,6 @@ class RunLauncher(
             if (!held) return RunLaunchResult.QueueTimedOut
         } else if (!gate.tryLock()) {
             return RunLaunchResult.Blocked(uiTextOf(R.string.msg_launch_in_progress), BlockSource.Busy)
-        } else if (!runnerPort.state.value.phase.isBusy) {
-            // 落回 Idle 后上一轮还在收尾（关目标应用、断特权进程、收起界面），这时 engage 会被它掐掉
-            try {
-                awaitSettling()
-            } catch (cancellation: CancellationException) {
-                gate.unlock()
-                throw cancellation
-            }
         }
         val engaged = ArrayDeque<Release>()
         try {
@@ -220,7 +222,13 @@ class RunLauncher(
             val ctx = RunContext(trigger, runMode(), plan, acknowledged, signals, progress, journal)
             runPrechecks(ctx)?.let { return it }
 
-            if (whenBusy == WhenBusy.Preempt) preemptRunning()
+            // 上一轮已落回 Idle、收尾还在关应用、断特权进程时就 engage，会被它的收尾掐掉。排在检查之后：
+            // 进门时还在跑、检查期间才停下的也在这里接住。仍在跑的 Reject 不等，交给 RunnerPort 拒
+            if (whenBusy == WhenBusy.Preempt) {
+                preemptRunning()
+            } else if (!runnerPort.state.value.phase.isBusy) {
+                settling.get()?.join()
+            }
 
             engage(Anchor.BeforeDispatch, ctx, engaged, steps)?.let { halt ->
                 finalize(engaged, halt.cause)
@@ -304,17 +312,6 @@ class RunLauncher(
         waiting.incrementAndGet()
         try {
             acquireTurn(progress)
-        } finally {
-            waiting.decrementAndGet()
-        }
-    }
-
-    /** 持着闸门等上一轮收尾走完；收尾每项限时，等得到头。算进 [hasWaiters]，它就不会把这一轮要用的连接断掉 */
-    private suspend fun awaitSettling() {
-        val pending = settling.get()?.takeUnless { it.isCompleted } ?: return
-        waiting.incrementAndGet()
-        try {
-            pending.join()
         } finally {
             waiting.decrementAndGet()
         }
