@@ -70,6 +70,9 @@ object MaaDesignTokens {
         /** 顶替勾选框的圆形标记：圆要比 18dp 的方框大一圈，看着才一样大 */
         val checkboxMark: Dp = 24.dp
 
+        /** 设置列表行首的单色图标（对齐 MaaMeow 的 SettingIcon）：比按钮图标大一圈，单独一列时才压得住标题 */
+        val rowLeading: Dp = 22.dp
+
         /** 卡片内的占位插画 */
         val lg: Dp = 32.dp
 
@@ -90,6 +93,9 @@ object MaaDesignTokens {
     object RowHeight {
         /** 尾部挂 TextButton 的紧凑信息行：M3 按钮最小高 40dp，连着摞几行太散 */
         val compact: Dp = 32.dp
+
+        /** 设置列表的一行：标准行档（§2），开关、箭头、纯文字几种行尾放在一起高度齐 */
+        val setting: Dp = 56.dp
     }
 
     /** 按钮高度；首页服务操作那排主按钮的大号档，对齐 MaaMeow 的 52dp */
