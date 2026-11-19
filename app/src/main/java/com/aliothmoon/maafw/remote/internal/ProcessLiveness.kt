@@ -52,15 +52,22 @@ enum class ProcessLiveness {
             UNKNOWN
         }
 
-        /** 进程表里只有自己的进程，是被权限挡了，不能当成「别人都不在」，返回 null */
+        /**
+         * 进程表里只有自己的进程，是被权限挡了，不能当成「别人都不在」，返回 null
+         *
+         * 只认可见的：常驻的推送、下载子进程（`包名:pushcore`）也带着这个包名，目标应用崩了它们还在，
+         * 照算的话崩溃会被当成窗口漂移去 repin。没上屏的别名进程应用因此会被报成死的，接受
+         */
         private fun listedInProcessTable(packageName: String): Boolean? = runCatching {
             val am = FakeContext.get().getSystemService(ActivityManager::class.java) ?: return null
             val processes = am.runningAppProcesses ?: return null
             if (processes.none { it.uid != Process.myUid() }) return null
             processes.any { process ->
-                process.processName == packageName ||
-                    process.processName.startsWith("$packageName:") ||
-                    process.pkgList?.contains(packageName) == true
+                process.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE && (
+                    process.processName == packageName ||
+                        process.processName.startsWith("$packageName:") ||
+                        process.pkgList?.contains(packageName) == true
+                    )
             }
         }.onFailure { Ln.w("ProcessLiveness: process table unavailable: ${it.message}") }.getOrNull()
     }
