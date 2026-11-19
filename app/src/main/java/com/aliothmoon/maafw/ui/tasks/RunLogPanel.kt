@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.ui.tasks
 
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -167,6 +169,15 @@ internal fun RunLogPanel(
         // 不用 animateScrollToItem：高频事件下动画会排队打架
         LaunchedEffect(visible.lastOrNull()?.id) {
             if (following) listState.scrollToItem(lastItemIndex)
+        }
+        // 跟随中可视高度变了（转屏、分屏改大小）就重新贴底：LazyColumn 保住的是首行，底部会被挤出屏，
+        // 要等下一条日志才回来
+        val currentLastIndex by rememberUpdatedState(lastItemIndex)
+        LaunchedEffect(listState) {
+            snapshotFlow { listState.layoutInfo.viewportSize.height }
+                .drop(1)
+                .distinctUntilChanged()
+                .collect { if (following) listState.scrollToItem(currentLastIndex) }
         }
         // 切档是换了一份列表，停在旧档的位置没有意义，直接回到底部接着跟
         LaunchedEffect(essentialOnly) {

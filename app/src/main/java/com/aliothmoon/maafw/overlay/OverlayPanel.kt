@@ -98,11 +98,15 @@ fun OverlayPanel(
                         onIntent = onIntent,
                     )
 
-                    OverlayPanelTab.LOG -> RunLogPanel(
-                        entries = logEntries,
-                        onExport = onExportLog,
-                        onClear = { onIntent(SessionIntent.ClearRunLog) },
-                    )
+                    // 预组合的相邻页也会随每条日志重排：不在这一页、也不在往这一页翻时不组合，
+                    // 回来时跟随状态靠 rememberSaveable 接上，进场回底
+                    OverlayPanelTab.LOG -> if (page == pagerState.currentPage || page == pagerState.targetPage) {
+                        RunLogPanel(
+                            entries = logEntries,
+                            onExport = onExportLog,
+                            onClear = { onIntent(SessionIntent.ClearRunLog) },
+                        )
+                    }
                 }
             }
             Row(
