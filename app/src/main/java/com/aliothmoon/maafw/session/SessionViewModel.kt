@@ -265,6 +265,7 @@ class SessionViewModel(
 
     private var reinstallJob: Job? = null
     private var closeTargetJob: Job? = null
+    private var startJob: Job? = null
 
     /** 运行中到的语言切换；这一轮结束时补重载，否则 PI 文案停在旧语言直到进程重启 */
     private val localeReloadPending = AtomicBoolean(false)
@@ -658,7 +659,7 @@ class SessionViewModel(
                 }
             }
 
-            is SessionIntent.Start -> start(intent.surface, intent.acknowledged, intent.startFromInstanceId)
+            is SessionIntent.Start -> launchStart(intent)
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -742,7 +743,8 @@ class SessionViewModel(
 
     /** Screen 禁用之外的第二层写锁：写入前再读 RunnerState */
     private suspend fun guarded(block: suspend () -> Unit) {
-        if (locked()) {
+        // 起跑在循环外：检查与挂载那段 phase 还没 busy，计划却已按当时的配置冻好，这时写进去界面就和在跑的对不上
+        if (locked() || startJob?.isActive == true) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_locked_while_running)))
             return
         }
@@ -869,6 +871,15 @@ class SessionViewModel(
             is DisplaySizeResult.Failed -> result.reason
         }
         emitEffect(SessionEffect.ShowMessage(message))
+    }
+
+    /**
+     * 准备阶段要连特权进程、建虚拟屏，几十秒起：放进 intent 循环里等的话，「停止」与预览操作全排在它后面。
+     * 连点只受理一次，并发起跑本来也会被 RunLauncher 的闸门挡下
+     */
+    private fun launchStart(intent: SessionIntent.Start) {
+        if (startJob?.isActive == true) return
+        startJob = viewModelScope.launch { start(intent.surface, intent.acknowledged, intent.startFromInstanceId) }
     }
 
     /**

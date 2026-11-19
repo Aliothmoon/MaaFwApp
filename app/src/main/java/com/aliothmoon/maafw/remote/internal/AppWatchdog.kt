@@ -106,6 +106,8 @@ object AppWatchdog {
         if (top != null) {
             if (targetPackage == null) Ln.i("AppWatchdog: target acquired: $top")
             targetPackage = top
+            // 拉回、重启后换了新任务，或起跑那一下任务还没建好，都靠巡检补；同一任务只试一次
+            ActivityUtils.excludeFromRecents(top, displayId)
             driftFirstSeenMs = 0L
             driftRepinAttempts = 0
             driftNotified = false

@@ -45,6 +45,7 @@ import com.aliothmoon.maafw.runner.RunJournal
 import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunScreenSaver
+import com.aliothmoon.maafw.runner.ScreenSaverShow
 import com.aliothmoon.maafw.runner.RunSessionLogStore
 import com.aliothmoon.maafw.runner.ScreenPowerOffHook
 import com.aliothmoon.maafw.runner.ScreenSaverHook
@@ -154,7 +155,7 @@ val runnerModule = module {
     single<RunScreenSaver> {
         val manager = get<ScreenSaverOverlayManager>()
         object : RunScreenSaver {
-            override suspend fun show(): Boolean = manager.show()
+            override suspend fun show(): ScreenSaverShow = manager.show()
             override suspend fun hide() = manager.hide()
         }
     }

@@ -78,8 +78,13 @@ class ScheduleStrategyStore(private val context: Context) {
         current.filterNot { it.id == strategyId }
     }
 
-    suspend fun setEnabled(strategyId: String, enabled: Boolean) = mutate { current ->
-        current.map { if (it.id == strategyId) it.copy(enabled = enabled) else it }
+    /** @return 写进去的那条；[strategies] 异步回流，刚写完拿 [findById] 读到的还是旧值 */
+    suspend fun setEnabled(strategyId: String, enabled: Boolean): ScheduleStrategy? {
+        var written: ScheduleStrategy? = null
+        mutate { current ->
+            current.map { if (it.id == strategyId) it.copy(enabled = enabled).also { s -> written = s } else it }
+        }
+        return written
     }
 
     suspend fun recordTrigger(

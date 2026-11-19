@@ -280,11 +280,14 @@ class ScreenSaverHook(
         if (ctx.screenPowerOffPlanned) return EngageResult.Skipped()
 
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
-        if (!screenSaver.show()) {
-            ctx.journal.warn(ctx.executionId, uiTextOf(R.string.run_log_screen_saver_skipped))
-            return EngageResult.Skipped()
+        return when (screenSaver.show()) {
+            ScreenSaverShow.SHOWN -> EngageResult.Engaged(Release { screenSaver.hide() })
+            ScreenSaverShow.ALREADY_SHOWN -> EngageResult.Skipped()
+            ScreenSaverShow.FAILED -> {
+                ctx.journal.warn(ctx.executionId, uiTextOf(R.string.run_log_screen_saver_skipped))
+                EngageResult.Skipped()
+            }
         }
-        return EngageResult.Engaged(Release { screenSaver.hide() })
     }
 }
 
@@ -505,7 +508,9 @@ object CountdownHook : RunEnvHook {
  * 隔一层这几个 hook 才进得了 JVM 单测
  */
 interface RunScreenSaver {
-    /** 返回是否确实由本次调用盖上 */
-    suspend fun show(): Boolean
+    suspend fun show(): ScreenSaverShow
     suspend fun hide()
 }
+
+/** 已经盖着的要与盖失败分开：前者是用户手动盖的，本轮既不该撤它，也不该记成「没盖上」 */
+enum class ScreenSaverShow { SHOWN, ALREADY_SHOWN, FAILED }

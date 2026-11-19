@@ -43,13 +43,13 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
         ScheduleLaunchOutcome(TriggerResult.DUPLICATE)
 
     RunLaunchResult.ProjectNotReady ->
-        failed(TriggerFailureReason.PROJECT_NOT_READY)
+        failedOutcome(TriggerFailureReason.PROJECT_NOT_READY)
 
     RunLaunchResult.ConfigurationMissing ->
-        failed(TriggerFailureReason.CONFIGURATION_MISSING)
+        failedOutcome(TriggerFailureReason.CONFIGURATION_MISSING)
 
     RunLaunchResult.NoExecutableTasks ->
-        failed(TriggerFailureReason.NO_EXECUTABLE_TASKS)
+        failedOutcome(TriggerFailureReason.NO_EXECUTABLE_TASKS)
 
     // 只留「配置有错」用户无从下手；带上首条 Error 指到具体 option，其余等改完下一次触发再露面
     is RunLaunchResult.Invalid ->
@@ -79,10 +79,10 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt, ScheduleNotice.FAILED)
 
     RunLaunchResult.QueueTimedOut ->
-        failed(TriggerFailureReason.EXPIRED)
+        failedOutcome(TriggerFailureReason.EXPIRED)
 }
 
-private fun failed(reason: TriggerFailureReason) =
+internal fun failedOutcome(reason: TriggerFailureReason) =
     ScheduleLaunchOutcome(TriggerResult.FAILED_START, reason, notice = ScheduleNotice.FAILED)
 
 // 用户正用着名单里的应用：是本来就要的跳过，不算失败

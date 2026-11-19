@@ -47,6 +47,9 @@ static std::atomic<int64_t> g_release_stage_since_ms{0};
 static std::atomic<bool> g_closing{false};
 static std::atomic<int> g_callbacks_in_flight{0};
 
+// 一帧预览正常几毫秒画完；等不到多半卡在 swap 上，再等下去会拖到 app 侧判卡重启
+static constexpr int kPreviewDrainTimeoutMs = 500;
+
 static int64_t NowMs() {
     using namespace std::chrono;
     return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
@@ -149,12 +152,15 @@ void ReleaseNativeCapturer() {
 
     // 回调已放完，不会再往队里塞图
     EnterReleaseStage(RELEASE_DRAIN_PREVIEW);
-    DrainPreviewQueue();
+    const bool previewIdle = DrainPreviewQueue(kPreviewDrainTimeoutMs);
 
     if (g_capturer) {
-        if (g_capturer->reader) {
+        if (g_capturer->reader && previewIdle) {
             EnterReleaseStage(RELEASE_DELETE_READER);
             AImageReader_delete(g_capturer->reader);
+        } else if (g_capturer->reader) {
+            // 渲染线程卡在 swap 上还攥着这个 reader 的图：删了它回头 AImage_delete 就是 UAF，宁可漏到进程退出
+            LOGE("ReleaseNativeCapturer: preview still rendering after %dms, leaking the reader", kPreviewDrainTimeoutMs);
         }
 
         delete g_capturer;

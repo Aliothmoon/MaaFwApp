@@ -744,6 +744,41 @@ class RunLauncherTest {
         assertEquals(RunLaunchResult.Started, first.await())
     }
 
+    /** 上一轮已落回 Idle、收尾还在跑：当场 engage 会被它的收尾掐掉，要等它收完，且算作有人在等 */
+    @Test
+    fun `a launch right after a round waits for that round's release`() = runTest(testDispatcher) {
+        for (whenBusy in listOf(WhenBusy.Reject, WhenBusy.Preempt)) {
+            val log = mutableListOf<String>()
+            var waitersSeenInRelease: Boolean? = null
+            lateinit var launcher: RunLauncher
+            val slowRelease = object : RunEnvHook {
+                override val id = "slow-release"
+                override val anchor = Anchor.BeforeDispatch
+                override val order = 0
+                override val gating = false
+                override suspend fun engage(ctx: RunContext): EngageResult {
+                    log += "engage"
+                    return EngageResult.Engaged(Release {
+                        delay(2_000)
+                        if (waitersSeenInRelease == null) waitersSeenInRelease = launcher.hasWaiters
+                        log += "release"
+                    })
+                }
+            }
+            launcher = launcher(scope = backgroundScope, runner = slowStub(backgroundScope), hooks = listOf(slowRelease))
+
+            assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+            // 跑完只要两三百毫秒，此刻已 Idle，收尾还卡在 delay 里
+            advanceTimeBy(1_000)
+            val second = async { launcher.launch(RunTrigger.Manual, whenBusy = whenBusy) }
+            advanceTimeBy(6_000)
+
+            assertEquals(whenBusy.toString(), RunLaunchResult.Started, second.await())
+            assertEquals(whenBusy.toString(), listOf("engage", "release", "engage", "release"), log)
+            assertEquals(whenBusy.toString(), true, waitersSeenInRelease)
+        }
+    }
+
     /** 重新解压持着闸门：当场起跑的报正在启动，排队的定时等它解完才投 */
     @Test
     fun `launches wait out a whenIdle block`() = runTest(testDispatcher) {

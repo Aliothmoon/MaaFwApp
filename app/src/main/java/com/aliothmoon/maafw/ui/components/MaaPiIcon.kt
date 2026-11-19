@@ -6,9 +6,12 @@ import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -45,8 +48,10 @@ fun MaaPiIcon(
     val key = "$path@$sizePx"
     // 重新解压后代数变了：没读到的重来一遍，读到的照旧命中缓存
     val generation by PiUnpackGeneration.value.collectAsState()
-    val bitmap by produceState(initialValue = PiIconCache.peek(key), key, generation) {
-        if (value == null) value = PiIconCache.load(path, sizePx, key, generation)
+    // 不用 produceState：它的初值只在首次组合时取，key 变了 value 还留着上一张图，同一槽位换 path 就一直显示旧图标
+    var bitmap by remember(key) { mutableStateOf(PiIconCache.peek(key)) }
+    LaunchedEffect(key, generation) {
+        if (bitmap == null) bitmap = PiIconCache.load(path, sizePx, key, generation)
     }
     bitmap?.let {
         Image(

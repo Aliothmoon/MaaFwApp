@@ -170,7 +170,8 @@ object ActivityUtils {
         return startActivity(intent, displayId).also { started ->
             if (started) {
                 lastLaunched = targetPackage to displayId
-                excludeFromRecents(targetPackage, displayId)
+                // 冷启动时任务多半还没进 getRunningTasks，这一下常落空，由看门狗巡检与拉回校验补上
+                if (excludeFromRecents) excludeFromRecents(targetPackage, displayId)
             }
         }
     }
@@ -186,7 +187,8 @@ object ActivityUtils {
      */
     @JvmStatic
     fun excludeFromRecents(packageName: String, displayId: Int) {
-        if (Build.VERSION.SDK_INT < AndroidVersions.API_37_ANDROID_17) return
+        // 主屏模式目标应用就在用户眼前，强制排除会让它从最近任务里消失、切不回去
+        if (Build.VERSION.SDK_INT < AndroidVersions.API_37_ANDROID_17 || displayId == Display.DEFAULT_DISPLAY) return
         val apply = applyForceExcludedFromRecents ?: return
         val task = runCatching { findRecentTask(packageName) }.getOrNull() ?: return
         if (getTaskDisplayId(task) != displayId || task.taskId == recentsExcludedTaskId) return

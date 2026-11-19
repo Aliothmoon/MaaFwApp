@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -41,15 +45,20 @@ fun MaaAppIcon(
     val context = LocalContext.current.applicationContext
     val sizePx = with(LocalDensity.current) { size.roundToPx() }.coerceAtLeast(1)
     val key = "$packageName@$sizePx"
-    val icon = produceState<ImageBitmap?>(iconCache.get(key), key) {
-        value = iconCache.get(key) ?: withContext(MaaDispatchers.IO) {
-            LauncherApps.icon(context, packageName, sizePx).asImageBitmap().also { iconCache.put(key, it) }
+    // 按 key 重取初值：produceState 换 key 时留着上一个包的图标，解码期间会闪成别家的
+    var icon by remember(key) { mutableStateOf<ImageBitmap?>(iconCache.get(key)) }
+    LaunchedEffect(key) {
+        if (icon == null) {
+            icon = withContext(MaaDispatchers.IO) {
+                LauncherApps.icon(context, packageName, sizePx).asImageBitmap().also { iconCache.put(key, it) }
+            }
         }
-    }.value
-    if (icon == null) {
+    }
+    val current = icon
+    if (current == null) {
         Spacer(modifier.size(size))
     } else {
-        Image(bitmap = icon, contentDescription = null, modifier = modifier.size(size))
+        Image(bitmap = current, contentDescription = null, modifier = modifier.size(size))
     }
 }
 

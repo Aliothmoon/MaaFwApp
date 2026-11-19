@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -59,6 +60,7 @@ fun OverlayPanel(
 ) {
     val pagerState = rememberPagerState(initialPage = 0) { OverlayPanelTab.entries.size }
     val scope = rememberCoroutineScope()
+    val logPageState = rememberSaveableStateHolder()
     LaunchedEffect(showLogRequests) {
         showLogRequests.collect { pagerState.animateScrollToPage(OverlayPanelTab.LOG.ordinal) }
     }
@@ -98,15 +100,17 @@ fun OverlayPanel(
                         onIntent = onIntent,
                     )
 
-                    // 预组合的相邻页也会随每条日志重排：不在这一页、也不在往这一页翻时不组合，
-                    // 回来时跟随状态靠 rememberSaveable 接上，进场回底
+                    // 预组合的相邻页也会随每条日志重排：不在这一页、也不在往这一页翻时不组合，进场回底。
+                    // 页还在而内容被 if 撤掉时 rememberSaveable 不会存，筛选与折叠得靠外面这个 holder 接上
                     OverlayPanelTab.LOG -> if (page == pagerState.currentPage || page == pagerState.targetPage) {
-                        RunLogPanel(
-                            entries = logEntries,
-                            running = phase.isBusy,
-                            onExport = onExportLog,
-                            onClear = { onIntent(SessionIntent.ClearRunLog) },
-                        )
+                        logPageState.SaveableStateProvider(LOG_PAGE_STATE_KEY) {
+                            RunLogPanel(
+                                entries = logEntries,
+                                running = phase.isBusy,
+                                onExport = onExportLog,
+                                onClear = { onIntent(SessionIntent.ClearRunLog) },
+                            )
+                        }
                     }
                 }
             }
@@ -211,3 +215,5 @@ private fun PanelHeader(
         )
     }
 }
+
+private const val LOG_PAGE_STATE_KEY = "run-log"

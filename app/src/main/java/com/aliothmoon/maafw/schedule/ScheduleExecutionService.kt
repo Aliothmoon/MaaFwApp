@@ -202,7 +202,7 @@ class ScheduleExecutionService : Service() {
                 strategy,
                 scheduledTimeMs,
                 now,
-                ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.EXPIRED),
+                failedOutcome(TriggerFailureReason.EXPIRED),
                 steps = emptyList(),
             )
             return

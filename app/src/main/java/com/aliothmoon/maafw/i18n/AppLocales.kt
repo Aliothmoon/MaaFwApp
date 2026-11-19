@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.i18n
 
+import android.app.LocaleManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.Configuration
@@ -68,13 +69,20 @@ object AppLocales : LocaleController {
     @Volatile
     private var appContext: Context? = null
 
+    /** 33+ 自己问系统：appcompat 只借活着的 Activity 去拿 LocaleManager，定时、开机这类没有 Activity 的进程里恒回空 */
+    @Volatile
+    private var localeManager: LocaleManager? = null
+
     /** 备份在内存里的那份，每行日志都要渲染，不能每次读 prefs；只在 32 及以下有值 */
     @Volatile
     private var backupTag: String? = null
 
     /** Application.onCreate 里最先调：之后渲染的通知、悬浮窗才是应用语言 */
     fun init(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            localeManager = context.applicationContext.getSystemService(LocaleManager::class.java)
+            return
+        }
         appContext = context.applicationContext
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).also {
             backupTag = it.getString(KEY_TAG, null)
@@ -85,9 +93,19 @@ object AppLocales : LocaleController {
     /** null = 跟随系统 */
     fun currentTag(): String? = AppLanguagePolicy.resolveTag(
         sdkInt = Build.VERSION.SDK_INT,
-        androidx = AppCompatDelegate.getApplicationLocales()[0]?.toLanguageTag(),
+        androidx = applicationLocaleTag(),
         backup = backupTag,
     )
+
+    private fun applicationLocaleTag(): String? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            localeManager?.let { manager ->
+                val locales = manager.applicationLocales
+                return if (locales.isEmpty) null else locales[0].toLanguageTag()
+            }
+        }
+        return AppCompatDelegate.getApplicationLocales()[0]?.toLanguageTag()
+    }
 
     fun currentProjectTag(): String = AppLanguagePolicy.projectLocaleTag(
         appLocaleTag = currentTag(),

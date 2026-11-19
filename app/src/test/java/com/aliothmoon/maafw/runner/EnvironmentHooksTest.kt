@@ -49,12 +49,12 @@ class EnvironmentHooksTest {
     private fun context(runMode: RunMode = RunMode.BACKGROUND) =
         RunContext(RunTrigger.Manual, runMode, plan, journal = DiscardingRunJournal)
 
-    private class RecordingScreenSaver(private val showSucceeds: Boolean = true) : RunScreenSaver {
+    private class RecordingScreenSaver(private val outcome: ScreenSaverShow = ScreenSaverShow.SHOWN) : RunScreenSaver {
         var shown = 0
         var hidden = 0
-        override suspend fun show(): Boolean {
-            if (showSucceeds) shown++
-            return showSucceeds
+        override suspend fun show(): ScreenSaverShow {
+            if (outcome == ScreenSaverShow.SHOWN) shown++
+            return outcome
         }
 
         override suspend fun hide() {
@@ -292,11 +292,23 @@ class EnvironmentHooksTest {
     /** 没盖上就不该登记撤销——否则会去掀用户自己手动盖的那份 */
     @Test
     fun `a screen saver that failed to show registers no release`() = runTest {
-        val saver = RecordingScreenSaver(showSucceeds = false)
+        val saver = RecordingScreenSaver(ScreenSaverShow.FAILED)
         val settings = FakeAppSettingsGateway().apply { screenSaverEnabled.value = true }
 
         assertNull(ScreenSaverHook(settings, saver).engage(context()).releaseOrNull())
         assertEquals(0, saver.hidden)
+    }
+
+    /** 用户自己先盖上的：本轮不登记撤销，也不当成没盖上去记警告 */
+    @Test
+    fun `an already shown screen saver is left to the user`() = runTest {
+        val saver = RecordingScreenSaver(ScreenSaverShow.ALREADY_SHOWN)
+        val settings = FakeAppSettingsGateway().apply { screenSaverEnabled.value = true }
+        val journal = NoteRecordingJournal()
+        val ctx = RunContext(RunTrigger.Manual, RunMode.BACKGROUND, plan, journal = journal)
+
+        assertNull(ScreenSaverHook(settings, saver).engage(ctx).releaseOrNull())
+        assertTrue(journal.notes.isEmpty())
     }
 
     @Test

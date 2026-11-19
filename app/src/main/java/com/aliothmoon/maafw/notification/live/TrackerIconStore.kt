@@ -46,10 +46,13 @@ class TrackerIconStore(
     suspend fun importCustom(uri: Uri): Boolean = withContext(MaaDispatchers.IO) {
         fileMutex.withLock {
             val file = copyToIconDir(uri) ?: return@withLock false
-            if (!TrackerIconDecoder.isImage(file.path)) {
+            // 整张解一遍再认：只读文件头的话截断的坏图也能过，旧图标却已经删了
+            val decoded = runCatching { TrackerIconDecoder.decode(file.path) }.getOrNull()
+            if (decoded == null) {
                 file.delete()
                 return@withLock false
             }
+            decoded.recycle()
             // 先切新路径再删旧图，设置不会指向已删文件；文件名带时间戳，同图重选也会换路径
             appSettings.setLiveCustomTrackerPath(file.absolutePath)
             iconDir.listFiles()?.forEach { if (it != file) it.delete() }
@@ -65,12 +68,15 @@ class TrackerIconStore(
         }
     }
 
-    private fun load(type: LiveTrackerIcon, path: String): Bitmap? = when (type) {
-        LiveTrackerIcon.DEFAULT -> null
-        // 按通知尺寸栅格化：原图尺寸的位图每次 notify 都要跨进程传
-        LiveTrackerIcon.APP -> LauncherApps.icon(appContext, appContext.packageName, TrackerIconDecoder.TARGET_SIZE)
-        LiveTrackerIcon.CUSTOM -> TrackerIconDecoder.decode(path)
-    }
+    // 解码抛出来会打穿 stateIn 所在的 scope；设置里存着坏图时，每次构造这个 single 都崩
+    private fun load(type: LiveTrackerIcon, path: String): Bitmap? = runCatching {
+        when (type) {
+            LiveTrackerIcon.DEFAULT -> null
+            // 按通知尺寸栅格化：原图尺寸的位图每次 notify 都要跨进程传
+            LiveTrackerIcon.APP -> LauncherApps.icon(appContext, appContext.packageName, TrackerIconDecoder.TARGET_SIZE)
+            LiveTrackerIcon.CUSTOM -> TrackerIconDecoder.decode(path)
+        }
+    }.onFailure { Timber.w(it, "Failed to load live tracker icon (%s)", type) }.getOrNull()
 
     private fun copyToIconDir(uri: Uri): File? {
         val target = File(iconDir.apply { mkdirs() }, "$ICON_PREFIX${System.currentTimeMillis()}")

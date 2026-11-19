@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
+import com.aliothmoon.maafw.remote.internal.DisplayLifecycle
 import com.aliothmoon.maafw.remote.internal.AppWatchdog
 import com.aliothmoon.maafw.remote.internal.GameFpsMonitor
 import com.aliothmoon.maafw.remote.internal.GestureRecorder
@@ -250,41 +251,48 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     // ── 显示 ──
 
-    override fun setVirtualDisplayMode(mode: Int): Boolean = when (mode) {
-        DisplayMode.PRIMARY -> {
-            GameFpsMonitor.stop()
-            VirtualDisplayManager.stop()
-            virtualDisplayMode.set(mode)
-            true
-        }
+    // 读模式与起停在同一把锁里：切模式与起屏交错时，会按旧模式起出一块没人撤的屏
+    override fun setVirtualDisplayMode(mode: Int): Boolean = synchronized(DisplayLifecycle.lock) {
+        when (mode) {
+            DisplayMode.PRIMARY -> {
+                GameFpsMonitor.stop()
+                VirtualDisplayManager.stop()
+                virtualDisplayMode.set(mode)
+                true
+            }
 
-        DisplayMode.BACKGROUND -> {
-            PrimaryDisplayManager.stop()
-            virtualDisplayMode.set(mode)
-            true
-        }
+            DisplayMode.BACKGROUND -> {
+                PrimaryDisplayManager.stop()
+                virtualDisplayMode.set(mode)
+                true
+            }
 
-        else -> false
+            else -> false
+        }
     }
 
     override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) {
         VirtualDisplayManager.setResolution(width, height, dpi)
     }
 
-    override fun startVirtualDisplay(): Int = when (virtualDisplayMode.get()) {
-        DisplayMode.PRIMARY -> PrimaryDisplayManager.start()
-        DisplayMode.BACKGROUND -> VirtualDisplayManager.start()
-        else -> DefaultDisplayConfig.DISPLAY_NONE
+    override fun startVirtualDisplay(): Int = synchronized(DisplayLifecycle.lock) {
+        when (virtualDisplayMode.get()) {
+            DisplayMode.PRIMARY -> PrimaryDisplayManager.start()
+            DisplayMode.BACKGROUND -> VirtualDisplayManager.start()
+            else -> DefaultDisplayConfig.DISPLAY_NONE
+        }
     }
 
     override fun stopVirtualDisplay() {
         stopDisplayWatchers()
         GameFpsMonitor.stop()
-        when (virtualDisplayMode.get()) {
-            DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
-            DisplayMode.BACKGROUND -> {
-                PowerController.stopUserActivityKeepAlive()
-                VirtualDisplayManager.stop()
+        synchronized(DisplayLifecycle.lock) {
+            when (virtualDisplayMode.get()) {
+                DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
+                DisplayMode.BACKGROUND -> {
+                    PowerController.stopUserActivityKeepAlive()
+                    VirtualDisplayManager.stop()
+                }
             }
         }
     }
@@ -294,11 +302,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         val displayId = VirtualDisplayManager.getDisplayId()
         if (displayId == DefaultDisplayConfig.DISPLAY_NONE) return true
         return ActivityUtils.isAppOnDisplay(packageName, displayId).also { onDisplay ->
-            if (onDisplay) {
-                GameFpsMonitor.ensureStarted(packageName)
-                // 拉回 / 重启后换了新任务也靠巡检补上
-                ActivityUtils.excludeFromRecents(packageName, displayId)
-            }
+            if (onDisplay) GameFpsMonitor.ensureStarted(packageName)
         }
     }
 
@@ -533,10 +537,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
         step("game fps") { GameFpsMonitor.stop() }
         step("screen size") { ScreenManager.destroy() }
         step("power") { PowerController.destroy() }
+        // 排在拆屏之前：拆屏要排在卡住的显示调用后面等锁，被退出期限掐掉时断网规则还留在 netd 里，得等下次拉起才放开
+        step("xmsf") { XmsfFirewall.restoreIfNeeded() }
         step("primary display") { PrimaryDisplayManager.stop() }
         step("virtual display") { VirtualDisplayManager.stop() }
         step("preview") { shutdownPreview() }
-        step("xmsf") { XmsfFirewall.restoreIfNeeded() }
     }
 
     private inline fun step(name: String, action: () -> Unit) {

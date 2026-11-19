@@ -96,7 +96,7 @@ class ScheduleTriggerLog {
                 .mapNotNull { runCatching { json.decodeFromString<TriggerLogEntry>(it) }.getOrNull() }
                 .filter { it.stableId != stableId }
             if (kept.isEmpty()) file.delete()
-            else file.writeText(kept.joinToString("\n", postfix = "\n"))
+            else file.writeText(kept.joinToString("\n", postfix = "\n") { json.encodeToString(it) })
         }.onFailure { Timber.w(it, "Failed to delete trigger log entry") }
         Unit
     }

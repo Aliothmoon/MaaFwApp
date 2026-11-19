@@ -93,5 +93,7 @@ object RunProgressSnapshots {
 /** 16 以下没有实时动态开关，请求会被忽略 */
 fun NotificationManager.canRequestPromotedOngoing(): Boolean {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) return true
+    // 三星的 One UI 没给这项开关，查询恒为 false，但请求照样生效（对齐 MaaMeow）
+    if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) return true
     return canPostPromotedNotifications()
 }

@@ -53,15 +53,15 @@ object VirtualDisplayManager {
     private val flagTier = AtomicInteger(FLAG_TIER_NONE)
     private val virtualDisplay = AtomicReference<VirtualDisplay?>()
 
-    fun start(): Int {
+    fun start(): Int = synchronized(DisplayLifecycle.lock) {
         if (!state.compareAndSet(STATE_IDLE, STATE_CAPTURING)) {
             Ln.w("start: already capturing")
             return displayId.get()
         }
-        return startInternal()
+        startInternal()
     }
 
-    fun stop() {
+    fun stop(): Unit = synchronized(DisplayLifecycle.lock) {
         if (!state.compareAndSet(STATE_CAPTURING, STATE_IDLE)) {
             return
         }
@@ -69,7 +69,7 @@ object VirtualDisplayManager {
         Ln.i("VirtualDisplayManager stopped")
     }
 
-    fun restart() {
+    fun restart(): Unit = synchronized(DisplayLifecycle.lock) {
         if (state.get() != STATE_CAPTURING) {
             return
         }
@@ -77,7 +77,7 @@ object VirtualDisplayManager {
         startInternal()
     }
 
-    fun setResolution(width: Int, height: Int, dpi: Int = config.get().dpi) {
+    fun setResolution(width: Int, height: Int, dpi: Int = config.get().dpi): Unit = synchronized(DisplayLifecycle.lock) {
         val newConfig = DisplayConfig(width, height, dpi)
         val oldConfig = config.getAndSet(newConfig)
         if (state.get() == STATE_CAPTURING && oldConfig != newConfig) {
@@ -101,6 +101,8 @@ object VirtualDisplayManager {
             return displayId.get()
         } catch (e: Exception) {
             Ln.e("VirtualDisplayManager start failed", e)
+            // capturer 的 AImageReader 与帧缓冲在建屏之前就已分配，建屏失败不撤就漏到进程退出
+            runCatching { releaseResources() }.onFailure { Ln.e("release after failed start failed", it) }
             state.set(STATE_IDLE)
             return DISPLAY_NONE
         }

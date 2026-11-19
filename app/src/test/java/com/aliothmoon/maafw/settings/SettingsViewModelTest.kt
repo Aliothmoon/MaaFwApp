@@ -417,6 +417,28 @@ class SettingsViewModelTest {
         assertEquals(CdkStatus.None, latestPanel(viewModel).cdkStatus)
     }
 
+    /** 输完一秒内又清空：防抖不能把清空前那份吐出去验，状态行也不能卡在「正在验证」 */
+    @Test
+    fun `clearing the cdk within the debounce window verifies nothing`() = runTest {
+        val verified = mutableListOf<CdkVerifyRequest>()
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { check(any()) } returns
+                    UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
+                coEvery { verifyCdk(capture(verified)) } returns CdkVerification.Valid(null)
+            },
+        )
+        advanceUntilIdle()
+
+        viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk("cdk-1"))
+        advanceTimeBy(500)
+        viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk(""))
+        advanceUntilIdle()
+
+        assertEquals(emptyList<CdkVerifyRequest>(), verified)
+        assertEquals(CdkStatus.None, latestPanel(viewModel).cdkStatus)
+    }
+
     /** 已验过有效的，进页再验时碰上网络失败不降级 */
     @Test
     fun `a verified cdk survives a later network failure`() = runTest {

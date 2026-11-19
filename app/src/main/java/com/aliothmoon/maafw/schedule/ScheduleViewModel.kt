@@ -82,7 +82,9 @@ class ScheduleViewModel(
     private val healthSettings: Flow<HealthSettings> = combine(
         appSettings.runMode,
         combine(appSettings.screenSaverEnabled, store.strategies) { saver, rules ->
-            saver to rules.any { it.enabled && !it.hardwareScreenOff }
+            // 一条都没启用时按要用屏保算：健康卡在建第一条规则之前就该把缺的报出来（见 ScheduleHealth.failingIssues）
+            val enabled = rules.filter { it.enabled }
+            saver to (enabled.isEmpty() || enabled.any { !it.hardwareScreenOff })
         },
         appSettings.wakeUnlockType,
         appSettings.wakeCredential,
@@ -215,11 +217,9 @@ class ScheduleViewModel(
             }
 
             is ScheduleIntent.SetEnabled -> {
-                store.setEnabled(intent.strategyId, intent.enabled)
+                val written = store.setEnabled(intent.strategyId, intent.enabled)
                 alarms.cancel(intent.strategyId)
-                if (intent.enabled) {
-                    store.findById(intent.strategyId)?.let { alarms.scheduleNext(it) }
-                }
+                if (written?.enabled == true) alarms.scheduleNext(written)
             }
 
             ScheduleIntent.LoadTriggerLog -> loadedLog.value = triggerLog.readAll()

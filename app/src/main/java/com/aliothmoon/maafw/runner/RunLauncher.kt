@@ -87,7 +87,7 @@ sealed interface BlockSource {
 }
 
 sealed interface WhenBusy {
-    /** 当场报「正在启动中」或由 RunnerPort 拒 */
+    /** 当场报「正在启动中」或由 RunnerPort 拒；上一轮已停、收尾还没走完的，等它收完 */
     data object Reject : WhenBusy
 
     /** 掐掉在跑的那一轮，等它收尾完再上 */
@@ -173,10 +173,20 @@ class RunLauncher(
         startFromInstanceId: String?,
     ): RunLaunchResult {
         if (whenBusy is WhenBusy.Queue) {
-            withTimeoutOrNull(whenBusy.maxWaitMs) { awaitTurn(progress) }
-                ?: return RunLaunchResult.QueueTimedOut
+            var held = false
+            withTimeoutOrNull(whenBusy.maxWaitMs) { awaitTurn(progress); held = true }
+            // 超时可能紧贴着拿到闸门触发，块里拿到了 withTimeoutOrNull 照样回 null：按拿到算，否则这把锁永远没人放
+            if (!held) return RunLaunchResult.QueueTimedOut
         } else if (!gate.tryLock()) {
             return RunLaunchResult.Blocked(uiTextOf(R.string.msg_launch_in_progress), BlockSource.Busy)
+        } else if (!runnerPort.state.value.phase.isBusy) {
+            // 落回 Idle 后上一轮还在收尾（关目标应用、断特权进程、收起界面），这时 engage 会被它掐掉
+            try {
+                awaitSettling()
+            } catch (cancellation: CancellationException) {
+                gate.unlock()
+                throw cancellation
+            }
         }
         val engaged = ArrayDeque<Release>()
         try {
@@ -299,6 +309,17 @@ class RunLauncher(
         }
     }
 
+    /** 持着闸门等上一轮收尾走完；收尾每项限时，等得到头。算进 [hasWaiters]，它就不会把这一轮要用的连接断掉 */
+    private suspend fun awaitSettling() {
+        val pending = settling.get()?.takeUnless { it.isCompleted } ?: return
+        waiting.incrementAndGet()
+        try {
+            pending.join()
+        } finally {
+            waiting.decrementAndGet()
+        }
+    }
+
     private suspend fun acquireTurn(progress: RunProgress) {
         if (gate.tryLock()) {
             if (previousRoundSettled()) return
@@ -339,9 +360,11 @@ class RunLauncher(
      * engage 与旧一轮的 release 交错，屏保刚盖上就被上一轮撤掉
      */
     private suspend fun preemptRunning() {
-        if (!runnerPort.state.value.phase.isBusy) return
-        Timber.i("preempt: aborting the running round")
-        runnerPort.stop()
+        if (runnerPort.state.value.phase.isBusy) {
+            Timber.i("preempt: aborting the running round")
+            runnerPort.stop()
+        }
+        // 已落回 Idle 也要等：收尾还没走完的话，同样会与本轮的 engage 交错
         settling.getAndSet(null)?.join()
     }
 

@@ -21,9 +21,6 @@ object TrackerIconDecoder {
         return scale(orientByExif(path, bitmap))
     }
 
-    /** 只读文件头判断是不是图片 */
-    fun isImage(path: String): Boolean = bounds(path) != null
-
     private fun bounds(path: String): Pair<Int, Int>? {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, opts)

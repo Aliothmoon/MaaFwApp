@@ -86,8 +86,9 @@ class SettingsViewModel(
         // 填完 CDK 停一会儿就验一次；进设置页那次由界面发 VerifyCdk
         viewModelScope.launch {
             appSettings.loaded.first { it }
-            appSettings.mirrorchyanCdk.drop(1).filter(String::isNotBlank)
-                .debounce(CDK_CHECK_DEBOUNCE_MS.milliseconds).collect(::verifyCdk)
+            // 先防抖再滤空：反过来时输完 1 秒内清空，空串被滤掉，防抖照样吐出清空前那份去验
+            appSettings.mirrorchyanCdk.drop(1).debounce(CDK_CHECK_DEBOUNCE_MS.milliseconds)
+                .filter(String::isNotBlank).collect(::verifyCdk)
         }
     }
 
@@ -149,13 +150,22 @@ class SettingsViewModel(
 
             is SettingsIntent.SetMirrorchyanCdk -> viewModelScope.launch {
                 if (updateSettingsLocked()) return@launch
+                // 只多敲了首尾空白：落盘值不变、不会重验，清了状态就再也回不来
+                if (intent.cdk.trim() == appSettings.mirrorchyanCdk.value) return@launch
                 // 旧 CDK 的结果别挂在新输入旁边
                 cdkJob?.cancel()
                 updateOperation.update { it.copy(cdkStatus = CdkStatus.None) }
                 appSettings.setMirrorchyanCdk(intent.cdk)
             }
 
-            SettingsIntent.VerifyCdk -> appSettings.mirrorchyanCdk.value.takeIf(String::isNotBlank)?.let(::verifyCdk)
+            // 首页首帧就会发：设置可能还没读盘，rid 来自 PI 时 PI 也可能还在载，这时验就是空跑一趟
+            SettingsIntent.VerifyCdk -> viewModelScope.launch {
+                appSettings.loaded.first { it }
+                if (BuildConfig.MAFW_MIRRORCHYAN_RID.isBlank()) {
+                    projectRepository.state.first { it !is ProjectState.Loading }
+                }
+                appSettings.mirrorchyanCdk.value.takeIf(String::isNotBlank)?.let(::verifyCdk)
+            }
 
             is SettingsIntent.SetAutoCheckUpdate -> viewModelScope.launch {
                 if (updateSettingsLocked()) return@launch
@@ -393,7 +403,6 @@ class SettingsViewModel(
         }
     }
 
-    /** profile 钉的压过 PI 声明的：出包方知道自己发到哪个项目，PI 作者不一定知道 */
     /**
      * 验一次 [cdk]；迟到的旧 CDK 结果丢掉，已验过有效的不因一次网络失败降级
      */
@@ -425,6 +434,7 @@ class SettingsViewModel(
         }
     }
 
+    /** profile 钉的压过 PI 声明的：出包方知道自己发到哪个项目，PI 作者不一定知道 */
     private fun mirrorchyanRid(metadata: ProjectMetadata?): String? =
         BuildConfig.MAFW_MIRRORCHYAN_RID.takeIf(String::isNotBlank) ?: metadata?.mirrorchyanRid
 
