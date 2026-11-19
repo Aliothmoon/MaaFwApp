@@ -24,7 +24,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,13 +38,21 @@ import com.aliothmoon.maafw.log.RunLogDetailViewModel
 import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.RunSessionOutcome
 import com.aliothmoon.maafw.runner.RunSessionRecord
+import com.aliothmoon.maafw.runner.elapsedText
+import com.aliothmoon.maafw.runner.groupRunLog
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.ListPlaceholder
+import com.aliothmoon.maafw.ui.components.MaaRunLogTaskHeader
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
+import com.aliothmoon.maafw.ui.components.RunLogLevelPrefixes
+import com.aliothmoon.maafw.ui.components.rememberRunLogCardStyle
+import com.aliothmoon.maafw.ui.components.rememberRunLogLevelPrefixes
 import com.aliothmoon.maafw.ui.components.runLogColor
+import com.aliothmoon.maafw.ui.components.runLogLevelSemantics
+import com.aliothmoon.maafw.ui.components.runLogLineFrame
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -52,6 +60,8 @@ import org.koin.androidx.compose.koinViewModel
  *
  * 正文是写入时就渲染好的成品文本，这里不再翻译——历史记录用当时的语言，
  * 与 `RunSessionRecord.Line` 的取舍一致
+ *
+ * 与运行日志面板同样按任务分组成卡片；旧版本写的文件没有任务标记，整份落进无标题组，照旧平铺
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,8 +93,26 @@ fun RunLogDetailScreen(
             )
         },
     ) { padding ->
-        // 一次只展开一条：detail 展开就是十来行，多条同时展开这个列表没法看
-        var expanded by remember { mutableIntStateOf(-1) }
+        val records = state.records
+        val header = remember(records) { records.firstNotNullOfOrNull { it as? RunSessionRecord.Header } }
+        val footer = remember(records) { records.lastOrNull() as? RunSessionRecord.Footer }
+        val groups = remember(records) { groupRunLog(records.filterIsInstance<RunSessionRecord.Line>()) }
+        // 一次只展开一条：detail 展开就是十来行，多条同时展开这个列表没法看。
+        // 按对象认：同一份文件是只读快照，内容相同的两行仍是两个实例
+        var expandedLine by remember { mutableStateOf<RunSessionRecord.Line?>(null) }
+        // 用户点过的分组以点过的为准；按组序记，只读快照里组序不会变
+        val toggled = remember { mutableStateMapOf<Int, Boolean>() }
+        val cardStyle = rememberRunLogCardStyle()
+        val prefixes = rememberRunLogLevelPrefixes()
+        val lineRow: @Composable (RunSessionRecord.Line, Boolean, Boolean) -> Unit = { line, inCard, last ->
+            LineRow(
+                line = line,
+                expanded = expandedLine === line,
+                prefixes = prefixes,
+                onToggle = { expandedLine = if (expandedLine === line) null else line },
+                modifier = Modifier.runLogLineFrame(cardStyle, inCard, last),
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -94,20 +122,38 @@ fun RunLogDetailScreen(
                 modifier = Modifier
                     .fillMaxSize(),
                 contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
             ) {
-                // 索引当 key：同一份文件是只读快照，行序不会变
-                itemsIndexed(state.records) { index, record ->
-                    when (record) {
-                        is RunSessionRecord.Header -> HeaderBlock(record)
-                        is RunSessionRecord.Footer -> FooterBlock(record)
-                        is RunSessionRecord.Line -> LineRow(
-                            line = record,
-                            expanded = expanded == index,
-                            onToggle = { expanded = if (expanded == index) -1 else index },
+                // 键按组序 + 组内序：点开收起一组时后面的项整体挪位，没有键的话箭头动画会错位到别的表头上
+                header?.let { item(key = "header") { HeaderBlock(it) } }
+                groups.forEachIndexed { index, group ->
+                    if (group.start == null) {
+                        itemsIndexed(group.lines, key = { i, _ -> "p$index-$i" }) { _, line -> lineRow(line, false, false) }
+                        return@forEachIndexed
+                    }
+                    // 文件里的都已经跑完：没有结束行的算中断，不算进行中
+                    val isLast = index == groups.lastIndex
+                    val expanded = toggled[index] ?: group.expandedByDefault(running = false, isLast = isLast)
+                    val showLines = expanded && group.lines.isNotEmpty()
+                    item(key = "h$index", contentType = HEADER_CONTENT_TYPE) {
+                        MaaRunLogTaskHeader(
+                            title = group.title.orEmpty(),
+                            status = group.status(running = false, isLast = isLast),
+                            elapsed = group.elapsedMillis?.let(::elapsedText),
+                            warnings = group.warnings,
+                            expanded = expanded,
+                            expandable = group.lines.isNotEmpty(),
+                            style = cardStyle,
+                            closesCard = !showLines,
+                            onToggle = { toggled[index] = !expanded },
                         )
                     }
+                    if (showLines) {
+                        itemsIndexed(group.lines, key = { i, _ -> "l$index-$i" }) { i, line ->
+                            lineRow(line, true, i == group.lines.lastIndex)
+                        }
+                    }
                 }
+                footer?.let { item(key = "footer") { FooterBlock(it) } }
             }
             if (state.records.isEmpty()) {
                 ListPlaceholder(if (state.loading) R.string.common_loading else R.string.log_detail_empty)
@@ -182,11 +228,14 @@ private fun FooterBlock(footer: RunSessionRecord.Footer) {
 private fun LineRow(
     line: RunSessionRecord.Line,
     expanded: Boolean,
+    prefixes: RunLogLevelPrefixes,
     onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .runLogLevelSemantics(prefixes, line.kind, line.text)
             .then(if (line.detail != null) Modifier.maaClickable(onClick = onToggle) else Modifier),
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
     ) {
@@ -216,6 +265,8 @@ private fun LineRow(
         }
     }
 }
+
+private const val HEADER_CONTENT_TYPE = "taskHeader"
 
 private fun RunSessionOutcome.labelRes(): Int = when (this) {
     RunSessionOutcome.COMPLETED -> R.string.log_outcome_completed

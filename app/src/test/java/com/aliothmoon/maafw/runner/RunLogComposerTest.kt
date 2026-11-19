@@ -27,11 +27,54 @@ class RunLogComposerTest {
     @Test
     fun `task messages become sentences with the running task name`() {
         assertEquals(
-            RunLogEntry(1, 0, RunLogKind.Info, UiText.Resource(R.string.run_log_task_starting, listOf("启动应用"))),
+            RunLogEntry(
+                1,
+                0,
+                RunLogKind.Info,
+                UiText.Resource(R.string.run_log_task_starting, listOf("启动应用")),
+                task = RunLogTaskMark(RunLogTaskEdge.Start, "启动应用"),
+            ),
             callback("Tasker.Task.Starting", """{"entry":"Start"}"""),
         )
         assertEquals(RunLogKind.Success, callback("Tasker.Task.Succeeded")?.kind)
         assertEquals(RunLogKind.Error, callback("Tasker.Task.Failed")?.kind)
+    }
+
+    /** 任务起止三句带上标记，屏上与历史详情靠它分组；名字与正文用同一个展示名 */
+    @Test
+    fun `task start and end lines carry a task mark`() {
+        assertEquals(
+            RunLogTaskMark(RunLogTaskEdge.Start, "启动应用"),
+            callback("Tasker.Task.Starting", """{"entry":"Start"}""")?.task,
+        )
+        assertEquals(
+            RunLogTaskMark(RunLogTaskEdge.Succeeded, "启动应用"),
+            callback("Tasker.Task.Succeeded", """{"entry":"Start"}""")?.task,
+        )
+        callback("Tasker.Task.Starting", """{"entry":"Start"}""")
+        assertEquals(
+            RunLogTaskMark(RunLogTaskEdge.Failed, "启动应用"),
+            callback("Tasker.Task.Failed", """{"entry":"Start"}""")?.task,
+        )
+    }
+
+    /** 拿不到展示名时标记里的名字与正文一起退回 entry */
+    @Test
+    fun `the task mark falls back to the pipeline entry like the text`() {
+        val entry = RunLogComposer().compose(
+            RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"Start"}"""),
+            1,
+            0,
+            RunLogContext(),
+        )
+        assertEquals(RunLogTaskMark(RunLogTaskEdge.Start, "Start"), entry?.task)
+    }
+
+    @Test
+    fun `lines other than task start and end carry no mark`() {
+        assertNull(compose(RunnerEvent.Log("hello"))?.task)
+        assertNull(callback("Controller.Action.Succeeded", """{"action":"Connect"}""")?.task)
+        assertNull(compose(agentLine("print"))?.task)
     }
 
     /** 对齐 MAA 的完成日志：带上本任务的用时 */

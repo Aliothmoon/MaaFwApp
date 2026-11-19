@@ -91,7 +91,7 @@ class RunLogComposer {
         lastKind = composed.kind
         lastText = composed.text
 
-        return RunLogEntry(id, atMillis, composed.kind, composed.text, composed.detail)
+        return RunLogEntry(id, atMillis, composed.kind, composed.text, composed.detail, composed.task)
     }
 
     /**
@@ -187,22 +187,32 @@ class RunLogComposer {
 
             TASK_STARTING -> {
                 taskStartedAt = atMillis
+                val label = context.taskLabel(details)
                 Composed(
                     RunLogKind.Info,
-                    uiTextOf(R.string.run_log_task_starting, context.taskLabel(details)),
+                    uiTextOf(R.string.run_log_task_starting, label),
+                    task = RunLogTaskMark(RunLogTaskEdge.Start, label),
                 )
             }
 
-            TASK_SUCCEEDED -> Composed(
-                RunLogKind.Success,
-                withElapsed(uiTextOf(R.string.run_log_task_succeeded, context.taskLabel(details)), atMillis),
-            )
+            TASK_SUCCEEDED -> {
+                val label = context.taskLabel(details)
+                Composed(
+                    RunLogKind.Success,
+                    withElapsed(uiTextOf(R.string.run_log_task_succeeded, label), atMillis),
+                    task = RunLogTaskMark(RunLogTaskEdge.Succeeded, label),
+                )
+            }
 
-            TASK_FAILED -> Composed(
-                RunLogKind.Error,
-                withElapsed(uiTextOf(R.string.run_log_task_failed, context.taskLabel(details)), atMillis),
-                event.details,
-            )
+            TASK_FAILED -> {
+                val label = context.taskLabel(details)
+                Composed(
+                    RunLogKind.Error,
+                    withElapsed(uiTextOf(R.string.run_log_task_failed, label), atMillis),
+                    event.details,
+                    RunLogTaskMark(RunLogTaskEdge.Failed, label),
+                )
+            }
 
             else -> null
         }
@@ -222,6 +232,7 @@ class RunLogComposer {
         val kind: RunLogKind,
         val text: UiText,
         val detail: String? = null,
+        val task: RunLogTaskMark? = null,
     )
 
     private companion object {

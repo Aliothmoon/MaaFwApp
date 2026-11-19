@@ -48,6 +48,9 @@ object MaaDesignTokens {
 
         /** 单选标记的圈 */
         val marker: Dp = 2.dp
+
+        /** 与 [IconSize.sm] 同大的行内转圈；M3 默认 4dp 在这个尺寸下糊成一团 */
+        val spinner: Dp = 2.dp
     }
 
     /**

@@ -593,6 +593,18 @@
     <string name="tasks_log">Log</string>
     <string name="run_log_filter_progress">Progress</string>
     <string name="run_log_filter_all">All</string>
+    <string name="run_log_group_running">In progress</string>
+    <string name="run_log_group_succeeded">Completed</string>
+    <string name="run_log_group_failed">Failed</string>
+    <string name="run_log_group_interrupted">Interrupted</string>
+    <string name="run_log_group_expanded">Expanded</string>
+    <string name="run_log_group_collapsed">Collapsed</string>
+    <plurals name="run_log_group_warnings">
+        <item quantity="one">%1$d warning</item>
+        <item quantity="other">%1$d warnings</item>
+    </plurals>
+    <string name="run_log_a11y_warning">Warning: %1$s</string>
+    <string name="run_log_a11y_error">Error: %1$s</string>
     <string name="run_log_connecting">Connecting to device…</string>
     <string name="run_log_connected">Device connected</string>
     <string name="run_log_agent_connected">Agent connected: %1$s</string>

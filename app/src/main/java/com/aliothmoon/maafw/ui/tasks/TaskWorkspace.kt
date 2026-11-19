@@ -196,6 +196,8 @@ private fun TaskWorkspaceBody(
     when {
         logOpen -> RunLogPanel(
             entries = runLog,
+            // 锁定唯一来源就是 RunnerPhase.isBusy，正是「这一轮还没收尾」
+            running = locked,
             onExport = onExportLogs,
             onClear = { onIntent(SessionIntent.ClearRunLog) },
             modifier = modifier.fillMaxSize(),

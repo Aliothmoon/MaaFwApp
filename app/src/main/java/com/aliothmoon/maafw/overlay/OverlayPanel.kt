@@ -103,6 +103,7 @@ fun OverlayPanel(
                     OverlayPanelTab.LOG -> if (page == pagerState.currentPage || page == pagerState.targetPage) {
                         RunLogPanel(
                             entries = logEntries,
+                            running = phase.isBusy,
                             onExport = onExportLog,
                             onClear = { onIntent(SessionIntent.ClearRunLog) },
                         )

@@ -583,6 +583,17 @@
     <string name="tasks_log">日志</string>
     <string name="run_log_filter_progress">进度</string>
     <string name="run_log_filter_all">全部</string>
+    <string name="run_log_group_running">进行中</string>
+    <string name="run_log_group_succeeded">已完成</string>
+    <string name="run_log_group_failed">出错</string>
+    <string name="run_log_group_interrupted">已中断</string>
+    <string name="run_log_group_expanded">已展开</string>
+    <string name="run_log_group_collapsed">已收起</string>
+    <plurals name="run_log_group_warnings">
+        <item quantity="other">%1$d 条警告</item>
+    </plurals>
+    <string name="run_log_a11y_warning">警告：%1$s</string>
+    <string name="run_log_a11y_error">错误：%1$s</string>
     <string name="run_log_connecting">正在连接设备…</string>
     <string name="run_log_connected">设备连接成功</string>
     <string name="run_log_agent_connected">Agent 已连接: %1$s</string>
