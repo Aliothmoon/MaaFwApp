@@ -138,6 +138,7 @@ import com.aliothmoon.maafw.ui.logs.RunLogArchiveScreen
 import com.aliothmoon.maafw.ui.logs.RunLogDetailScreen
 import com.aliothmoon.maafw.ui.navigation.Routes
 import com.aliothmoon.maafw.ui.pip.LocalIsInPip
+import com.aliothmoon.maafw.ui.notification.LiveStyleScreen
 import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
@@ -719,7 +720,13 @@ fun AppRoot(
                     ScheduleAppBlacklistScreen(onBack = { navController.popBackStack() })
                 }
                 subPage(Routes.NOTIFICATION_SETTINGS) {
-                    NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                    NotificationSettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenLiveStyle = { navController.navigate(Routes.LIVE_STYLE) },
+                    )
+                }
+                subPage(Routes.LIVE_STYLE) {
+                    LiveStyleScreen(onBack = { navController.popBackStack() })
                 }
                 subPage(Routes.WALLPAPER) {
                     WallpaperScreen(onBack = { navController.popBackStack() })

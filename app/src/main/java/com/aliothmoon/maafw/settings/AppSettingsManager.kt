@@ -15,6 +15,10 @@ import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.notification.live.LiveBackend
+import com.aliothmoon.maafw.notification.live.LiveChipContent
+import com.aliothmoon.maafw.notification.live.LiveColorScheme
+import com.aliothmoon.maafw.notification.live.LiveStyle
+import com.aliothmoon.maafw.notification.live.LiveTrackerIcon
 import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunDurationLimit
@@ -63,8 +67,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
          * 随配置导出、导入的设置：和这台设备无关、也不含凭据的那些
          *
          * 不在列：提权后端与 Shizuku 几项（换台设备不一定有 Root / Shizuku）、虚拟屏分辨率（看屏幕）、
-         * 运行通知样式（超级岛、实时更新看 ROM）、背景图（图不进文件）、唤醒解锁、Mirror酱 CDK、应用黑名单（看装了什么）、
+         * 运行通知的展示方式（超级岛、实时更新看 ROM）、背景图与运行通知的自定义图标（图不进文件）、
+         * 唤醒解锁、Mirror酱 CDK、应用黑名单（看装了什么）、
          * 遥测开关（本机关了的，导入一份开着的备份不能被重新打开）。
+         * 运行通知的图标选择随行，但 CUSTOM 导出成 DEFAULT：图片路径只在本机有效
          * 不在列的项导入时一律不碰，本机填好的不会被清掉
          */
         private val PORTABLE_SETTINGS: List<Pair<Preferences.Key<String>, (AppSettings) -> String>> =
@@ -83,6 +89,10 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                     wallpaperScrim to AppSettings::wallpaperScrim,
                     wallpaperBlur to AppSettings::wallpaperBlur,
                     eventNotificationLevel to AppSettings::eventNotificationLevel,
+                    liveChipContent to AppSettings::liveChipContent,
+                    liveColorScheme to AppSettings::liveColorScheme,
+                    liveCustomColor to AppSettings::liveCustomColor,
+                    liveTrackerIcon to { LiveStyle.portableTrackerIcon(it.liveTrackerIcon) },
                     runDurationLimitEnabled to AppSettings::runDurationLimitEnabled,
                     runDurationLimitMinutes to AppSettings::runDurationLimitMinutes,
                     autoCheckUpdate to AppSettings::autoCheckUpdate,
@@ -143,6 +153,11 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
 
     /** 运行通知的展示方式；null 是没选过，见 [com.aliothmoon.maafw.notification.live.LiveBackends.resolve] */
     val liveBackend: StateFlow<LiveBackend?> = _liveBackend.asStateFlow()
+
+    private val _liveStyle = MutableStateFlow(parseLiveStyle(defaults))
+
+    /** 运行通知样式：胶囊内容、进度条配色、图标 */
+    val liveStyle: StateFlow<LiveStyle> = _liveStyle.asStateFlow()
 
     private val _resolutionPreset = MutableStateFlow(ResolutionPresets.resolve(defaults.resolutionPreset))
     override val resolutionPreset: StateFlow<ResolutionPreset> = _resolutionPreset.asStateFlow()
@@ -222,6 +237,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _wallpaper.value = parseWallpaper(s)
                 _eventNotificationLevel.value = parseEventNotificationLevel(s.eventNotificationLevel)
                 _liveBackend.value = parseLiveBackend(s.liveBackend)
+                _liveStyle.value = parseLiveStyle(s)
                 _wakeUnlockType.value = parseWakeUnlockType(s.wakeUnlockType)
                 _wakeCredential.value = s.wakeCredential
                 _runDurationLimitEnabled.value = s.runDurationLimitEnabled.toBoolean()
@@ -328,6 +344,33 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[liveBackend] = backend?.name.orEmpty() }
     }
 
+    suspend fun setLiveChipContent(content: LiveChipContent) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[liveChipContent] = content.name }
+    }
+
+    suspend fun setLiveColorScheme(scheme: LiveColorScheme) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[liveColorScheme] = scheme.name }
+    }
+
+    suspend fun setLiveCustomColor(hex: String) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[liveCustomColor] = hex }
+    }
+
+    suspend fun setLiveTrackerIcon(icon: LiveTrackerIcon) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[liveTrackerIcon] = icon.name }
+    }
+
+    suspend fun setLiveCustomTrackerPath(path: String) = with(AppSettingsSchema) {
+        context.dataStore.edit { it[liveCustomTrackerPath] = path }
+    }
+
+    suspend fun clearLiveCustomTracker() = with(AppSettingsSchema) {
+        context.dataStore.edit {
+            it[liveTrackerIcon] = LiveTrackerIcon.DEFAULT.name
+            it[liveCustomTrackerPath] = ""
+        }
+    }
+
     override suspend fun setWakeUnlockType(type: String): Unit = with(AppSettingsSchema) {
         if (type !in UnlockCredential.TYPES) return
         context.dataStore.edit { it[wakeUnlockType] = type }
@@ -409,6 +452,14 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         imageAlpha = parsePercent(s.wallpaperImageAlpha, 80),
         scrim = parsePercent(s.wallpaperScrim, 25),
         blur = parsePercent(s.wallpaperBlur, 0),
+    )
+
+    private fun parseLiveStyle(s: AppSettings) = LiveStyle.parse(
+        chipContent = s.liveChipContent,
+        colorScheme = s.liveColorScheme,
+        customColor = s.liveCustomColor,
+        trackerIcon = s.liveTrackerIcon,
+        customTrackerPath = s.liveCustomTrackerPath,
     )
 
     private fun parsePackageList(raw: String): Set<String> =

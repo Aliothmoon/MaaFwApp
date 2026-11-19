@@ -61,6 +61,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun NotificationSettingsScreen(
     onBack: () -> Unit,
+    onOpenLiveStyle: () -> Unit,
     viewModel: NotificationSettingsViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -104,7 +105,7 @@ fun NotificationSettingsScreen(
             contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            item(key = "live") { RunNotificationCard(state, viewModel::onIntent) }
+            item(key = "live") { RunNotificationCard(state, viewModel::onIntent, onOpenLiveStyle) }
             item(key = "internal") { InternalCard(state, viewModel::onIntent) }
             item(key = "triggers") { TriggerCard(state, viewModel::onIntent) }
             items(NOTIFICATION_PROVIDER_ORDER, key = { it }) { id ->

@@ -122,6 +122,24 @@ data class AppSettings(
     @PrefKey(default = "")
     val liveBackend: String = "",
 
+    /** 运行通知样式，取值与语义见 [com.aliothmoon.maafw.notification.live.LiveStyle] */
+    @PrefKey(default = "BOTH")
+    val liveChipContent: String = "BOTH",
+
+    @PrefKey(default = "DEFAULT")
+    val liveColorScheme: String = "DEFAULT",
+
+    /** `#RRGGBB`，只在 CUSTOM 配色下生效 */
+    @PrefKey(default = "")
+    val liveCustomColor: String = "",
+
+    @PrefKey(default = "DEFAULT")
+    val liveTrackerIcon: String = "DEFAULT",
+
+    /** 自定义图标在 filesDir 里的绝对路径，只在 CUSTOM 图标下生效；设备本地，不随配置导出 */
+    @PrefKey(default = "")
+    val liveCustomTrackerPath: String = "",
+
     /**
      * 定时触发时的解锁方式：swipe / gesture / pin（见 [com.aliothmoon.maafw.domain.UnlockCredential]）
      *

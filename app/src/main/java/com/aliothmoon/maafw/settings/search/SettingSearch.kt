@@ -199,6 +199,8 @@ object SettingSearchIndex {
         entry(R.string.wallpaper_enable, wallpaperPage, SettingAnchors.WALLPAPER_ENABLE, R.string.wallpaper_desc, R.string.search_keywords_wallpaper),
 
         entry(R.string.notification_section_live, notificationPage, SettingAnchors.NOTIFY_LIVE_STYLE, keywordsRes = R.string.search_keywords_live),
+        // 样式页入口看本机能力才出现，借常显的展示方式锚点落到同一节
+        entry(R.string.live_style_title, notificationPage, SettingAnchors.NOTIFY_LIVE_STYLE, R.string.live_style_entry_desc, R.string.search_keywords_live_style),
         entry(R.string.notification_enable, notificationPage, SettingAnchors.NOTIFY_ENABLE),
         entry(R.string.notification_popup, notificationPage, SettingAnchors.NOTIFY_ENABLE),
         entry(R.string.notification_send_on_complete, notificationPage, SettingAnchors.NOTIFY_ON_COMPLETE),

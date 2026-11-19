@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.notification.live.FocusSequenceStore
 import com.aliothmoon.maafw.notification.live.LiveCapabilityProbe
 import com.aliothmoon.maafw.notification.live.RunNotificationFactory
 import com.aliothmoon.maafw.notification.live.RunNotificationTester
+import com.aliothmoon.maafw.notification.live.TrackerIconStore
 import com.aliothmoon.maafw.notification.live.XmsfNetworkGate
 import com.aliothmoon.maafw.notification.provider.BarkProvider
 import com.aliothmoon.maafw.notification.provider.CustomWebhookProvider
@@ -34,7 +35,8 @@ val notificationModule = module {
     // 运行通知的三种展示方式：前台服务按它们拼进度通知，通知设置页读能力、发测试
     single { LiveCapabilityProbe(androidContext(), get()) }
     single { FocusSequenceStore(androidContext()) }
-    single { RunNotificationFactory(androidContext(), get()) }
+    single { TrackerIconStore(androidContext(), get()) }
+    single { RunNotificationFactory(androidContext(), get(), get(), get()) }
     single { XmsfNetworkGate(androidContext(), get(), get(named<AppCoroutineScope>())) }
     single { RunNotificationTester(androidContext(), get(), get(), get(), get(named<AppCoroutineScope>())) }
 

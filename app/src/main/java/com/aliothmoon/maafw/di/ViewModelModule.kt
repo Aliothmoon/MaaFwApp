@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.log.AppLogDetailViewModel
 import com.aliothmoon.maafw.log.AppLogViewModel
 import com.aliothmoon.maafw.log.RunLogArchiveViewModel
 import com.aliothmoon.maafw.log.RunLogDetailViewModel
+import com.aliothmoon.maafw.notification.LiveStyleViewModel
 import com.aliothmoon.maafw.notification.NotificationSettingsViewModel
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.schedule.ScheduleWakeUnlockViewModel
@@ -25,6 +26,7 @@ val viewModelModule = module {
     viewModelOf(::AppLogViewModel)
     viewModelOf(::AppLogDetailViewModel)
     viewModelOf(::NotificationSettingsViewModel)
+    viewModelOf(::LiveStyleViewModel)
     viewModelOf(::WallpaperViewModel)
     singleOf(::SessionViewModel)
     single {

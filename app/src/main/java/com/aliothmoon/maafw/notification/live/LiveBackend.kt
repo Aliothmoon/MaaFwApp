@@ -33,6 +33,10 @@ data class LiveCapability(
             if (liveUpdateAvailable) add(LiveBackend.LIVE_UPDATE)
             add(LiveBackend.PLAIN)
         }
+
+    /** 运行通知样式有能生效的项：标准通知栏在 16 以下退回系统进度条，颜色与图标都不生效 */
+    val styleConfigurable: Boolean
+        get() = backend != LiveBackend.PLAIN || liveUpdateAvailable
 }
 
 object LiveBackends {

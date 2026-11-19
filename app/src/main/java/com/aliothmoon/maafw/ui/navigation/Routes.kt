@@ -41,6 +41,9 @@ object Routes {
     /** 通知设置：系统事件通知档位 + 外部推送渠道 */
     const val NOTIFICATION_SETTINGS = "notification_settings"
 
+    /** 运行通知样式：显示内容、进度条颜色、图标；从通知设置页的「运行通知」一节进 */
+    const val LIVE_STYLE = "live_style"
+
     /** 自定义背景：选图裁剪与不透明度、遮罩、模糊 */
     const val WALLPAPER = "wallpaper"
 

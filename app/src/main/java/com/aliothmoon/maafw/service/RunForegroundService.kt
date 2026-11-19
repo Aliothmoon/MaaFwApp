@@ -135,13 +135,14 @@ class RunForegroundService : Service() {
 
     private suspend fun observeProgress() {
         var lastPostedPhase: RunnerPhase? = null
-        // 展示方式与闸门也算输入：设置里换了方式、闸门拿到了，都要立刻重发一帧
+        // 展示方式、样式与闸门也算输入：设置里换了方式或样式、闸门拿到了，都要立刻重发一帧
         combine(
             runnerPort.state,
             recorder.liveUpdateStatus,
             appSettings.liveBackend,
             islandReady,
-        ) { state, status, _, _ -> state to status }.collectLatest { (state, status) ->
+            notificationFactory.styleChanges,
+        ) { state, status, _, _, _ -> state to status }.collectLatest { (state, status) ->
             if (!state.phase.isBusy) {
                 lastPostedPhase = null
                 stopNow()
