@@ -153,6 +153,31 @@ sealed interface UpdateResolveResult {
     ) : UpdateResolveResult
 }
 
+/** Mirror酱 CDK 的校验输入；[currentVersion] 只用来先问出最新版本号 */
+data class CdkVerifyRequest(
+    val cdk: String,
+    val currentVersion: String,
+    val abi: AndroidAbi,
+    val channel: UpdateChannel = UpdateChannel.STABLE,
+    val mirrorchyanRid: String? = null,
+)
+
+sealed interface CdkVerification {
+    /** [expiresAtSec] 是 Unix 秒，服务端没给时为 null */
+    data class Valid(val expiresAtSec: Long?) : CdkVerification
+
+    /** 服务端认定 CDK 不能用；[reason] 是 CDK_* 之一 */
+    data class Rejected(val reason: UpdateCheckFailure) : CdkVerification
+
+    /** 网络、服务端或配置的问题：判不出 CDK 本身对不对 */
+    data object Unverified : CdkVerification
+}
+
+/** 能校验 CDK 的源（只有 Mirror酱）；检查与解析之外的第三件事，不进 [UpdateSourceClient] */
+interface CdkVerifier {
+    suspend fun verifyCdk(request: CdkVerifyRequest): CdkVerification
+}
+
 /**
  * 每源一个实现；[source] 是路由键，只被 [UpdateService] 消费，实现自身不读 request.source。
  * 「检查匿名、CDK 只在解析带上」的约束长在两个请求类型上，与实现无关

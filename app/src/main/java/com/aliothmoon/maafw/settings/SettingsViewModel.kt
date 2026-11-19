@@ -14,6 +14,8 @@ import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
 import com.aliothmoon.maafw.update.TransferRateMeter
 import com.aliothmoon.maafw.update.UpdateCheckFailure
+import com.aliothmoon.maafw.update.CdkVerification
+import com.aliothmoon.maafw.update.CdkVerifyRequest
 import com.aliothmoon.maafw.update.UpdateCheckRequest
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateDownloadResult
@@ -74,25 +76,18 @@ class SettingsViewModel(
     /** 只在 CAS 抢到 downloading 位后登记，取消不会误伤没抢到位的空跑协程 */
     private var downloadJob: Job? = null
 
+    private var cdkJob: Job? = null
+
+    /** 本进程里最近一次验成有效的 CDK 与结果 */
+    private var verifiedCdk: Pair<String, CdkStatus.Valid>? = null
+
     init {
         viewModelScope.launch { startupUpdateCheck() }
-        // 对齐 MaaMeow：填写 CDK 时静默触发一次检查，结果丢弃、不弹任何窗
+        // 填完 CDK 停一会儿就验一次；进设置页那次由界面发 VerifyCdk
         viewModelScope.launch {
             appSettings.loaded.first { it }
             appSettings.mirrorchyanCdk.drop(1).filter(String::isNotBlank)
-                .debounce(CDK_CHECK_DEBOUNCE_MS.milliseconds).collect {
-                    val metadata = projectMetadata()
-                    updateService.check(
-                        UpdateCheckRequest(
-                            source = appSettings.updateSource.value,
-                            currentVersion = currentVersion,
-                            channel = appSettings.updateChannel.value,
-                            abi = abi,
-                            mirrorchyanRid = mirrorchyanRid(metadata),
-                            githubRepository = metadata?.githubRepository,
-                        ),
-                    )
-                }
+                .debounce(CDK_CHECK_DEBOUNCE_MS.milliseconds).collect(::verifyCdk)
         }
     }
 
@@ -154,8 +149,13 @@ class SettingsViewModel(
 
             is SettingsIntent.SetMirrorchyanCdk -> viewModelScope.launch {
                 if (updateSettingsLocked()) return@launch
+                // 旧 CDK 的结果别挂在新输入旁边
+                cdkJob?.cancel()
+                updateOperation.update { it.copy(cdkStatus = CdkStatus.None) }
                 appSettings.setMirrorchyanCdk(intent.cdk)
             }
+
+            SettingsIntent.VerifyCdk -> appSettings.mirrorchyanCdk.value.takeIf(String::isNotBlank)?.let(::verifyCdk)
 
             is SettingsIntent.SetAutoCheckUpdate -> viewModelScope.launch {
                 if (updateSettingsLocked()) return@launch
@@ -394,6 +394,32 @@ class SettingsViewModel(
     }
 
     /** profile 钉的压过 PI 声明的：出包方知道自己发到哪个项目，PI 作者不一定知道 */
+    /**
+     * 验一次 [cdk]；迟到的旧 CDK 结果丢掉，已验过有效的不因一次网络失败降级
+     */
+    private fun verifyCdk(cdk: String) {
+        cdkJob?.cancel()
+        updateOperation.update { it.copy(cdkStatus = CdkStatus.Checking) }
+        cdkJob = viewModelScope.launch {
+            val result = updateService.verifyCdk(
+                CdkVerifyRequest(
+                    cdk = cdk,
+                    currentVersion = currentVersion,
+                    abi = abi,
+                    channel = appSettings.updateChannel.value,
+                    mirrorchyanRid = mirrorchyanRid(projectMetadata()),
+                ),
+            )
+            if (appSettings.mirrorchyanCdk.value != cdk) return@launch
+            val status = when (result) {
+                is CdkVerification.Valid -> CdkStatus.Valid(result.expiresAtSec).also { verifiedCdk = cdk to it }
+                is CdkVerification.Rejected -> CdkStatus.Rejected(result.reason).also { verifiedCdk = null }
+                CdkVerification.Unverified -> verifiedCdk?.takeIf { it.first == cdk }?.second ?: CdkStatus.Unverified
+            }
+            updateOperation.update { it.copy(cdkStatus = status) }
+        }
+    }
+
     private fun mirrorchyanRid(metadata: ProjectMetadata?): String? =
         BuildConfig.MAFW_MIRRORCHYAN_RID.takeIf(String::isNotBlank) ?: metadata?.mirrorchyanRid
 

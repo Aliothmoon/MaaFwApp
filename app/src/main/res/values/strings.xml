@@ -173,6 +173,12 @@
     <string name="settings_update_mirror_cdk">Mirror酱 CDK</string>
     <string name="settings_update_cdk_placeholder">输入您的 CDK</string>
     <string name="settings_update_cdk_subscribe">没有CDK? 立即订阅</string>
+    <string name="settings_update_cdk_checking">正在验证 CDK…</string>
+    <string name="settings_update_cdk_unverified">无法验证 CDK，请检查网络</string>
+    <string name="settings_update_cdk_valid_no_expiry">CDK 有效，未获取到到期时间</string>
+    <plurals name="settings_update_cdk_days_left">
+        <item quantity="other">CDK 有效，还剩 %1$d 天到期</item>
+    </plurals>
     <string name="settings_update_cdk_clear">清空 CDK</string>
     <string name="settings_update_cdk_show">显示 CDK</string>
     <string name="settings_update_cdk_hide">隐藏 CDK</string>

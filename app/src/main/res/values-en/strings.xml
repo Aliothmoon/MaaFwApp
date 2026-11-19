@@ -179,6 +179,13 @@
     <string name="settings_update_mirror_cdk">MirrorChyan CDK</string>
     <string name="settings_update_cdk_placeholder">Enter your CDK</string>
     <string name="settings_update_cdk_subscribe">No CDK? Subscribe</string>
+    <string name="settings_update_cdk_checking">Verifying CDK…</string>
+    <string name="settings_update_cdk_unverified">Could not verify the CDK; check the network</string>
+    <string name="settings_update_cdk_valid_no_expiry">CDK valid; expiry date unavailable</string>
+    <plurals name="settings_update_cdk_days_left">
+        <item quantity="one">CDK valid, expires in %1$d day</item>
+        <item quantity="other">CDK valid, expires in %1$d days</item>
+    </plurals>
     <string name="settings_update_cdk_clear">Clear CDK</string>
     <string name="settings_update_cdk_show">Show CDK</string>
     <string name="settings_update_cdk_hide">Hide CDK</string>
