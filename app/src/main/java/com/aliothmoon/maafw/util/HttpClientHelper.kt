@@ -78,7 +78,7 @@ class HttpClientHelper(
         val mediaType = contentTypeEntry?.value?.toMediaTypeOrNull()
             ?: JSON_MEDIA_TYPE.also {
                 if (contentTypeEntry != null) {
-                    Timber.w("Content-Type 无法解析，按 JSON 发送: %s", contentTypeEntry.value)
+                    Timber.w("unparsable Content-Type, sending as JSON: %s", contentTypeEntry.value)
                 }
             }
         val request = Request.Builder().apply {

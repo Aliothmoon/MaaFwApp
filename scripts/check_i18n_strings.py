@@ -8,13 +8,16 @@ i18n strings.xml 一致性校验与冗余清理工具。
   - res/values-zh/strings.xml   历史遗留的中文冗余副本,应删除
                                 (中文 locale "zh" 会自动 fallback 到默认 values)
 
-本脚本做两件事:
+本脚本做三件事:
   1) 校验(默认):对比默认 values(中文)与 values-en(英文),报告
        - key 不一致:英文漏翻 / 英文多余残留
        - 占位符(%1$s 等)集合不匹配
        - 英文值里残留中文(疑似漏翻,或运行时会 fallback 成中文)
        - 单个文件内重复定义的 key
-  2) 清理(--clean):在确认零丢失后删除冗余的 values-zh。
+  2) 扫描 main 源码里注释以外的中文字面量:界面文案走字符串资源,日志与异常消息用英文,
+     所以日志调用不跳过;确需保留的逐条登记到 scripts/chinese_literal_allowlist.tsv,
+     已不在源码里的登记条目同样报错
+  3) 清理(--clean):在确认零丢失后删除冗余的 values-zh。
 
 用法:
   python scripts/check_i18n_strings.py            # 仅校验,有错误时以非零码退出(可作 CI gate)
@@ -37,6 +40,10 @@ RES_DIR = PROJECT_ROOT / "app" / "src" / "main" / "res"
 VALUES_DEFAULT = RES_DIR / "values" / "strings.xml"   # 中文源(source of truth)
 VALUES_EN = RES_DIR / "values-en" / "strings.xml"     # 英文翻译
 VALUES_ZH = RES_DIR / "values-zh" / "strings.xml"     # 冗余中文副本
+SOURCE_ROOT = PROJECT_ROOT / "app" / "src" / "main" / "java"
+ALLOWLIST = PROJECT_ROOT / "scripts" / "chinese_literal_allowlist.tsv"
+SOURCE_EXTENSIONS = {".kt", ".java"}
+HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 
 # Android 带序号占位符:%1$s、%2$d、%1$04d、%1$dx%2$d 等
 PLACEHOLDER_RE = re.compile(r"%\d+\$[-#+ 0-9.]*[a-zA-Z]")
@@ -167,6 +174,118 @@ def check() -> int:
     return errors
 
 
+def _string_end(src: str, start: int) -> int:
+    j = start
+    n = len(src)
+    while j < n:
+        c = src[j]
+        if c == "\\":
+            j += 2
+        elif src.startswith("${", j):
+            j = _template_end(src, j + 2)
+        elif c == '"' or c == "\n":
+            return j
+        else:
+            j += 1
+    return n
+
+
+def _template_end(src: str, start: int) -> int:
+    depth = 1
+    j = start
+    n = len(src)
+    while j < n and depth > 0:
+        c = src[j]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+        elif c == '"':
+            j = _string_end(src, j + 1)
+        j += 1
+    return j
+
+
+def _char_end(src: str, i: int) -> int:
+    start = i + 3 if src[i + 1:i + 2] == "\\" else i + 2
+    close = src.find("'", start)
+    return close + 1 if start <= close <= i + 8 else i + 1
+
+
+def han_literals(src: str) -> list[str]:
+    """注释以外、含中文的字符串字面量(引号内的源码原文);模板里嵌套的字符串算在外层那条里"""
+    out: list[str] = []
+    i = 0
+    n = len(src)
+    while i < n:
+        if src.startswith("//", i):
+            end = src.find("\n", i)
+            i = n if end < 0 else end
+        elif src.startswith("/*", i):
+            end = src.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+        elif src.startswith('"""', i):
+            close = src.find('"""', i + 3)
+            close = n if close < 0 else close
+            end = min(close + 3, n)
+            while end < n and src[end] == '"':
+                end += 1
+            literal = src[i + 3:max(i + 3, end - 3)]
+            if HAN_RE.search(literal):
+                out.append(literal)
+            i = end
+        elif src[i] == '"':
+            close = _string_end(src, i + 1)
+            literal = src[i + 1:close]
+            if HAN_RE.search(literal):
+                out.append(literal)
+            i = close + 1
+        elif src[i] == "'":
+            i = _char_end(src, i)
+        else:
+            i += 1
+    return out
+
+
+def load_allowlist() -> set[tuple[str, str]]:
+    entries: set[tuple[str, str]] = set()
+    if not ALLOWLIST.exists():
+        return entries
+    for line in ALLOWLIST.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        path, sep, literal = line.partition("\t")
+        if not sep:
+            raise SystemExit(f"{ALLOWLIST.name} 格式应为 <路径>\\t<字面量>: {line}")
+        entries.add((path, literal))
+    return entries
+
+
+def check_source_literals() -> int:
+    """扫描 main 源码的中文字面量,返回未登记 + 登记已失效的条数"""
+    found: set[tuple[str, str]] = set()
+    for file in sorted(SOURCE_ROOT.rglob("*")):
+        if file.suffix not in SOURCE_EXTENSIONS or not file.is_file():
+            continue
+        path = file.relative_to(SOURCE_ROOT).as_posix()
+        for literal in han_literals(file.read_text(encoding="utf-8")):
+            found.add((path, literal))
+    allowed = load_allowlist()
+    unexpected = sorted(found - allowed)
+    stale = sorted(allowed - found)
+    if unexpected:
+        print(f"[错误] 源码里未登记的中文字面量共 {len(unexpected)} 条"
+              f"(界面文案改用字符串资源,日志与异常消息改英文,确需保留的登记到 {ALLOWLIST.name}):")
+        for path, literal in unexpected:
+            print(f"    {path}\t{literal}")
+    if stale:
+        print(f"[错误] {ALLOWLIST.name} 里这些条目已不在源码里,请删除:")
+        for path, literal in stale:
+            print(f"    {path}\t{literal}")
+    print(f"源码扫描完成:中文字面量 {len(found)} 条,已登记 {len(found & allowed)} 条。")
+    return len(unexpected) + len(stale)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="i18n strings.xml 校验与冗余清理")
     parser.add_argument("--clean", action="store_true",
@@ -182,6 +301,9 @@ def main() -> int:
 
     print("== 校验 values(中文) vs values-en(英文) ==")
     errors = check()
+    print()
+    print("== 扫描 main 源码的中文字面量 ==")
+    errors += check_source_literals()
 
     return 1 if (errors and not args.no_fail) else 0
 

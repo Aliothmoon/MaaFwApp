@@ -481,6 +481,14 @@
 
     <!-- Runner 拒绝/失败原因：reason 现为 UiText，不再当 %s 拼接 -->
     <string name="msg_fail_default">执行失败</string>
+    <string name="msg_prepare_framework_not_loaded">MaaFramework 原生库加载失败</string>
+    <string name="msg_prepare_bridge_not_loaded">原生桥接库未加载，无法建立控制器</string>
+    <string name="msg_prepare_capture_not_started">主屏采集未启动</string>
+    <string name="msg_prepare_display_not_started">虚拟屏未启动</string>
+    <string name="msg_prepare_resource">资源加载失败</string>
+    <string name="msg_prepare_controller">控制器连接失败</string>
+    <string name="msg_prepare_tasker">任务执行器初始化失败</string>
+    <string name="msg_prepare_agent_sinks">Agent 事件登记失败</string>
     <string name="msg_fail_agent_launch">Agent 启动失败: %1$s</string>
     <string name="msg_fail_agent_launch_any">Agent 启动失败</string>
     <string name="msg_fail_debug_hint">%1$s。在设置里打开调试模式后重试，可记录失败原因</string>

@@ -98,8 +98,12 @@ class MaaFrameworkRunnerPort(
             val entry = agentRuntimes.getOrNull(it)
             uiTextOf(R.string.msg_fail_agent_launch, agentLabel(entry?.name, entry?.executable.orEmpty(), it))
         } ?: uiTextOf(R.string.msg_fail_agent_launch_any)
-        return if (debugMode()) failed else uiTextOf(R.string.msg_fail_debug_hint, failed)
+        return withDebugHint(failed)
     }
+
+    /** 细节只在特权进程 logcat 里，调试模式才抓得下来 */
+    private fun withDebugHint(failed: UiText): UiText =
+        if (debugMode()) failed else uiTextOf(R.string.msg_fail_debug_hint, failed)
 
     init {
         // 特权进程没了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
@@ -271,6 +275,7 @@ class MaaFrameworkRunnerPort(
                 RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
                 RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
                 RunOutcome.AGENT_LAUNCH_FAILED -> ExecutionResult.Failed(agentLaunchFailure(reason?.toIntOrNull()), results)
+                RunOutcome.PREPARE_FAILED -> ExecutionResult.Failed(withDebugHint(prepareFailureText(reason)), results)
                 else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
             }
             emit(RunnerEvent.ExecutionFinished(result))

@@ -488,6 +488,14 @@
 
     <!-- Runner reject/failure reasons: reason is now UiText, no longer interpolated as %s -->
     <string name="msg_fail_default">Run failed</string>
+    <string name="msg_prepare_framework_not_loaded">Failed to load the MaaFramework native library</string>
+    <string name="msg_prepare_bridge_not_loaded">Native bridge library not loaded; cannot create the controller</string>
+    <string name="msg_prepare_capture_not_started">Main display capture not started</string>
+    <string name="msg_prepare_display_not_started">Virtual display not started</string>
+    <string name="msg_prepare_resource">Failed to load resources</string>
+    <string name="msg_prepare_controller">Controller connection failed</string>
+    <string name="msg_prepare_tasker">Failed to initialize the task executor</string>
+    <string name="msg_prepare_agent_sinks">Failed to register agent events</string>
     <string name="msg_fail_agent_launch">Agent failed to start: %1$s</string>
     <string name="msg_fail_agent_launch_any">Agent failed to start</string>
     <string name="msg_fail_debug_hint">%1$s. Turn on Debug mode in Settings and try again to record the cause</string>

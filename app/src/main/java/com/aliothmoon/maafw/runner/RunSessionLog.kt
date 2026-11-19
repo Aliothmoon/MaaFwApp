@@ -107,7 +107,7 @@ class RunSessionLogStore {
                 val writer = RunSessionWriter(BufferedWriter(FileWriter(file, true)))
                 writer.write(listOf(RunSessionRecord.Header(startedAt, tasks)))
                 writer
-            }.onFailure { Timber.w(it, "开会话日志文件失败") }.getOrNull()
+            }.onFailure { Timber.w(it, "open session log file failed") }.getOrNull()
         }
 
     suspend fun list(): List<RunSessionLogFile> = withContext(MaaDispatchers.IO) {
@@ -118,7 +118,7 @@ class RunSessionLogStore {
                 ?.sortedByDescending { it.startedAt }
                 .orEmpty()
         }.getOrElse {
-            Timber.w(it, "列会话日志失败")
+            Timber.w(it, "list session logs failed")
             emptyList()
         }
     }
@@ -134,7 +134,7 @@ class RunSessionLogStore {
                     runCatching { JSON.decodeFromString<RunSessionRecord>(line) }.getOrNull()
                 }
         }.getOrElse {
-            Timber.w(it, "读会话日志失败：%s", fileName)
+            Timber.w(it, "read session log failed: %s", fileName)
             emptyList()
         }
     }
@@ -204,10 +204,10 @@ class RunSessionWriter internal constructor(private val writer: BufferedWriter) 
                 writer.newLine()
             }
             writer.flush()
-        }.onFailure { Timber.w(it, "写会话日志失败") }
+        }.onFailure { Timber.w(it, "write session log failed") }
     }
 
     fun close() {
-        runCatching { writer.close() }.onFailure { Timber.w(it, "关会话日志失败") }
+        runCatching { writer.close() }.onFailure { Timber.w(it, "close session log failed") }
     }
 }

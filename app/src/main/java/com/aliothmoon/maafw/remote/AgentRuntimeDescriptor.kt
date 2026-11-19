@@ -71,7 +71,7 @@ data class AgentRuntimeDescriptor(
  */
 internal fun String.resolveAgentPlaceholders(bundleDir: String?, nativeLibraryDir: String): String {
     if (contains(BUNDLE_PLACEHOLDER) && bundleDir == null) {
-        throw AgentLaunchException("运行时描述用了 $BUNDLE_PLACEHOLDER，但该条目不是 bundle 形态")
+        throw AgentLaunchException("runtime descriptor uses $BUNDLE_PLACEHOLDER but the entry is not a bundle")
     }
     return replace(BUNDLE_PLACEHOLDER, bundleDir.orEmpty())
         .replace(NATIVE_LIBS_PLACEHOLDER, nativeLibraryDir)

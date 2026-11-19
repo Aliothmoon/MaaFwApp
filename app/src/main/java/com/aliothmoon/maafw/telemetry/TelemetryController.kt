@@ -92,7 +92,7 @@ class TelemetryController(
     fun setup() {
         scope.launch {
             // 开关关着也记：用户反馈问题时可凭这行在 Sentry 后台按 user.id 定位
-            Timber.i("[telemetry] 匿名设备 ID (Sentry user.id) = %s", TelemetryUserId.get(context))
+            Timber.i("[telemetry] anonymous device id (Sentry user.id) = %s", TelemetryUserId.get(context))
         }
         scope.launch {
             combine(

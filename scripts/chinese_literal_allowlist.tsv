@@ -1,0 +1,9 @@
+# check_i18n_strings.py 源码扫描的白名单：<main/java 下的相对路径>\t<引号内的源码原文>
+# 只收确实不该走字符串资源的：语言自名、内部标识、只给测试与 Preview 用的桩
+com/aliothmoon/maafw/project/ProjectLoader.kt	未分组
+com/aliothmoon/maafw/runner/StubRunnerPort.kt	任务失败: ${task.taskName}
+com/aliothmoon/maafw/runner/StubRunnerPort.kt	任务完成: ${task.taskName}
+com/aliothmoon/maafw/runner/StubRunnerPort.kt	准备运行环境（${plan.resource.name}）
+com/aliothmoon/maafw/runner/StubRunnerPort.kt	开始任务: ${task.taskName}
+com/aliothmoon/maafw/runner/StubRunnerPort.kt	本轮执行结束: ${result::class.simpleName}
+com/aliothmoon/maafw/ui/settings/SettingsScreen.kt	简体中文
