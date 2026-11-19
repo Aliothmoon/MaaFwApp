@@ -155,6 +155,15 @@ class ScreenSaverOverlayManager(
         }
     }
 
+    private fun setBrightness(value: Float) {
+        val view = composeView ?: return
+        val params = view.layoutParams as? WindowManager.LayoutParams ?: return
+        if (params.screenBrightness == value) return
+        params.screenBrightness = value
+        runCatching { windowManager.updateViewLayout(view, params) }
+            .onFailure { Timber.w(it, "Failed to update screen saver brightness") }
+    }
+
     private fun createView(): ComposeView = ComposeView(context).apply {
         setViewTreeLifecycleOwner(viewModelOwner)
         setViewTreeViewModelStoreOwner(viewModelOwner)
@@ -166,6 +175,7 @@ class ScreenSaverOverlayManager(
                 ScreenSaverView(
                     latestLog = latestLog,
                     onUnlock = { scope.launch { hide() } },
+                    onBrightnessChange = ::setBrightness,
                 )
             }
         }
@@ -195,19 +205,17 @@ class ScreenSaverOverlayManager(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             flags,
-            PixelFormat.TRANSLUCENT,
+            // 整屏纯黑，不透明省掉与下层的混合
+            PixelFormat.OPAQUE,
         ).apply {
             gravity = Gravity.CENTER
-            screenBrightness = MIN_BRIGHTNESS
+            screenBrightness = DIM_BRIGHTNESS
             layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
     }
 
     private companion object {
-        /** 0f 在部分 ROM 上被当成「跟随系统」，给一个够小但非零的值 */
-        const val MIN_BRIGHTNESS = 0.01f
-
         /** 覆盖三大厂的手势条高度还有余量；解锁条本身离底 56dp，不会被这块挡住 */
         const val GESTURE_EXCLUSION_DP = 120
     }
