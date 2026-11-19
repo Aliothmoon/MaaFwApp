@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw
 
+import com.aliothmoon.maafw.i18n.AppLocales
+import android.content.res.Configuration
 import android.app.Application
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.di.AppCoroutineScope
@@ -54,6 +56,7 @@ class MaaFwApp : Application() {
         // 重启中转等子进程不初始化
         if (getProcessName() != packageName) return
         AppPaths.init(this)
+        AppLocales.init(this)
         CrashHandler().install()
         val app = this
         val koin = startKoin {
@@ -98,6 +101,12 @@ class MaaFwApp : Application() {
             runCatching { koin.get<RunSessionLogStore>().cleanup() }
                 .onFailure { Timber.w(it, "run session log cleanup failed") }
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // 系统配置一变，Application 的 Resources 就被重置回系统语言
+        AppLocales.syncApplicationResources(this)
     }
 
     fun postCreate(koin: Koin) {
