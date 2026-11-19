@@ -649,7 +649,7 @@ class SessionViewModel(
                 runLauncher.whenIdle { if (piInstall.reinstall()) projectRepository.reload() }
             }
 
-            is SessionIntent.Start -> start(intent.surface, intent.acknowledged)
+            is SessionIntent.Start -> start(intent.surface, intent.acknowledged, intent.startFromInstanceId)
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -862,7 +862,7 @@ class SessionViewModel(
      * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
      * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
      */
-    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>) {
+    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>, startFromInstanceId: String?) {
         if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
             return
@@ -872,7 +872,7 @@ class SessionViewModel(
             TaskSurface.InApp -> RunTrigger.Manual
             TaskSurface.Overlay -> RunTrigger.Overlay
         }
-        when (val result = runLauncher.launch(trigger, acknowledged)) {
+        when (val result = runLauncher.launch(trigger, acknowledged, startFromInstanceId = startFromInstanceId)) {
             RunLaunchResult.Started -> emitEffect(SessionEffect.ShowRunLog(surface))
 
             // 手动发起不传 requestId、不排队，这两条到不了
@@ -909,7 +909,7 @@ class SessionViewModel(
                 emitEffect(SessionEffect.ShowMessage(result.reason))
 
             is RunLaunchResult.NeedsConfirmation ->
-                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token))
+                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token, startFromInstanceId))
         }
     }
 

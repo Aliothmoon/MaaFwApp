@@ -140,6 +140,27 @@ class RunPlanBuilderTest {
         assertTrue(result is RunPlanResult.NoExecutableTasks)
     }
 
+    /** 起点之前的不跑也不算跳过；起点之后没勾选的照旧不跑 */
+    @Test
+    fun `从此处运行只编起点及其后的已勾选任务`() {
+        val first = ConfiguredTask("启动游戏")
+        val start = ConfiguredTask("切换账号")
+        val config = configWith(first, start, ConfiguredTask("常规作战", enabled = false), ConfiguredTask("启动游戏"))
+
+        val result = RunPlanBuilder.build(definition, config, startFromInstanceId = start.instanceId)
+
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(listOf("切换账号", "启动游戏"), plan.tasks.map { it.taskName })
+        assertTrue(plan.skippedTasks.isEmpty())
+    }
+
+    @Test
+    fun `起点已不在配置里映射为 NoExecutableTasks`() {
+        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")), startFromInstanceId = "gone")
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
     @Test
     fun `全部禁用映射为 NoExecutableTasks`() {
         val result = RunPlanBuilder.build(

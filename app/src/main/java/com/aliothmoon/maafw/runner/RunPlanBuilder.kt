@@ -38,6 +38,9 @@ object RunPlanBuilder {
     /**
      * [clientVersion] / [clientLanguage] 只为拼 agent 的 `PI_*`，默认空表示「不声明」
      * 取值在 app 侧（BuildConfig 与 per-app locale），此处不反查环境，保持纯函数
+     *
+     * [startFromInstanceId]：「从此处运行」只跑这一条及其后的任务，只影响本轮，不改 enabled、不落盘。
+     * 前面的任务不算跳过，不进 [RunPlan.skippedTasks]；起点那条已不在配置里就没有可执行任务
      */
     fun build(
         definition: ProjectDefinition,
@@ -45,6 +48,7 @@ object RunPlanBuilder {
         configurationId: RunConfigurationId? = null,
         clientVersion: String? = null,
         clientLanguage: String? = null,
+        startFromInstanceId: String? = null,
     ): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
@@ -103,7 +107,12 @@ object RunPlanBuilder {
 
         val runtimeTasks = mutableListOf<RuntimeTask>()
         val skippedTasks = mutableListOf<SkippedTask>()
-        for (configured in runConfiguration.tasks) {
+        val candidates = if (startFromInstanceId == null) {
+            runConfiguration.tasks
+        } else {
+            runConfiguration.tasks.dropWhile { it.instanceId != startFromInstanceId }
+        }
+        for (configured in candidates) {
             if (!configured.enabled) continue
             // 已不在项目里的任务也只跳过不报错：勾选框已锁，拦下整轮用户只能去删
             val task = definition.task(configured.taskName)

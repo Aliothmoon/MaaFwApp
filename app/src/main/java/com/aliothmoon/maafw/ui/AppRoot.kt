@@ -793,7 +793,12 @@ fun AppRoot(
                 confirmText = stringResource(R.string.precheck_start_anyway),
                 onConfirm = {
                     confirmStartDialog = null
-                    viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
+                    viewModel.onIntent(
+                        SessionIntent.Start(
+                            acknowledged = confirm.acknowledged,
+                            startFromInstanceId = confirm.startFromInstanceId,
+                        ),
+                    )
                 },
                 dismissText = stringResource(R.string.dialog_cancel),
                 onDismissRequest = { confirmStartDialog = null },

@@ -149,8 +149,9 @@ class RunLauncher(
         steps: RunStepSink? = null,
         signals: RunSignals = RunSignals(),
         progress: RunProgress = RunProgress { _, _ -> },
+        startFromInstanceId: String? = null,
     ): RunLaunchResult =
-        dispatch(trigger, acknowledged, configurationId, requestId, whenBusy, steps, signals, progress)
+        dispatch(trigger, acknowledged, configurationId, requestId, whenBusy, steps, signals, progress, startFromInstanceId)
             .also { logOutcome(trigger, configurationId, it) }
 
     private suspend fun dispatch(
@@ -162,6 +163,7 @@ class RunLauncher(
         steps: RunStepSink?,
         signals: RunSignals,
         progress: RunProgress,
+        startFromInstanceId: String?,
     ): RunLaunchResult {
         if (whenBusy is WhenBusy.Queue) {
             withTimeoutOrNull(whenBusy.maxWaitMs) { awaitTurn(progress) }
@@ -190,6 +192,7 @@ class RunLauncher(
                 configurationId,
                 clientVersion = BuildConfig.VERSION_NAME,
                 clientLanguage = AppLocales.currentProjectTag(),
+                startFromInstanceId = startFromInstanceId,
             )
             val plan = when (built) {
                 RunPlanResult.NoExecutableTasks -> return RunLaunchResult.NoExecutableTasks

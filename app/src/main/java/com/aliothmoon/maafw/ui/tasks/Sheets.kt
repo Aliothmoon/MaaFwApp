@@ -53,6 +53,7 @@ import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSkipReason
@@ -338,15 +339,30 @@ fun TaskOptionSheet(
     locked: Boolean,
     onSetOption: (String, OptionValue) -> Unit,
     onDismiss: () -> Unit,
+    /** 「从此处运行」：只跑这一条及其后的任务；不可起跑或这条没勾选时置灰 */
+    canRunFromHere: Boolean,
+    onRunFromHere: () -> Unit,
 ) {
     MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
-        TaskOptionContent(
-            task = task,
-            locked = locked,
-            onSetOption = onSetOption,
-            onClose = onDismiss,
+        Column(
             modifier = sheetModifier.padding(bottom = MaaDesignTokens.Spacing.xl),
-        )
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        ) {
+            TaskOptionContent(
+                task = task,
+                locked = locked,
+                onSetOption = onSetOption,
+                onClose = onDismiss,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            MaaOutlinedButton(
+                onClick = onRunFromHere,
+                enabled = canRunFromHere,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.tasks_run_from_here))
+            }
+        }
     }
 }
 

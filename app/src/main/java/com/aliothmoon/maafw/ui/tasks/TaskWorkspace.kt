@@ -147,6 +147,12 @@ internal fun TaskWorkspace(
                 onIntent(SessionIntent.SetTaskOption(active.id, editingTask.instanceId, optionName, value))
             },
             onDismiss = { editingTaskInstanceId = null },
+            // 没勾选的不当起点：起点顺延到下一条已勾选的，用户点的和跑的就对不上了
+            canRunFromHere = state.canStart && !locked && editingTask.effectiveEnabled,
+            onRunFromHere = {
+                editingTaskInstanceId = null
+                onIntent(SessionIntent.Start(startFromInstanceId = editingTask.instanceId))
+            },
         )
     }
 

@@ -321,11 +321,13 @@ sealed interface SessionIntent {
      * 发起一轮执行
      *
      * [surface] 区分入口：应用内前台仍拦，悬浮窗放行。定时不走这条 Intent。
-     * [acknowledged] 是用户在 [SessionEffect.ConfirmStart] 上点过头的项，原样带回来重发
+     * [acknowledged] 是用户在 [SessionEffect.ConfirmStart] 上点过头的项，原样带回来重发。
+     * [startFromInstanceId] 是「从此处运行」的起点，只影响这一轮
      */
     data class Start(
         val surface: TaskSurface = TaskSurface.InApp,
         val acknowledged: Set<ConfirmToken> = emptySet(),
+        val startFromInstanceId: String? = null,
     ) : SessionIntent
     data object Stop : SessionIntent
 
@@ -382,7 +384,12 @@ sealed interface SessionEffect {
      *
      * [acknowledged] 已含本次这项：几项都要问时逐个弹，前面点过的跟着累积，VM 不必记
      */
-    data class ConfirmStart(val prompt: UiText, val acknowledged: Set<ConfirmToken>) : SessionEffect
+    data class ConfirmStart(
+        val prompt: UiText,
+        val acknowledged: Set<ConfirmToken>,
+        /** 点头后原样带回 [SessionIntent.Start]，否则从此处运行的那一轮重发成整份 */
+        val startFromInstanceId: String? = null,
+    ) : SessionEffect
 
     /** 手动发起被受理：从 [surface] 那一侧切到日志，人就在跟前；定时触发不切 */
     data class ShowRunLog(val surface: TaskSurface) : SessionEffect

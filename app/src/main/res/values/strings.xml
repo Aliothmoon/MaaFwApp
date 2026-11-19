@@ -641,6 +641,7 @@
     <string name="config_export_failed">导出配置失败</string>
     <string name="config_import_unreadable">无法读取该文件</string>
     <string name="close_target_confirm_title">关闭目标应用？</string>
+    <string name="tasks_run_from_here">从此处运行</string>
     <string name="close_target_confirm_message">任务正在运行，关闭目标应用会让这一轮中断</string>
     <string name="config_import_too_large">文件超过 %1$d MB，不是配置文件</string>
     <string name="config_import_unrecognized">无法识别的配置格式</string>
