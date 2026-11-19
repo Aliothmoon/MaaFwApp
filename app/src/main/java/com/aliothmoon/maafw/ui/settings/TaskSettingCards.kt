@@ -90,7 +90,8 @@ private fun TaskSettingCards(state: SessionUiState, onIntent: (SessionIntent) ->
                 title = section.label,
                 leading = section.icon?.let { { MaaPiIcon(it, MaaDesignTokens.IconSize.sm, null) } },
                 collapsible = true,
-                initiallyExpanded = section.defaultExpand,
+                // 分区一多整页全是选项，外壳自己的设置要翻很久才见得到：一律先收起，不看 PI 的 default_expand
+                initiallyExpanded = false,
                 revealToken = sectionRevealToken(SettingsSections.projectSection(section.name)),
             ) {
                 section.description?.let {
@@ -114,6 +115,7 @@ private fun TaskSettingCards(state: SessionUiState, onIntent: (SessionIntent) ->
     MaaCard(
         title = stringResource(R.string.settings_section_global_option),
         collapsible = true,
+        initiallyExpanded = false,
         revealToken = sectionRevealToken(SettingsSections.PI_GLOBAL),
     ) {
         OptionEditorList(
@@ -137,6 +139,7 @@ private fun ResourceOptionCard(state: SessionUiState, onIntent: (SessionIntent) 
     MaaCard(
         title = stringResource(R.string.settings_section_resource_option),
         collapsible = true,
+        initiallyExpanded = false,
         revealToken = sectionRevealToken(SettingsSections.PI_RESOURCE),
     ) {
         OptionEditorList(
@@ -158,6 +161,7 @@ private fun ControllerOptionCard(state: SessionUiState, onIntent: (SessionIntent
     MaaCard(
         title = stringResource(R.string.settings_section_controller_option),
         collapsible = true,
+        initiallyExpanded = false,
         revealToken = sectionRevealToken(SettingsSections.PI_CONTROLLER),
     ) {
         OptionEditorList(
