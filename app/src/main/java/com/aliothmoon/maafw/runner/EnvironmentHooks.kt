@@ -357,8 +357,9 @@ class ScreenPowerOffHook(private val servicePort: PrivilegedServicePort) : RunEn
             return EngageResult.Failed(reason)
         }
         ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_screen_power_off))
-        // 不恢复：同手动熄屏挂机，一轮跑完屏幕仍关着，由用户按电源键点亮
-        return EngageResult.Skipped()
+        // 收尾什么都不做：同手动熄屏挂机，一轮跑完屏幕仍关着，由用户按电源键点亮。
+        // 仍报 Engaged 而不是 Skipped，触发日志的步骤才记得下「关过屏」
+        return EngageResult.Engaged(Release { })
     }
 }
 

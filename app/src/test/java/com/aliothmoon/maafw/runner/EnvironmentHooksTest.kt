@@ -336,17 +336,17 @@ class EnvironmentHooksTest {
 
     // ── 关屏幕电源 ──────────────────────────────────────────────────
 
-    /** 只关不恢复：没有收尾要撤 */
+    /** 只关不恢复：收尾什么都不做，但步骤要记成 ENGAGED */
     @Test
     fun `screen power off turns the panel off for an idle background run`() = runTest {
         val service = FakePrivilegedService()
         val ctx = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
         ctx.idleAtStart.set(true)
 
-        val result = ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(ctx)
+        val release = ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()
+        release!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
         assertEquals(listOf(false), service.displayPowerSyncCalls)
-        assertNull(result.releaseOrNull())
     }
 
     @Test
