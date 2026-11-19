@@ -72,10 +72,10 @@ class ScheduleMissedReporterTest {
 
         reporter().reportMissed()
 
-        coVerify(exactly = 1) { notifications.onScheduleNotStarted(any(), any(), any()) }
-        coVerify {
-            notifications.onScheduleNotStarted(
-                "Kept",
+        coVerify(exactly = 0) { notifications.onScheduleNotStarted(any(), any(), any()) }
+        coVerify(exactly = 1) {
+            notifications.onSchedulesNotStarted(
+                listOf("Kept"),
                 uiTextOf(R.string.schedule_missed_many, 2, uiTextOf(R.string.schedule_reason_missed)),
                 ScheduleNotice.FAILED,
             )

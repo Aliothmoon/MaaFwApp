@@ -116,6 +116,14 @@ class NotificationCenter(
      *
      * 独占一格通知 id：不被下一轮的结局顶掉，凌晨失败到早上还在。连接失败拼的英文短原因只进触发日志
      */
+    /** 多条规则合成一条；名字之间的分隔符跟着语言走 */
+    suspend fun onSchedulesNotStarted(strategyNames: List<String>, reason: UiText, notice: ScheduleNotice) =
+        onScheduleNotStarted(
+            strategyNames.joinToString(renderText(uiTextOf(R.string.common_list_separator))),
+            reason,
+            notice,
+        )
+
     suspend fun onScheduleNotStarted(strategyName: String, reason: UiText, notice: ScheduleNotice) {
         val skipped = notice == ScheduleNotice.SKIPPED
         val title = renderText(
@@ -169,7 +177,7 @@ class NotificationCenter(
                         R.string.notification_event_run_partial_body,
                         result.taskResults.size - failed.size,
                         result.taskResults.size,
-                        failed.joinToString("、"),
+                        failed.joinToString(renderText(uiTextOf(R.string.common_list_separator))),
                     ),
                     isError = true,
                     trigger = Trigger.ERROR,

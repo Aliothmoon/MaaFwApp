@@ -3,7 +3,6 @@ package com.aliothmoon.maafw.notification
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.UiText
-import com.aliothmoon.maafw.i18n.uiTextJoin
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.provider.NotificationProvider
 import com.aliothmoon.maafw.notification.provider.NotificationSendResult
@@ -103,11 +102,7 @@ class ExternalNotificationService(
 
     private fun emitFailure(id: String, message: UiText) {
         _feedbackMessages.tryEmit(
-            uiTextJoin(
-                uiTextOf(R.string.notification_feedback_send_failed, id),
-                message,
-                separator = "：",
-            ),
+            uiTextOf(R.string.common_with_detail, uiTextOf(R.string.notification_feedback_send_failed, id), message),
         )
     }
 

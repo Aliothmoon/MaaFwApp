@@ -408,7 +408,7 @@
     <string name="schedule_reason_invalid_plan">配置有错，无法生成本次执行</string>
     <string name="schedule_reason_invalid_plan_detail">配置有错（%1$s）：%2$s</string>
     <string name="schedule_reason_blocked">启动前检查未通过</string>
-    <string name="schedule_reason_rejected">已有执行在进行中</string>
+    <string name="schedule_reason_rejected">执行器拒绝了这次投递</string>
     <string name="schedule_reason_expired">超过原定时刻 %1$d 小时仍未开始，本次作废</string>
     <string name="schedule_reason_missed">到点未被系统唤起：应用可能被省电或后台管控清理，请允许自启动与后台运行</string>
     <string name="schedule_reason_missed_rebooted">未执行：此后设备关机或重启过，到点时可能处于关机状态</string>
@@ -467,6 +467,8 @@
     <string name="notification_schedule_failed">定时任务未能启动</string>
     <string name="notification_schedule_skipped">定时任务已跳过</string>
     <string name="notification_schedule_detail">「%1$s」：%2$s</string>
+    <string name="common_list_separator">、</string>
+    <string name="common_with_detail">%1$s：%2$s</string>
     <string name="schedule_missed_many">%1$d 次定时没有执行，最近一次：%2$s</string>
     <string name="notification_shizuku_down_after_boot">手机重启后需要重新启动 Shizuku，否则定时任务无法执行</string>
     <string name="notification_shizuku_down_stopped">Shizuku 已停止，重新启动前定时任务无法执行</string>

@@ -176,7 +176,7 @@ private fun HeaderBlock(header: RunSessionRecord.Header) {
             color = MaterialTheme.colorScheme.primary,
         )
         Text(
-            text = stringResource(R.string.log_detail_tasks, header.tasks.joinToString("、")),
+            text = stringResource(R.string.log_detail_tasks, header.tasks.joinToString(stringResource(R.string.common_list_separator))),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

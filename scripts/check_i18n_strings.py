@@ -43,7 +43,8 @@ VALUES_ZH = RES_DIR / "values-zh" / "strings.xml"     # 冗余中文副本
 SOURCE_ROOT = PROJECT_ROOT / "app" / "src" / "main" / "java"
 ALLOWLIST = PROJECT_ROOT / "scripts" / "chinese_literal_allowlist.tsv"
 SOURCE_EXTENSIONS = {".kt", ".java"}
-HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+# 汉字之外带上中文标点与全角符号：单独一个「、」也会进界面
+HAN_RE = re.compile(r"[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]")
 
 # Android 带序号占位符:%1$s、%2$d、%1$04d、%1$dx%2$d 等
 PLACEHOLDER_RE = re.compile(r"%\d+\$[-#+ 0-9.]*[a-zA-Z]")

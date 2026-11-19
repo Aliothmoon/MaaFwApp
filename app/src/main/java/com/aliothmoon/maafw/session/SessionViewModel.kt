@@ -72,6 +72,7 @@ import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.AppLocales
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -261,6 +262,9 @@ class SessionViewModel(
 
     // Intent 串行消费，保证配置写入不交错
     private val intents = Channel<SessionIntent>(Channel.UNLIMITED)
+
+    private var reinstallJob: Job? = null
+    private var closeTargetJob: Job? = null
 
     /** 运行中到的语言切换；这一轮结束时补重载，否则 PI 文案停在旧语言直到进程重启 */
     private val localeReloadPending = AtomicBoolean(false)
@@ -624,8 +628,8 @@ class SessionViewModel(
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
             SessionIntent.CloseTargetApp ->
-                if (locked()) emitEffect(SessionEffect.ConfirmCloseTargetApp) else closeTargetApp()
-            SessionIntent.CloseTargetAppConfirmed -> closeTargetApp()
+                if (locked()) emitEffect(SessionEffect.ConfirmCloseTargetApp) else launchCloseTargetApp()
+            SessionIntent.CloseTargetAppConfirmed -> launchCloseTargetApp()
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {
@@ -645,8 +649,13 @@ class SessionViewModel(
                 }
             }
 
+            // whenIdle 要等上一轮连收尾都走完，可能几小时：放进循环里等，「停止」就一直排在后面
             SessionIntent.ReinstallPi -> guarded {
-                runLauncher.whenIdle { if (piInstall.reinstall()) projectRepository.reload() }
+                if (reinstallJob?.isActive != true) {
+                    reinstallJob = viewModelScope.launch {
+                        runLauncher.whenIdle { if (piInstall.reinstall()) projectRepository.reload() }
+                    }
+                }
             }
 
             is SessionIntent.Start -> start(intent.surface, intent.acknowledged, intent.startFromInstanceId)
@@ -684,6 +693,12 @@ class SessionViewModel(
      *
      * 只用现成连接：一颗次级按钮，不值得为它弹授权请求
      */
+    /** 收尾卡住时要等到判卡（15s 起），不能占着 intent 循环；连点只跑一次 */
+    private fun launchCloseTargetApp() {
+        if (closeTargetJob?.isActive == true) return
+        closeTargetJob = viewModelScope.launch { closeTargetApp() }
+    }
+
     private suspend fun closeTargetApp() {
         val service = servicePort.serviceOrNull() ?: return
         val stopped = servicePort.callWithTimeout(CLOSE_TARGET_TIMEOUT) { it.stopTargetApp() }

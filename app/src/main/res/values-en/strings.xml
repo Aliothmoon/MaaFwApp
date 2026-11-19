@@ -416,7 +416,7 @@
     <string name="schedule_reason_invalid_plan">Configuration errors; the run could not be prepared</string>
     <string name="schedule_reason_invalid_plan_detail">Configuration error (%1$s): %2$s</string>
     <string name="schedule_reason_blocked">A start check did not pass</string>
-    <string name="schedule_reason_rejected">A run is already in progress</string>
+    <string name="schedule_reason_rejected">The runner rejected this run</string>
     <string name="schedule_reason_expired">Not started within %1$d hours of the scheduled time; dropped</string>
     <string name="schedule_reason_missed">The system did not wake the app on time; battery saving or background management may have cleared it. Allow auto-start and background activity</string>
     <string name="schedule_reason_missed_rebooted">Not run: the device was shut down or restarted afterwards and may have been off at the scheduled time</string>
@@ -475,6 +475,8 @@
     <string name="notification_schedule_failed">Scheduled run did not start</string>
     <string name="notification_schedule_skipped">Scheduled run skipped</string>
     <string name="notification_schedule_detail">“%1$s”: %2$s</string>
+    <string name="common_list_separator">", "</string>
+    <string name="common_with_detail">%1$s: %2$s</string>
     <string name="schedule_missed_many">%1$d scheduled runs did not happen; the latest: %2$s</string>
     <string name="notification_shizuku_down_after_boot">Shizuku has to be started again after a reboot, or scheduled tasks cannot run</string>
     <string name="notification_shizuku_down_stopped">Shizuku has stopped; scheduled tasks cannot run until it is started again</string>

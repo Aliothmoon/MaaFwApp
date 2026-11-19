@@ -121,6 +121,10 @@ class ConfigBackupService(
     } catch (e: IllegalArgumentException) {
         Timber.w(e, "Unknown configuration uri %s", source)
         CappedRead.Unreadable
+    } catch (e: RuntimeException) {
+        // 第三方网盘的 DocumentsProvider 什么都可能抛（IllegalState、UnsupportedOperation、NPE）
+        Timber.w(e, "Document provider failed reading %s", source)
+        CappedRead.Unreadable
     }
 
     /** 粘贴进来的 MXU 分享码 */

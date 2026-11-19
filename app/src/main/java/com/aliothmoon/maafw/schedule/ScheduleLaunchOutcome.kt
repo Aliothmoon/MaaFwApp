@@ -62,9 +62,9 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
             ScheduleNotice.FAILED,
         )
 
-    // 多半已有一轮在跑：算跳过
+    // 定时走 Queue / Preempt，到这里已没有在跑的一轮：拒绝来自准备阶段（setup、建虚拟屏、卡死重启），是真失败
     is RunLaunchResult.Rejected ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason, ScheduleNotice.SKIPPED)
+        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason, ScheduleNotice.FAILED)
 
     is RunLaunchResult.Blocked ->
         ScheduleLaunchOutcome(

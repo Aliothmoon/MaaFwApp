@@ -12,6 +12,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
+import com.aliothmoon.maafw.privileged.callWithTimeout
 
 /**
  * 进程死因补记的唯一入口：App 自身的退出在启动时记，上一个特权进程的死因等新进程连上后由它翻系统日志
@@ -37,9 +39,10 @@ internal class ProcessForensics(
                 when (state) {
                     PrivilegedServiceState.Connected -> {
                         val service = servicePort.serviceOrNull() ?: return@collect
-                        val pid = withContext(MaaDispatchers.IO) { runCatching { service.pid() }.getOrNull() }
+                        val pid = servicePort.callWithTimeout(PID_TIMEOUT) { it.pid() }
                         connectedPid = pid
-                        forensics.take(pid)?.let { dump(service, it) }
+                        // 翻日志最长十来秒，在 collect 里等的话这期间再死一次，Died 会被合并掉
+                        forensics.take(pid)?.let { pending -> scope.launch { dump(service, pending) } }
                     }
 
                     PrivilegedServiceState.Died -> connectedPid?.let {
@@ -56,7 +59,8 @@ internal class ProcessForensics(
     private suspend fun dump(service: RemoteService, pending: PrivilegedDeathForensics.Pending) {
         val delaySec = (clock() - pending.diedAtMs) / 1000
         val text = withContext(MaaDispatchers.IO) {
-            runCatching { service.dumpSystemLog(pending.sinceMs, pending.untilMs, pending.pid, processPrefix) }
+            // 旧版特权进程没有这个方法，proxy 读回 null
+            runCatching { service.dumpSystemLog(pending.sinceMs, pending.untilMs, pending.pid, processPrefix).orEmpty() }
         }.getOrElse {
             Timber.w(it, "dump system log for dead privileged process %d failed", pending.pid)
             return
@@ -87,6 +91,7 @@ internal class ProcessForensics(
     private companion object {
         const val PREFIX = "death_"
         const val KEEP = 10
+        val PID_TIMEOUT = 3.seconds
         val STAMP = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
     }
 }

@@ -60,7 +60,7 @@ class ScheduleLaunchOutcomeTest {
             RunLaunchResult.DuplicateRequest to null,
             RunLaunchResult.ProjectNotReady to ScheduleNotice.FAILED,
             RunLaunchResult.QueueTimedOut to ScheduleNotice.FAILED,
-            RunLaunchResult.Rejected(reason) to ScheduleNotice.SKIPPED,
+            RunLaunchResult.Rejected(reason) to ScheduleNotice.FAILED,
             RunLaunchResult.Blocked(reason, BlockSource.Busy) to ScheduleNotice.SKIPPED,
             RunLaunchResult.Blocked(reason, BlockSource.Hook("countdown", NotRunCause.Cancelled)) to null,
             RunLaunchResult.Blocked(reason, BlockSource.Hook("wake-unlock", NotRunCause.HookFailed)) to

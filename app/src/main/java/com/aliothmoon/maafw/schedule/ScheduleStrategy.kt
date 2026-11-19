@@ -135,7 +135,7 @@ enum class TriggerFailureReason {
     /** 被某道前置检查拦下；定时触发下「需要确认」也降级到这里 */
     BLOCKED,
 
-    /** RunnerPort 拒绝，多半是已有执行在跑 */
+    /** RunnerPort 拒绝投递：定时走排队或抢占，拒绝多半来自准备阶段（setup、建虚拟屏） */
     REJECTED,
 
     /** 超过 [TRIGGER_EXPIRE_AFTER_MS] 还没开跑，作废 */

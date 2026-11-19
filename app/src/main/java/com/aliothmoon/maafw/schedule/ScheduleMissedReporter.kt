@@ -52,8 +52,8 @@ class ScheduleMissedReporter(
             notifications.onScheduleNotStarted(latestName, latestReason.asUiText(), ScheduleNotice.FAILED)
             return
         }
-        notifications.onScheduleNotStarted(
-            reported.map { it.first }.distinct().joinToString("、"),
+        notifications.onSchedulesNotStarted(
+            reported.map { it.first }.distinct(),
             uiTextOf(R.string.schedule_missed_many, reported.size, latestReason.asUiText()),
             ScheduleNotice.FAILED,
         )
