@@ -92,4 +92,8 @@ interface AppSettingsGateway {
     val mirrorchyanCdk: StateFlow<String>
     suspend fun setMirrorchyanCdk(cdk: String)
 
+    /** 定时的应用黑名单（包名）；只对后台模式的定时触发生效 */
+    val scheduleAppBlacklist: StateFlow<Set<String>>
+    suspend fun setScheduleAppBlacklisted(packageName: String, blacklisted: Boolean)
+
 }

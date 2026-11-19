@@ -98,10 +98,16 @@ internal object HookOrder {
     /** 连上之后、唤醒之前：唤醒之后再采，屏幕永远是亮的 */
     const val IDLE_PROBE = -1
     const val AUTO_SLEEP = 0
+
+    /** 要唤醒前的设备状态，又得赶在唤醒、盖屏保之前拦下；自动熄屏只采样，排它前后都行 */
+    const val APP_BLACKLIST = 5
     const val WAKE_UNLOCK = 10
     const val SCREEN_SAVER = 20
     const val CLOSE_APP = 30
     const val COUNTDOWN = 40
+
+    /** 倒计时走完再查一次 */
+    const val APP_BLACKLIST_RECHECK = 42
 
     /** 紧挨投递：倒计时期间用户还可能点开面板 */
     const val OVERLAY_CLEAR = 45

@@ -11,6 +11,7 @@ import com.aliothmoon.maafw.runner.PrivilegedAccessPrecheck
 import com.aliothmoon.maafw.runner.PrivilegedConnectHook
 import com.aliothmoon.maafw.runner.RunLaunchResult
 import com.aliothmoon.maafw.runner.RunRequestId
+import com.aliothmoon.maafw.runner.isAppBlacklist
 
 /** 一次定时发起的记账结果 */
 data class ScheduleLaunchOutcome(
@@ -65,7 +66,16 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
     is RunLaunchResult.Rejected ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason, ScheduleNotice.SKIPPED)
 
-    is RunLaunchResult.Blocked ->
+    // 用户正用着名单里的应用：是本来就要的跳过，不算失败
+    is RunLaunchResult.Blocked -> if (source.isAppBlacklist) {
+        ScheduleLaunchOutcome(
+            TriggerResult.FAILED_START,
+            TriggerFailureReason.BLACKLISTED,
+            reason,
+            ScheduleNotice.SKIPPED,
+            blockedBy = (source as? BlockSource.Precheck)?.id,
+        )
+    } else {
         ScheduleLaunchOutcome(
             TriggerResult.FAILED_START,
             TriggerFailureReason.BLOCKED,
@@ -73,6 +83,7 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
             source.notice(),
             blockedBy = (source as? BlockSource.Precheck)?.id,
         )
+    }
 
     is RunLaunchResult.NeedsConfirmation ->
         ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt, ScheduleNotice.FAILED)

@@ -5,6 +5,8 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.notification.ScheduleNotice
+import com.aliothmoon.maafw.runner.AppBlacklistHook
+import com.aliothmoon.maafw.runner.AppBlacklistPrecheck
 import com.aliothmoon.maafw.runner.BlockSource
 import com.aliothmoon.maafw.runner.PrivilegedAccessPrecheck
 import com.aliothmoon.maafw.runner.PrivilegedConnectHook
@@ -88,6 +90,24 @@ class ScheduleLaunchOutcomeTest {
             RunLaunchResult.Blocked(reason, BlockSource.Hook(PrivilegedConnectHook.ID, NotRunCause.HookFailed))
                 .toScheduleOutcome().blockedBy,
         )
+    }
+
+    /** 撞上黑名单是本来就要的跳过：启动前检查与两道挂载物同一档 */
+    @Test
+    fun `blacklist hits are recorded as skipped`() {
+        val reason = uiTextFromFramework("x")
+        val sources = listOf(
+            BlockSource.Precheck(AppBlacklistPrecheck.ID),
+            BlockSource.Hook(AppBlacklistHook.ID, NotRunCause.HookFailed),
+            BlockSource.Hook(AppBlacklistHook.RECHECK_ID, NotRunCause.HookFailed),
+        )
+
+        sources.forEach { source ->
+            val outcome = RunLaunchResult.Blocked(reason, source).toScheduleOutcome()
+            assertEquals(TriggerFailureReason.BLACKLISTED, outcome.failureReason)
+            assertEquals(ScheduleNotice.SKIPPED, outcome.notice)
+            assertEquals(reason, outcome.detail)
+        }
     }
 
     /** 定时触发本该在 RunLauncher 里被降级；真漏过来也得记成失败而不是当成功 */

@@ -86,6 +86,7 @@ fun TriggerFailureReason.asUiText(): UiText = when (this) {
         uiTextOf(R.string.schedule_reason_expired, (TRIGGER_EXPIRE_AFTER_MS / 3_600_000L).toInt())
     TriggerFailureReason.MISSED -> uiTextOf(R.string.schedule_reason_missed)
     TriggerFailureReason.MISSED_REBOOTED -> uiTextOf(R.string.schedule_reason_missed_rebooted)
+    TriggerFailureReason.BLACKLISTED -> uiTextOf(R.string.schedule_reason_blacklisted)
 }
 
 /**

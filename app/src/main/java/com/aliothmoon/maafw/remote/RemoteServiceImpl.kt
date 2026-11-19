@@ -322,6 +322,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun getLastWakeTrace(sinceElapsedMs: Long): String = WakeUnlockController.lastTrace(sinceElapsedMs)
 
+    override fun getVisiblePackages(displayId: Int): List<String>? = ActivityUtils.visiblePackages(displayId)
+
     /**
      * 改主屏分辨率会把整个系统的 UI 重排一遍，失败要报出去而不是吞掉——
      * 用户看到「已修改」却什么都没变，只会以为是自己屏幕不支持

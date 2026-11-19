@@ -254,6 +254,25 @@ object ActivityUtils {
     }
 
     /**
+     * 屏上可见任务的包名（分屏、小窗都算）；读不到可见性时只取最上面那个任务，判不出返回 null
+     *
+     * 14 起 `TaskInfo.isVisible` 公开，之前读隐藏字段
+     */
+    fun visiblePackages(displayId: Int): List<String>? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        if (taskDisplayIdField == null) return null
+        return runCatching {
+            @Suppress("DEPRECATION")
+            val onDisplay = FakeContext.get().getSystemService(ActivityManager::class.java)
+                ?.getRunningTasks(100)
+                ?.filter { getTaskDisplayId(it) == displayId }
+            if (onDisplay.isNullOrEmpty()) return null
+            val picked = if (visibilityReadable) onDisplay.filter(::isTaskVisible) else onDisplay.take(1)
+            picked.mapNotNull { it.topActivity?.packageName }.distinct()
+        }.onFailure { Ln.w("visiblePackages: failed", it) }.getOrNull()
+    }
+
+    /**
      * 检查指定包名的应用最近的活动 task 是否运行在给定 displayId 上。
      * API 28 无 TaskInfo.displayId 字段（@hide），宽松返回 true（不拦截）。
      * 任何异常也宽松返回 true，避免误伤。
@@ -409,20 +428,33 @@ object ActivityUtils {
         }
     }
 
-    private val taskDisplayIdField by lazy {
-        runCatching {
-            var cls: Class<*>? = ActivityManager.RunningTaskInfo::class.java
-            var field: java.lang.reflect.Field? = null
-            while (cls != null && field == null) {
-                field = runCatching { cls.getDeclaredField("displayId") }.getOrNull()
-                cls = cls.superclass
-            }
-            field?.also { it.isAccessible = true }
-        }.onFailure { Ln.w("taskDisplayIdField: reflection failed", it) }.getOrNull()
-    }
+    private val taskDisplayIdField by lazy { taskInfoField("displayId") }
+
+    // 14 起有公开的 isVisible()，之前只能读隐藏字段
+    private val taskVisibleField by lazy { taskInfoField("isVisible") }
+
+    private val visibilityReadable: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE || taskVisibleField != null
+
+    private fun taskInfoField(name: String): java.lang.reflect.Field? = runCatching {
+        var cls: Class<*>? = ActivityManager.RunningTaskInfo::class.java
+        var field: java.lang.reflect.Field? = null
+        while (cls != null && field == null) {
+            field = runCatching { cls.getDeclaredField(name) }.getOrNull()
+            cls = cls.superclass
+        }
+        field?.also { it.isAccessible = true }
+    }.onFailure { Ln.w("taskInfoField($name): reflection failed", it) }.getOrNull()
 
     private fun getTaskDisplayId(task: ActivityManager.RunningTaskInfo): Int =
         runCatching { taskDisplayIdField?.getInt(task) ?: -1 }.getOrDefault(-1)
+
+    private fun isTaskVisible(task: ActivityManager.RunningTaskInfo): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            task.isVisible
+        } else {
+            runCatching { taskVisibleField?.getBoolean(task) == true }.getOrDefault(false)
+        }
 
     private fun startViaAmCommand(intent: Intent, displayId: Int): Boolean {
         try {

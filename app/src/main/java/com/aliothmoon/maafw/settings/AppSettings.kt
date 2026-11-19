@@ -175,4 +175,8 @@ data class AppSettings(
     /** Mirror酱 CDK；只在更新源为 Mirror酱 时有意义，下载解析时带上 */
     @PrefKey(default = "")
     val mirrorchyanCdk: String = "",
+
+    /** 定时的应用黑名单：逗号分隔的包名，见 [com.aliothmoon.maafw.runner.AppBlacklist] */
+    @PrefKey(default = "")
+    val scheduleAppBlacklist: String = "",
 )

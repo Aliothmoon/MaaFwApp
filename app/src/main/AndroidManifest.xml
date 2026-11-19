@@ -196,6 +196,11 @@
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <!-- 定时应用黑名单：选应用页列桌面应用，命中时取应用名 -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <!-- 自启动引导的厂商设置页（AutoStartHelper），targetSdk 30+ 需逐包声明才可 resolveActivity -->
         <package android:name="com.miui.securitycenter" />
         <package android:name="com.coloros.safecenter" />

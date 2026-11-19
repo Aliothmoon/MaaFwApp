@@ -143,6 +143,7 @@ import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleWakeUnlockScreen
+import com.aliothmoon.maafw.ui.schedule.ScheduleAppBlacklistScreen
 import com.aliothmoon.maafw.ui.settings.ConfigBackupAction
 import com.aliothmoon.maafw.ui.settings.ConfigBackupController
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
@@ -588,6 +589,7 @@ fun AppRoot(
                         onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
                         onFixIssue = fixScheduleIssue,
                         onOpenWakeUnlock = openWakeUnlock,
+                        onOpenAppBlacklist = { navController.navigate(Routes.SCHEDULE_APP_BLACKLIST) },
                         modifier = Modifier.fillMaxSize(),
                     )
 
@@ -712,6 +714,9 @@ fun AppRoot(
                 }
                 subPage(Routes.SCHEDULE_WAKE_UNLOCK) {
                     ScheduleWakeUnlockScreen(onBack = { navController.popBackStack() })
+                }
+                subPage(Routes.SCHEDULE_APP_BLACKLIST) {
+                    ScheduleAppBlacklistScreen(onBack = { navController.popBackStack() })
                 }
                 subPage(Routes.NOTIFICATION_SETTINGS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })

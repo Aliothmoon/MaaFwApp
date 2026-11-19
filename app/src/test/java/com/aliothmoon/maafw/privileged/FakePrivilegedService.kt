@@ -176,6 +176,11 @@ open class FakePrivilegedService : RemoteService {
 
     override fun getLastWakeTrace(sinceElapsedMs: Long): String = lastWakeTrace
 
+    /** null = 判不出 */
+    var visiblePackages: List<String>? = null
+
+    override fun getVisiblePackages(displayId: Int): List<String>? = visiblePackages
+
     override fun setDisplayPowerSync(on: Boolean): Boolean {
         displayPowerSyncCalls += on
         return displayPowerSyncResult

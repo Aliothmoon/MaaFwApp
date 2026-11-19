@@ -144,6 +144,9 @@ enum class TriggerFailureReason {
 
     /** 同上，但触发点之后设备重启过，多半到点时关着机 */
     MISSED_REBOOTED,
+
+    /** 后台模式到点时主屏上开着应用黑名单里的应用 */
+    BLACKLISTED,
 }
 /** 编辑期字段级校验；空集 = 可保存 */
 enum class ScheduleFieldError { NAME, CONFIGURATION, DAYS, TIMES, START, INTERVAL }

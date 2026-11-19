@@ -7,6 +7,9 @@ import com.aliothmoon.maafw.config.passwordPlaintexts
 import com.aliothmoon.maafw.i18n.LocalizedTextRenderer
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
+import com.aliothmoon.maafw.runner.AppBlacklist
+import com.aliothmoon.maafw.runner.AppBlacklistHook
+import com.aliothmoon.maafw.runner.AppBlacklistPrecheck
 import com.aliothmoon.maafw.runner.AutoSleepHook
 import com.aliothmoon.maafw.runner.IdleProbeHook
 import com.aliothmoon.maafw.runner.BackgroundModePrecheck
@@ -51,6 +54,7 @@ import com.aliothmoon.maafw.runner.WatchdogNoticeHook
 import com.aliothmoon.maafw.service.AccessibilityTextInputSink
 import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsManager
+import com.aliothmoon.maafw.util.LauncherApps
 import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
@@ -153,12 +157,22 @@ val runnerModule = module {
     single<DisplayHazardProbe> { SystemDisplayHazardProbe(androidContext(), get()) }
 
     single {
+        val keyguardLocked = {
+            androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
+        }
+        val blacklist = AppBlacklist(
+            servicePort = get(),
+            blacklist = get<AppSettingsManager>().scheduleAppBlacklist::value,
+            keyguardLocked = keyguardLocked,
+            appLabel = { LauncherApps.label(androidContext(), it) ?: it },
+        )
         RunLauncher(
             projectRepository = get(),
             configurationStore = get(),
             runnerPort = get(),
             prechecks = listOf(
                 PrivilegedAccessPrecheck(get(), get()),
+                AppBlacklistPrecheck(blacklist, get()),
                 ForegroundModePrecheck,
                 BackgroundModePrecheck(),
                 DisplayHazardPrecheck(get()),
@@ -168,17 +182,14 @@ val runnerModule = module {
                 TelemetryHook(get()),
                 NotificationHook(get()),
                 PrivilegedConnectHook(get()),
-                IdleProbeHook(get()) {
-                    androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
-                },
+                IdleProbeHook(get(), keyguardLocked),
                 AutoSleepHook(get()),
+                AppBlacklistHook(blacklist, afterCountdown = false),
                 WakeUnlockHook(
                     servicePort = get(),
                     settings = get<AppSettingsManager>(),
                     gestures = get<UnlockGestureStore>(),
-                    keyguardLocked = {
-                        androidContext().getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
-                    },
+                    keyguardLocked = keyguardLocked,
                     deviceSecure = {
                         androidContext().getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
                     },
@@ -186,6 +197,7 @@ val runnerModule = module {
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
                 CountdownHook,
+                AppBlacklistHook(blacklist, afterCountdown = true),
                 // 调用时才取：OverlayController 经 SessionViewModel 依赖 RunLauncher，构造期取会成环
                 OverlayClearHook { get<OverlayController>().awaitPanelCleared() },
                 KeepAliveHook(get()),

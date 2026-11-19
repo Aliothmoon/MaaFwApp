@@ -27,6 +27,9 @@ object Routes {
     /** 唤醒解锁：定时到点时的解锁方式（无密码 / 录制手势 / PIN） */
     const val SCHEDULE_WAKE_UNLOCK = "schedule_wake_unlock"
 
+    /** 应用黑名单：后台模式的定时触发撞上这些应用在用就跳过 */
+    const val SCHEDULE_APP_BLACKLIST = "schedule_app_blacklist"
+
     /** 历史运行日志列表 */
     const val RUN_LOG_ARCHIVE = "run_log_archive"
 

@@ -63,7 +63,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
          * 随配置导出、导入的设置：和这台设备无关、也不含凭据的那些
          *
          * 不在列：提权后端与 Shizuku 几项（换台设备不一定有 Root / Shizuku）、虚拟屏分辨率（看屏幕）、
-         * 运行通知样式（超级岛、实时更新看 ROM）、背景图（图不进文件）、唤醒解锁、Mirror酱 CDK、
+         * 运行通知样式（超级岛、实时更新看 ROM）、背景图（图不进文件）、唤醒解锁、Mirror酱 CDK、应用黑名单（看装了什么）、
          * 遥测开关（本机关了的，导入一份开着的备份不能被重新打开）。
          * 不在列的项导入时一律不碰，本机填好的不会被清掉
          */
@@ -197,6 +197,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
     private val _mirrorchyanCdk = MutableStateFlow(defaults.mirrorchyanCdk)
     override val mirrorchyanCdk: StateFlow<String> = _mirrorchyanCdk.asStateFlow()
 
+    private val _scheduleAppBlacklist = MutableStateFlow(parsePackageList(defaults.scheduleAppBlacklist))
+    override val scheduleAppBlacklist: StateFlow<Set<String>> = _scheduleAppBlacklist.asStateFlow()
+
     init {
         // 一处 collect 铺开到各字段，而不是每个字段各起一条 stateIn：
         // 那样 loaded 置位与各字段拿到首值是两件并发的事，早读的人仍可能读到默认值
@@ -230,6 +233,7 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
                 _updateSource.value = parseUpdateSource(s.updateSource)
                 _pipOnHome.value = s.pipOnHome.toBoolean()
                 _mirrorchyanCdk.value = s.mirrorchyanCdk
+                _scheduleAppBlacklist.value = parsePackageList(s.scheduleAppBlacklist)
                 // 必须是最后一行：置位即宣告上面全部就位
                 _loaded.value = true
             }
@@ -371,6 +375,18 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         context.dataStore.edit { it[mirrorchyanCdk] = cdk.trim() }
     }
 
+    override suspend fun setScheduleAppBlacklisted(packageName: String, blacklisted: Boolean) {
+        if (packageName.isBlank()) return
+        with(AppSettingsSchema) {
+            // 读改写放在同一个 edit 里，连点不丢
+            context.dataStore.edit { prefs ->
+                val current = parsePackageList(prefs[scheduleAppBlacklist].orEmpty())
+                val next = if (blacklisted) current + packageName else current - packageName
+                prefs[scheduleAppBlacklist] = next.joinToString(",")
+            }
+        }
+    }
+
     /** 导出配置带走的那几项，键是 DataStore 里的键名；没写过的项按默认值导出，文件里一眼看得全 */
     suspend fun portableSettings(): Map<String, String> {
         val current = settings.first()
@@ -394,6 +410,9 @@ class AppSettingsManager(private val context: Context) : AppSettingsGateway {
         scrim = parsePercent(s.wallpaperScrim, 25),
         blur = parsePercent(s.wallpaperBlur, 0),
     )
+
+    private fun parsePackageList(raw: String): Set<String> =
+        raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
     private fun parsePercent(raw: String, default: Int): Int = raw.toIntOrNull()?.coerceIn(0, 100) ?: default
 

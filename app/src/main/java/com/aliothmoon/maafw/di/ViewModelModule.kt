@@ -7,6 +7,7 @@ import com.aliothmoon.maafw.log.RunLogDetailViewModel
 import com.aliothmoon.maafw.notification.NotificationSettingsViewModel
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.schedule.ScheduleWakeUnlockViewModel
+import com.aliothmoon.maafw.schedule.ScheduleAppBlacklistViewModel
 import com.aliothmoon.maafw.session.SessionViewModel
 import com.aliothmoon.maafw.settings.SettingsViewModel
 import com.aliothmoon.maafw.ui.SessionMessagePresenter
@@ -35,6 +36,7 @@ val viewModelModule = module {
     }
     viewModelOf(::ScheduleViewModel)
     viewModelOf(::ScheduleWakeUnlockViewModel)
+    viewModelOf(::ScheduleAppBlacklistViewModel)
 
     viewModel {
         SettingsViewModel(
