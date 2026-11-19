@@ -65,8 +65,12 @@ object AppLocales : LocaleController {
     @Volatile
     private var prefs: SharedPreferences? = null
 
+    @Volatile
+    private var appContext: Context? = null
+
     /** Application.onCreate 里最先调：之后渲染的通知、悬浮窗才是应用语言 */
     fun init(context: Context) {
+        appContext = context.applicationContext
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         syncApplicationResources(context)
     }
@@ -85,11 +89,14 @@ object AppLocales : LocaleController {
 
     /** null 恢复跟随系统；已启动 Activity 会重建 */
     override fun apply(tag: String?) {
+        prefs?.edit { putString(KEY_TAG, tag.orEmpty()) }
+        // 必须先于 setApplicationLocales：32 及以下 appcompat 把 Application 的 Configuration 当「系统语言」，
+        // 跟随系统时就拿它当结果。先换的话它读到的还是上一种语言，切回跟随系统会停在那一种
+        appContext?.let { syncApplicationResources(it, tag) }
         AppCompatDelegate.setApplicationLocales(
             if (tag == null) LocaleListCompat.getEmptyLocaleList()
             else LocaleListCompat.forLanguageTags(tag),
         )
-        prefs?.edit { putString(KEY_TAG, tag.orEmpty()) }
     }
 
     /**
@@ -109,11 +116,11 @@ object AppLocales : LocaleController {
      * 所以 onConfigurationChanged 里也要再同步一次
      */
     @Suppress("DEPRECATION")
-    fun syncApplicationResources(context: Context) {
+    fun syncApplicationResources(context: Context, tag: String? = currentTag()) {
         val res = context.applicationContext.resources
         val target = AppLanguagePolicy.localesToSync(
             sdkInt = Build.VERSION.SDK_INT,
-            appLocales = currentTag()?.let(LocaleListCompat::forLanguageTags) ?: LocaleListCompat.getEmptyLocaleList(),
+            appLocales = tag?.let(LocaleListCompat::forLanguageTags) ?: LocaleListCompat.getEmptyLocaleList(),
             systemLocales = ConfigurationCompat.getLocales(Resources.getSystem().configuration),
             current = ConfigurationCompat.getLocales(res.configuration),
         ) ?: return
