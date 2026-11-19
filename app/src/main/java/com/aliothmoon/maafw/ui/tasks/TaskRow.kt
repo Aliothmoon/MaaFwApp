@@ -119,7 +119,8 @@ internal fun TaskRow(
     MaaCard(
         modifier = modifier
             .shadow(elevation = dragElevation, shape = MaterialTheme.shapes.medium)
-            .maaClickable(enabled = task.hasOptions, shape = MaterialTheme.shapes.medium, onClick = onClick),
+            // 没有选项的也能点开：sheet 里还有描述与「从此处运行」
+            .maaClickable(shape = MaterialTheme.shapes.medium, onClick = onClick),
         contentPadding = PaddingValues(
             horizontal = MaaDesignTokens.Spacing.xs,
             vertical = MaaDesignTokens.Spacing.xs,
