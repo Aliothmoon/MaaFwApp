@@ -399,6 +399,11 @@ class SettingsViewModel(
      */
     private fun verifyCdk(cdk: String) {
         cdkJob?.cancel()
+        // 这个包没配 Mirror酱 rid：验不了，不能说成「请检查网络」
+        val rid = mirrorchyanRid(projectMetadata()) ?: run {
+            updateOperation.update { it.copy(cdkStatus = CdkStatus.None) }
+            return
+        }
         updateOperation.update { it.copy(cdkStatus = CdkStatus.Checking) }
         cdkJob = viewModelScope.launch {
             val result = updateService.verifyCdk(
@@ -407,7 +412,7 @@ class SettingsViewModel(
                     currentVersion = currentVersion,
                     abi = abi,
                     channel = appSettings.updateChannel.value,
-                    mirrorchyanRid = mirrorchyanRid(projectMetadata()),
+                    mirrorchyanRid = rid,
                 ),
             )
             if (appSettings.mirrorchyanCdk.value != cdk) return@launch
