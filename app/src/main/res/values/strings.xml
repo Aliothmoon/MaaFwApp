@@ -824,6 +824,8 @@
     <string name="notification_send_on_error">任务出错时</string>
     <string name="notification_send_on_service_died">后台服务中断时</string>
     <string name="notification_include_log_details">推送内容附带运行日志</string>
+    <string name="notification_attach_screenshot">完成推送附带截图</string>
+    <string name="notification_attach_screenshot_desc">任务全部完成时截取目标应用画面一并推送，画面里的账号等信息会发到推送渠道。仅 Telegram、Discord、Discord Webhook、SMTP、KOOK 支持</string>
     <string name="notification_section_test">测试推送</string>
     <string name="notification_test_title">测试通知</string>
     <string name="notification_test_message">这是一条来自 MaaFwApp 的测试通知</string>

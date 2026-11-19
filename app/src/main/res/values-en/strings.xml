@@ -835,6 +835,8 @@
     <string name="notification_send_on_error">A task failed</string>
     <string name="notification_send_on_service_died">Background service stopped</string>
     <string name="notification_include_log_details">Attach the run log to the message</string>
+    <string name="notification_attach_screenshot">Attach screenshot to completion push</string>
+    <string name="notification_attach_screenshot_desc">When all tasks finish, the target app screen is captured and pushed too, including any account details on it. Only Telegram, Discord, Discord Webhook, SMTP and KOOK support images</string>
     <string name="notification_section_test">Test push</string>
     <string name="notification_test_title">Test notification</string>
     <string name="notification_test_message">This is a test notification from MaaFwApp</string>

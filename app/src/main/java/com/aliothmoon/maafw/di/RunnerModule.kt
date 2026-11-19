@@ -16,6 +16,7 @@ import com.aliothmoon.maafw.runner.IdleProbeHook
 import com.aliothmoon.maafw.runner.BackgroundModePrecheck
 import com.aliothmoon.maafw.runner.CloseTargetAppHook
 import com.aliothmoon.maafw.runner.CollapseAfterRunHook
+import com.aliothmoon.maafw.runner.CompletionScreenshotHook
 import com.aliothmoon.maafw.runner.CountdownHook
 import com.aliothmoon.maafw.runner.DisplayHazardNoticeHook
 import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
@@ -211,6 +212,7 @@ val runnerModule = module {
                 ),
                 ScreenSaverHook(get<AppSettingsManager>(), get()),
                 CloseTargetAppHook(get(), get<AppSettingsManager>()),
+                CompletionScreenshotHook(get(), get()),
                 CountdownHook,
                 AppBlacklistHook(blacklist, afterCountdown = true),
                 // 调用时才取：OverlayController 经 SessionViewModel 依赖 RunLauncher，构造期取会成环

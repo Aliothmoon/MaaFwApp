@@ -37,6 +37,21 @@ class NotificationCenterRunTest {
         verify(exactly = 0) { external.send(any(), any()) }
     }
 
+    /** 截图只随「全部完成」那条走；有失败的那轮不带 */
+    @Test
+    fun screenshotRidesOnlyOnTheCompletionPush() = runTest {
+        val shot = NotificationImage(byteArrayOf(1, 2, 3))
+
+        center.onRunFinished(RunEndReason.Ran(ExecutionResult.Completed(emptyList())), screenshot = shot)
+        verify(exactly = 1) { external.send(any(), any(), shot) }
+
+        center.onRunFinished(
+            RunEndReason.Ran(ExecutionResult.CompletedWithFailures(emptyList())),
+            screenshot = shot,
+        )
+        verify(exactly = 1) { external.send(any(), any(), null) }
+    }
+
     @Test
     fun manualStopIsNotReported() = runTest {
         center.onRunFinished(RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())))

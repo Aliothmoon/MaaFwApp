@@ -181,6 +181,10 @@ open class FakePrivilegedService : RemoteService {
 
     override fun getVisiblePackages(displayId: Int): List<String>? = visiblePackages
 
+    var frameJpeg: ByteArray? = null
+
+    override fun captureFrameJpeg(quality: Int): ByteArray? = frameJpeg
+
     override fun setDisplayPowerSync(on: Boolean): Boolean {
         displayPowerSyncCalls += on
         return displayPowerSyncResult

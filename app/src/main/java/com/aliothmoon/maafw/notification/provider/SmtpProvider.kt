@@ -2,10 +2,15 @@ package com.aliothmoon.maafw.notification.provider
 
 import androidx.core.text.htmlEncode
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.NotificationImage
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.toPrefBoolean
 import com.aliothmoon.maafw.R
+import jakarta.activation.DataHandler
 import jakarta.mail.Authenticator
+import jakarta.mail.internet.MimeBodyPart
+import jakarta.mail.internet.MimeMultipart
+import jakarta.mail.util.ByteArrayDataSource
 import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeMessage
 import jakarta.mail.Message
@@ -28,7 +33,15 @@ class SmtpProvider(
 
     override val id = "SMTP"
 
-    override suspend fun send(title: String, content: String): NotificationSendResult {
+    override val supportsImage = true
+
+    override suspend fun send(title: String, content: String): NotificationSendResult =
+        sendInternal(title, content, image = null)
+
+    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        sendWithTextFallback(title, content, retryOnTransient = true) { sendInternal(title, content, image) }
+
+    private suspend fun sendInternal(title: String, content: String, image: NotificationImage?): NotificationSendResult {
         val settings = settingsManager.current()
         val server = settings.smtpServer.takeIf { it.isNotBlank() }
             ?: return NotificationSendResult.Failed(
@@ -86,7 +99,20 @@ class SmtpProvider(
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
                 subject = sanitizedTitle
                 sentDate = Date()
-                setContent(buildHtmlBody(sanitizedTitle, content), "text/html; charset=UTF-8")
+                val html = buildHtmlBody(sanitizedTitle, content)
+                if (image == null) {
+                    setContent(html, "text/html; charset=UTF-8")
+                } else {
+                    setContent(
+                        MimeMultipart(
+                            MimeBodyPart().apply { setContent(html, "text/html; charset=UTF-8") },
+                            MimeBodyPart().apply {
+                                dataHandler = DataHandler(ByteArrayDataSource(image.bytes, image.mimeType))
+                                fileName = image.fileName
+                            },
+                        ),
+                    )
+                }
             }
             Transport.send(message)
             NotificationSendResult.Success

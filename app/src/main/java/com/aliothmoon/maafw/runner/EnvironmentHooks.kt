@@ -107,6 +107,9 @@ internal object HookOrder {
     const val WAKE_UNLOCK = 10
     const val SCREEN_SAVER = 20
     const val CLOSE_APP = 30
+
+    /** 收尾排在关闭目标应用之前：结束画面要趁目标应用还在屏上截 */
+    const val COMPLETION_SCREENSHOT = 35
     const val COUNTDOWN = 40
 
     /** 倒计时走完再查一次 */

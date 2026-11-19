@@ -23,6 +23,8 @@ data class NotificationSettings(
     @PrefKey(default = "true") val sendOnError: String = "true",
     @PrefKey(default = "false") val sendOnServiceDied: String = "false",
     @PrefKey(default = "false") val includeLogDetails: String = "false",
+    /** 完成推送附带结束时的画面；默认关：屏上可能有账号信息 */
+    @PrefKey(default = "false") val attachScreenshot: String = "false",
 
     /** 已启用渠道的 id，逗号分隔；顺序即发送顺序 */
     @PrefKey(default = "") val enabledProviders: String = "",

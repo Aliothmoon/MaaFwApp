@@ -191,6 +191,20 @@ private fun TriggerCard(state: NotificationUiState, onIntent: (NotificationInten
                 onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(includeLogDetails = value.toString()) }) },
             )
         }
+        SettingSearchTarget(SettingAnchors.NOTIFY_SCREENSHOT) {
+            Column {
+                MaaSwitchRow(
+                    label = stringResource(R.string.notification_attach_screenshot),
+                    checked = state.settings.attachScreenshot.toPrefBoolean(),
+                    onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(attachScreenshot = value.toString()) }) },
+                )
+                Text(
+                    text = stringResource(R.string.notification_attach_screenshot_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

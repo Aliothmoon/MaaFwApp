@@ -9,6 +9,7 @@ import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -115,6 +116,19 @@ class HttpClientHelper(
             .url(url.toHttpUrl())
             .apply { headers.forEach { (k, v) -> header(k, v) } }
             .post(formBody)
+            .build()
+        return okHttpClient.newCall(request).await()
+    }
+
+    suspend fun postMultipart(
+        url: String,
+        body: MultipartBody,
+        headers: Map<String, String> = emptyMap(),
+    ): Response {
+        val request = Request.Builder()
+            .url(url.toHttpUrl())
+            .apply { headers.forEach { (k, v) -> header(k, v) } }
+            .post(body)
             .build()
         return okHttpClient.newCall(request).await()
     }

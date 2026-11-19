@@ -29,15 +29,19 @@ class ExternalNotificationService(
     private val _feedbackMessages = MutableSharedFlow<UiText>(extraBufferCapacity = 16)
     val feedbackMessages: SharedFlow<UiText> = _feedbackMessages.asSharedFlow()
 
-    fun send(title: String, content: String) {
-        scope.launch(MaaDispatchers.IO) { dispatch(title, content, isTest = false) }
+    fun send(title: String, content: String, image: NotificationImage? = null) {
+        scope.launch(MaaDispatchers.IO) { dispatch(title, content, isTest = false, image = image) }
     }
+
+    /** 已启用的渠道里有能发图的，截图才有去处 */
+    suspend fun hasImageChannel(): Boolean =
+        settingsManager.current().enabledProviderIds().any { providers[it]?.supportsImage == true }
 
     fun sendTest(title: String, content: String) {
         scope.launch(MaaDispatchers.IO) { dispatch(title, content, isTest = true) }
     }
 
-    private suspend fun dispatch(title: String, content: String, isTest: Boolean) {
+    private suspend fun dispatch(title: String, content: String, isTest: Boolean, image: NotificationImage? = null) {
         val enabledIds = settingsManager.current().enabledProviderIds()
         if (enabledIds.isEmpty()) {
             if (isTest) _feedbackMessages.tryEmit(uiTextOf(R.string.notification_feedback_no_channel))
@@ -53,7 +57,9 @@ class ExternalNotificationService(
                 Timber.w("unknown notification provider: %s", id)
                 continue
             }
-            val result = runCatching { provider.send(prefixedTitle, content) }
+            val result = runCatching {
+                if (image != null) provider.send(prefixedTitle, content, image) else provider.send(prefixedTitle, content)
+            }
                 .getOrElse {
                     Timber.e(it, "notification provider %s threw", id)
                     NotificationSendResult.Transient(uiTextOf(R.string.notification_err_network))

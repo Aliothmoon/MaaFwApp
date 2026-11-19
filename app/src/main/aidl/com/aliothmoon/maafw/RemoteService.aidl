@@ -176,6 +176,9 @@ interface RemoteService {
     /** 指定屏上可见任务的包名，供定时的应用黑名单判定；判不出返回 null */
     List<String> getVisiblePackages(int displayId) = 92;
 
+    /** 当前帧编码成 JPEG 直接回传（长边缩到 1280）；无帧或失败返回 null。完成推送附图用 */
+    byte[] captureFrameJpeg(int quality) = 93;
+
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;
     /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */

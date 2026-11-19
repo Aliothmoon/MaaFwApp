@@ -43,6 +43,7 @@ import android.graphics.Bitmap
 import android.view.Surface
 import android.os.Process
 import android.provider.Settings
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -436,6 +437,30 @@ class RemoteServiceImpl : RemoteService.Stub() {
         }
     }
 
+    override fun captureFrameJpeg(quality: Int): ByteArray? {
+        var frame: Bitmap? = null
+        var scaled: Bitmap? = null
+        return try {
+            frame = NativeBridgeLib.getFrameBufferBitmap() ?: return null
+            // 前台模式是原生分辨率，缩到长边 1280 免得撑爆 binder 缓冲
+            val scale = JPEG_MAX_EDGE.toFloat() / maxOf(frame.width, frame.height)
+            scaled = if (scale < 1f) {
+                Bitmap.createScaledBitmap(frame, (frame.width * scale).toInt(), (frame.height * scale).toInt(), true)
+            } else {
+                frame
+            }
+            ByteArrayOutputStream().use { out ->
+                if (scaled.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)) out.toByteArray() else null
+            }
+        } catch (e: Throwable) {
+            Ln.w("$TAG: captureFrameJpeg failed: ${e.message}")
+            null
+        } finally {
+            if (scaled !== frame) scaled?.recycle()
+            frame?.recycle()
+        }
+    }
+
     override fun getGameFps(): Float = GameFpsMonitor.currentFps()
 
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
@@ -562,6 +587,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     private companion object {
+        private const val JPEG_MAX_EDGE = 1280
         const val TAG = "RemoteService"
         const val HEARTBEAT_INTERVAL_MS = 5_000L
         const val PREVIEW_SHUTDOWN_TIMEOUT_MS = 1_000L

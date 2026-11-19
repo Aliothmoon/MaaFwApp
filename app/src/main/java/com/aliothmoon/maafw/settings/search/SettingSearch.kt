@@ -74,6 +74,7 @@ object SettingAnchors {
     const val NOTIFY_ON_ERROR = "notify.on_error"
     const val NOTIFY_ON_SERVICE_DIED = "notify.on_service_died"
     const val NOTIFY_LOG_DETAILS = "notify.log_details"
+    const val NOTIFY_SCREENSHOT = "notify.screenshot"
 
     const val RUN_MODE = "home.run_mode"
     const val OVERLAY_MODE = "home.overlay_mode"
@@ -204,6 +205,7 @@ object SettingSearchIndex {
         entry(R.string.notification_send_on_error, notificationPage, SettingAnchors.NOTIFY_ON_ERROR),
         entry(R.string.notification_send_on_service_died, notificationPage, SettingAnchors.NOTIFY_ON_SERVICE_DIED),
         entry(R.string.notification_include_log_details, notificationPage, SettingAnchors.NOTIFY_LOG_DETAILS),
+        entry(R.string.notification_attach_screenshot, notificationPage, SettingAnchors.NOTIFY_SCREENSHOT),
 
         entry(R.string.settings_run_mode, SettingLocation.Home(uiTextOf(R.string.settings_run_mode)), SettingAnchors.RUN_MODE, keywordsRes = R.string.search_keywords_run_mode, condition = SearchCondition.FOREGROUND_ALLOWED),
         entry(R.string.settings_overlay_mode, SettingLocation.Home(uiTextOf(R.string.settings_overlay_mode)), SettingAnchors.OVERLAY_MODE, keywordsRes = R.string.search_keywords_overlay, condition = SearchCondition.FOREGROUND_MODE),

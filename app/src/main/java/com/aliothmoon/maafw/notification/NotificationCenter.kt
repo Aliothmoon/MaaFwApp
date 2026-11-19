@@ -41,7 +41,12 @@ class NotificationCenter(
      * [stoppedAtLimit]：到达运行时长上限停下的也落在 Cancelled，但那时多半没人看着，要说一声；
      * 只发系统通知不外推，同上游
      */
-    suspend fun onRunFinished(reason: RunEndReason, stoppedAtLimit: Boolean = false) {
+    suspend fun onRunFinished(
+        reason: RunEndReason,
+        stoppedAtLimit: Boolean = false,
+        /** 收尾早段截下的结束画面，只随「全部完成」那条外推 */
+        screenshot: NotificationImage? = null,
+    ) {
         // 没投出去 / 用户自己按的停：都不是要播报的结局
         val result = (reason as? RunEndReason.Ran)?.result ?: return
         if (result is ExecutionResult.Cancelled) {
@@ -70,7 +75,15 @@ class NotificationCenter(
         }
         if (!wanted) return
 
-        external.send(title, appendLogs(body, current))
+        external.send(title, appendLogs(body, current), screenshot.takeIf { outcome.trigger == Trigger.COMPLETE })
+    }
+
+    /** 开了附图、开了完成推送、且有能发图的渠道才截：截图是一次跨进程编码，用不上就别做 */
+    suspend fun wantsCompletionScreenshot(): Boolean {
+        val current = settings.current()
+        return current.attachScreenshot.toPrefBoolean() &&
+            current.sendOnComplete.toPrefBoolean(default = true) &&
+            external.hasImageChannel()
     }
 
     /**

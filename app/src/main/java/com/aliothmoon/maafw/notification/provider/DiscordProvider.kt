@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.notification.provider
 
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.NotificationImage
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.util.HttpClientHelper
@@ -21,7 +22,15 @@ class DiscordProvider(
 
     override val id = "Discord"
 
-    override suspend fun send(title: String, content: String): NotificationSendResult {
+    override val supportsImage = true
+
+    override suspend fun send(title: String, content: String): NotificationSendResult =
+        sendInternal(title, content, image = null)
+
+    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        sendWithTextFallback(title, content) { sendInternal(title, content, image) }
+
+    private suspend fun sendInternal(title: String, content: String, image: NotificationImage?): NotificationSendResult {
         val settings = settingsManager.current()
         val botToken = settings.discordBotToken.takeIf { it.isNotBlank() }
             ?: return NotificationSendResult.Failed(
@@ -42,12 +51,14 @@ class DiscordProvider(
                 return NotificationSendResult.Transient(uiTextOf(R.string.notification_err_network))
         }
 
+        val url = "https://discord.com/api/v9/channels/$channelId/messages"
+        val text = "$title\n$content".fitChars(MAX_CONTENT_LENGTH)
         return runCatching {
-            httpClient.postForm(
-                url = "https://discord.com/api/v9/channels/$channelId/messages",
-                params = mapOf("content" to "$title\n$content".fitChars(MAX_CONTENT_LENGTH)),
-                headers = discordHeaders(botToken),
-            ).use { response ->
+            if (image == null) {
+                httpClient.postForm(url, mapOf("content" to text), discordHeaders(botToken))
+            } else {
+                httpClient.postMultipart(url, discordMultipart(text, image), discordHeaders(botToken))
+            }.use { response ->
                 if (response.isSuccessful) {
                     NotificationSendResult.Success
                 } else {
