@@ -1,6 +1,5 @@
 package com.aliothmoon.maafw.ui.schedule
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -39,7 +38,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +48,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.schedule.CloseAppEffect
 import com.aliothmoon.maafw.schedule.ScheduleIntent
 import com.aliothmoon.maafw.schedule.ScheduleFieldError
 import com.aliothmoon.maafw.schedule.ScheduleStrategy
@@ -59,14 +56,9 @@ import com.aliothmoon.maafw.schedule.ScheduleType
 import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.OpaqueTheme
-import com.aliothmoon.maafw.ui.components.CardCollapse
-import com.aliothmoon.maafw.ui.components.CardExpand
-import com.aliothmoon.maafw.ui.components.ExpandableTipContent
-import com.aliothmoon.maafw.ui.components.ExpandableTipIcon
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaPromptDialog
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
-import com.aliothmoon.maafw.ui.components.MaaSwitch
 import com.aliothmoon.maafw.ui.components.ITextField
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
 import com.aliothmoon.maafw.ui.components.MaaTimePickerDialog
@@ -281,60 +273,12 @@ fun ScheduleEditScreen(
             // 排在最后：这一组是「跑起来之后怎么收场」，改的频率远低于上面的时间与配置。
             // 整组是逐条规则的，不是全局设置——对齐 MaaMeow 的归属
             ScheduleSection(stringResource(R.string.schedule_edit_advanced)) {
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_force_start),
-                    tip = stringResource(R.string.schedule_edit_force_start_tip),
-                    checked = draft.forceStart,
-                    onCheckedChange = { draft = draft.copy(forceStart = it) },
-                )
-                // 子开关和父开关包成一组，间距放进子项自己的 padding：留在 Section 的 spacedBy 里，
-                // 那 8dp 会在展开开始时一下冒出来、收起结束时一下消失，看着是一跳
-                Column {
-                    ScheduleToggleRow(
-                        label = stringResource(R.string.schedule_edit_auto_sleep),
-                        tip = stringResource(R.string.schedule_edit_auto_sleep_tip),
-                        checked = draft.autoSleepAfterTask,
-                        onCheckedChange = { draft = draft.copy(autoSleepAfterTask = it) },
-                    )
-                    AnimatedVisibility(
-                        visible = draft.autoSleepAfterTask,
-                        enter = CardExpand,
-                        exit = CardCollapse,
-                    ) {
-                        // 缩进一档表明从属，对齐 MaaMeow
-                        ScheduleToggleRow(
-                            label = stringResource(R.string.schedule_edit_skip_sleep_if_awake),
-                            tip = stringResource(R.string.schedule_edit_skip_sleep_if_awake_tip),
-                            checked = draft.skipAutoSleepIfAwake,
-                            onCheckedChange = { draft = draft.copy(skipAutoSleepIfAwake = it) },
-                            modifier = Modifier.padding(
-                                start = MaaDesignTokens.Spacing.lg,
-                                top = MaaDesignTokens.Spacing.sm,
-                            ),
-                        )
-                    }
-                }
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_hardware_screen_off),
-                    tip = stringResource(R.string.schedule_edit_hardware_screen_off_tip),
-                    checked = draft.hardwareScreenOff,
-                    // 打开先确认：屏幕全黑、要按电源键才亮，误开了会以为手机死机
-                    onCheckedChange = { on ->
-                        if (on) confirmScreenPowerOff = true else draft = draft.copy(hardwareScreenOff = false)
-                    },
-                )
-                ScheduleToggleRow(
-                    label = stringResource(R.string.schedule_edit_close_app),
-                    tip = stringResource(R.string.schedule_edit_close_app_tip),
-                    // 与快捷选项的优先级容易踩坑，默认展开（对齐 MaaMeow）
-                    tipInitiallyExpanded = true,
-                    supporting = {
-                        CloseAppEffectText(
-                            CloseAppEffect.of(state.runMode, state.globalCloseAppAfterTask, draft.closeAppAfterTask),
-                        )
-                    },
-                    checked = draft.closeAppAfterTask,
-                    onCheckedChange = { draft = draft.copy(closeAppAfterTask = it) },
+                ScheduleAdvancedOptions(
+                    draft = draft,
+                    runMode = state.runMode,
+                    globalCloseAppAfterTask = state.globalCloseAppAfterTask,
+                    onDraftChange = { draft = it },
+                    onRequestScreenPowerOff = { confirmScreenPowerOff = true },
                 )
             }
         }
@@ -397,81 +341,6 @@ fun ScheduleEditScreen(
 }
 
 /** 小节标题 + 内容；替掉 MaaCard 的描边卡，对齐 MaaMeow 的 SectionHeader（轻、不占高） */
-/**
- * 高级选项的一行开关（对齐 MaaMeow）：说明收进标题旁的小 i，点开才在下方展开
- *
- * 标题行只放标题与开关，有没有说明都和开关居中对齐；说明默认收起，
- * [tipInitiallyExpanded] 留给容易踩坑、要先让人看到的那条
- */
-@Composable
-private fun ScheduleToggleRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    tip: String? = null,
-    tipInitiallyExpanded: Boolean = false,
-    /** 标题行下方常显的一行，如「当前效果」；不进标题行，标题照样和开关居中 */
-    supporting: (@Composable () -> Unit)? = null,
-) {
-    var tipExpanded by rememberSaveable { mutableStateOf(tipInitiallyExpanded) }
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
-            ) {
-                // fill = false：标题短时小 i 紧跟标题，长了才换行而不把小 i 挤出去
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (tip != null) {
-                    ExpandableTipIcon(expanded = tipExpanded, onExpandedChange = { tipExpanded = it })
-                }
-            }
-            MaaSwitch(checked = checked, onCheckedChange = onCheckedChange)
-        }
-        supporting?.invoke()
-        if (tip != null) {
-            ExpandableTipContent(visible = tipExpanded, topSpacing = MaaDesignTokens.Spacing.xs) {
-                Text(
-                    text = tip,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-        }
-    }
-}
-
-/** 跟着运行模式、全局开关与本规则现算，用户不必自己推优先级（对齐 MaaMeow） */
-@Composable
-private fun CloseAppEffectText(effect: CloseAppEffect) {
-    Text(
-        text = stringResource(
-            when (effect) {
-                CloseAppEffect.FOREGROUND_INACTIVE -> R.string.schedule_edit_close_app_effect_foreground
-                CloseAppEffect.GLOBAL_OVERRIDE -> R.string.schedule_edit_close_app_effect_global
-                CloseAppEffect.STRATEGY_ACTIVE -> R.string.schedule_edit_close_app_effect_strategy
-                CloseAppEffect.INACTIVE -> R.string.schedule_edit_close_app_effect_inactive
-            },
-        ),
-        style = MaterialTheme.typography.bodySmall,
-        color = if (effect.willClose) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-    )
-}
-
 @Composable
 private fun ScheduleSection(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {
