@@ -167,6 +167,12 @@ interface RemoteService {
     /** 同 setDisplayPower，但等做完并回结果：17 号是 oneway，改不了签名 */
     boolean setDisplayPowerSync(boolean on) = 90;
 
+    /**
+     * 最近一次唤醒解锁（含自测）的步骤与耗时，不含 PIN 与轨迹
+     * sinceElapsedMs 为 App 发起解锁时的 elapsedRealtime，更早开始的返回空串
+     */
+    String getLastWakeTrace(long sinceElapsedMs) = 91;
+
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;
     /** app 每轮开始前注册；InputText 里按键打不出来的文本经它交给无障碍写入 */

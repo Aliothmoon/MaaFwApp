@@ -50,23 +50,64 @@ object WakeUnlockController {
     /** 任务的手指可能正按着，等它抬起；槽位是进程共享的，硬塞进去会取消或并入任务的手势 */
     private const val CONTACTS_IDLE_TIMEOUT_MS = 1_000L
 
+    /** 当前这次解锁的 trace；解锁在 binder 线程上同步跑完，按线程挂就不会和并发的另一次串 */
+    private val active = ThreadLocal<WakeTrace?>()
+
+    /** 收尾后不再改动，取时才拼文本 */
+    @Volatile
+    private var last: WakeTrace? = null
+
+    /**
+     * 最近一次解锁（含自测）的步骤与耗时，App 解锁失败时取走写进运行日志
+     * @param sinceElapsedMs App 发起解锁时的 elapsedRealtime；更早开始的不算，免得把别次的过程记到这次头上
+     */
+    fun lastTrace(sinceElapsedMs: Long): String =
+        last?.takeIf { it.startMs >= sinceElapsedMs }?.render().orEmpty()
+
+    /** 嵌套调用（自测里再解锁）沿用外层那份 */
+    private inline fun <T> traced(begin: String, block: () -> T): T {
+        if (active.get() != null) return block()
+        val trace = WakeTrace().also { last = it }
+        active.set(trace)
+        try {
+            trace.i(begin)
+            return block()
+        } finally {
+            active.remove()
+        }
+    }
+
+    private fun logI(msg: String) {
+        val trace = active.get()
+        if (trace != null) trace.i(msg) else Ln.i("$TAG: $msg")
+    }
+
+    private fun logW(msg: String) {
+        val trace = active.get()
+        if (trace != null) trace.w(msg) else Ln.w("$TAG: $msg")
+    }
+
     /**
      * 设置页自测：先 [lockAndSleep]，等待 [LOCK_SETTLE_MS] 后再 [unlock]
      * 整段在提权进程内完成，避免息屏后 App 侧协程被挂起
      */
-    fun testUnlock(credential: String): Int = keepCpuAwake(TEST_CPU_LOCK_MS) {
+    fun testUnlock(credential: String): Int = traced("test unlock, ${credentialKind(credential)}") { testUnlockTraced(credential) }
+
+    private fun testUnlockTraced(credential: String): Int = keepCpuAwake(TEST_CPU_LOCK_MS) {
         val lockCode = lockAndSleep()
         if (lockCode != WakeUnlockResult.OK) return@keepCpuAwake lockCode
-        Ln.i("$TAG: locked for test, settle ${LOCK_SETTLE_MS}ms")
+        logI("locked for test, settle ${LOCK_SETTLE_MS}ms")
         Thread.sleep(LOCK_SETTLE_MS)
         unlock(credential)
     }
 
     /** 设置页自测：手势版 */
-    fun testUnlockGesture(gestureJson: String): Int = keepCpuAwake(TEST_CPU_LOCK_MS) {
+    fun testUnlockGesture(gestureJson: String): Int = traced("test unlock, gesture") { testUnlockGestureTraced(gestureJson) }
+
+    private fun testUnlockGestureTraced(gestureJson: String): Int = keepCpuAwake(TEST_CPU_LOCK_MS) {
         val lockCode = lockAndSleep()
         if (lockCode != WakeUnlockResult.OK) return@keepCpuAwake lockCode
-        Ln.i("$TAG: locked for gesture test, settle ${LOCK_SETTLE_MS}ms")
+        logI("locked for gesture test, settle ${LOCK_SETTLE_MS}ms")
         Thread.sleep(LOCK_SETTLE_MS)
         unlockWithGesture(gestureJson)
     }
@@ -92,7 +133,7 @@ object WakeUnlockController {
             acquire(timeoutMs)
         }
     }.getOrElse {
-        Ln.w("$TAG: cannot hold cpu wakelock: $it")
+        logW("cannot hold cpu wakelock: $it")
         null
     }
 
@@ -105,36 +146,36 @@ object WakeUnlockController {
         val wm = ServiceManager.getWindowManager()
 
         if (!wm.lockNow()) {
-            Ln.w("$TAG: lockNow unavailable")
+            logW("lockNow unavailable")
             return WakeUnlockResult.UNSUPPORTED
         }
         val keyguardUp = pollUntil(KEYGUARD_GONE_TIMEOUT_MS) {
             isCancelled() || wm.isKeyguardLocked == true
         }
         if (isCancelled()) {
-            Ln.i("$TAG: cancelled after lockNow, leave screen on")
+            logI("cancelled after lockNow, leave screen on")
             return WakeUnlockResult.RECORD_CANCELLED
         }
         if (!keyguardUp) {
             // 锁屏方式为「无」时 lockNow 后 keyguard 永不出现；滑动/密码锁屏均会出现，
             // 超时且非 secure 即视为未设置锁屏，此时也无需息屏验证
             if (wm.isKeyguardSecure(0) != true) {
-                Ln.i("$TAG: keyguard never appeared and not secure — no lock screen configured")
+                logI("keyguard never appeared and not secure — no lock screen configured")
                 return WakeUnlockResult.NO_KEYGUARD
             }
-            Ln.w("$TAG: keyguard did not lock after lockNow")
+            logW("keyguard did not lock after lockNow")
             return WakeUnlockResult.LOCK_FAILED
         }
 
         val off = ensureScreenOff(pm, isCancelled)
         if (isCancelled()) {
-            Ln.i("$TAG: cancelled while turning screen off")
+            logI("cancelled while turning screen off")
             return WakeUnlockResult.RECORD_CANCELLED
         }
         if (!off) {
-            Ln.w("$TAG: screen still on after sleep attempts (keyguard already locked)")
+            logW("screen still on after sleep attempts (keyguard already locked)")
         } else {
-            Ln.i("$TAG: screen locked and off")
+            logI("screen locked and off")
         }
         return WakeUnlockResult.OK
     }
@@ -150,28 +191,33 @@ object WakeUnlockController {
         val startMs = SystemClock.elapsedRealtime()
         val screenWasOn = pm.isScreenOn(0)
         if (!ensureScreenOn(pm)) {
-            Ln.w("$TAG: screen did not turn on after wakeUp and key fallback")
+            logW("screen did not turn on after wakeUp and key fallback")
             return WakeUnlockResult.WAKE_FAILED
         }
-        Ln.i(
-            "$TAG: screen on in ${SystemClock.elapsedRealtime() - startMs}ms," +
+        logI(
+            "screen on in ${SystemClock.elapsedRealtime() - startMs}ms," +
                     " wasOn=$screenWasOn"
         )
 
         val locked = wm.isKeyguardLocked
         if (locked == null) {
-            Ln.w("$TAG: isKeyguardLocked unavailable")
+            logW("isKeyguardLocked unavailable")
             return WakeUnlockResult.UNSUPPORTED
         }
         if (!locked) {
-            Ln.i("$TAG: keyguard not showing, nothing to do")
+            logI("keyguard not showing, nothing to do")
             return WakeUnlockResult.OK
         }
         return null
     }
 
     /** 亮屏并解除锁屏；@param credential 纯数字 PIN，无凭证锁屏传空串 */
-    fun unlock(credential: String): Int {
+    fun unlock(credential: String): Int = traced("unlock, ${credentialKind(credential)}") { doUnlock(credential) }
+
+    /** trace 会写进运行日志、可能随推送外发：只说有没有凭证，不带 PIN 与位数 */
+    private fun credentialKind(credential: String): String = if (credential.isEmpty()) "no credential" else "pin"
+
+    private fun doUnlock(credential: String): Int {
         val pm = ServiceManager.getPowerManager()
         val wm = ServiceManager.getWindowManager()
 
@@ -180,30 +226,30 @@ object WakeUnlockController {
         val wakeCostMs = SystemClock.elapsedRealtime() - wakeStartMs
 
         val secure = wm.isKeyguardSecure(0) ?: false
-        Ln.i("$TAG: keyguard locked, secure=$secure")
+        logI("keyguard locked, secure=$secure")
 
         if (!wm.dismissKeyguard()) {
-            Ln.w("$TAG: dismissKeyguard unavailable on this ROM")
+            logW("dismissKeyguard unavailable on this ROM")
             return WakeUnlockResult.UNSUPPORTED
         }
-        Ln.i("$TAG: dismissKeyguard requested")
+        logI("dismissKeyguard requested")
 
         if (!secure) {
             return if (pollUntil(KEYGUARD_GONE_TIMEOUT_MS) { wm.isKeyguardLocked == false }) {
-                Ln.i("$TAG: unlocked (insecure keyguard)")
+                logI("unlocked (insecure keyguard)")
                 WakeUnlockResult.OK
             } else {
-                Ln.w("$TAG: insecure keyguard did not dismiss")
+                logW("insecure keyguard did not dismiss")
                 WakeUnlockResult.CREDENTIAL_REJECTED
             }
         }
 
         if (credential.isEmpty()) {
-            Ln.w("$TAG: secure keyguard but no credential configured")
+            logW("secure keyguard but no credential configured")
             return WakeUnlockResult.CREDENTIAL_REQUIRED
         }
         if (credential.any { !it.isDigit() }) {
-            Ln.w("$TAG: only numeric PIN is supported")
+            logW("only numeric PIN is supported")
             return WakeUnlockResult.CREDENTIAL_REQUIRED
         }
 
@@ -212,29 +258,29 @@ object WakeUnlockController {
         Thread.sleep(settleMs)
         // 人脸/信任代理可能在 settle 期间解掉了锁屏，这时再按数字就落进前台应用了
         if (keyguardGone(wm)) {
-            Ln.i("$TAG: keyguard gone during ${settleMs}ms settle, skip PIN injection")
+            logI("keyguard gone during ${settleMs}ms settle, skip PIN injection")
             return WakeUnlockResult.OK
         }
         // 位数不进任何日志：logcat 随日志导出
-        Ln.i("$TAG: injecting PIN after ${settleMs}ms settle (wake ${wakeCostMs}ms)")
+        logI("injecting PIN after ${settleMs}ms settle (wake ${wakeCostMs}ms)")
 
         val injectStartMs = SystemClock.elapsedRealtime()
         if (!withSensitiveInput { injectPin(wm, credential) }) {
-            Ln.i("$TAG: keyguard gone mid-injection, stopped")
+            logI("keyguard gone mid-injection, stopped")
             return WakeUnlockResult.OK
         }
         val padMs = PIN_INJECT_BUDGET_MS - (SystemClock.elapsedRealtime() - injectStartMs)
         if (padMs > 0) Thread.sleep(padMs)
-        Ln.i("$TAG: PIN injected")
+        logI("PIN injected")
 
         val pollStartMs = SystemClock.elapsedRealtime()
         return if (pollUntil(KEYGUARD_GONE_TIMEOUT_MS) { wm.isKeyguardLocked == false }) {
-            Ln.i("$TAG: unlocked (PIN accepted) after ${SystemClock.elapsedRealtime() - pollStartMs}ms")
+            logI("unlocked (PIN accepted) after ${SystemClock.elapsedRealtime() - pollStartMs}ms")
             WakeUnlockResult.OK
         } else {
             // 不重试，避免连续输错触发系统锁定
-            Ln.w(
-                "$TAG: still locked ${SystemClock.elapsedRealtime() - pollStartMs}ms after PIN" +
+            logW(
+                "still locked ${SystemClock.elapsedRealtime() - pollStartMs}ms after PIN" +
                         " injection — wrong PIN, or bouncer was not ready and swallowed the keys"
             )
             WakeUnlockResult.CREDENTIAL_REJECTED
@@ -261,10 +307,12 @@ object WakeUnlockController {
      * 亮屏并回放录制的解锁手势
      * @param gestureJson 空串表示未录制
      */
-    fun unlockWithGesture(gestureJson: String): Int {
-        val gesture = UnlockGesture.parseOrNull(gestureJson) { Ln.w("$TAG: $it") }
+    fun unlockWithGesture(gestureJson: String): Int = traced("unlock, gesture") { doUnlockWithGesture(gestureJson) }
+
+    private fun doUnlockWithGesture(gestureJson: String): Int {
+        val gesture = UnlockGesture.parseOrNull(gestureJson) { logW("$it") }
         if (gesture == null || gesture.steps.isEmpty()) {
-            Ln.w("$TAG: no usable gesture recorded")
+            logW("no usable gesture recorded")
             return WakeUnlockResult.GESTURE_EMPTY
         }
 
@@ -276,16 +324,16 @@ object WakeUnlockController {
         // 与录制一致，在 keyguard 还在时采样
         val screen = ScreenGeometry.current()
         if (screen == null) {
-            Ln.w("$TAG: display info unavailable")
+            logW("display info unavailable")
             return WakeUnlockResult.UNSUPPORTED
         }
         if (screen.rotation != gesture.rotation) {
-            Ln.w("$TAG: rotation ${screen.rotation} != recorded ${gesture.rotation}")
+            logW("rotation ${screen.rotation} != recorded ${gesture.rotation}")
             return WakeUnlockResult.GESTURE_SCREEN_MISMATCH
         }
         if (screen.width != gesture.screenWidth || screen.height != gesture.screenHeight) {
-            Ln.w(
-                "$TAG: screen ${screen.width}x${screen.height} != recorded" +
+            logW(
+                "screen ${screen.width}x${screen.height} != recorded" +
                         " ${gesture.screenWidth}x${gesture.screenHeight}, scaling"
             )
         }
@@ -293,26 +341,31 @@ object WakeUnlockController {
         // 录制起点就是亮屏后的锁屏首屏，这里不能再 dismissKeyguard 打乱状态
         Thread.sleep(GESTURE_SETTLE_MS)
         if (keyguardGone(wm)) {
-            Ln.i("$TAG: keyguard gone during settle, skip gesture replay")
+            logI("keyguard gone during settle, skip gesture replay")
             return WakeUnlockResult.OK
         }
         // 槽位与任务注入共用：给在途的一笔留点时间抬起。等不到也照样回放——任务被中途停掉时
         // 残留的槽位不会自己清，在这拒绝就永远解不了锁；回放前后各整体 CANCEL 一次
         if (!pollUntil(CONTACTS_IDLE_TIMEOUT_MS) { !InputControlUtils.hasActiveContacts() }) {
-            Ln.w("$TAG: other contacts still down, replay will cancel them")
+            logW("other contacts still down, replay will cancel them")
         }
         val actions = UnlockGestureReplay.timeline(gesture, screen.width, screen.height)
+        // 步骤全是没点的空滑动：回放什么都不按，结局会被说成轨迹失效
+        if (actions.none { it is InjectAction.Down }) {
+            logW("gesture has no presses to replay")
+            return WakeUnlockResult.GESTURE_EMPTY
+        }
         // 不报步数：点按录的手势步数就是 PIN 位数
-        Ln.i("$TAG: replaying gesture after ${GESTURE_SETTLE_MS}ms settle")
+        logI("replaying gesture after ${GESTURE_SETTLE_MS}ms settle")
         val stats = UnlockGestureReplay.execute(actions) { !keyguardGone(wm) }
         if (stats == null) {
-            Ln.i("$TAG: keyguard gone mid-replay, stopped")
+            logI("keyguard gone mid-replay, stopped")
             return WakeUnlockResult.OK
         }
-        Ln.i("$TAG: replay done, injected $stats")
+        logI("replay done, injected $stats")
 
         return if (pollUntil(KEYGUARD_GONE_TIMEOUT_MS) { wm.isKeyguardLocked == false }) {
-            Ln.i("$TAG: unlocked (gesture accepted)")
+            logI("unlocked (gesture accepted)")
             WakeUnlockResult.OK
         } else {
             // 与 PIN 一致：不重试，避免连错触发系统锁定
@@ -321,7 +374,7 @@ object WakeUnlockController {
             } else {
                 "some injections not delivered: events likely blocked by the system"
             }
-            Ln.w("$TAG: still locked after gesture replay — $cause")
+            logW("still locked after gesture replay — $cause")
             WakeUnlockResult.CREDENTIAL_REJECTED
         }
     }
@@ -337,17 +390,17 @@ object WakeUnlockController {
                 when (action) {
                     WakeAction.BINDER -> {
                         if (!pm.wakeUp()) {
-                            Ln.w("$TAG: wakeUp() invoke failed, polling then falling back to keys")
+                            logW("wakeUp() invoke failed, polling then falling back to keys")
                         }
                     }
 
                     WakeAction.KEY_WAKEUP -> {
-                        Ln.w("$TAG: injecting KEYCODE_WAKEUP")
+                        logW("injecting KEYCODE_WAKEUP")
                         injectKey(KeyEvent.KEYCODE_WAKEUP)
                     }
 
                     WakeAction.KEY_POWER -> if (!pm.isScreenOn(0)) {
-                        Ln.w("$TAG: injecting KEYCODE_POWER")
+                        logW("injecting KEYCODE_POWER")
                         injectKey(KeyEvent.KEYCODE_POWER)
                     }
                 }
@@ -359,7 +412,7 @@ object WakeUnlockController {
                     KEY_WAKE_TIMEOUT_MS
                 }
                 val on = pollUntil(timeout) { pm.isScreenOn(0) }
-                if (!on) Ln.w("$TAG: screen still off after $action")
+                if (!on) logW("screen still off after $action")
                 on
             },
         )
@@ -374,17 +427,17 @@ object WakeUnlockController {
                 when (action) {
                     SleepAction.BINDER -> {
                         if (!pm.goToSleep()) {
-                            Ln.w("$TAG: goToSleep() invoke failed, polling then falling back to keys")
+                            logW("goToSleep() invoke failed, polling then falling back to keys")
                         }
                     }
 
                     SleepAction.KEY_SLEEP -> {
-                        Ln.w("$TAG: injecting KEYCODE_SLEEP")
+                        logW("injecting KEYCODE_SLEEP")
                         injectKey(KeyEvent.KEYCODE_SLEEP)
                     }
 
                     SleepAction.KEY_POWER -> if (pm.isScreenOn(0)) {
-                        Ln.w("$TAG: injecting KEYCODE_POWER")
+                        logW("injecting KEYCODE_POWER")
                         injectKey(KeyEvent.KEYCODE_POWER)
                     }
                 }
@@ -396,7 +449,7 @@ object WakeUnlockController {
                     KEY_WAKE_TIMEOUT_MS
                 }
                 val off = pollUntil(timeout) { isCancelled() || !pm.isScreenOn(0) }
-                if (!off) Ln.w("$TAG: screen still on after $action")
+                if (!off) logW("screen still on after $action")
                 off
             },
         )

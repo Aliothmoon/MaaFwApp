@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import android.os.SystemClock
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.WakeUnlockResult
@@ -166,6 +167,8 @@ class WakeUnlockHook(
     private val settings: AppSettingsGateway,
     private val gestures: UnlockGestureReader,
     private val keyguardLocked: () -> Boolean,
+    /** 设了安全锁屏（要密码）；只进失败取证 */
+    private val deviceSecure: () -> Boolean,
 ) : RunEnvHook {
 
     override val id: String = ID
@@ -190,6 +193,7 @@ class WakeUnlockHook(
                 ""
             },
         )
+        val startedAt = SystemClock.elapsedRealtime()
         val code = servicePort.callConnecting("unlock", WakeUnlockResult.IPC_FAILED) {
             when (credential) {
                 UnlockCredential.Swipe -> it.unlock("")
@@ -197,9 +201,31 @@ class WakeUnlockHook(
                 is UnlockCredential.Gesture -> it.unlockWithGesture(credential.json)
             }
         }
-        val result = WakeResult.fromCodeOrNull(code)
-        if (result?.isUnlocked == true || !keyguardLocked()) return EngageResult.Skipped()
-        return EngageResult.Failed(result?.message ?: uiTextOf(R.string.wake_result_unknown, code))
+        val result = WakeResult.fromCode(code)
+        if (result.isUnlocked || !keyguardLocked()) return EngageResult.Skipped()
+        recordFailure(ctx, credential, startedAt)
+        return EngageResult.Failed(result.message)
+    }
+
+    /**
+     * 解锁失败多半没人在跟前，只一句原因查不下去：配置摘要与特权侧的步骤耗时写进本轮运行日志
+     * （会话日志排在解锁前，没跑起来的一轮也归档）。运行日志可能随推送外发，两段都不带 PIN、位数与轨迹
+     */
+    private suspend fun recordFailure(ctx: RunContext, credential: UnlockCredential, startedAt: Long) {
+        val recordedAt = if (credential is UnlockCredential.Gesture) gestures.recordedAtMs() else null
+        ctx.journal.warn(
+            ctx.executionId,
+            wakeConfigText(
+                unlockType = settings.wakeUnlockType.value,
+                credential = credential,
+                gestureRecordedAtMs = recordedAt,
+                passwordRequired = deviceSecure(),
+                before = ctx.deviceAtStart.get(),
+            ),
+        )
+        // 旧版特权进程没有这个方法，proxy 读回 null
+        val trace = servicePort.callOrDefault("getLastWakeTrace", "") { it.getLastWakeTrace(startedAt).orEmpty() }
+        if (trace.isNotBlank()) ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_wake_trace, trace))
     }
 
     companion object {
@@ -232,7 +258,7 @@ class ScreenSaverHook(
 
         // 这条定时规则改用关屏幕电源，由 ScreenPowerOffHook 接手；开始时设备在用的不关屏，屏保照盖
         val powerOff = (ctx.trigger as? RunTrigger.Schedule)?.options?.hardwareScreenOff == true
-        if (powerOff && ctx.idleAtStart.get() == true) return EngageResult.Skipped()
+        if (powerOff && ctx.deviceAtStart.get()?.idle == true) return EngageResult.Skipped()
 
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
         if (!screenSaver.show()) {
@@ -277,7 +303,7 @@ class CloseTargetAppHook(
 }
 
 /**
- * 唤醒之前采「设备在不在用」，写进 [RunContext.idleAtStart]
+ * 唤醒之前采「设备在不在用」，写进 [RunContext.deviceAtStart]
  *
  * 只采不改，只采定时触发：手动发起时人就在跟前。熄屏或锁屏都算没在用——没设锁屏的机器熄了屏也不上锁，
  * 只看 keyguard 会把它判成在用
@@ -295,12 +321,12 @@ class IdleProbeHook(
     override suspend fun engage(ctx: RunContext): EngageResult {
         if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
         val screenOn = servicePort.callConnecting("isScreenOn", true) { it.isScreenOn() }
-        ctx.idleAtStart.set(!screenOn || keyguardLocked())
+        ctx.deviceAtStart.set(DeviceAtStart(screenOn = screenOn, keyguardLocked = keyguardLocked()))
         return EngageResult.Skipped()
     }
 }
 
-/** 跑完自动上锁息屏；「用户本来就在用手机」读 [RunContext.idleAtStart]，engage 时就捕进闭包 */
+/** 跑完自动上锁息屏；「用户本来就在用手机」读 [RunContext.deviceAtStart]，engage 时就捕进闭包 */
 class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
 
     override val id: String = "auto-sleep"
@@ -312,7 +338,7 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
         val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
         if (!options.autoSleepAfterTask) return EngageResult.Skipped()
 
-        val tookOverIdleDevice = ctx.idleAtStart.get() == true
+        val tookOverIdleDevice = ctx.deviceAtStart.get()?.idle == true
         val skipIfAwake = options.skipAutoSleepIfAwake
         // 两个采样值都在这里捕进闭包：收尾时再去读，读到的是那时的屏幕状态与开关，不是本轮开始时的
         return EngageResult.Engaged(Release { reason ->
@@ -347,7 +373,7 @@ class ScreenPowerOffHook(private val servicePort: PrivilegedServicePort) : RunEn
     override suspend fun engage(ctx: RunContext): EngageResult {
         val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
         if (!options.hardwareScreenOff || ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
-        if (ctx.idleAtStart.get() != true) {
+        if (ctx.deviceAtStart.get()?.idle != true) {
             ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_screen_power_off_skipped_awake))
             return EngageResult.Skipped()
         }

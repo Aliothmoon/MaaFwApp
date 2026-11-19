@@ -102,14 +102,20 @@ class RunContext(
     /**
      * 本轮被时长上限停下；结局与手动停同为 [ExecutionResult.Cancelled]，收尾靠它把两者分开
      *
-     * 本类的运行期写入只有它与 [idleAtStart]：到点停发生在 engage 之后，没法冻结在 Start 时刻
+     * 本类的运行期写入只有它与 [deviceAtStart]：到点停发生在 engage 之后，没法冻结在 Start 时刻
      */
     val stoppedAtLimit = AtomicBoolean(false)
 
     /**
-     * 定时触发时设备在不在用：唤醒之前由 [IdleProbeHook] 采一次，熄屏或锁屏都算没在用；手动发起与没采到为 null
+     * 定时触发时唤醒之前的设备状态，由 [IdleProbeHook] 采一次；手动发起与没采到为 null
      *
-     * 唤醒之后屏幕永远是亮的，后面读它的挂载物（跑完熄屏、关屏幕电源、屏保让位）只能读这份
+     * 唤醒之后屏幕永远是亮的，后面读它的挂载物（跑完熄屏、关屏幕电源、屏保让位、解锁失败取证）只能读这份
      */
-    val idleAtStart = AtomicReference<Boolean?>(null)
+    val deviceAtStart = AtomicReference<DeviceAtStart?>(null)
+}
+
+/** 定时触发唤醒之前的设备状态 */
+data class DeviceAtStart(val screenOn: Boolean, val keyguardLocked: Boolean) {
+    /** 熄屏或锁屏都算没在用：没设锁屏的机器熄了屏也不上锁，只看 keyguard 会判成在用 */
+    val idle: Boolean get() = !screenOn || keyguardLocked
 }

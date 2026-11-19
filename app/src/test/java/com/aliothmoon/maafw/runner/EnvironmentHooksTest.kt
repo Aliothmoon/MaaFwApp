@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.RemoteAccessFailure
+import com.aliothmoon.maafw.schedule.UnlockGestureReader
 import com.aliothmoon.maafw.privileged.ServiceConnectResult
 import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.i18n.isResource
@@ -117,9 +118,19 @@ class EnvironmentHooksTest {
         service: FakePrivilegedService,
         settings: FakeAppSettingsGateway,
         gestureJson: String = "",
+        gestureRecordedAtMs: Long? = null,
         keyguardLocked: Boolean = true,
         port: PrivilegedServicePort = FakePrivilegedServicePort(service),
-    ) = WakeUnlockHook(port, settings, { gestureJson }, { keyguardLocked })
+    ) = WakeUnlockHook(
+        servicePort = port,
+        settings = settings,
+        gestures = object : UnlockGestureReader {
+            override suspend fun readJson() = gestureJson
+            override suspend fun recordedAtMs() = gestureRecordedAtMs
+        },
+        keyguardLocked = { keyguardLocked },
+        deviceSecure = { true },
+    )
 
     /** 没有总开关：定时到点总要亮屏，「无密码」方式传空凭证，交给特权侧 dismissKeyguard */
     @Test
@@ -225,14 +236,46 @@ class EnvironmentHooksTest {
         assertEquals(listOf(""), service.unlockCalls)
     }
 
-    /** 认不出的码要带进文案，不能一律说成 IPC 失败 */
+    /** 认不出的码不能说成服务没连上 */
     @Test
-    fun `an unknown result code keeps the code in the failure`() = runTest {
+    fun `an unknown result code is reported as unknown`() = runTest {
         val service = FakePrivilegedService().apply { unlockResult = 99 }
 
         val result = wakeHook(service, FakeAppSettingsGateway()).engage(scheduleContext())
 
-        assertEquals(uiTextOf(R.string.wake_result_unknown, 99), (result as EngageResult.Failed).reason)
+        assertEquals(uiTextOf(R.string.wake_result_unknown), (result as EngageResult.Failed).reason)
+    }
+
+    /** 失败多半没人在跟前：配置摘要与特权侧过程写进本轮运行日志，不带 PIN */
+    @Test
+    fun `a failed unlock records its setup and the privileged trace`() = runTest {
+        val service = FakePrivilegedService().apply {
+            unlockResult = WakeUnlockResult.CREDENTIAL_REJECTED
+            lastWakeTrace = "+0ms unlock, pin"
+        }
+        val settings = FakeAppSettingsGateway().apply {
+            wakeUnlockType.value = UnlockCredential.TYPE_PIN
+            wakeCredential.value = "1234"
+        }
+        val journal = NoteRecordingJournal()
+        val ctx = scheduleContext(journal = journal).apply {
+            deviceAtStart.set(DeviceAtStart(screenOn = false, keyguardLocked = true))
+        }
+
+        wakeHook(service, settings).engage(ctx)
+
+        assertEquals(listOf(RunNote.Warning, RunNote.Info), journal.notes.map { it.first })
+        assertEquals(uiTextOf(R.string.run_log_wake_trace, "+0ms unlock, pin"), journal.notes[1].second)
+        assertTrue(journal.notes.none { it.second.toString().contains("1234") })
+    }
+
+    @Test
+    fun `a successful unlock records nothing`() = runTest {
+        val journal = NoteRecordingJournal()
+
+        wakeHook(FakePrivilegedService(), FakeAppSettingsGateway()).engage(scheduleContext(journal = journal))
+
+        assertTrue(journal.notes.isEmpty())
     }
 
     // ── 屏保 ────────────────────────────────────────────────────────
@@ -277,31 +320,31 @@ class EnvironmentHooksTest {
         val service = FakePrivilegedService().apply { screenOn = false }
         val dark = scheduleContext()
         IdleProbeHook(FakePrivilegedServicePort(service)) { false }.engage(dark)
-        assertEquals(true, dark.idleAtStart.get())
+        assertEquals(DeviceAtStart(screenOn = false, keyguardLocked = false), dark.deviceAtStart.get())
 
         service.screenOn = true
         val locked = scheduleContext()
         IdleProbeHook(FakePrivilegedServicePort(service)) { true }.engage(locked)
-        assertEquals(true, locked.idleAtStart.get())
+        assertEquals(true, locked.deviceAtStart.get()?.idle)
 
         val inUse = scheduleContext()
         IdleProbeHook(FakePrivilegedServicePort(service)) { false }.engage(inUse)
-        assertEquals(false, inUse.idleAtStart.get())
+        assertEquals(false, inUse.deviceAtStart.get()?.idle)
 
         val manual = context()
         IdleProbeHook(FakePrivilegedServicePort(service)) { false }.engage(manual)
-        assertNull(manual.idleAtStart.get())
+        assertNull(manual.deviceAtStart.get())
     }
 
     @Test
     fun `auto sleep is skipped when the phone was already awake`() = runTest {
         val service = FakePrivilegedService()
         val ctx = scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true))
-        ctx.idleAtStart.set(false)
+        ctx.deviceAtStart.set(IN_USE)
 
         val release = AutoSleepHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()
         // 收尾时读到的不是此刻的屏幕：值在 engage 时已捕进闭包
-        ctx.idleAtStart.set(true)
+        ctx.deviceAtStart.set(IDLE)
         release!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
 
         assertEquals(0, service.lockAndSleepCount)
@@ -311,7 +354,7 @@ class EnvironmentHooksTest {
     fun `auto sleep fires when the run took over an idle phone`() = runTest {
         val service = FakePrivilegedService()
         val ctx = scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true, skipAutoSleepIfAwake = true))
-        ctx.idleAtStart.set(true)
+        ctx.deviceAtStart.set(IDLE)
 
         AutoSleepHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()!!(
             RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
@@ -325,7 +368,7 @@ class EnvironmentHooksTest {
     fun `auto sleep does not fire when the run never started`() = runTest {
         val service = FakePrivilegedService()
         val ctx = scheduleContext(ScheduleRunOptions(autoSleepAfterTask = true))
-        ctx.idleAtStart.set(true)
+        ctx.deviceAtStart.set(IDLE)
 
         AutoSleepHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()!!(
             RunEndReason.NotRun(NotRunCause.Rejected),
@@ -341,7 +384,7 @@ class EnvironmentHooksTest {
     fun `screen power off turns the panel off for an idle background run`() = runTest {
         val service = FakePrivilegedService()
         val ctx = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
-        ctx.idleAtStart.set(true)
+        ctx.deviceAtStart.set(IDLE)
 
         val release = ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(ctx).releaseOrNull()
         release!!(RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
@@ -353,9 +396,9 @@ class EnvironmentHooksTest {
     fun `screen power off leaves an in-use or foreground run alone`() = runTest {
         val service = FakePrivilegedService()
         val awake = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
-        awake.idleAtStart.set(false)
+        awake.deviceAtStart.set(IN_USE)
         val foreground = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true), runMode = RunMode.FOREGROUND)
-        foreground.idleAtStart.set(true)
+        foreground.deviceAtStart.set(IDLE)
 
         ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(awake)
         ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(foreground)
@@ -368,7 +411,7 @@ class EnvironmentHooksTest {
     fun `screen power off failure is reported`() = runTest {
         val service = FakePrivilegedService().apply { displayPowerSyncResult = false }
         val ctx = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
-        ctx.idleAtStart.set(true)
+        ctx.deviceAtStart.set(IDLE)
 
         assertTrue(ScreenPowerOffHook(FakePrivilegedServicePort(service)).engage(ctx) is EngageResult.Failed)
     }
@@ -379,9 +422,9 @@ class EnvironmentHooksTest {
         val settings = FakeAppSettingsGateway().apply { screenSaverEnabled.value = true }
         val saver = RecordingScreenSaver()
         val idle = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
-        idle.idleAtStart.set(true)
+        idle.deviceAtStart.set(IDLE)
         val inUse = scheduleContext(ScheduleRunOptions(hardwareScreenOff = true))
-        inUse.idleAtStart.set(false)
+        inUse.deviceAtStart.set(IN_USE)
 
         ScreenSaverHook(settings, saver).engage(idle)
         assertEquals(0, saver.shown)
@@ -395,12 +438,13 @@ class EnvironmentHooksTest {
         options: ScheduleRunOptions = ScheduleRunOptions(),
         signals: RunSignals = RunSignals(),
         runMode: RunMode = RunMode.BACKGROUND,
+        journal: RunJournal = DiscardingRunJournal,
     ) = RunContext(
         trigger = RunTrigger.Schedule("s1", options),
         runMode = runMode,
         plan = plan,
         signals = signals,
-        journal = DiscardingRunJournal,
+        journal = journal,
     )
 
     /** 手动 Start 不该被拖住：trigger 不是 Schedule 就没有倒计时 */
@@ -540,5 +584,10 @@ class EnvironmentHooksTest {
             CloseTargetAppHook(port, settings).engage(context(RunMode.FOREGROUND))
                 is EngageResult.Skipped,
         )
+    }
+
+    private companion object {
+        val IDLE = DeviceAtStart(screenOn = false, keyguardLocked = true)
+        val IN_USE = DeviceAtStart(screenOn = true, keyguardLocked = false)
     }
 }

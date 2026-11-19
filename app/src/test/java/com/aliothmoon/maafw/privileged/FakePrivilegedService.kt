@@ -172,6 +172,10 @@ open class FakePrivilegedService : RemoteService {
     var displayPowerSyncCalls: MutableList<Boolean> = mutableListOf()
         private set
 
+    var lastWakeTrace: String = ""
+
+    override fun getLastWakeTrace(sinceElapsedMs: Long): String = lastWakeTrace
+
     override fun setDisplayPowerSync(on: Boolean): Boolean {
         displayPowerSyncCalls += on
         return displayPowerSyncResult
