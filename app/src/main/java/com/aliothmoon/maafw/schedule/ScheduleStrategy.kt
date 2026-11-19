@@ -73,6 +73,8 @@ data class ScheduleStrategy(
     val closeAppAfterTask: Boolean = false,
     /** 跑的时候关闭屏幕电源代替屏保；仅后台模式、且到点时设备没在用 */
     val hardwareScreenOff: Boolean = false,
+    /** 跑到头后断开特权进程、关掉界面，进程留着；手动停止不收 */
+    val collapseAfterTask: Boolean = false,
     /** [ScheduleType.FIXED_TIME]：命中的星期 */
     val daysOfWeek: Set<@Serializable(with = DayOfWeekSerializer::class) DayOfWeek> = emptySet(),
     /** [ScheduleType.FIXED_TIME]：每天的触发时刻，已排序 */

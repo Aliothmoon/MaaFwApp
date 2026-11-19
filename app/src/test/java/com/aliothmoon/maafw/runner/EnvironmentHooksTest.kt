@@ -377,6 +377,82 @@ class EnvironmentHooksTest {
         assertEquals(0, service.lockAndSleepCount)
     }
 
+    // ── 结束后收起 ──────────────────────────────────────────────────
+
+    private class Collapse(queued: Boolean = false) {
+        val service = FakePrivilegedService()
+        val port = FakePrivilegedServicePort(service)
+        var uiClosed = 0
+        val hook = CollapseAfterRunHook(port, { queued }) { uiClosed++ }
+    }
+
+    private suspend fun Collapse.runAndEnd(ctx: RunContext, reason: RunEndReason) {
+        hook.engage(ctx).releaseOrNull()!!(reason)
+    }
+
+    @Test
+    fun `collapse unbinds and closes the ui after a run that ran to its end`() = runTest {
+        val collapse = Collapse()
+
+        collapse.runAndEnd(
+            scheduleContext(ScheduleRunOptions(collapseAfterTask = true)),
+            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
+        )
+
+        assertEquals(1, collapse.port.unbindCount)
+        assertEquals(1, collapse.uiClosed)
+        assertEquals(0, collapse.service.lockAndSleepCount)
+    }
+
+    /** 手动停多半是要接手现场；到时长上限停的不算 */
+    @Test
+    fun `collapse leaves a manual stop alone but not a duration-limit stop`() = runTest {
+        val manual = Collapse()
+        manual.runAndEnd(
+            scheduleContext(ScheduleRunOptions(collapseAfterTask = true)),
+            RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())),
+        )
+        assertEquals(0, manual.port.unbindCount)
+
+        val limited = Collapse()
+        val ctx = scheduleContext(ScheduleRunOptions(collapseAfterTask = true)).apply { stoppedAtLimit.set(true) }
+        limited.runAndEnd(ctx, RunEndReason.Ran(ExecutionResult.Cancelled(emptyList())))
+        assertEquals(1, limited.port.unbindCount)
+    }
+
+    /** 排队的定时要接着用这条连接 */
+    @Test
+    fun `collapse is skipped while another run waits`() = runTest {
+        val collapse = Collapse(queued = true)
+
+        collapse.runAndEnd(
+            scheduleContext(ScheduleRunOptions(collapseAfterTask = true)),
+            RunEndReason.Ran(ExecutionResult.Completed(emptyList())),
+        )
+
+        assertEquals(0, collapse.port.unbindCount)
+        assertEquals(0, collapse.uiClosed)
+    }
+
+    /** 关过屏幕电源的面板在特权进程退出时会被点亮，先上锁休眠 */
+    @Test
+    fun `collapse sleeps a powered-off panel before unbinding`() = runTest {
+        val collapse = Collapse()
+        val ctx = scheduleContext(ScheduleRunOptions(collapseAfterTask = true, hardwareScreenOff = true))
+        ctx.deviceAtStart.set(IDLE)
+
+        collapse.runAndEnd(ctx, RunEndReason.Ran(ExecutionResult.Completed(emptyList())))
+
+        assertEquals(1, collapse.service.lockAndSleepCount)
+        assertEquals(1, collapse.port.unbindCount)
+    }
+
+    @Test
+    fun `collapse is off unless the rule asks for it`() = runTest {
+        assertTrue(Collapse().hook.engage(scheduleContext()) is EngageResult.Skipped)
+        assertTrue(Collapse().hook.engage(context()) is EngageResult.Skipped)
+    }
+
     // ── 关屏幕电源 ──────────────────────────────────────────────────
 
     /** 只关不恢复：收尾什么都不做，但步骤要记成 ENGAGED */

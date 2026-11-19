@@ -83,6 +83,9 @@ private suspend fun <R> PrivilegedServicePort.callConnecting(
  * 倒计时排最后：等待期间屏幕该已经亮着、屏保该已经盖好，用户看到的才是最终态
  */
 internal object HookOrder {
+    /** 收尾排在最后：熄屏、通知、会话日志都撤完了才断开特权进程 */
+    const val COLLAPSE = -20
+
     /** 排在所有环境动作之前，收尾时因此最后关：文件开着的窗口覆盖住整轮 */
     const val SESSION_LOG = -10
 
@@ -329,6 +332,50 @@ class IdleProbeHook(
         val screenOn = servicePort.callConnecting("isScreenOn", true) { it.isScreenOn() }
         ctx.deviceAtStart.set(DeviceAtStart(screenOn = screenOn, keyguardLocked = keyguardLocked()))
         return EngageResult.Skipped()
+    }
+}
+
+/**
+ * 定时规则开了「结束后收起」：跑到头（含到时长上限）后断开特权进程、关掉界面
+ *
+ * 不退进程：开着无障碍时系统会为重绑它立刻重建进程，冷启动时授权观察器拿到首值就去 bind，
+ * 特权进程又回来了，等于白退；进程内 unbind 后授权状态不变，不会被拉回。虚拟屏带
+ * DESTROY_CONTENT_ON_REMOVAL，特权进程一退目标应用界面随之销毁，不会跳到主屏
+ *
+ * 手动停止不收：多半是用户要接手现场。有定时在排队也不收：它要接着用这条连接
+ */
+class CollapseAfterRunHook(
+    private val servicePort: PrivilegedServicePort,
+    private val runQueued: () -> Boolean,
+    private val closeUi: suspend () -> Unit,
+) : RunEnvHook {
+
+    override val id: String = "collapse-after-run"
+    override val anchor: Anchor = Anchor.BeforeDispatch
+    override val order: Int = HookOrder.COLLAPSE
+    override val gating: Boolean = false
+
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
+        if (!options.collapseAfterTask) return EngageResult.Skipped()
+        return EngageResult.Engaged(Release { reason ->
+            val ranToEnd = reason is RunEndReason.Ran &&
+                (reason.result !is ExecutionResult.Cancelled || ctx.stoppedAtLimit.get())
+            if (!ranToEnd) return@Release
+            if (runQueued()) {
+                Timber.i("collapse skipped: another run is waiting")
+                return@Release
+            }
+            // 关过屏幕电源而系统还醒着：特权进程一退面板就被点亮，先上锁休眠。与 ScreenPowerOffHook 同一判据
+            val panelOff = options.hardwareScreenOff && ctx.runMode == RunMode.BACKGROUND &&
+                ctx.deviceAtStart.get()?.idle == true
+            if (panelOff) {
+                servicePort.callOrDefault("lockAndSleep", WakeUnlockResult.IPC_FAILED) { it.lockAndSleep() }
+            }
+            Timber.i("collapsing after run: unbinding the privileged process")
+            servicePort.unbind()
+            closeUi()
+        })
     }
 }
 

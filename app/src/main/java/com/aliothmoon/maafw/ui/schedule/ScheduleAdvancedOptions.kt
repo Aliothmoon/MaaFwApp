@@ -118,6 +118,12 @@ internal fun ScheduleAdvancedOptions(
                 },
                 noteHighlighted = closeEffect == CloseAppEffect.GLOBAL_OVERRIDE,
             )
+            ScheduleToggleRow(
+                label = stringResource(R.string.schedule_edit_collapse),
+                tip = stringResource(R.string.schedule_edit_collapse_tip),
+                checked = draft.collapseAfterTask,
+                onCheckedChange = { onDraftChange(draft.copy(collapseAfterTask = it)) },
+            )
         }
     }
 }

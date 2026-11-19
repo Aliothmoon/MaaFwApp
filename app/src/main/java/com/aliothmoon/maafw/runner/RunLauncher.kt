@@ -23,6 +23,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -132,6 +133,12 @@ class RunLauncher(
 
     /** 抢占时要撤掉上一轮的收尾登记，否则旧的自动熄屏会落到新一轮头上 */
     private val settling = AtomicReference<Job?>(null)
+
+    /** 在 [awaitTurn] 里等着的个数：排队的定时、等着重解 PI 的 */
+    private val waiting = AtomicInteger(0)
+
+    /** 有人在等上一轮收尾；收尾里要断开特权进程的挂载物看它，免得把后一轮要用的连接断掉 */
+    val hasWaiters: Boolean get() = waiting.get() > 0
 
     /**
      * @param configurationId null 跑当前激活的那份；定时规则可以指定别的
@@ -284,6 +291,15 @@ class RunLauncher(
      * 落回 Idle 后它的收尾还在撤屏保、熄屏，与本轮的 engage 交错
      */
     private suspend fun awaitTurn(progress: RunProgress) {
+        waiting.incrementAndGet()
+        try {
+            acquireTurn(progress)
+        } finally {
+            waiting.decrementAndGet()
+        }
+    }
+
+    private suspend fun acquireTurn(progress: RunProgress) {
         if (gate.tryLock()) {
             if (previousRoundSettled()) return
             gate.unlock()

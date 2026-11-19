@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.di
 
+import android.app.ActivityManager
 import android.app.KeyguardManager
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.UserConfigurationStore
@@ -14,6 +15,7 @@ import com.aliothmoon.maafw.runner.AutoSleepHook
 import com.aliothmoon.maafw.runner.IdleProbeHook
 import com.aliothmoon.maafw.runner.BackgroundModePrecheck
 import com.aliothmoon.maafw.runner.CloseTargetAppHook
+import com.aliothmoon.maafw.runner.CollapseAfterRunHook
 import com.aliothmoon.maafw.runner.CountdownHook
 import com.aliothmoon.maafw.runner.DisplayHazardNoticeHook
 import com.aliothmoon.maafw.runner.DisplayHazardPrecheck
@@ -55,7 +57,9 @@ import com.aliothmoon.maafw.service.AccessibilityTextInputSink
 import com.aliothmoon.maafw.service.ForegroundRunKeepAlive
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.util.LauncherApps
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -178,6 +182,17 @@ val runnerModule = module {
                 DisplayHazardPrecheck(get()),
             ),
             hooks = listOf(
+                CollapseAfterRunHook(
+                    servicePort = get(),
+                    // 调用时才取：此刻 RunLauncher 还在构造
+                    runQueued = { get<RunLauncher>().hasWaiters },
+                    closeUi = {
+                        withContext(Dispatchers.Main) {
+                            androidContext().getSystemService(ActivityManager::class.java)
+                                ?.appTasks?.forEach { it.finishAndRemoveTask() }
+                        }
+                    },
+                ),
                 SessionLogHook(get()),
                 TelemetryHook(get()),
                 NotificationHook(get()),

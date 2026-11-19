@@ -47,6 +47,8 @@ data class ScheduleRunOptions(
     val closeAppAfterTask: Boolean = false,
     /** 跑的时候关掉物理屏（只关不恢复），代替屏保；仅后台模式、且开始时设备没在用 */
     val hardwareScreenOff: Boolean = false,
+    /** 跑到头后收起：断开特权进程、关掉界面 */
+    val collapseAfterTask: Boolean = false,
 )
 
 /**

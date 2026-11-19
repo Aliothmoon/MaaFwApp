@@ -206,8 +206,12 @@ class FakePrivilegedServicePort(
 
     override val currentBackend: RemoteBackend? = RemoteBackend.SHIZUKU
 
+    var unbindCount = 0
+
     override fun bind() = Unit
-    override fun unbind() = Unit
+    override fun unbind() {
+        unbindCount++
+    }
 
     override fun serviceOrNull(): RemoteService? = service
 

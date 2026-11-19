@@ -226,6 +226,7 @@ class ScheduleExecutionService : Service() {
                         skipAutoSleepIfAwake = strategy.skipAutoSleepIfAwake,
                         closeAppAfterTask = strategy.closeAppAfterTask,
                         hardwareScreenOff = strategy.hardwareScreenOff,
+                        collapseAfterTask = strategy.collapseAfterTask,
                     ),
                 ),
                 configurationId = RunConfigurationId(strategy.runConfigurationId),
