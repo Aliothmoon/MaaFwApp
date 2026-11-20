@@ -3,6 +3,7 @@ package com.aliothmoon.maafw.ui.settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,18 +19,18 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 
-private val IconSize = 72.dp
-private val IconShape = RoundedCornerShape(16.dp)
+/** 对齐 MaaMeow `SettingAboutHeader` 的 56dp 左侧图标尺寸 */
+private val AboutIconSize = 56.dp
 
 /**
- * 关于卡顶部的项目名片：图标、名称、简介居中，对齐 MXU 的关于页
+ * 关于卡顶部的项目名片：左侧图标 + 右侧名称与简介，对齐 MaaMeow 的 SettingAboutHeader
  *
  * 图标取 PI 根上的 `icon`；PI 没写时用应用图标（同样来自 profile）
  */
@@ -40,39 +41,43 @@ internal fun AboutHeader(
     description: String?,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    val iconShape = RoundedCornerShape(MaaTheme.style.radii.large)
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = MaaDesignTokens.Spacing.md),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.lg),
     ) {
         val iconModifier = Modifier
-            .shadow(6.dp, IconShape)
-            .clip(IconShape)
+            .shadow(MaaTheme.style.cardElevation, iconShape)
+            .clip(iconShape)
         if (icon != null) {
-            MaaPiIcon(icon, IconSize, contentDescription = name, modifier = iconModifier)
+            MaaPiIcon(icon, AboutIconSize, contentDescription = name, modifier = iconModifier)
         } else {
             val context = LocalContext.current
             val bitmap = remember(context) {
                 context.applicationInfo.loadIcon(context.packageManager).toBitmap().asImageBitmap()
             }
-            Image(bitmap = bitmap, contentDescription = name, modifier = iconModifier.size(IconSize))
+            Image(bitmap = bitmap, contentDescription = name, modifier = iconModifier.size(AboutIconSize))
         }
-        Text(
-            text = name,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = MaaDesignTokens.Spacing.xs),
-        )
-        description?.takeIf(String::isNotBlank)?.let {
-            MaaMarkdown(
-                text = it,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        ) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
+            description?.takeIf(String::isNotBlank)?.let {
+                MaaMarkdown(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

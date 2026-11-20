@@ -589,11 +589,12 @@ private fun AboutLinks(
             onClick = onOpenWelcome,
         )
     }
-    // 联系方式通常就几行链接，直接摊开（对齐 MXU），不再点进 sheet
+    // 联系方式通常就几行链接或表格，直接摊开并铺满卡内宽（对齐 MXU），不再点进 sheet
     metadata.contact?.let { body ->
         MaaSettingRow(
             title = stringResource(R.string.settings_about_contact),
             icon = MaaIcons.Contact,
+            footerInset = false,
             footer = {
                 MaaDescriptionPanel {
                     MaaMarkdown(

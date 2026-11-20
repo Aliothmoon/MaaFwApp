@@ -211,7 +211,8 @@ fun MaaSettingIcon(icon: ImageVector, enabled: Boolean = true) {
 }
 
 /**
- * 设置列表的一行：图标 + 标题（+ 可选说明）+ 行尾，[footer] 挂在下面、与标题左对齐（chip、滑块、输入框）
+ * 设置列表的一行：图标 + 标题（+ 可选说明）+ 行尾，[footer] 挂在下面（chip、滑块、输入框等）；
+ * [footerInset] 默认与标题左对齐，长正文或表格面板（如「联系方式」）可传 false 铺满卡片内宽
  *
  * [info] 默认收起，标题旁给一个问号钮，点开在整项下方展开（对齐 MaaMeow 的 SettingRow）；
  * [description] 用于必须常显的短副标题，设置主页尽量少用。
@@ -230,6 +231,7 @@ fun MaaSettingRow(
     toggled: Boolean? = null,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    footerInset: Boolean = true,
     footer: (@Composable () -> Unit)? = null,
 ) {
     val titleColor = MaterialTheme.colorScheme.onSurface
@@ -304,7 +306,7 @@ fun MaaSettingRow(
         footer?.let {
             Box(
                 modifier = Modifier
-                    .then(if (icon != null) Modifier.padding(start = TextInset) else Modifier)
+                    .then(if (icon != null && footerInset) Modifier.padding(start = TextInset) else Modifier)
                     .padding(bottom = MaaDesignTokens.Spacing.md),
             ) {
                 it()
