@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Schedule
@@ -60,6 +61,7 @@ fun ScheduleScreen(
     onOpenLog: () -> Unit,
     onFixIssue: (ScheduleHealthIssue) -> Unit,
     onOpenWakeUnlock: () -> Unit,
+    onOpenAppBlacklist: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScheduleSetupWizard(
@@ -104,6 +106,12 @@ fun ScheduleScreen(
                     Icon(
                         imageVector = Icons.Outlined.LockOpen,
                         contentDescription = stringResource(R.string.schedule_wake_unlock_title),
+                    )
+                }
+                IconButton(onClick = onOpenAppBlacklist) {
+                    Icon(
+                        imageVector = Icons.Outlined.Block,
+                        contentDescription = stringResource(R.string.schedule_app_blacklist_title),
                     )
                 }
                 IconButton(onClick = onOpenLog) {

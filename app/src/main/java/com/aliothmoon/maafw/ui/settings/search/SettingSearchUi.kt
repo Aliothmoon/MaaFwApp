@@ -72,6 +72,14 @@ fun sectionRevealToken(sectionKey: String): Any? =
         location is SettingLocation.Section && location.sectionKey == sectionKey && request.isFresh()
     }
 
+/** 当前请求落在任一以 [prefix] 开头的子分区时触发外层分组卡展开（如「任务设置」下的所有 PI 分区） */
+@Composable
+fun sectionPrefixRevealToken(prefix: String): Any? =
+    LocalSettingSearchRequest.current?.takeIf { request ->
+        val location = request.entry.location
+        location is SettingLocation.Section && location.sectionKey.startsWith(prefix) && request.isFresh()
+    }
+
 /** 同 [sectionRevealToken]，给整张卡自己就是锚点的可折叠卡（首页的资源、控制器） */
 @Composable
 fun anchorRevealToken(anchor: String): Any? =

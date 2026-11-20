@@ -135,13 +135,14 @@ class RunForegroundService : Service() {
 
     private suspend fun observeProgress() {
         var lastPostedPhase: RunnerPhase? = null
-        // 展示方式与闸门也算输入：设置里换了方式、闸门拿到了，都要立刻重发一帧
+        // 展示方式、样式与闸门也算输入：设置里换了方式或样式、闸门拿到了，都要立刻重发一帧
         combine(
             runnerPort.state,
             recorder.liveUpdateStatus,
             appSettings.liveBackend,
             islandReady,
-        ) { state, status, _, _ -> state to status }.collectLatest { (state, status) ->
+            notificationFactory.styleChanges,
+        ) { state, status, _, _, _ -> state to status }.collectLatest { (state, status) ->
             if (!state.phase.isBusy) {
                 lastPostedPhase = null
                 stopNow()
@@ -258,8 +259,9 @@ class RunForegroundService : Service() {
         try {
             SpecialUseFgsGate.startForeground(this, NOTIFICATION_ID, notification)
             return true
-        } catch (e: SecurityException) {
-            // 预检放行但系统仍拒（如 appop 为 FOREGROUND）；AOSP 抛出前已清 fgRequired，
+        } catch (e: RuntimeException) {
+            // 预检放行但系统仍拒：appop 为 FOREGROUND 抛 SecurityException，12+ 后台重建抛
+            // ForegroundServiceStartNotAllowedException（IllegalStateException）。AOSP 抛出前已清 fgRequired，
             // stopSelf 不会触发 ForegroundServiceDidNotStartInTimeException
             Timber.w(e, "RunForegroundService: startForeground denied, run without FGS")
             foregroundDenied = true

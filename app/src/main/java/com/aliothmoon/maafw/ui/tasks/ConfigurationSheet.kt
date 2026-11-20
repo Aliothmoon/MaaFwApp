@@ -55,10 +55,14 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
+import com.aliothmoon.maafw.domain.ResolvedConfigurationTemplate
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TemplateTask
+import com.aliothmoon.maafw.domain.UnavailableReasons
 import com.aliothmoon.maafw.session.SessionUiState
+import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.i18n.uiTextPlural
 import com.aliothmoon.maafw.theme.MaaDesignTokens
@@ -74,6 +78,7 @@ import com.aliothmoon.maafw.ui.components.MaaSelectableCard
 import com.aliothmoon.maafw.ui.components.MaaSelectionMarker
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
+import com.aliothmoon.maafw.ui.components.MaaSkipReason
 import com.aliothmoon.maafw.ui.components.MaaToneBadge
 import com.aliothmoon.maafw.ui.components.maaClickable
 import com.aliothmoon.maafw.ui.components.MaaIconButton
@@ -102,7 +107,7 @@ private sealed interface ConfigSheetPage {
 @Composable
 internal fun ConfigurationSheet(
     state: SessionUiState,
-    templates: List<ConfigurationTemplate>,
+    templates: List<ResolvedConfigurationTemplate>,
     locked: Boolean,
     onSelect: (RunConfigurationId) -> Unit,
     onDuplicate: (RunConfigurationId, String) -> Unit,
@@ -175,18 +180,19 @@ internal fun ConfigurationSheet(
                 )
 
                 is ConfigSheetPage.TemplatePreview -> {
-                    val template = templates.firstOrNull { it.name == current.templateName }
-                    if (template == null) {
+                    val entry = templates.firstOrNull { it.template.name == current.templateName && it.applicable }
+                    if (entry == null) {
                         LaunchedEffect(current) { page = ConfigSheetPage.Home }
                     } else {
                         TemplatePreviewPage(
-                            template = template,
+                            template = entry.template,
+                            catalog = state.taskCatalog,
                             existingNames = existingNames,
                             writeEnabled = !locked,
                             onBack = { page = ConfigSheetPage.Home },
                             onClose = onDismiss,
                             onCreate = { name, taskNames ->
-                                onCreateFromTemplate(template.name, name, taskNames)
+                                onCreateFromTemplate(entry.template.name, name, taskNames)
                             },
                         )
                     }
@@ -199,7 +205,7 @@ internal fun ConfigurationSheet(
 @Composable
 private fun ConfigSheetHomePage(
     state: SessionUiState,
-    templates: List<ConfigurationTemplate>,
+    templates: List<ResolvedConfigurationTemplate>,
     locked: Boolean,
     tab: Int,
     onTabChange: (Int) -> Unit,
@@ -268,11 +274,11 @@ private fun ConfigSheetHomePage(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                     ) {
-                        items(templates, key = { "template-${it.name}" }) { template ->
+                        items(templates, key = { "template-${it.template.name}" }) { entry ->
                             TemplateCard(
-                                template = template,
+                                entry = entry,
                                 writeEnabled = !locked,
-                                onClick = { onOpenTemplate(template.name) },
+                                onClick = { onOpenTemplate(entry.template.name) },
                             )
                         }
                     }
@@ -286,6 +292,7 @@ private fun ConfigSheetHomePage(
 @Composable
 private fun TemplatePreviewPage(
     template: ConfigurationTemplate,
+    catalog: List<TaskCatalogGroup>,
     existingNames: List<String>,
     writeEnabled: Boolean,
     onBack: () -> Unit,
@@ -293,6 +300,7 @@ private fun TemplatePreviewPage(
     onCreate: (name: String, taskNames: List<String>) -> Unit,
 ) {
     val templateTasks = remember(template) { template.distinctTasks }
+    val catalogItems = remember(catalog) { catalog.flatMap { it.tasks }.associateBy { it.taskName } }
     var name by rememberSaveable(template.name) {
         mutableStateOf(uniqueConfigurationName(template.label, existingNames))
     }
@@ -337,8 +345,11 @@ private fun TemplatePreviewPage(
             contentPadding = PaddingValues(bottom = MaaDesignTokens.Spacing.xs),
         ) {
             items(templateTasks, key = { it.taskName }) { task ->
+                val item = catalogItems[task.taskName]
                 TemplateTaskRow(
                     task = task,
+                    // 目录覆盖全部任务，查不到就是 preset 引用了已不存在的任务
+                    unavailableReason = if (item == null) UnavailableReasons.missingDefinition() else item.unavailableReason,
                     checked = task.taskName in included,
                     writeEnabled = writeEnabled,
                     onToggle = { checked -> included.setPresent(task.taskName, checked) },
@@ -363,6 +374,7 @@ private fun TemplatePreviewPage(
 @Composable
 private fun TemplateTaskRow(
     task: TemplateTask,
+    unavailableReason: UiText?,
     checked: Boolean,
     writeEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
@@ -372,6 +384,12 @@ private fun TemplateTaskRow(
         checked = checked,
         enabled = writeEnabled,
         onToggle = onToggle,
+        labelColor = if (unavailableReason == null) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        belowLabel = unavailableReason?.let { reason -> { MaaSkipReason(reason.asString()) } },
         trailing = if (!task.enabled) {
             {
                 MaaToneBadge(
@@ -592,14 +610,16 @@ private fun ConfigRowCard(
 
 @Composable
 private fun TemplateCard(
-    template: ConfigurationTemplate,
+    entry: ResolvedConfigurationTemplate,
     writeEnabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val template = entry.template
+    val enabled = writeEnabled && entry.applicable
     MaaCard(
         modifier = Modifier
-            .maaClickable(enabled = writeEnabled, shape = MaterialTheme.shapes.medium, onClick = onClick)
-            .alpha(if (writeEnabled) 1f else MaaDesignTokens.Alpha.disabled),
+            .maaClickable(enabled = enabled, shape = MaterialTheme.shapes.medium, onClick = onClick)
+            .alpha(if (enabled) 1f else MaaDesignTokens.Alpha.disabled),
         contentPadding = PaddingValues(MaaDesignTokens.Spacing.md),
     ) {
         Row(
@@ -625,6 +645,9 @@ private fun TemplateCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        entry.unavailableReason?.let { reason ->
+            MaaSkipReason(reason.asString())
         }
         template.description?.takeIf { it.isNotBlank() }?.let {
             MaaDescriptionPanel {

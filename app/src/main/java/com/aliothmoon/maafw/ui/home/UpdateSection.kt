@@ -1,5 +1,12 @@
 package com.aliothmoon.maafw.ui.home
 
+import com.aliothmoon.maafw.update.CdkVerification
+import com.aliothmoon.maafw.update.UpdateCheckFailure
+import com.aliothmoon.maafw.settings.cdkDaysLeft
+import com.aliothmoon.maafw.settings.CDK_EXPIRY_WARNING_DAYS
+import com.aliothmoon.maafw.settings.CdkStatus
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.LaunchedEffect
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -19,8 +26,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -59,6 +64,7 @@ import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.UpdatePanelState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.ITextFieldWithFocus
@@ -69,9 +75,11 @@ import com.aliothmoon.maafw.ui.components.horizontalBleed
 import com.aliothmoon.maafw.ui.components.updateSourceLabel
 import com.aliothmoon.maafw.update.UpdateChannel
 import com.aliothmoon.maafw.update.UpdateSource
+import com.aliothmoon.maafw.update.formatSpeed
 import timber.log.Timber
 
-private const val MIRRORCHYAN_SITE = "https://mirrorchyan.com/"
+/** source 让 MirrorChyan 认出访问来自本应用 */
+private const val MIRRORCHYAN_SITE = "https://mirrorchyan.com/?source=MaaFwApp"
 
 /** 概览行左侧标签；不用 MaaFieldLabel（组标题档），颜色跟 MaaInfoRow 的 onSurface 一致 */
 @Composable
@@ -199,6 +207,8 @@ private fun CdkInputBlock(
 ) {
     val context = LocalContext.current
     var cdkVisible by remember { mutableStateOf(false) }
+    // 进页验一次已填的 CDK；到期时间不落盘，每次进来现查
+    LaunchedEffect(Unit) { onSettingsIntent(SettingsIntent.VerifyCdk) }
     var userExpanded by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val expanded = userExpanded ?: update.mirrorchyanCdk.isEmpty()
     val toggleLabel = stringResource(
@@ -233,7 +243,7 @@ private fun CdkInputBlock(
             )
         }
         Icon(
-            imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+            imageVector = if (expanded) MaaIcons.ChevronUp else MaaIcons.ChevronDown,
             contentDescription = toggleLabel,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(MaaDesignTokens.IconSize.md),
@@ -278,6 +288,8 @@ private fun CdkInputBlock(
             },
         )
     }
+    // 收起时也显示：剩几天到期正是收起态要看的
+    CdkStatusLine(update.cdkStatus)
     // 订阅入口单独一行放输入框下面；收起时也保留——没 CDK 的人往往停在收起态；
     // 不用 TextButton，它的 40dp 最小高度会把这行撑得太高
     Text(
@@ -291,6 +303,33 @@ private fun CdkInputBlock(
                 .onFailure { Timber.w(it, "No activity handles the MirrorChyan link") }
         },
     )
+}
+
+/** CDK 校验结果一行；没填或刚改过时不占位 */
+@Composable
+private fun CdkStatusLine(status: CdkStatus) {
+    val palette = MaaTheme.palette
+    val result = when (status) {
+        CdkStatus.None -> return
+        CdkStatus.Checking -> null
+        is CdkStatus.Done -> status.result
+    }
+    val (text, color) = when (result) {
+        null -> stringResource(R.string.settings_update_cdk_checking) to MaterialTheme.colorScheme.onSurfaceVariant
+
+        CdkVerification.Unverified ->
+            stringResource(R.string.settings_update_cdk_unverified) to MaterialTheme.colorScheme.onSurfaceVariant
+
+        is CdkVerification.Rejected -> result.reason.message.asString() to MaterialTheme.colorScheme.error
+
+        is CdkVerification.Valid -> when (val days = cdkDaysLeft(result.expiresAtSec, System.currentTimeMillis())) {
+            null -> stringResource(R.string.settings_update_cdk_valid_no_expiry) to palette.success.content
+            0 -> UpdateCheckFailure.CDK_EXPIRED.message.asString() to MaterialTheme.colorScheme.error
+            else -> pluralStringResource(R.plurals.settings_update_cdk_days_left, days, days) to
+                if (days <= CDK_EXPIRY_WARNING_DAYS) palette.warning.content else palette.success.content
+        }
+    }
+    Text(text = text, style = MaterialTheme.typography.bodySmall, color = color)
 }
 
 /** Mirror酱 付费服务说明；正文里的品牌名带官网链接 */
@@ -361,6 +400,13 @@ private fun DownloadProgressRow(
         } else {
             // 总长未知：不确定进度条，没有可算的百分比
             LinearProgressIndicator(modifier = Modifier.weight(1f))
+        }
+        if (update.bytesPerSecond >= 0) {
+            Text(
+                text = formatSpeed(update.bytesPerSecond),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         IconButton(
             onClick = { onSettingsIntent(SettingsIntent.CancelDownload) },

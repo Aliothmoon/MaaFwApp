@@ -22,11 +22,18 @@ object AppFiles {
     /** [LOG_DIR] 下：缓存帧轮转目录 */
     const val FOCUS_DIR = "focus"
 
+    /** [LOG_DIR] 下：用户手动截取的虚拟屏画面 */
+    const val MANUAL_SCREENSHOT_DIR = "manual"
+
     /** [LOG_DIR] 下：未捕获异常现场 */
     const val CRASH_DIR = "crash"
 
-    /** [DEBUG_DIR] 下：logcat 抓取子目录（core=特权进程，app=App 进程） */
-    const val LOGCAT_CORE_DIR = "logcat/core"
-    const val LOGCAT_APP_DIR = "logcat/app"
+    /** [LOG_DIR] 下：特权进程被杀后由下一个特权进程翻出的系统日志 */
+    const val PRIVILEGED_DEATH_DIR = "privileged_death"
+
+    /** [DEBUG_DIR] 下：logcat 抓取目录，按进程分子目录（core=特权进程，app=App 进程） */
+    const val LOGCAT_DIR = "logcat"
+    const val LOGCAT_CORE_DIR = "$LOGCAT_DIR/core"
+    const val LOGCAT_APP_DIR = "$LOGCAT_DIR/app"
 }
 

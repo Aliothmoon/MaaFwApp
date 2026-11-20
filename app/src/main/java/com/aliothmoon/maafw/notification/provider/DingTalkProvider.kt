@@ -43,7 +43,7 @@ class DingTalkProvider(
         }
 
         val body = providerJson.encodeToString(
-            DingTalkRequest(msgtype = "text", text = DingTalkText("$title: $content")),
+            DingTalkRequest(msgtype = "text", text = DingTalkText("$title: $content".fitUtf8(MAX_CONTENT_BYTES))),
         )
 
         return runCatching {
@@ -77,5 +77,8 @@ class DingTalkProvider(
 
     private companion object {
         const val SIGN_ALGORITHM = "HmacSHA256"
+
+        /** 请求体上限 20000 字节，超了回 460101；留出转义余量 */
+        const val MAX_CONTENT_BYTES = 18000
     }
 }

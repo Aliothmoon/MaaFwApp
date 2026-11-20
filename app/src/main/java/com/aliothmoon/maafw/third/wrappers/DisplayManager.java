@@ -1,14 +1,12 @@
 package com.aliothmoon.maafw.third.wrappers;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.hardware.display.VirtualDisplay;
 import android.os.Handler;
 import android.view.Display;
 import android.view.Surface;
 
-import com.aliothmoon.maafw.constant.AndroidVersions;
 import com.aliothmoon.maafw.third.Command;
 import com.aliothmoon.maafw.third.DisplayInfo;
 import com.aliothmoon.maafw.third.FakeContext;
@@ -48,7 +46,6 @@ public final class DisplayManager {
     private final Object manager; // instance of hidden class android.hardware.display.DisplayManagerGlobal
     private Method getDisplayInfoMethod;
     private Method createVirtualDisplayMethod;
-    private Method requestDisplayPowerMethod;
 
     static DisplayManager create() {
         try {
@@ -123,6 +120,19 @@ public final class DisplayManager {
         return getDisplayInfoMethod;
     }
 
+    // Android 12 起才有，取不到返回 -1
+    public int getDisplayGroupId(int displayId) {
+        try {
+            Object displayInfo = getGetDisplayInfoMethod().invoke(manager, displayId);
+            if (displayInfo == null) {
+                return -1;
+            }
+            return displayInfo.getClass().getDeclaredField("displayGroupId").getInt(displayInfo);
+        } catch (ReflectiveOperationException e) {
+            return -1;
+        }
+    }
+
     public DisplayInfo getDisplayInfo(int displayId) {
         try {
             Method method = getGetDisplayInfoMethod();
@@ -173,24 +183,6 @@ public final class DisplayManager {
         ctor.setAccessible(true);
         android.hardware.display.DisplayManager dm = ctor.newInstance(FakeContext.get());
         return dm.createVirtualDisplay(name, width, height, dpi, surface, flags);
-    }
-
-    private Method getRequestDisplayPowerMethod() throws NoSuchMethodException {
-        if (requestDisplayPowerMethod == null) {
-            requestDisplayPowerMethod = manager.getClass().getMethod("requestDisplayPower", int.class, boolean.class);
-        }
-        return requestDisplayPowerMethod;
-    }
-
-    @TargetApi(AndroidVersions.API_35_ANDROID_15)
-    public boolean requestDisplayPower(int displayId, boolean on) {
-        try {
-            Method method = getRequestDisplayPowerMethod();
-            return (boolean) method.invoke(manager, displayId, on);
-        } catch (ReflectiveOperationException e) {
-            Ln.e("Could not invoke method", e);
-            return false;
-        }
     }
 
     public DisplayListenerHandle registerDisplayListener(DisplayListener listener, Handler handler) {

@@ -1,5 +1,8 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.i18n.uiTextOf
+
 /**
  * 整轮的会话日志文件：engage 开，收尾写 Footer 并关
  *
@@ -20,6 +23,9 @@ class SessionLogHook(private val journal: RunJournal) : RunEnvHook {
 
     override suspend fun engage(ctx: RunContext): EngageResult {
         journal.begin(ctx.plan, ctx.executionId)
+        ctx.plan.skippedTasks.forEach {
+            journal.warn(ctx.executionId, uiTextOf(R.string.run_log_task_skipped, it.label, it.reason))
+        }
         return EngageResult.Engaged { reason -> journal.end(ctx.executionId, reason) }
     }
 }

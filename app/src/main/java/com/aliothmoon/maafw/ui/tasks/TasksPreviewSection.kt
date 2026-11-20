@@ -153,7 +153,6 @@ internal fun rememberMovablePreview(
 @Composable
 internal fun LivePreview(
     resolution: DisplayResolution?,
-    surfaceReady: Boolean,
     running: Boolean,
     watchdogState: WatchdogState,
     content: (@Composable () -> Unit)?,
@@ -187,9 +186,8 @@ internal fun LivePreview(
         ) {
             Box(Modifier.fillMaxSize()) {
                 content()
-                PreviewStatusMask(surfaceReady = surfaceReady, running = running)
                 WatchdogStatusBadge(
-                    state = watchdogState,
+                    status = resolvePreviewBadgeStatus(watchdogState, running),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(MaaDesignTokens.Spacing.sm),
@@ -198,23 +196,41 @@ internal fun LivePreview(
         }
     }
 }
+
+internal enum class PreviewBadgeStatus {
+    RUNNING,
+    APP_STOPPED,
+    DISPLAY_DRIFT,
+    READY,
+    IDLE,
+}
+
+// 结合 running 消掉 2s 看门狗轮询滞后：刚开跑不等首拍即显示绿点，刚停下也不残留绿点或旧坏态
+internal fun resolvePreviewBadgeStatus(state: WatchdogState, running: Boolean): PreviewBadgeStatus = when {
+    !running -> if (state == WatchdogState.READY) PreviewBadgeStatus.READY else PreviewBadgeStatus.IDLE
+    state == WatchdogState.APP_DIED -> PreviewBadgeStatus.APP_STOPPED
+    state == WatchdogState.DISPLAY_DRIFT -> PreviewBadgeStatus.DISPLAY_DRIFT
+    else -> PreviewBadgeStatus.RUNNING
+}
+
 @Composable
-private fun WatchdogStatusBadge(state: WatchdogState, modifier: Modifier = Modifier) {
-    // 着色对齐 MaaMeow 预览小窗右上角徽标；两种坏结局同为红，但文字要分得开——
-    // 「已停止」去看应用是不是被杀了，「已离屏」去改运行模式，指向不同
-    val (dotColor, label) = when (state) {
-        WatchdogState.WATCHING ->
-            Color(0xFF4CAF50) to stringResource(R.string.virtual_display_game_running)
-        WatchdogState.APP_DIED ->
+private fun WatchdogStatusBadge(status: PreviewBadgeStatus, modifier: Modifier = Modifier) {
+    // 配色、尺寸与文案对齐 MaaMeow VirtualDisplayPreview 右上角状态胶囊；两种坏结局同为红，文字区分指向
+    val (dotColor, label) = when (status) {
+        PreviewBadgeStatus.RUNNING ->
+            Color(0xFF4CAF50) to stringResource(R.string.virtual_display_task_running)
+        PreviewBadgeStatus.APP_STOPPED ->
             Color(0xFFF44336) to stringResource(R.string.virtual_display_game_stopped)
-        WatchdogState.DISPLAY_DRIFT ->
+        PreviewBadgeStatus.DISPLAY_DRIFT ->
             Color(0xFFF44336) to stringResource(R.string.virtual_display_app_drifted)
-        WatchdogState.IDLE ->
+        PreviewBadgeStatus.READY ->
+            Color(0xFF2196F3) to stringResource(R.string.virtual_display_ready)
+        PreviewBadgeStatus.IDLE ->
             Color(0xFF9E9E9E) to stringResource(R.string.virtual_display_idle)
     }
     Row(
         modifier = modifier
-            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(MaaDesignTokens.CornerRadius.button))
+            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(MaaDesignTokens.CornerRadius.card))
             .padding(horizontal = MaaDesignTokens.Spacing.sm, vertical = MaaDesignTokens.Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -370,28 +386,6 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
-}
-
-/** 画面还没上来时盖一层说明，免得黑屏看着像坏了 */
-@Composable
-private fun PreviewStatusMask(surfaceReady: Boolean, running: Boolean) {
-    val text = when {
-        !surfaceReady -> stringResource(R.string.tasks_preview_waiting_surface)
-        !running -> stringResource(R.string.tasks_preview_idle)
-        else -> return
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Composable

@@ -12,7 +12,10 @@ import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.update.AndroidAbi
 import com.aliothmoon.maafw.update.OkHttpUpdateDownloader
+import com.aliothmoon.maafw.update.TransferRateMeter
 import com.aliothmoon.maafw.update.UpdateCheckFailure
+import com.aliothmoon.maafw.update.CdkVerification
+import com.aliothmoon.maafw.update.CdkVerifyRequest
 import com.aliothmoon.maafw.update.UpdateCheckRequest
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateDownloadResult
@@ -38,6 +41,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -60,6 +65,7 @@ class SettingsViewModel(
     private val currentVersion: String = BuildConfig.VERSION_NAME,
     /** 按安装包自己的 ABI 更新，不按设备：装 universal 的不会被换成单 ABI 包 */
     private val abi: AndroidAbi = AndroidAbi.fromPackageAbi(BuildConfig.MAFW_PACKAGE_ABI),
+    private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : ViewModel() {
 
     private val updateOperation = MutableStateFlow(UpdatePanelState())
@@ -70,25 +76,19 @@ class SettingsViewModel(
     /** 只在 CAS 抢到 downloading 位后登记，取消不会误伤没抢到位的空跑协程 */
     private var downloadJob: Job? = null
 
+    private var cdkJob: Job? = null
+
+    /** 本进程里最近一次验成有效的 CDK 与结果 */
+    private var verifiedCdk: Pair<String, CdkVerification.Valid>? = null
+
     init {
         viewModelScope.launch { startupUpdateCheck() }
-        // 对齐 MaaMeow：填写 CDK 时静默触发一次检查，结果丢弃、不弹任何窗
+        // 填完 CDK 停一会儿就验一次；进设置页那次由界面发 VerifyCdk
         viewModelScope.launch {
             appSettings.loaded.first { it }
-            appSettings.mirrorchyanCdk.drop(1).filter(String::isNotBlank)
-                .debounce(CDK_CHECK_DEBOUNCE_MS.milliseconds).collect {
-                    val metadata = projectMetadata()
-                    updateService.check(
-                        UpdateCheckRequest(
-                            source = appSettings.updateSource.value,
-                            currentVersion = currentVersion,
-                            channel = appSettings.updateChannel.value,
-                            abi = abi,
-                            mirrorchyanRid = mirrorchyanRid(metadata),
-                            githubRepository = metadata?.githubRepository,
-                        ),
-                    )
-                }
+            // 先防抖再滤空：反过来时输完 1 秒内清空，空串被滤掉，防抖照样吐出清空前那份去验
+            appSettings.mirrorchyanCdk.drop(1).debounce(CDK_CHECK_DEBOUNCE_MS.milliseconds)
+                .filter(String::isNotBlank).collect(::verifyCdk)
         }
     }
 
@@ -150,7 +150,21 @@ class SettingsViewModel(
 
             is SettingsIntent.SetMirrorchyanCdk -> viewModelScope.launch {
                 if (updateSettingsLocked()) return@launch
+                // 只多敲了首尾空白：落盘值不变、不会重验，清了状态就再也回不来
+                if (intent.cdk.trim() == appSettings.mirrorchyanCdk.value) return@launch
+                // 旧 CDK 的结果别挂在新输入旁边
+                cdkJob?.cancel()
+                updateOperation.update { it.copy(cdkStatus = CdkStatus.None) }
                 appSettings.setMirrorchyanCdk(intent.cdk)
+            }
+
+            // 首页首帧就会发：设置可能还没读盘，rid 来自 PI 时 PI 也可能还在载，这时验就是空跑一趟
+            SettingsIntent.VerifyCdk -> viewModelScope.launch {
+                appSettings.loaded.first { it }
+                if (BuildConfig.MAFW_MIRRORCHYAN_RID.isBlank()) {
+                    projectRepository.state.first { it !is ProjectState.Loading }
+                }
+                appSettings.mirrorchyanCdk.value.takeIf(String::isNotBlank)?.let(::verifyCdk)
             }
 
             is SettingsIntent.SetAutoCheckUpdate -> viewModelScope.launch {
@@ -191,6 +205,8 @@ class SettingsViewModel(
      * 启动自检：等设置读盘与 PI 就绪后查一次；VM 存活期内只跑这一回。
      * 不写 checkResult（首页不出现结果行）；已是最新弹 Toast（与手动检查同一句），失败照弹错误窗，
      * 发现新版本按自动下载开关走静默下载或弹「发现新版本」dialog
+     *
+     * 例外是「更新源缺少配置」：PI 不配更新源是合法选择，用户改不了，每次启动都弹只是噪音；手动检查照常报
      */
     private suspend fun startupUpdateCheck() {
         appSettings.loaded.first { it }
@@ -211,10 +227,14 @@ class SettingsViewModel(
         )
         val available = result as? UpdateCheckResult.UpdateAvailable
         if (available == null) {
-            Timber.tag("UpdateCheck")
-                .w("startup check found no update: %s", result::class.simpleName)
+            Timber.tag("UpdateCheck").w("startup check found no update: %s", result)
+            val unconfigured = result is UpdateCheckResult.SourceFailed &&
+                result.reason == UpdateCheckFailure.MISSING_CONFIGURATION
             updateOperation.update {
-                it.copy(checking = false, errorPrompt = result.message()?.let(UpdateErrorPrompt::check))
+                it.copy(
+                    checking = false,
+                    errorPrompt = result.message()?.takeUnless { unconfigured }?.let(UpdateErrorPrompt::check),
+                )
             }
             if (result is UpdateCheckResult.UpToDate) {
                 effectChannel.trySend(SettingsEffect.ShowMessage(uiTextOf(R.string.settings_update_up_to_date)))
@@ -269,12 +289,25 @@ class SettingsViewModel(
             downloading = true,
             downloadedBytes = -1L,
             totalBytes = -1L,
+            bytesPerSecond = -1L,
             errorMessage = null,
         )
         return if (updateOperation.compareAndSet(current, claimed)) requested else null
     }
 
     private fun updateSettingsLocked(): Boolean = updateOperation.value.downloading
+
+    /** 定时看一眼已下载字节数：网络卡住时下载器不回调，靠这里速度才会掉下来 */
+    private suspend fun sampleDownloadSpeed() {
+        // 头一次进度回来之前没东西可量
+        updateOperation.first { it.downloadedBytes >= 0 }
+        val meter = TransferRateMeter()
+        while (true) {
+            val rate = meter.sample(clockMillis(), updateOperation.value.downloadedBytes)
+            updateOperation.update { it.copy(bytesPerSecond = rate) }
+            delay(SPEED_SAMPLE_INTERVAL_MS)
+        }
+    }
 
     private suspend fun downloadUpdate() {
         // 二次触发（连点、启动自检与手动并发）不上错，CAS 抢不到位就静默快速返回
@@ -325,14 +358,21 @@ class SettingsViewModel(
                 }
             }
 
-            val result = updateDownloader.download(
-                update = update,
-                onProgress = { downloaded, total ->
-                    updateOperation.update {
-                        it.copy(downloadedBytes = downloaded, totalBytes = total)
-                    }
-                },
-            )
+            val result = coroutineScope {
+                val speedSampler = launch { sampleDownloadSpeed() }
+                try {
+                    updateDownloader.download(
+                        update = update,
+                        onProgress = { downloaded, total ->
+                            updateOperation.update {
+                                it.copy(downloadedBytes = downloaded, totalBytes = total)
+                            }
+                        },
+                    )
+                } finally {
+                    speedSampler.cancel()
+                }
+            }
             when (result) {
                 is UpdateDownloadResult.Downloaded -> install(result)
                 is UpdateDownloadResult.Failed -> updateOperation.update {
@@ -363,6 +403,42 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * 验一次 [cdk]；迟到的旧 CDK 结果丢掉，已验过有效的不因一次网络失败降级
+     */
+    private fun verifyCdk(cdk: String) {
+        cdkJob?.cancel()
+        // 这个包没配 Mirror酱 rid：验不了，不能说成「请检查网络」
+        val rid = mirrorchyanRid(projectMetadata()) ?: run {
+            updateOperation.update { it.copy(cdkStatus = CdkStatus.None) }
+            return
+        }
+        updateOperation.update { it.copy(cdkStatus = CdkStatus.Checking) }
+        cdkJob = viewModelScope.launch {
+            val result = updateService.verifyCdk(
+                CdkVerifyRequest(
+                    cdk = cdk,
+                    currentVersion = currentVersion,
+                    abi = abi,
+                    channel = appSettings.updateChannel.value,
+                    mirrorchyanRid = rid,
+                ),
+            )
+            if (appSettings.mirrorchyanCdk.value != cdk) {
+                // 改 CDK 时先清状态再异步落盘：防抖赶在落盘前吐出旧值的话，这一轮是在清状态之后才置的「正在验证」，
+                // 不复位就一直挂着。更新一轮的验证会先取消这一轮，走到这里的不会盖掉别人的 Checking
+                updateOperation.update { if (it.cdkStatus is CdkStatus.Checking) it.copy(cdkStatus = CdkStatus.None) else it }
+                return@launch
+            }
+            val shown = when (result) {
+                is CdkVerification.Valid -> result.also { verifiedCdk = cdk to it }
+                is CdkVerification.Rejected -> result.also { verifiedCdk = null }
+                CdkVerification.Unverified -> verifiedCdk?.takeIf { it.first == cdk }?.second ?: result
+            }
+            updateOperation.update { it.copy(cdkStatus = CdkStatus.Done(shown)) }
+        }
+    }
+
     /** profile 钉的压过 PI 声明的：出包方知道自己发到哪个项目，PI 作者不一定知道 */
     private fun mirrorchyanRid(metadata: ProjectMetadata?): String? =
         BuildConfig.MAFW_MIRRORCHYAN_RID.takeIf(String::isNotBlank) ?: metadata?.mirrorchyanRid
@@ -372,5 +448,6 @@ class SettingsViewModel(
 
     private companion object {
         const val CDK_CHECK_DEBOUNCE_MS = 1_000L
+        const val SPEED_SAMPLE_INTERVAL_MS = 500L
     }
 }

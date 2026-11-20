@@ -84,7 +84,8 @@ class OkHttpUpdateDownloader(
                 val totalLength = response.body.contentLength()
                 val digest = MessageDigest.getInstance(SHA_256)
                 var downloadedBytes = 0L
-                var lastProgressBytes = -PROGRESS_INTERVAL.toLong()
+                var lastProgressBytes = 0L
+                var lastProgressAt = System.nanoTime()
                 onProgress(0L, totalLength)
 
                 val input = response.body.byteStream()
@@ -100,12 +101,12 @@ class OkHttpUpdateDownloader(
                         out.write(buffer, 0, read)
                         digest.update(buffer, 0, read)
                         downloadedBytes += read
-                        if (
-                            downloadedBytes - lastProgressBytes >= PROGRESS_INTERVAL ||
-                            downloadedBytes == totalLength
-                        ) {
+                        // 按时间节流：慢网下按字节数节流会十几秒不动，速度也就采不准
+                        val now = System.nanoTime()
+                        if (now - lastProgressAt >= PROGRESS_INTERVAL_NANOS || downloadedBytes == totalLength) {
                             onProgress(downloadedBytes, totalLength)
                             lastProgressBytes = downloadedBytes
+                            lastProgressAt = now
                         }
                     }
                 }
@@ -275,7 +276,7 @@ class OkHttpUpdateDownloader(
     private companion object {
         const val BUFFER_SIZE = 64 * 1024
         const val PART_EXTENSION = ".part"
-        const val PROGRESS_INTERVAL = 1024 * 1024
+        const val PROGRESS_INTERVAL_NANOS = 250_000_000L
         const val SHA_256 = "SHA-256"
         const val DIGEST_FILE_SUFFIX_LENGTH = 16
         const val MAX_VERSION_LENGTH = 48

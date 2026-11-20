@@ -28,15 +28,13 @@ public class NativeBridgeLib {
 
     public static native void releaseNativeCapturer();
 
-    @FastNative
+    // 不能 FastNative：destroy 收尾持锁 join 时，等锁的 binder 线程会拖住 GC
     public static native void setPreviewSurface(Object surface);
 
     /** 停渲染线程并断开预览 Surface，会阻塞到线程退出；进程退出前调，否则这块 Surface 下一个特权进程接不上 */
     public static native void shutdownPreview();
 
-    /**
-     * 测试用
-     */
+    /** 帧缓冲为空返回 null */
     public static native Bitmap getFrameBufferBitmap();
 
     @FastNative
@@ -47,5 +45,8 @@ public class NativeBridgeLib {
      * 不计入 {@link #getFrameCount()}
      */
     public static native boolean blankFrame(long expectedFrameCount);
+
+    /** 采集收尾停在哪一步，没在收尾返回空串 */
+    public static native String describeReleaseStage();
 
 }

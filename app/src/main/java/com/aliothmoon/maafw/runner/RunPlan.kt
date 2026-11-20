@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.domain.AgentDefinition
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
+import com.aliothmoon.maafw.i18n.UiText
 import kotlinx.serialization.json.JsonObject
 
 /** Start 时冻结的执行输入；Runner 不再观察用户配置 */
@@ -18,7 +19,11 @@ data class RunPlan(
     val agents: List<AgentDefinition> = emptyList(),
     /** 注入 agent 子进程的 `PI_*`，见 [PiAgentEnv]；无 agent 的 PI 用不上 */
     val piEnv: Map<String, String> = emptyMap(),
+    /** 勾着但这一轮跑不了、被跳过的任务，只进运行日志 */
+    val skippedTasks: List<SkippedTask> = emptyList(),
 )
+
+data class SkippedTask(val label: String, val reason: UiText)
 
 data class RuntimeTask(
     val taskName: String,

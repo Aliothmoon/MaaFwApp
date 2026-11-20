@@ -1,12 +1,18 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.i18n.isResource
+import com.aliothmoon.maafw.domain.RemoteBackend
+import com.aliothmoon.maafw.privileged.RemoteAccessFailure
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
 import com.aliothmoon.maafw.ITextInputSink
 import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
@@ -96,6 +102,7 @@ class MaaFrameworkRunnerPortTest {
         servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(service),
         saveOnError: () -> Boolean = { true },
         resolutionPreset: () -> ResolutionPreset = { ResolutionPresets.builtIn.first() },
+        debugMode: () -> Boolean = { false },
     ): Pair<MaaFrameworkRunnerPort, FakePrivilegedServicePort> {
         val installer = mockk<PiInstaller>()
         every { installer.installedDir() } returns temp.newFolder("pi")
@@ -105,7 +112,7 @@ class MaaFrameworkRunnerPortTest {
             nativeLibraryDir = "/lib",
             runMode = { RunMode.BACKGROUND },
             resolutionPreset = resolutionPreset,
-            debugMode = { false },
+            debugMode = debugMode,
             saveOnError = saveOnError,
             scope = scope.backgroundScope,
             servicePort = servicePort,
@@ -162,6 +169,21 @@ class MaaFrameworkRunnerPortTest {
         assertEquals(Triple(1920, 1080, 280), service.lastVirtualDisplayResolution)
     }
 
+    /** 卡死的那次调用由 callOrRestart 重启特权进程，这一轮按「无响应」拒绝收尾，不再往下投 startRun */
+    @Test
+    fun `stuck display call rejects the run and returns to Idle`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val servicePort = FakePrivilegedServicePort(service).apply { stuckCall = "startVirtualDisplay" }
+        val (runner, _) = port(this, service, servicePort)
+
+        val rejected = runner.start(plan(), "e1") as RunnerCommandResult.Rejected
+        advanceUntilIdle()
+
+        assertTrue(rejected.reason.isResource(R.string.msg_fail_privileged_stuck))
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        assertEquals(null, service.lastRunPlanJson)
+    }
+
     /** 对齐 MaaPiCli：先 resource.path，再 controller.attach_resource_path */
     @Test
     fun `controller attach resource paths are loaded after resource paths`() = runTest(dispatcher) {
@@ -215,6 +237,20 @@ class MaaFrameworkRunnerPortTest {
         assertTrue(runner.state.value.latestResult is ExecutionResult.Cancelled)
     }
 
+    /** 以前是 IllegalStateException 的英文 message 原样进触发日志 */
+    @Test
+    fun `a backend that is not ready rejects with a localized reason`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort().apply {
+            connectResult = ServiceConnectResult.NotReady(RemoteBackend.SHIZUKU, RemoteAccessFailure.UNAVAILABLE)
+        }
+        val (runner, _) = port(this, servicePort = servicePort)
+
+        val rejected = runner.start(plan(), "e1") as RunnerCommandResult.Rejected
+
+        assertTrue(rejected.reason.isResource(R.string.msg_backend_not_running))
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+    }
+
     @Test
     fun `cancellation during prepare rethrows and returns to Idle`() = runTest(dispatcher) {
         val hold = CompletableDeferred<Unit>()
@@ -255,6 +291,20 @@ class MaaFrameworkRunnerPortTest {
     }
 
     @Test
+    fun `a task cut short by stop is marked cancelled on its finish marker`() = runTest(dispatcher) {
+        val (runner, _) = port(this)
+        val (callbacks, events) = recordCallbacks(runner)
+
+        runner.start(twoTaskPlan(), "e1")
+        val callback = callbacks.single()
+        callback.onTaskStarted("启动游戏", 0, 2)
+        callback.onTaskFinished("启动游戏", false, "Failed", true)
+
+        val finished = events.single { it.event is RunnerEvent.TaskFinished }.event
+        assertEquals(RunnerEvent.TaskFinished(0, success = false, cancelled = true), finished)
+    }
+
+    @Test
     fun `the terminal marker is emitted before state turns idle`() = runTest(dispatcher) {
         val (runner, _) = port(this)
         val (callbacks, events) = recordCallbacks(runner)
@@ -273,6 +323,37 @@ class MaaFrameworkRunnerPortTest {
         assertEquals(listOf("e1"), events.filter { it.event is RunnerEvent.ExecutionFinished }.map { it.executionId })
     }
 
+    /** 测试用的 APK 路径读不到描述，名字退到 agent[n] */
+    @Test
+    fun `an agent launch failure names the agent and points at debug mode`() = runTest(dispatcher) {
+        val (runner, _) = port(this)
+        val (callbacks, _) = recordCallbacks(runner)
+
+        runner.start(plan(), "e1")
+        callbacks.single().onFinished(RunOutcome.AGENT_LAUNCH_FAILED, "1")
+
+        assertEquals(
+            uiTextOf(R.string.msg_fail_debug_hint, uiTextOf(R.string.msg_fail_agent_launch, "agent[1]")),
+            (runner.state.value.latestResult as ExecutionResult.Failed).reason,
+        )
+    }
+
+    @Test
+    fun `an agent launch failure drops the hint once debug mode is on`() = runTest(dispatcher) {
+        var debug = false
+        val (runner, _) = port(this, debugMode = { debug })
+        val (callbacks, _) = recordCallbacks(runner)
+
+        runner.start(plan(), "e1")
+        debug = true
+        callbacks.single().onFinished(RunOutcome.AGENT_LAUNCH_FAILED, "")
+
+        assertEquals(
+            uiTextOf(R.string.msg_fail_agent_launch_any),
+            (runner.state.value.latestResult as ExecutionResult.Failed).reason,
+        )
+    }
+
     @Test
     fun `a callback from the previous run cannot touch the next one`() = runTest(dispatcher) {
         val (runner, _) = port(this)
@@ -284,7 +365,7 @@ class MaaFrameworkRunnerPortTest {
         runner.start(plan(), "e2")
 
         stale.onEvent("Tasker.Task.Failed", """{"entry":"Start"}""")
-        stale.onTaskFinished("启动游戏", false, "late")
+        stale.onTaskFinished("启动游戏", false, "late", false)
         stale.onFinished(RunOutcome.FAILED, "late")
 
         val active = runner.state.value.activeExecution
@@ -307,5 +388,58 @@ class MaaFrameworkRunnerPortTest {
 
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
         assertEquals(listOf("e1"), events.filter { it.event is RunnerEvent.ExecutionFinished }.map { it.executionId })
+    }
+
+    /** 主动断开会 destroy 远端，死亡通知先解绑了，只看得到 Disconnected；不收回就永远锁着 */
+    @Test
+    fun `an unbind mid-run aborts instead of waiting forever`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort()
+        val (runner, _) = port(this, servicePort = servicePort)
+
+        runner.start(plan(), "e1")
+        servicePort.emit(PrivilegedServiceState.Disconnected)
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+        val result = runner.state.value.latestResult as ExecutionResult.Failed
+        assertTrue(result.reason.isResource(R.string.msg_fail_privileged_exited))
+    }
+
+    /** 换身份重起：旧进程被 destroy，状态从 Connected 直接进 Connecting，同样要收回 */
+    @Test
+    fun `a respawn mid-run aborts the round`() = runTest(dispatcher) {
+        val servicePort = FakePrivilegedServicePort()
+        val (runner, _) = port(this, servicePort = servicePort)
+
+        runner.start(plan(), "e1")
+        assertEquals(RunnerPhase.Running, runner.state.value.phase)
+        servicePort.emit(PrivilegedServiceState.Connecting)
+        repeat(4) { testScheduler.runCurrent() }
+
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+    }
+
+    /** 投递前那段在连特权进程，换后端时先断再连是正常过程，不能当成远端没了 */
+    @Test
+    fun `reconnecting while preparing does not abort`() = runTest(dispatcher) {
+        val service = FakePrivilegedService()
+        val hold = CompletableDeferred<Unit>()
+        val servicePort = FakePrivilegedServicePort(service).apply { holdUseService = hold }
+        val (runner, _) = port(this, service, servicePort)
+
+        val started = async { runner.start(plan(), "e1") }
+        advanceUntilIdle()
+        assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
+        servicePort.emit(PrivilegedServiceState.Disconnected)
+        advanceUntilIdle()
+        servicePort.emit(PrivilegedServiceState.Connecting)
+        advanceUntilIdle()
+        assertEquals(RunnerPhase.Preparing, runner.state.value.phase)
+        servicePort.emit(PrivilegedServiceState.Connected)
+        hold.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(RunnerCommandResult.Accepted, started.await())
+        assertEquals(RunnerPhase.Running, runner.state.value.phase)
     }
 }

@@ -4,6 +4,7 @@ import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /** 谁发起的这一轮；决定「需要确认」时有没有人可问 */
 sealed interface RunTrigger {
@@ -44,6 +45,10 @@ data class ScheduleRunOptions(
     val autoSleepAfterTask: Boolean = false,
     val skipAutoSleepIfAwake: Boolean = true,
     val closeAppAfterTask: Boolean = false,
+    /** 跑的时候关掉物理屏（只关不恢复），代替屏保；仅后台模式、且开始时设备没在用 */
+    val hardwareScreenOff: Boolean = false,
+    /** 跑到头后收起：断开特权进程、关掉界面 */
+    val collapseAfterTask: Boolean = false,
 )
 
 /**
@@ -99,7 +104,23 @@ class RunContext(
     /**
      * 本轮被时长上限停下；结局与手动停同为 [ExecutionResult.Cancelled]，收尾靠它把两者分开
      *
-     * 本类唯一一处运行期写入：到点停发生在 engage 之后，没法冻结在 Start 时刻
+     * 本类的运行期写入只有它、[deviceAtStart] 与 [endScreenshot]：到点停发生在 engage 之后，没法冻结在 Start 时刻
      */
     val stoppedAtLimit = AtomicBoolean(false)
+
+    /**
+     * 定时触发时唤醒之前的设备状态，由 [IdleProbeHook] 采一次；手动发起与没采到为 null
+     *
+     * 唤醒之后屏幕永远是亮的，后面读它的挂载物（跑完熄屏、关屏幕电源、屏保让位、解锁失败取证）只能读这份
+     */
+    val deviceAtStart = AtomicReference<DeviceAtStart?>(null)
+
+    /** 跑完那一刻的画面（JPEG），[CompletionScreenshotHook] 收尾时截、[NotificationHook] 随完成推送发 */
+    val endScreenshot = AtomicReference<ByteArray?>(null)
+}
+
+/** 定时触发唤醒之前的设备状态 */
+data class DeviceAtStart(val screenOn: Boolean, val keyguardLocked: Boolean) {
+    /** 熄屏或锁屏都算没在用：没设锁屏的机器熄了屏也不上锁，只看 keyguard 会判成在用 */
+    val idle: Boolean get() = !screenOn || keyguardLocked
 }

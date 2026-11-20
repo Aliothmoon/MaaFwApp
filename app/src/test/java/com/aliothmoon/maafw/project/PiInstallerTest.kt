@@ -14,13 +14,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 class PiInstallerTest {
 
@@ -406,32 +403,53 @@ class PiInstallerTest {
         val root = installer(base, ZipPiPackage(files), 11).ensureInstalled()
         assertEquals("ok", File(root, "resource/foo..bar.json").readText())
     }
+
+    private val bulkyFiles = mapOf(
+        "resource/bulky.txt" to bulkyText(),
+        "interface.json" to "{}",
+    )
+
+    /** 下载残缺的 APK 在签名校验被关掉的机器上装得上，读到的归档与出包时记的 CRC 对不上 */
+    @Test
+    fun `归档 inflate 出错且 CRC 对不上时判为包损坏`() {
+        val base = temp.newFolder("external")
+        val (intact, damaged) = zeroFilledArchive(bulkyFiles)
+        val pkg = ZipPiPackage(damaged, archiveCrc = crc32Of(intact))
+
+        val error = assertThrows(PiArchiveException::class.java) {
+            installer(base, pkg, 11).ensureInstalled()
+        }
+
+        assertTrue(error.corrupt)
+        assertTrue(error.message!!, "resource/bulky.txt" in error.message!!)
+        assertFalse(File(base, PiInstaller.PI_MARKER_NAME).exists())
+    }
+
+    /** 读到的与记的一致，说明包没坏，是这一遍没读对，重试还有指望 */
+    @Test
+    fun `归档 inflate 出错但 CRC 对得上时不判包损坏`() {
+        val base = temp.newFolder("external")
+        val (_, damaged) = zeroFilledArchive(bulkyFiles)
+        val pkg = ZipPiPackage(damaged, archiveCrc = crc32Of(damaged))
+
+        val error = assertThrows(PiArchiveException::class.java) {
+            installer(base, pkg, 11).ensureInstalled()
+        }
+
+        assertFalse(error.corrupt)
+    }
+
+    @Test
+    fun `拿不到 CRC 参照时不判包损坏`() {
+        val base = temp.newFolder("external")
+        val (_, damaged) = zeroFilledArchive(bulkyFiles)
+
+        val error = assertThrows(PiArchiveException::class.java) {
+            installer(base, ZipPiPackage(damaged), 11).ensureInstalled()
+        }
+
+        assertFalse(error.corrupt)
+    }
 }
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
-
-private class ZipPiPackage(
-    files: Map<String, String>,
-    manifest: List<String> = files.keys.sorted(),
-) : PiPackage {
-    private val bytes: ByteArray = zipBytes(files)
-    private val names = manifest
-
-    override fun manifest(): List<String> = names
-
-    override fun open(path: String): InputStream = error(path)
-
-    override fun openArchive(): InputStream = bytes.inputStream()
-}
-
-private fun zipBytes(files: Map<String, String>): ByteArray =
-    ByteArrayOutputStream().use { raw ->
-        ZipOutputStream(raw).use { zip ->
-            files.forEach { (name, content) ->
-                zip.putNextEntry(ZipEntry(name))
-                zip.write(content.toByteArray())
-                zip.closeEntry()
-            }
-        }
-        raw.toByteArray()
-    }

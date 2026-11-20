@@ -32,16 +32,21 @@ enum class WakeResult(val code: Int, val message: UiText) {
     RECORD_CANCELLED(WakeUnlockResult.RECORD_CANCELLED, uiTextOf(R.string.wake_result_record_cancelled)),
     RECORD_NO_TOUCH(WakeUnlockResult.RECORD_NO_TOUCH, uiTextOf(R.string.wake_result_record_no_touch)),
     IPC_FAILED(WakeUnlockResult.IPC_FAILED, uiTextOf(R.string.wake_result_ipc_failed)),
+    TASK_RUNNING(WakeUnlockResult.TASK_RUNNING, uiTextOf(R.string.wake_result_task_running)),
+
+    /** 特权侧回了本端不认识的码，多半是两端版本不一致 */
+    UNKNOWN(WakeUnlockResult.UNKNOWN, uiTextOf(R.string.wake_result_unknown)),
     ;
 
     /** 解开了，或者本来就没锁：两种都可以往下跑 */
     val isUnlocked: Boolean get() = this == OK || this == NO_KEYGUARD
 
     companion object {
-        /** 认不出的码当 IPC 失败；要把码带进文案的用 [fromCodeOrNull] */
-        fun fromCode(code: Int): WakeResult = fromCodeOrNull(code) ?: IPC_FAILED
-
-        fun fromCodeOrNull(code: Int): WakeResult? = entries.firstOrNull { it.code == code }
+        /** 认不出的码不能说成「服务未连接」：定时与设置页两条路都落 [UNKNOWN]，码只进日志 */
+        fun fromCode(code: Int): WakeResult = entries.firstOrNull { it.code == code } ?: run {
+            Timber.w("unknown wake result code: %d", code)
+            UNKNOWN
+        }
     }
 }
 

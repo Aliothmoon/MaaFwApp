@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -21,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
-import com.aliothmoon.maafw.project.ProjectState
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
@@ -41,6 +43,10 @@ internal fun TaskWorkspace(
     onExportLogs: () -> Unit,
     onIntent: (SessionIntent) -> Unit,
     showLogToggle: Boolean,
+    /** 主 pager 会预组合相邻页：停在别的页、或二级页盖在上面时，收日志不该抢走返回键 */
+    backEnabled: Boolean,
+    /** 变了就打开日志；悬浮窗不传 */
+    runLogRequest: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val locked = state.configurationLocked
@@ -51,6 +57,14 @@ internal fun TaskWorkspace(
     var showConfigSheet by rememberSaveable { mutableStateOf(false) }
     var showRunLog by rememberSaveable { mutableStateOf(false) }
     val logOpen = showLogToggle && showRunLog
+    // 记下处理过的那次：首次组合与转屏重建时请求号没变，不该自己打开
+    var handledLogRequest by rememberSaveable { mutableIntStateOf(runLogRequest) }
+    LaunchedEffect(runLogRequest) {
+        if (runLogRequest != handledLogRequest) {
+            handledLogRequest = runLogRequest
+            showRunLog = true
+        }
+    }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -110,9 +124,7 @@ internal fun TaskWorkspace(
         }
     }
 
-    if (logOpen) {
-        BackHandler { showRunLog = false }
-    }
+    BackHandler(enabled = logOpen && backEnabled) { showRunLog = false }
 
     if (showAddTasks && active != null) {
         AddTasksSheet(
@@ -135,13 +147,20 @@ internal fun TaskWorkspace(
                 onIntent(SessionIntent.SetTaskOption(active.id, editingTask.instanceId, optionName, value))
             },
             onDismiss = { editingTaskInstanceId = null },
+            // 没勾选的不当起点：起点顺延到下一条已勾选的，用户点的和跑的就对不上了
+            canRunFromHere = state.canStart && !locked && editingTask.effectiveEnabled,
+            foregroundBlocked = state.runMode == RunMode.FOREGROUND,
+            onRunFromHere = {
+                editingTaskInstanceId = null
+                onIntent(SessionIntent.Start(startFromInstanceId = editingTask.instanceId))
+            },
         )
     }
 
     if (showConfigSheet) {
         ConfigurationSheet(
             state = state,
-            templates = (state.projectState as? ProjectState.Ready)?.definition?.templates.orEmpty(),
+            templates = state.templates,
             locked = locked,
             onSelect = { id ->
                 showConfigSheet = false
@@ -178,6 +197,8 @@ private fun TaskWorkspaceBody(
     when {
         logOpen -> RunLogPanel(
             entries = runLog,
+            // 锁定唯一来源就是 RunnerPhase.isBusy，正是「这一轮还没收尾」
+            running = locked,
             onExport = onExportLogs,
             onClear = { onIntent(SessionIntent.ClearRunLog) },
             modifier = modifier.fillMaxSize(),

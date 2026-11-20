@@ -134,11 +134,14 @@ class TouchPointerSequenceTest {
     }
 
     @Test
-    fun `up without that contact is rejected`() {
+    fun `up without that contact is a no-op`() {
         val up = TouchPointerSequence.plan(Kind.Up, listOf(p(0)), 1, 0f, 0f)
+        val bare = TouchPointerSequence.plan(Kind.Up, emptyList(), 0, 0f, 0f)
 
-        assertFalse(up.ok)
-        assertEquals(FailureReason.MissingContact, up.failureReason)
+        assertTrue(up.ok)
+        assertTrue(up.noop)
+        assertTrue(bare.ok)
+        assertTrue(bare.noop)
     }
 
     /** PC 的「挪开鼠标」在 PI 里是不按下的 TouchMove：触屏上无事可做，但不能判失败 */

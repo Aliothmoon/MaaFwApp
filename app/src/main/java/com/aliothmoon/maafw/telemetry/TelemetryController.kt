@@ -2,9 +2,11 @@ package com.aliothmoon.maafw.telemetry
 
 import android.content.Context
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.TelemetryDefinition
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunPlan
@@ -15,6 +17,7 @@ import io.sentry.Attachment
 import io.sentry.Hint
 import io.sentry.Sentry
 import io.sentry.SentryAttributes
+import io.sentry.SentryEvent
 import io.sentry.SentryOptions
 import io.sentry.android.core.SentryAndroid
 import io.sentry.logger.SentryLogParameters
@@ -32,16 +35,20 @@ import java.io.File
  * DSN 只来自 PI，外壳没有自己的上报去处；用户开关关着或 PI 压根没声明这一段时不初始化。
  * 开关缺省为开，与 MXU `helpImproveSoftware ?? true` 一致；debug 构建同样上报，靠 `maafwapp.build_type` 区分
  *
- * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
+ * 上报面：哈希后的设备 ID、硬件摘要、版本、每轮的运行模式 / 后台分辨率 / 目标应用版本（[TelemetryRunTags]）、
+ * 任务名、脱敏后的选项（[TelemetrySummary]）、
  * 任务与节点的结果（[RunTracer]）、任务终态失败的事件（[TaskFailure]）。
  * 任务失败时另带这个任务期间新写的日志尾巴与 `on_error/` 出错截图（[TaskEvidence]），
- * 日志里的 PI password 先换成掩码；任务没失败就不碰日志和截图，focus 正文任何时候都不带
+ * 日志里的 PI password 先换成掩码；任务没失败就不碰日志和截图，focus 正文任何时候都不带。
+ * 另有 agent 异常退出的事件（[AgentExitReporter]），与 SDK 自带的未捕获异常、ANR、原生崩溃
  */
 class TelemetryController(
     private val context: Context,
     private val projectRepository: ProjectRepository,
     private val settings: AppSettingsManager,
     private val runnerPort: RunnerPort,
+    /** 目标包名只在特权进程手里，取目标应用版本用 */
+    private val servicePort: PrivilegedServicePort,
     private val scope: CoroutineScope,
     /** 当前保存着的 PI password 明文，失败日志上传前打码用 */
     private val secrets: suspend () -> Collection<String>,
@@ -72,6 +79,12 @@ class TelemetryController(
         secrets = secrets,
         send = ::sendFailure,
     )
+    private val agentExits = AgentExitReporter(
+        scope = scope,
+        crashDir = { File(AppPaths.LOG_DIR, AppFiles.CRASH_DIR) },
+        secrets = secrets,
+        send = ::sendAgentExit,
+    )
 
     /** 取值不随 DSN 变，重新初始化不必再查一遍 ActivityManager */
     private val hardware by lazy { TelemetryHardware.collect(context) }
@@ -79,7 +92,7 @@ class TelemetryController(
     fun setup() {
         scope.launch {
             // 开关关着也记：用户反馈问题时可凭这行在 Sentry 后台按 user.id 定位
-            Timber.i("[telemetry] 匿名设备 ID (Sentry user.id) = %s", TelemetryUserId.get(context))
+            Timber.i("[telemetry] anonymous device id (Sentry user.id) = %s", TelemetryUserId.get(context))
         }
         scope.launch {
             combine(
@@ -108,10 +121,15 @@ class TelemetryController(
             runnerPort.events.collect { envelope ->
                 synchronized(lock) {
                     // 不看 tracing：它关着时采样率是 0，事务不发，失败事件照发，与 MXU 一致
-                    if (active != null) {
-                        if (envelope.event is RunnerEvent.Progress) reporter.onTaskStarted()
-                        tracer.onEvent(envelope.executionId, envelope.event)
+                    val telemetry = active ?: return@synchronized
+                    when (val event = envelope.event) {
+                        is RunnerEvent.Progress -> reporter.onTaskStarted()
+                        is RunnerEvent.AgentOutput -> agentExits.onOutput(event)
+                        is RunnerEvent.AgentExited ->
+                            agentExits.report(event, envelope.executionId, envelope.taskLabel, telemetry.appName)
+                        else -> Unit
                     }
+                    tracer.onEvent(envelope.executionId, envelope.event)
                 }
             }
         }
@@ -151,8 +169,26 @@ class TelemetryController(
         Timber.i("[telemetry] task failure event_id=%s run_id=%s task=%s", eventId, failure.runId, failure.task)
     }
 
+    private fun sendAgentExit(event: SentryEvent, attachments: List<Attachment>) {
+        val eventId = Sentry.captureEvent(event, Hint.withAttachments(attachments))
+        Timber.i("[telemetry] agent exit event_id=%s %s", eventId, event.message?.formatted)
+    }
+
     /** 由 [TelemetryHook] 在投递前调用 */
-    fun begin(executionId: String, plan: RunPlan) = synchronized(lock) { tracer.begin(executionId, plan) }
+    fun begin(executionId: String, plan: RunPlan) {
+        val enabled = synchronized(lock) {
+            tracer.begin(executionId, plan)
+            active != null
+        }
+        // 问包名是 binder、查版本要碰 PackageManager，调用方在投递路径上
+        if (enabled) scope.launch(MaaDispatchers.IO) { refreshRunTags() }
+    }
+
+    private fun refreshRunTags() {
+        val target = runCatching { servicePort.serviceOrNull()?.watchdogTargetPackage() }.getOrNull()?.takeIf { it.isNotBlank() }
+        TelemetryRunTags.collect(context, settings.runMode.value, settings.resolutionPreset.value, target)
+            .forEach { (key, value) -> Sentry.setTag(key, value) }
+    }
 
     fun forget(executionId: String) = synchronized(lock) { tracer.forget(executionId) }
 
@@ -193,13 +229,15 @@ class TelemetryController(
             options.logs.beforeSend = SentryOptions.Logs.BeforeSendLogCallback { it.apply { bindDiagnosticTrace() } }
             // Session（Release Health）与 MXU 一样开着，日活与 crash-free 率靠它
             options.isEnableAutoSessionTracking = true
-            // 其余自动采集面全部关掉，只留本类显式发出的事件
-            options.isAnrEnabled = false
+            // 自动采集只开未捕获异常、ANR 与原生崩溃，生命周期面包屑补上「当时在哪个界面」
+            options.isAnrEnabled = true
+            options.isAttachAnrThreadDump = true
+            options.isTombstoneEnabled = true
+            options.isEnableActivityLifecycleBreadcrumbs = true
             options.isAttachScreenshot = false
             options.isAttachViewHierarchy = false
             options.isEnableUserInteractionBreadcrumbs = false
             options.isEnableUserInteractionTracing = false
-            options.isEnableActivityLifecycleBreadcrumbs = false
             options.isEnableAutoActivityLifecycleTracing = false
         }
         Sentry.setUser(User().apply { id = TelemetryUserId.get(context) })

@@ -35,13 +35,13 @@ class ExecAgentHost(
     override fun launch(request: AgentLaunchRequest): AgentSession {
         val descriptor = readDescriptor(request.apkPath)
             ?: throw AgentLaunchException(
-                "本包未带 agent 运行时：PI 声明了 ${request.agent.childExec}，" +
-                    "但 assets 里没有 ${AgentRuntimeDescriptor.ASSET_PATH}",
+                "no agent runtime bundled: PI declares ${request.agent.childExec}, " +
+                    "but assets has no ${AgentRuntimeDescriptor.ASSET_PATH}",
             )
         val entry = descriptor.runtimes.getOrNull(request.index)
             ?: throw AgentLaunchException(
-                "agent 运行时数量不足：PI 第 ${request.index + 1} 个 agent 无对应条目" +
-                    "（描述里共 ${descriptor.runtimes.size} 条）",
+                "not enough agent runtimes: no entry for PI agent #${request.index + 1} " +
+                    "(descriptor has ${descriptor.runtimes.size})",
             )
 
         val bundleDir = when (entry.location) {
@@ -51,12 +51,12 @@ class ExecAgentHost(
         val root = bundleDir ?: request.nativeLibraryDir
         val executable = File(root, entry.executable)
         if (!executable.canExecute()) {
-            throw AgentLaunchException("agent 可执行体不可执行：${executable.absolutePath}")
+            throw AgentLaunchException("agent executable is not executable: ${executable.absolutePath}")
         }
 
         val wrapper = File(request.nativeLibraryDir, AGENT_EXEC)
         if (!wrapper.canExecute()) {
-            throw AgentLaunchException("agent 启动包装不可执行：${wrapper.absolutePath}")
+            throw AgentLaunchException("agent exec wrapper is not executable: ${wrapper.absolutePath}")
         }
 
         // identifier 恒在末位，对齐上游 Runner.cpp；它之前的部分全部来自 agent-runtime.json
@@ -83,7 +83,7 @@ class ExecAgentHost(
 
         Ln.i("ExecAgentHost: launching $command (cwd=${request.workingDir})")
         val process = runCatching { builder.start() }
-            .getOrElse { throw AgentLaunchException("agent 启动失败：${it.message}", it) }
+            .getOrElse { throw AgentLaunchException("agent launch failed: ${it.message}", it) }
         val exec = executable.absolutePath
         return ProcessAgentSession(exec, process, onOutput) { pid, exitCode ->
             onExit(AgentExit(request.index, exec, exitCode, saveCrashReport(exec, pid, exitCode)))

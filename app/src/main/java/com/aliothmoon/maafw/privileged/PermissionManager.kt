@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.aliothmoon.maafw.runner.XiaomiAdbInput
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -116,6 +117,21 @@ class PermissionManager(
         initialValue = ShizukuReadiness(),
     )
 
+    override val readinessIgnoringSkip: StateFlow<ShizukuReadiness> = combine(
+        accessPort.state,
+        appSettings.shizukuLaunchPackage,
+        refreshTrigger,
+    ) { remoteState, launchPackage, _ ->
+        resolveReadiness(remoteState, skipCheck = false, launchPackage)
+    }.stateIn(
+        scope = scope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ShizukuReadiness(),
+    )
+
+    override suspend fun resolveReadinessIgnoringSkip(): ShizukuReadiness =
+        resolveReadiness(accessPort.refresh(), skipCheck = false, appSettings.shizukuLaunchPackage.value)
+
     init {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         // drop(1)：首值是启动时的当前后端，不该被当成"用户切了后端"而去解绑
@@ -136,8 +152,22 @@ class PermissionManager(
         }
         // 特权进程一上线就代授，省掉用户逐个点系统页
         scope.launch {
-            serviceConnected.filter { it }.collect { grantViaPrivileged(PrivilegedGrant.ALL) }
+            serviceConnected.filter { it }.collect {
+                grantViaPrivileged(PrivilegedGrant.ALL)
+                enableXiaomiAdbInputIfRoot()
+            }
         }
+    }
+
+    /**
+     * 特权进程以 shell 跑，小米没开「USB 调试（安全设置）」时触控输入全被拦；Root 后端连上时直接开掉，
+     * 定时任务也就不受影响。Shizuku 下 shell 写不了这几个属性，只能靠启动前提醒
+     */
+    private suspend fun enableXiaomiAdbInputIfRoot() {
+        if (accessPort.state.value.configuredBackend != RemoteBackend.ROOT) return
+        if (!XiaomiAdbInput.isRestricted()) return
+        val enabled = MiuiAdbInputEnabler.enable()
+        Timber.w("Xiaomi USB debugging (Security settings) is off and blocks shell input; enabled with root: %s", enabled)
     }
 
     /** 从 Shizuku 的授权界面切回来时状态已变，但没有回调会通知我们 */
@@ -260,8 +290,6 @@ class PermissionManager(
             // 已跳过就不再付 checkStatus 那次 IPC 的代价
             skipCheck -> ShizukuReadinessStage.Ready
             remoteState.configuredBackend != RemoteBackend.SHIZUKU -> ShizukuReadinessStage.Ready
-            // Sui 在启动时已 init，先报兼容性，别被下面的 shizukuAvailable 抢成 NeedAuth
-            ShizukuManager.isSui -> ShizukuReadinessStage.SuiAvailable
             remoteState.shizukuGranted -> ShizukuReadinessStage.Ready
             remoteState.shizukuAvailable -> ShizukuReadinessStage.NeedAuth
             else -> when (
@@ -269,7 +297,8 @@ class PermissionManager(
                     ShizukuInstallHelper.checkStatus(appContext, launchPackage)
                 }
             ) {
-                ShizukuInstallHelper.Status.SuiAvailable -> ShizukuReadinessStage.SuiAvailable
+                // Sui 的服务已在，只差授权；它拉起的特权进程同样降到 shell，没有兼容性可告知
+                ShizukuInstallHelper.Status.SuiAvailable -> ShizukuReadinessStage.NeedAuth
                 ShizukuInstallHelper.Status.NotRunning -> ShizukuReadinessStage.NotRunning
                 ShizukuInstallHelper.Status.Ready -> ShizukuReadinessStage.NeedAuth
                 ShizukuInstallHelper.Status.NotInstalled -> ShizukuReadinessStage.NotInstalled

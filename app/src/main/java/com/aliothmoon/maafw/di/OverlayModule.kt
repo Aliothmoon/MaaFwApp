@@ -24,7 +24,6 @@ val overlayModule = module {
     single {
         ScreenSaverOverlayManager(
             context = androidContext(),
-            runnerPort = get(),
             focusDispatcher = get(),
             appSettings = get(),
         )

@@ -44,6 +44,10 @@ data class ProjectDefinition(
     fun controller(name: String?): ControllerDefinition =
         controllers.firstOrNull { it.name == name } ?: controllers.first()
 
+    /** 当前 controller 下可用的 resource 列表，按 PI 声明顺序 */
+    fun resourcesFor(controller: ControllerDefinition): List<ResourceDefinition> =
+        resources.filter { it.runsOn(controller) }
+
     private val taskIndex: Map<String, TaskDefinition> by lazy { tasks.associateBy { it.name } }
 }
 
@@ -113,7 +117,12 @@ data class ResourceDefinition(
     val icon: String? = null,
     /** PI v2.3.0 `resource[].option`：当前选中这份时参与每个任务的 override */
     val optionNames: List<String> = emptyList(),
-)
+    /** PI `resource[].controller`；空 = 全部 controller 适用 */
+    val controllers: List<String> = emptyList(),
+) {
+    /** 协议里 resource 的 `controller[]` 按 controller 名比，不按 type 比 */
+    fun runsOn(controller: ControllerDefinition): Boolean = controllers.isEmpty() || controller.name in controllers
+}
 
 data class AgentDefinition(
     val childExec: String,
@@ -201,9 +210,18 @@ sealed interface OptionDefinition {
          * 未设值时的落点：PI 的 `default_case`，缺了退到首个 case
          * 生态里绝大多数 option 不写 `default_case`，逼用户逐个选不现实；与 MXU 的 `default_case || cases[0]` 同语义
          * 只有 cases 为空才是 null——那是 PI 自己写坏，留给编译期报诊断
-         * Resolver 与 RunPlanBuilder 必须共用这一处：两边算法不同就会「显示的」与「跑的」分叉
          */
         val effectiveDefaultCase: String? get() = defaultCase ?: cases.firstOrNull()?.name
+
+        /**
+         * 存的 case 已不在 cases 里（PI 更新改名、select 改 switch）按未设值回落，与 MXU 加载期重置同语义
+         * Resolver、RunPlanBuilder、遥测必须共用这一处：两边算法不同就会「显示的」与「跑的」分叉
+         */
+        fun selectedCase(value: OptionValue?): OptionCaseDefinition? {
+            val saved = (value as? OptionValue.SingleCase)?.case
+            return cases.firstOrNull { it.name == saved }
+                ?: cases.firstOrNull { it.name == effectiveDefaultCase }
+        }
     }
 
     data class Select(
@@ -240,6 +258,11 @@ sealed interface OptionDefinition {
         val maxCount: Int? = null,
     ) : OptionDefinition {
         fun acceptsCount(count: Int): Boolean = count >= minCount && (maxCount == null || count <= maxCount)
+
+        /** 仅 Unset 回退默认，emptyList() = 明确全不选；已不在 cases 里的名字滤掉，不报错，口径同 [Choice.selectedCase] */
+        fun selectedCases(value: OptionValue?): List<String> =
+            ((value as? OptionValue.MultipleCases)?.cases ?: defaultCases)
+                .filter { s -> cases.any { it.name == s } }
     }
 
     data class Input(
@@ -301,9 +324,14 @@ data class ConfigurationTemplate(
     val description: String?,
     val tasks: List<TemplateTask>,
     val icon: String? = null,
+    /** PI v2.10.4 `preset.controller[]`；空 = 全部 controller 适用 */
+    val controllers: List<String> = emptyList(),
 ) {
     /** 同名任务保留先声明的一条；resolver 与 UI 必须一致 */
     val distinctTasks: List<TemplateTask> get() = tasks.distinctBy { it.taskName }
+
+    /** 协议里 preset 的 `controller[]` 与 task 同语义：按 controller 名比，不按 type 比 */
+    fun runsOn(controller: ControllerDefinition): Boolean = controllers.isEmpty() || controller.name in controllers
 }
 
 data class TemplateTask(

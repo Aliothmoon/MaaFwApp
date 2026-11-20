@@ -9,11 +9,12 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.view.Display
+import com.aliothmoon.maafw.constant.AndroidVersions
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
 
-@SuppressLint("BlockedPrivateApi")
+@SuppressLint("BlockedPrivateApi", "PrivateApi", "DiscouragedPrivateApi")
 object ActivityUtils {
 
     // android.app.WindowConfiguration.WINDOWING_MODE_FULLSCREEN
@@ -167,8 +168,62 @@ object ActivityUtils {
         Ln.i("startApp ${intent.component?.flattenToShortString()}")
 
         return startActivity(intent, displayId).also { started ->
-            if (started) lastLaunched = targetPackage to displayId
+            if (started) {
+                lastLaunched = targetPackage to displayId
+                // 冷启动时任务多半还没进 getRunningTasks，这一下常落空，由看门狗巡检与拉回校验补上
+                if (excludeFromRecents) excludeFromRecents(targetPackage, displayId)
+            }
         }
+    }
+
+    @Volatile
+    private var recentsExcludedTaskId: Int? = null
+
+    /**
+     * 把虚拟屏上的 [packageName] 任务强制排除出最近任务；每个任务只试一次，可随巡检反复调用
+     *
+     * API 37 起 EXCLUDE_FROM_RECENTS 的任务只要可见就进最近任务，不再要求在主屏，
+     * 虚拟屏上的目标应用因此常驻最近任务；任务级强制排除不受可见性影响
+     */
+    @JvmStatic
+    fun excludeFromRecents(packageName: String, displayId: Int) {
+        // 主屏模式目标应用就在用户眼前，强制排除会让它从最近任务里消失、切不回去
+        if (Build.VERSION.SDK_INT < AndroidVersions.API_37_ANDROID_17 || displayId == Display.DEFAULT_DISPLAY) return
+        val apply = applyForceExcludedFromRecents ?: return
+        val task = runCatching { findRecentTask(packageName) }.getOrNull() ?: return
+        if (getTaskDisplayId(task) != displayId || task.taskId == recentsExcludedTaskId) return
+        recentsExcludedTaskId = task.taskId
+        runCatching {
+            apply(taskTokenField!!.get(task)!!)
+            Ln.i("excludeFromRecents: task ${task.taskId} of $packageName excluded")
+        }.onFailure { Ln.w("excludeFromRecents: failed for task ${task.taskId}", it) }
+    }
+
+    private val taskTokenField by lazy {
+        runCatching { ActivityManager.RunningTaskInfo::class.java.getField("token") }
+            .onFailure { Ln.w("taskTokenField: reflection failed", it) }.getOrNull()
+    }
+
+    // WindowContainerTransaction#setTaskForceExcludedFromRecents 经 IWindowOrganizerController 提交，需 MANAGE_ACTIVITY_TASKS
+    private val applyForceExcludedFromRecents: ((Any) -> Unit)? by lazy {
+        runCatching {
+            if (taskTokenField == null) return@runCatching null
+            val atm = activityTaskManager ?: return@runCatching null
+            val organizer = atm.javaClass.getMethod("getWindowOrganizerController").invoke(atm)!!
+            val wctClass = Class.forName("android.window.WindowContainerTransaction")
+            val setExcluded = wctClass.getMethod(
+                "setTaskForceExcludedFromRecents",
+                Class.forName("android.window.WindowContainerToken"),
+                Boolean::class.javaPrimitiveType,
+            )
+            val applyTransaction = organizer.javaClass.getMethod("applyTransaction", wctClass)
+            val block: (Any) -> Unit = { token ->
+                val wct = wctClass.getConstructor().newInstance()
+                setExcluded.invoke(wct, token, true)
+                applyTransaction.invoke(organizer, wct)
+            }
+            block
+        }.onFailure { Ln.w("applyForceExcludedFromRecents: reflection failed", it) }.getOrNull()
     }
 
     sealed interface DisplayOccupancy {
@@ -198,6 +253,25 @@ object ActivityUtils {
                 else -> DisplayOccupancy.Empty
             }
         }.onFailure { Ln.w("probeDisplay: failed", it) }.getOrDefault(DisplayOccupancy.Unknown)
+    }
+
+    /**
+     * 屏上可见任务的包名（分屏、小窗都算）；读不到可见性时只取最上面那个任务，判不出返回 null
+     *
+     * 14 起 `TaskInfo.isVisible` 公开，之前读隐藏字段
+     */
+    fun visiblePackages(displayId: Int): List<String>? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        if (taskDisplayIdField == null) return null
+        return runCatching {
+            @Suppress("DEPRECATION")
+            val onDisplay = FakeContext.get().getSystemService(ActivityManager::class.java)
+                ?.getRunningTasks(100)
+                ?.filter { getTaskDisplayId(it) == displayId }
+            if (onDisplay.isNullOrEmpty()) return null
+            val picked = if (visibilityReadable) onDisplay.filter(::isTaskVisible) else onDisplay.take(1)
+            picked.mapNotNull { it.topActivity?.packageName }.distinct()
+        }.onFailure { Ln.w("visiblePackages: failed", it) }.getOrNull()
     }
 
     /**
@@ -356,20 +430,33 @@ object ActivityUtils {
         }
     }
 
-    private val taskDisplayIdField by lazy {
-        runCatching {
-            var cls: Class<*>? = ActivityManager.RunningTaskInfo::class.java
-            var field: java.lang.reflect.Field? = null
-            while (cls != null && field == null) {
-                field = runCatching { cls.getDeclaredField("displayId") }.getOrNull()
-                cls = cls.superclass
-            }
-            field?.also { it.isAccessible = true }
-        }.onFailure { Ln.w("taskDisplayIdField: reflection failed", it) }.getOrNull()
-    }
+    private val taskDisplayIdField by lazy { taskInfoField("displayId") }
+
+    // 14 起有公开的 isVisible()，之前只能读隐藏字段
+    private val taskVisibleField by lazy { taskInfoField("isVisible") }
+
+    private val visibilityReadable: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE || taskVisibleField != null
+
+    private fun taskInfoField(name: String): java.lang.reflect.Field? = runCatching {
+        var cls: Class<*>? = ActivityManager.RunningTaskInfo::class.java
+        var field: java.lang.reflect.Field? = null
+        while (cls != null && field == null) {
+            field = runCatching { cls.getDeclaredField(name) }.getOrNull()
+            cls = cls.superclass
+        }
+        field?.also { it.isAccessible = true }
+    }.onFailure { Ln.w("taskInfoField($name): reflection failed", it) }.getOrNull()
 
     private fun getTaskDisplayId(task: ActivityManager.RunningTaskInfo): Int =
         runCatching { taskDisplayIdField?.getInt(task) ?: -1 }.getOrDefault(-1)
+
+    private fun isTaskVisible(task: ActivityManager.RunningTaskInfo): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            task.isVisible
+        } else {
+            runCatching { taskVisibleField?.getBoolean(task) == true }.getOrDefault(false)
+        }
 
     private fun startViaAmCommand(intent: Intent, displayId: Int): Boolean {
         try {

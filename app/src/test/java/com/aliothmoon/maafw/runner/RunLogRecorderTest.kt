@@ -289,6 +289,28 @@ class RunLogRecorderTest {
         )
     }
 
+    /** 任务起止标记跟着进屏上那份与会话文件，历史详情页才分得了组 */
+    @Test
+    fun `task marks reach both the screen and the session file`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("清体力"), ID)
+        runner.emit(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"Sanity"}"""), taskLabel = "清体力")
+        runner.emit(RunnerEvent.Log("跑起来了"), taskLabel = "清体力")
+        runner.emit(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"Sanity"}"""), taskLabel = "清体力")
+        settleRunLog()
+
+        val expected = listOf(
+            RunLogTaskMark(RunLogTaskEdge.Start, "清体力"),
+            null,
+            RunLogTaskMark(RunLogTaskEdge.Succeeded, "清体力"),
+        )
+        assertEquals(expected, recorder.runLog.value.progress.map { it.task })
+        recorder.finish(runner)
+        assertEquals(expected, sessionRecords().filterIsInstance<RunSessionRecord.Line>().map { it.task })
+    }
+
     /** 没投出去也要留一份：「昨晚为什么没跑」是查这份日志的头号问题 */
     @Test
     fun `a round that never dispatched still gets a footer`() = runTest(dispatcher) {
@@ -342,6 +364,23 @@ class RunLogRecorderTest {
         val line = sessionRecords().filterIsInstance<RunSessionRecord.Line>().single()
         assertEquals(RunLogKind.Warning, line.kind)
         assertNull(line.detail)
+    }
+
+    @Test
+    fun `a failed round writes why after its last event`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+        val failed = ExecutionResult.Failed(UiText.Verbatim("本包未带 agent 运行时"))
+
+        recorder.begin(planOf("清体力"), ID)
+        runner.emit(RunnerEvent.Log("跑起来了"))
+        runner.emit(RunnerEvent.ExecutionFinished(failed))
+        recorder.end(ID, RunEndReason.Ran(failed))
+
+        val records = sessionRecords()
+        assertEquals(listOf("跑起来了", "本包未带 agent 运行时"), records.lineTexts())
+        assertEquals(RunLogKind.Error, (records[records.size - 2] as RunSessionRecord.Line).kind)
+        assertEquals(RunSessionOutcome.FAILED, (records.last() as RunSessionRecord.Footer).outcome)
     }
 
     /** 认不出的回调调试模式也不留，屏上与文件都没有：maa.log 里连 details 都有全份 */

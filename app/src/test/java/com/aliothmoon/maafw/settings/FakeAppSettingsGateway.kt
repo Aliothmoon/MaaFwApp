@@ -132,6 +132,13 @@ class FakeAppSettingsGateway : AppSettingsGateway {
         mirrorchyanCdk.value = cdk.trim()
     }
 
+    override val scheduleAppBlacklist = MutableStateFlow<Set<String>>(emptySet())
+
+    override suspend fun setScheduleAppBlacklisted(packageName: String, blacklisted: Boolean) {
+        scheduleAppBlacklist.value =
+            if (blacklisted) scheduleAppBlacklist.value + packageName else scheduleAppBlacklist.value - packageName
+    }
+
     override val updateSource = MutableStateFlow(UpdateSource.MIRRORCHYAN)
 
     override suspend fun setUpdateSource(source: UpdateSource) {

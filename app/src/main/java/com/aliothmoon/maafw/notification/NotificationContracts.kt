@@ -50,3 +50,19 @@ sealed interface NotificationIntent {
 sealed interface NotificationEffect {
     data class ShowMessage(val message: UiText) : NotificationEffect
 }
+
+/**
+ * 定时没跑起来时发哪一档：多半没人看着界面，只能靠通知
+ *
+ * 用户自己在倒计时里取消的不发，调用方直接不来
+ */
+enum class ScheduleNotice {
+    /** 已有一轮在跑之类，量大且多在预期内：只发系统通知，不外推 */
+    SKIPPED,
+
+    /** 按「出错」开关外推 */
+    FAILED,
+
+    /** 后端没就绪拦下的失败：顶替「Shizuku 未运行」那条提前提醒，同带打开 Shizuku 的按钮 */
+    BACKEND_DOWN,
+}

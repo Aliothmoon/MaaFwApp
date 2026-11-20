@@ -1,14 +1,28 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.R
+import com.aliothmoon.maafw.domain.DiagnosticSeverity
 import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.ScheduleNotice
+import com.aliothmoon.maafw.runner.BlockSource
+import com.aliothmoon.maafw.runner.NotRunCause
+import com.aliothmoon.maafw.runner.PrivilegedAccessPrecheck
+import com.aliothmoon.maafw.runner.PrivilegedConnectHook
 import com.aliothmoon.maafw.runner.RunLaunchResult
+import com.aliothmoon.maafw.runner.RunRequestId
+import com.aliothmoon.maafw.runner.isAppBlacklist
 
 /** 一次定时发起的记账结果 */
 data class ScheduleLaunchOutcome(
     val result: TriggerResult,
     val failureReason: TriggerFailureReason? = null,
-    /** 写入触发日志时冻成当时语言；来自 Blocked/Rejected 的 UiText */
+    /** 写入触发日志时冻成当时语言；来自 Blocked/Rejected 的 reason 或 Invalid 的首条 Error */
     val detail: UiText? = null,
+    /** null = 不发通知：起跑了、重投，或用户自己取消的 */
+    val notice: ScheduleNotice? = null,
+    /** 拦下这次的前置检查 id，进 [TriggerLogEntry.blockedBy] */
+    val blockedBy: String? = null,
 )
 
 /**
@@ -29,26 +43,70 @@ fun RunLaunchResult.toScheduleOutcome(): ScheduleLaunchOutcome = when (this) {
         ScheduleLaunchOutcome(TriggerResult.DUPLICATE)
 
     RunLaunchResult.ProjectNotReady ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.PROJECT_NOT_READY)
+        failedOutcome(TriggerFailureReason.PROJECT_NOT_READY)
 
     RunLaunchResult.ConfigurationMissing ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.CONFIGURATION_MISSING)
+        failedOutcome(TriggerFailureReason.CONFIGURATION_MISSING)
 
     RunLaunchResult.NoExecutableTasks ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.NO_EXECUTABLE_TASKS)
+        failedOutcome(TriggerFailureReason.NO_EXECUTABLE_TASKS)
 
+    // 只留「配置有错」用户无从下手；带上首条 Error 指到具体 option，其余等改完下一次触发再露面
     is RunLaunchResult.Invalid ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.INVALID_PLAN)
+        ScheduleLaunchOutcome(
+            TriggerResult.FAILED_START,
+            TriggerFailureReason.INVALID_PLAN,
+            diagnostics.firstOrNull { it.severity == DiagnosticSeverity.Error }?.let {
+                uiTextOf(R.string.schedule_reason_invalid_plan_detail, it.source, it.message)
+            },
+            ScheduleNotice.FAILED,
+        )
 
+    // 定时走 Queue / Preempt，到这里已没有在跑的一轮：拒绝来自准备阶段（setup、建虚拟屏、卡死重启），是真失败
     is RunLaunchResult.Rejected ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason)
+        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.REJECTED, reason, ScheduleNotice.FAILED)
 
     is RunLaunchResult.Blocked ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, reason)
+        ScheduleLaunchOutcome(
+            TriggerResult.FAILED_START,
+            if (source.isAppBlacklist) TriggerFailureReason.BLACKLISTED else TriggerFailureReason.BLOCKED,
+            reason,
+            source.notice(),
+            blockedBy = (source as? BlockSource.Precheck)?.id,
+        )
 
     is RunLaunchResult.NeedsConfirmation ->
-        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt)
+        ScheduleLaunchOutcome(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, prompt, ScheduleNotice.FAILED)
+
+    RunLaunchResult.QueueTimedOut ->
+        failedOutcome(TriggerFailureReason.EXPIRED)
 }
+
+internal fun failedOutcome(reason: TriggerFailureReason) =
+    ScheduleLaunchOutcome(TriggerResult.FAILED_START, reason, notice = ScheduleNotice.FAILED)
+
+// 用户正用着名单里的应用：是本来就要的跳过，不算失败
+private fun BlockSource.notice(): ScheduleNotice? = if (isAppBlacklist) ScheduleNotice.SKIPPED else when (this) {
+    // 另一发正在投递：与已有一轮在跑同一回事
+    BlockSource.Busy -> ScheduleNotice.SKIPPED
+    is BlockSource.Hook -> when {
+        cause == NotRunCause.Cancelled -> null
+        id == PrivilegedConnectHook.ID -> ScheduleNotice.BACKEND_DOWN
+        else -> ScheduleNotice.FAILED
+    }
+    is BlockSource.Precheck ->
+        if (id == PrivilegedAccessPrecheck.ID) ScheduleNotice.BACKEND_DOWN else ScheduleNotice.FAILED
+}
+
+/** 原定时刻过去这么久还没开跑就作废：送达太晚，或排队等前一轮等到了这个点 */
+const val TRIGGER_EXPIRE_AFTER_MS = 12 * 3_600_000L
+
+fun triggerTimeLeftMs(scheduledTimeMs: Long, nowMs: Long): Long =
+    scheduledTimeMs + TRIGGER_EXPIRE_AFTER_MS - nowMs
+
+/** 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id */
+fun scheduleRequestId(strategyId: String, scheduledTimeMs: Long): RunRequestId =
+    RunRequestId("$strategyId@$scheduledTimeMs")
 
 /** 框架侧的落点枚举翻成落盘的那一份；两边分开，schema 不跟着框架改 */
 fun com.aliothmoon.maafw.runner.HookOutcome.toTriggerStepOutcome(): TriggerStepOutcome = when (this) {

@@ -12,7 +12,7 @@ val updateModule = module {
     single { MirrorChyanLatestApi(get()) }
     single { GitHubReleasesApi(get()) }
     single { MirrorChyanUpdateClient(get()) }
-    single { GitHubUpdateClient(get()) }
+    single { GitHubUpdateClient(get(), get<MirrorChyanUpdateClient>()::latestRelease) }
     single {
         UpdateService(
             clients = listOf(

@@ -38,12 +38,12 @@ class AgentInstaller(
     @Synchronized
     fun ensureInstalled(): File {
         val fingerprint = readAsset(FINGERPRINT_ASSET)?.trim()?.takeIf(String::isNotEmpty)
-            ?: throw AgentLaunchException("本包未带 agent 运行时（assets 里没有 $FINGERPRINT_ASSET）")
+            ?: throw AgentLaunchException("no agent runtime bundled (assets has no $FINGERPRINT_ASSET)")
 
         val abis = readArchiveAbis()
         val abi = supportedAbis.firstOrNull(abis::contains)
             ?: throw AgentLaunchException(
-                "agent 运行时不覆盖本机 ABI：归档里有 $abis，设备支持 $supportedAbis",
+                "agent runtime does not cover this device's ABI: archive has $abis, device supports $supportedAbis",
             )
 
         val target = File(ShellDirs.AGENT_DIR, abi)
@@ -98,7 +98,7 @@ class AgentInstaller(
                 count++
             }
         }
-        if (count == 0) throw AgentLaunchException("agent 运行时归档里没有 $abi 的内容")
+        if (count == 0) throw AgentLaunchException("agent runtime archive has nothing for $abi")
         return count
     }
 
@@ -118,7 +118,7 @@ class AgentInstaller(
         val entry = apk.getEntry(BUNDLE_ASSET)
             ?: run {
                 apk.close()
-                throw AgentLaunchException("本包未带 agent 运行时（assets 里没有 $BUNDLE_ASSET）")
+                throw AgentLaunchException("no agent runtime bundled (assets has no $BUNDLE_ASSET)")
             }
         // ZipFile 得活到流读完；关流时一并关掉它
         return object : ZipInputStream(apk.getInputStream(entry)) {

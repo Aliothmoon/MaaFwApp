@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.notification.provider
 
 import com.aliothmoon.maafw.i18n.UiText
+import com.aliothmoon.maafw.notification.NotificationImage
 import kotlinx.serialization.json.Json
 
 /**
@@ -10,7 +11,15 @@ import kotlinx.serialization.json.Json
  */
 interface NotificationProvider {
     val id: String
+
+    /** 能随文字附带图片的渠道置真，其余渠道收到图片时只发文字 */
+    val supportsImage: Boolean get() = false
+
     suspend fun send(title: String, content: String): NotificationSendResult
+
+    /** 图片发送失败不影响文字，结果以文字为准 */
+    suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        send(title, content)
 }
 
 /**

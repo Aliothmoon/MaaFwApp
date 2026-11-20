@@ -9,21 +9,24 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * PI v2.5.0 约定 Client 拉起 agent 子进程时注入的 `PI_*`
+ * PI v2.5.0 / v2.11.0 约定 Client 拉起 agent 子进程时注入的 `PI_*`
  *
  * 语义对齐 MXU 的 `src/utils/piEnv.ts`：条目整条透传、`$` 前缀递归查表、拿不到就不设那一项
  * （不是设空串——agent 侧普遍用「变量存在与否」判断 Client 是否支持这套约定）
  *
- * `PI_CLIENT_MAAFW_VERSION` 不在这里：MaaFramework 版本要问 native，只有特权进程侧拿得到，
- * 由 ExecAgentHost 落地前补上
+ * - `PI_USER_DATA_DIR`（v2.11.0）：便携式布局下即 PI 解包根，运行期由 RunnerPort 按实装路径补齐
+ * - `PI_CLIENT_MAAFW_VERSION`：MaaFramework 版本要问 native，只有特权进程侧拿得到，由 ExecAgentHost 落地前补上
  */
 object PiAgentEnv {
 
-    /** 按哪一版协议注入这些变量；不表示外壳实现了 v2.5.0 的全部内容 */
-    private const val INTERFACE_VERSION = "v2.5.0"
+    /** 按哪一版协议注入这些变量；不表示外壳实现了 v2.11.0 的全部内容 */
+    private const val INTERFACE_VERSION = "v2.11.0"
 
     private const val CLIENT_NAME_KEY = "PI_CLIENT_NAME"
     private const val CLIENT_NAME = "MaaFwApp"
+
+    /** v2.11.0 用户数据目录键名；RunnerPort 按已解包 PI 根补写时共用这一常量 */
+    const val USER_DATA_DIR_KEY = "PI_USER_DATA_DIR"
 
     /** StaleAgentReaper 认孤儿的标记；改了会漏认旧版留下的 child */
     const val CLIENT_ENV_ENTRY = "$CLIENT_NAME_KEY=$CLIENT_NAME"
@@ -37,12 +40,14 @@ object PiAgentEnv {
         translations: Map<String, String>,
         clientVersion: String?,
         clientLanguage: String?,
+        userDataDir: String? = null,
     ): Map<String, String> = buildMap {
         put("PI_INTERFACE_VERSION", INTERFACE_VERSION)
         put(CLIENT_NAME_KEY, CLIENT_NAME)
         clientVersion?.takeIf(String::isNotBlank)?.let { put("PI_CLIENT_VERSION", it) }
         clientLanguage?.takeIf(String::isNotBlank)?.let { put("PI_CLIENT_LANGUAGE", it) }
         projectVersion?.takeIf(String::isNotBlank)?.let { put("PI_VERSION", it) }
+        userDataDir?.takeIf(String::isNotBlank)?.let { put(USER_DATA_DIR_KEY, it) }
         controller.raw.takeIf { it.isNotEmpty() }?.let {
             put("PI_CONTROLLER", it.resolveI18n(translations).toCompactJson())
         }

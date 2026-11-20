@@ -35,7 +35,7 @@ private const val FIXED_SIZE_DELAY_MS = 50L
  * 提前把还是布局尺寸的 Surface 交出去，画面会按错误比例贴上来
  *
  * [onSurfaceCreated] 与 [onSurfaceAvailable] 差着一整轮 `setFixedSize`，不能合并：
- * 前者是「画布有了」，遮罩与画中画武装看它；后者是「尺寸对上了，能交给特权进程」
+ * 前者是「画布有了」，画中画武装看它；后者是「尺寸对上了，能交给特权进程」
  *
  * 本组件不持有「已上报哪个 Surface」的状态，也不在离开组合时解绑——
  * 它整个活在 movableContent 里，搬家时这些状态会跟着一起动，

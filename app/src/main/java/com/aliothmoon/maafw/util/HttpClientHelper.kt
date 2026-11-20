@@ -9,6 +9,7 @@ import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -62,14 +63,6 @@ class HttpClientHelper(
         return okHttpClient.newCall(request).await()
     }
 
-    suspend inline fun <reified T> getEntity(
-        url: String,
-        query: Map<String, String?> = emptyMap(),
-        headers: Map<String, String> = emptyMap()
-    ): T {
-        return JsonUtils.common.decodeFromString<T>(get(url, query, headers).readBody())
-    }
-
     /**
      * [headers] 里的 Content-Type 会被拿来当请求体的 media type：
      * OkHttp 的 BridgeInterceptor 在请求体 contentType 非空时会无条件覆盖同名请求头，
@@ -86,7 +79,7 @@ class HttpClientHelper(
         val mediaType = contentTypeEntry?.value?.toMediaTypeOrNull()
             ?: JSON_MEDIA_TYPE.also {
                 if (contentTypeEntry != null) {
-                    Timber.w("Content-Type 无法解析，按 JSON 发送: %s", contentTypeEntry.value)
+                    Timber.w("unparsable Content-Type, sending as JSON: %s", contentTypeEntry.value)
                 }
             }
         val request = Request.Builder().apply {
@@ -123,6 +116,19 @@ class HttpClientHelper(
             .url(url.toHttpUrl())
             .apply { headers.forEach { (k, v) -> header(k, v) } }
             .post(formBody)
+            .build()
+        return okHttpClient.newCall(request).await()
+    }
+
+    suspend fun postMultipart(
+        url: String,
+        body: MultipartBody,
+        headers: Map<String, String> = emptyMap(),
+    ): Response {
+        val request = Request.Builder()
+            .url(url.toHttpUrl())
+            .apply { headers.forEach { (k, v) -> header(k, v) } }
+            .post(body)
             .build()
         return okHttpClient.newCall(request).await()
     }

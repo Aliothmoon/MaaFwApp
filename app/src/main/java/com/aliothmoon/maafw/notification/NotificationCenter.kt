@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.i18n.uiTextPlural
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.withoutConnectCause
 import com.aliothmoon.maafw.runner.ExecutionResult
 import com.aliothmoon.maafw.runner.RunEndReason
 import com.aliothmoon.maafw.runner.RunLogRecorder
@@ -36,11 +37,28 @@ class NotificationCenter(
      * 一轮**只播报一条**：内部通知共用同一个 notify id，两条会互相顶掉；外部推送发两条则是纯吵。
      * 有失败的那一轮同时命中「完成」与「出错」两个开关，任一开着就发——只认其中一个的话，
      * 只开了「完成」的用户在任务挂掉那轮反而收不到任何东西
+     *
+     * [stoppedAtLimit]：到达运行时长上限停下的也落在 Cancelled，但那时多半没人看着，要说一声；
+     * 只发系统通知不外推，同上游
      */
-    suspend fun onRunFinished(reason: RunEndReason) {
+    suspend fun onRunFinished(
+        reason: RunEndReason,
+        stoppedAtLimit: Boolean = false,
+        /** 收尾早段截下的结束画面，只随「全部完成」那条外推 */
+        screenshot: NotificationImage? = null,
+    ) {
         // 没投出去 / 用户自己按的停：都不是要播报的结局
         val result = (reason as? RunEndReason.Ran)?.result ?: return
-        if (result is ExecutionResult.Cancelled) return
+        if (result is ExecutionResult.Cancelled) {
+            if (stoppedAtLimit) {
+                eventNotifier.notifyRunFinished(
+                    renderText(uiTextOf(R.string.notification_event_run_time_limit)),
+                    renderText(uiTextOf(R.string.notification_event_run_time_limit_body)),
+                    isError = false,
+                )
+            }
+            return
+        }
 
         val outcome = describe(result)
         val title = renderText(outcome.title)
@@ -57,7 +75,67 @@ class NotificationCenter(
         }
         if (!wanted) return
 
-        external.send(title, appendLogs(body, current))
+        external.send(title, appendLogs(body, current), screenshot.takeIf { outcome.trigger == Trigger.COMPLETE })
+    }
+
+    /** 开了附图、开了完成推送、且有能发图的渠道才截：截图是一次跨进程编码，用不上就别做 */
+    suspend fun wantsCompletionScreenshot(): Boolean {
+        val current = settings.current()
+        return current.attachScreenshot.toPrefBoolean() &&
+            current.sendOnComplete.toPrefBoolean(default = true) &&
+            external.hasImageChannel()
+    }
+
+    /**
+     * 有启用的定时而 Shizuku 没在跑：到点必定跑不起来，提前说
+     *
+     * 只发系统通知不外推：这是让人去手机上点一下的事，推到别处也没法处理。
+     * 不设超时，Shizuku 回来时由 `ShizukuDownMonitor` 撤
+     */
+    fun notifyShizukuDown(afterBoot: Boolean) {
+        eventNotifier.notifyShizukuDown(
+            title = renderText(uiTextOf(R.string.notification_shizuku_down_title)),
+            text = renderText(
+                uiTextOf(
+                    if (afterBoot) R.string.notification_shizuku_down_after_boot
+                    else R.string.notification_shizuku_down_stopped,
+                ),
+            ),
+        )
+    }
+
+    fun withdrawShizukuDown() = eventNotifier.cancelShizukuDown()
+
+    /** 运行中要用户留意、但不中止整轮的事（目标应用退出 / 离屏）；只发系统通知，跑完的结局另有一条 */
+    fun onRunAlert(message: UiText) {
+        eventNotifier.notifyRunAlert(renderText(uiTextOf(R.string.notification_run_alert_title)), renderText(message))
+    }
+
+    /**
+     * 定时没跑起来：失败外推（跟「出错」开关），跳过只发系统通知
+     *
+     * 独占一格通知 id：不被下一轮的结局顶掉，凌晨失败到早上还在。连接失败拼的英文短原因只进触发日志
+     */
+    /** 多条规则合成一条；名字之间的分隔符跟着语言走 */
+    suspend fun onSchedulesNotStarted(strategyNames: List<String>, reason: UiText, notice: ScheduleNotice) =
+        onScheduleNotStarted(
+            strategyNames.joinToString(renderText(uiTextOf(R.string.common_list_separator))),
+            reason,
+            notice,
+        )
+
+    suspend fun onScheduleNotStarted(strategyName: String, reason: UiText, notice: ScheduleNotice) {
+        val skipped = notice == ScheduleNotice.SKIPPED
+        val title = renderText(
+            uiTextOf(if (skipped) R.string.notification_schedule_skipped else R.string.notification_schedule_failed),
+        )
+        val text = renderText(uiTextOf(R.string.notification_schedule_detail, strategyName, reason.withoutConnectCause()))
+        val backendDown = notice == ScheduleNotice.BACKEND_DOWN
+        // 同一件事报两条只是吵：这一条说清了是哪条规则、为什么，提前提醒那条撤掉
+        if (backendDown) eventNotifier.cancelShizukuDown()
+        eventNotifier.notifyScheduleNotStarted(title, text, isError = !skipped, offerShizuku = backendDown)
+        if (skipped) return
+        if (settings.current().sendOnError.toPrefBoolean(default = true)) external.send(title, text)
     }
 
     /**
@@ -99,7 +177,7 @@ class NotificationCenter(
                         R.string.notification_event_run_partial_body,
                         result.taskResults.size - failed.size,
                         result.taskResults.size,
-                        failed.joinToString("、"),
+                        failed.joinToString(renderText(uiTextOf(R.string.common_list_separator))),
                     ),
                     isError = true,
                     trigger = Trigger.ERROR,

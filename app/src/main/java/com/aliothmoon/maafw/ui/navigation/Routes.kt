@@ -27,6 +27,9 @@ object Routes {
     /** 唤醒解锁：定时到点时的解锁方式（无密码 / 录制手势 / PIN） */
     const val SCHEDULE_WAKE_UNLOCK = "schedule_wake_unlock"
 
+    /** 应用黑名单：后台模式的定时触发撞上这些应用在用就跳过 */
+    const val SCHEDULE_APP_BLACKLIST = "schedule_app_blacklist"
+
     /** 历史运行日志列表 */
     const val RUN_LOG_ARCHIVE = "run_log_archive"
 
@@ -37,6 +40,9 @@ object Routes {
 
     /** 通知设置：系统事件通知档位 + 外部推送渠道 */
     const val NOTIFICATION_SETTINGS = "notification_settings"
+
+    /** 运行通知样式：显示内容、进度条颜色、图标；从通知设置页的「运行通知」一节进 */
+    const val LIVE_STYLE = "live_style"
 
     /** 自定义背景：选图裁剪与不透明度、遮罩、模糊 */
     const val WALLPAPER = "wallpaper"

@@ -60,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -99,7 +100,9 @@ import com.aliothmoon.maafw.i18n.resolve
 import com.aliothmoon.maafw.overlay.OverlayController
 import com.aliothmoon.maafw.overlay.screensaver.ScreenSaverOverlayManager
 import com.aliothmoon.maafw.privileged.ShizukuInstallHelper
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.privileged.SystemPermission
+import com.aliothmoon.maafw.schedule.AutoStartHelper
 import com.aliothmoon.maafw.privileged.SystemPermissionRequester
 import com.aliothmoon.maafw.schedule.ExactAlarmSettings
 import com.aliothmoon.maafw.schedule.ScheduleEffect
@@ -110,6 +113,7 @@ import com.aliothmoon.maafw.schedule.ScheduleViewModel
 import com.aliothmoon.maafw.session.SessionEffect
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionViewModel
+import com.aliothmoon.maafw.session.TaskSurface
 import com.aliothmoon.maafw.settings.SettingsIntent
 import com.aliothmoon.maafw.settings.SettingsEffect
 import com.aliothmoon.maafw.settings.SettingsViewModel
@@ -134,11 +138,13 @@ import com.aliothmoon.maafw.ui.logs.RunLogArchiveScreen
 import com.aliothmoon.maafw.ui.logs.RunLogDetailScreen
 import com.aliothmoon.maafw.ui.navigation.Routes
 import com.aliothmoon.maafw.ui.pip.LocalIsInPip
+import com.aliothmoon.maafw.ui.notification.LiveStyleScreen
 import com.aliothmoon.maafw.ui.notification.NotificationSettingsScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleEditScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleTriggerLogScreen
 import com.aliothmoon.maafw.ui.schedule.ScheduleWakeUnlockScreen
+import com.aliothmoon.maafw.ui.schedule.ScheduleAppBlacklistScreen
 import com.aliothmoon.maafw.ui.settings.ConfigBackupAction
 import com.aliothmoon.maafw.ui.settings.ConfigBackupController
 import com.aliothmoon.maafw.ui.settings.SettingsScreen
@@ -147,6 +153,7 @@ import com.aliothmoon.maafw.ui.tasks.TasksScreen
 import com.aliothmoon.maafw.ui.tasks.rememberMovablePreview
 import com.aliothmoon.maafw.util.Misc
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
@@ -228,7 +235,7 @@ fun AppRoot(
     LaunchedEffect(localeTag) {
         if (lastLocaleTag != localeTag) {
             lastLocaleTag = localeTag
-            viewModel.onIntent(SessionIntent.ReloadProject)
+            viewModel.onIntent(SessionIntent.LocaleChanged)
         }
     }
 
@@ -249,7 +256,7 @@ fun AppRoot(
             markers = { previewMarkersState.value },
             fps = { gameFpsState.value },
             surfaceEpoch = { previewSurfaceEpochState.value },
-            // 不等 setFixedSize 那一轮：搬一次家要 50ms+ 才对上尺寸，期间遮罩会盖住刚回来的画面
+            // 画中画武装不等 setFixedSize 那一轮，搬家时少 50ms 空窗
             onSurfaceCreated = { previewSurfaceReady = true },
             onSurfaceAvailable = {
                 viewModel.onIntent(SessionIntent.AttachPreviewSurface(it))
@@ -288,6 +295,9 @@ fun AppRoot(
         val scope = rememberCoroutineScope()
         var diagnosticsDialog by remember { mutableStateOf<List<Diagnostic>?>(null) }
         var confirmStartDialog by remember { mutableStateOf<SessionEffect.ConfirmStart?>(null) }
+        var confirmCloseTargetApp by remember { mutableStateOf(false) }
+        // 递增即「打开任务页日志」；Saveable 免得转屏后 TaskWorkspace 把同一次当成新的
+        var runLogRequest by rememberSaveable { mutableIntStateOf(0) }
         var exportSheetVisible by remember { mutableStateOf(false) }
         var configBackupAction by remember { mutableStateOf<ConfigBackupAction?>(null) }
 
@@ -298,6 +308,14 @@ fun AppRoot(
         // 健康卡与保存后引导的修复入口：授权动作仍走 Session 那条路（先代授、不成再跳系统页）
         val fixScheduleIssue: (ScheduleHealthIssue) -> Unit = { issue ->
             when (issue) {
+                // Shizuku 没在跑只能去它自己的界面启动；Root 不可用多半是 su 还没给，代授一次
+                ScheduleHealthIssue.BACKEND_DOWN -> viewModel.onIntent(
+                    if (scheduleState.backend == RemoteBackend.SHIZUKU) {
+                        SessionIntent.OpenShizuku
+                    } else {
+                        SessionIntent.RequestRemoteAccess
+                    },
+                )
                 ScheduleHealthIssue.BACKEND -> viewModel.onIntent(SessionIntent.RequestRemoteAccess)
                 ScheduleHealthIssue.BATTERY -> viewModel.onIntent(
                     SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
@@ -328,6 +346,9 @@ fun AppRoot(
                     is SessionEffect.ShowDiagnostics -> diagnosticsDialog = effect.diagnostics
 
                     is SessionEffect.ConfirmStart -> confirmStartDialog = effect
+                    SessionEffect.ConfirmCloseTargetApp -> confirmCloseTargetApp = true
+                    // 悬浮窗那份由 OverlayController 自己收
+                    is SessionEffect.ShowRunLog -> if (effect.surface == TaskSurface.InApp) runLogRequest++
 
                     // 拉起外部 Activity 要 Context，只能落在 Route 层
                     SessionEffect.InstallShizuku -> ShizukuInstallHelper.installShizuku(context)
@@ -549,8 +570,10 @@ fun AppRoot(
                         previewContent = previewContent.takeUnless { previewFullscreen },
                         // settledPage 只在滑动落定后翻页，手势中途弹回去仍是旧页——组合≠可见
                         isActivePage = pagerState.settledPage == page,
+                        backEnabled = pagerState.settledPage == page && !onSubPage,
                         pipOnHome = settingsState.pipOnHome,
                         runLog = { runLogState.value },
+                        runLogRequest = runLogRequest,
                         onEnterFullscreen = { previewFullscreen = true },
                         onExportLogs = { exportSheetVisible = true },
                         onIntent = viewModel::onIntent,
@@ -567,6 +590,7 @@ fun AppRoot(
                         onOpenLog = { navController.navigate(Routes.SCHEDULE_TRIGGER_LOG) },
                         onFixIssue = fixScheduleIssue,
                         onOpenWakeUnlock = openWakeUnlock,
+                        onOpenAppBlacklist = { navController.navigate(Routes.SCHEDULE_APP_BLACKLIST) },
                         modifier = Modifier.fillMaxSize(),
                     )
 
@@ -661,6 +685,18 @@ fun AppRoot(
                                     }
                                 ScheduleFixAction.EDIT_RULE ->
                                     navController.navigate(Routes.scheduleEdit(entry.strategyId))
+                                ScheduleFixAction.BACKEND -> viewModel.onIntent(SessionIntent.RequestRemoteAccess)
+                                // 查不到厂商页（原生系统一类）就只剩电池白名单可给
+                                ScheduleFixAction.AUTO_START -> scope.launch {
+                                    val target = withContext(MaaDispatchers.IO) { AutoStartHelper.resolveTarget(context) }
+                                    if (target != null) {
+                                        AutoStartHelper.open(context, target)
+                                    } else {
+                                        viewModel.onIntent(
+                                            SessionIntent.RequestSystemPermission(SystemPermission.BatteryWhitelist),
+                                        )
+                                    }
+                                }
                             }
                         },
                     )
@@ -680,8 +716,17 @@ fun AppRoot(
                 subPage(Routes.SCHEDULE_WAKE_UNLOCK) {
                     ScheduleWakeUnlockScreen(onBack = { navController.popBackStack() })
                 }
+                subPage(Routes.SCHEDULE_APP_BLACKLIST) {
+                    ScheduleAppBlacklistScreen(onBack = { navController.popBackStack() })
+                }
                 subPage(Routes.NOTIFICATION_SETTINGS) {
-                    NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                    NotificationSettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenLiveStyle = { navController.navigate(Routes.LIVE_STYLE) },
+                    )
+                }
+                subPage(Routes.LIVE_STYLE) {
+                    LiveStyleScreen(onBack = { navController.popBackStack() })
                 }
                 subPage(Routes.WALLPAPER) {
                     WallpaperScreen(onBack = { navController.popBackStack() })
@@ -760,11 +805,33 @@ fun AppRoot(
                 confirmText = stringResource(R.string.precheck_start_anyway),
                 onConfirm = {
                     confirmStartDialog = null
-                    viewModel.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged))
+                    viewModel.onIntent(
+                        SessionIntent.Start(
+                            acknowledged = confirm.acknowledged,
+                            startFromInstanceId = confirm.startFromInstanceId,
+                        ),
+                    )
                 },
                 dismissText = stringResource(R.string.dialog_cancel),
                 onDismissRequest = { confirmStartDialog = null },
                 dismissOnOutsideClick = true,
+            )
+        }
+
+        if (confirmCloseTargetApp) {
+            MaaPromptDialog(
+                title = stringResource(R.string.close_target_confirm_title),
+                message = stringResource(R.string.close_target_confirm_message),
+                icon = Icons.Outlined.WarningAmber,
+                confirmText = stringResource(R.string.quick_action_close_app),
+                onConfirm = {
+                    confirmCloseTargetApp = false
+                    viewModel.onIntent(SessionIntent.CloseTargetAppConfirmed)
+                },
+                dismissText = stringResource(R.string.dialog_cancel),
+                onDismissRequest = { confirmCloseTargetApp = false },
+                dismissOnOutsideClick = true,
+                iconTint = MaterialTheme.colorScheme.error,
             )
         }
 

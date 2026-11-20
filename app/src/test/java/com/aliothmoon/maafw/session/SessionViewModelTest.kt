@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.session
 
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.config.InMemoryUserConfigurationStore
+import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
@@ -20,8 +21,13 @@ import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.privileged.FakeDisplaySizeGateway
 import com.aliothmoon.maafw.privileged.FakePermissionGateway
+import com.aliothmoon.maafw.privileged.FakePrivilegedService
 import com.aliothmoon.maafw.privileged.FakePrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.ShizukuReadiness
+import com.aliothmoon.maafw.privileged.ShizukuReadinessStage
+import com.aliothmoon.maafw.privileged.RemoteAccessState
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.settings.FakeAppSettingsGateway
 import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.PiInstallCoordinator
@@ -74,6 +80,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonObject
+import java.io.File
 import java.io.FileNotFoundException
 import java.io.InputStream
 import kotlin.io.path.createTempDirectory
@@ -188,6 +195,7 @@ class SessionViewModelTest {
             scenario = StubRunnerScenario(prepareDelayMillis = 0, taskDelayMillis = 0),
         ),
         permissions: FakePermissionGateway = FakePermissionGateway(),
+        servicePort: FakePrivilegedServicePort = FakePrivilegedServicePort(),
         settings: FakeAppSettingsGateway = FakeAppSettingsGateway(),
         displaySize: FakeDisplaySizeGateway = FakeDisplaySizeGateway(),
         preview: RecordingPreviewPort = RecordingPreviewPort(),
@@ -202,7 +210,7 @@ class SessionViewModelTest {
             runLauncher = launcherFor(project, store, runner, settings, hazards),
             previewPort = preview,
             permissionGateway = permissions,
-            servicePort = FakePrivilegedServicePort(),
+            servicePort = servicePort,
             displaySize = displaySize,
             appSettings = settings,
             focusDispatcher = focusDispatcher,
@@ -613,6 +621,88 @@ class SessionViewModelTest {
         assertTrue(runner.state.value.phase.isBusy)
     }
 
+    private val debugSettings get() = FakeAppSettingsGateway().apply { debugMode.value = true }
+
+    private fun List<SessionEffect>.hasMessage(res: Int) =
+        any { it is SessionEffect.ShowMessage && it.message.isResource(res) }
+
+    @Test
+    fun `manual screenshot saves the display frame without a run`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = debugSettings)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        val saved = File(service.savedFramePaths.single())
+        assertEquals(File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR), saved.parentFile)
+        assertTrue(effects.hasMessage(R.string.msg_screenshot_saved))
+    }
+
+    @Test
+    fun `manual screenshot keeps only the newest frames on disk`() = runTest(mainDispatcher) {
+        val dir = File(AppPaths.LOG_DIR, AppFiles.MANUAL_SCREENSHOT_DIR).apply { mkdirs() }
+        val old = (0 until 25).map { i ->
+            File(dir, "manual_$i.png").apply {
+                writeText("x")
+                setLastModified(1_000_000L + i * 1_000L)
+            }
+        }
+        val (vm, _, _) = createVm(
+            servicePort = FakePrivilegedServicePort(FakePrivilegedService()),
+            settings = debugSettings,
+        )
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        val kept = dir.listFiles().orEmpty().map { it.name }.toSet()
+        assertEquals(old.takeLast(20).map { it.name }.toSet(), kept)
+    }
+
+    @Test
+    fun `manual screenshot failure reports it`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService().apply { saveDisplayFrameResult = false }
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = debugSettings)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(effects.hasMessage(R.string.msg_screenshot_failed))
+    }
+
+    @Test
+    fun `manual screenshot works with debug mode disabled`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service))
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertEquals(1, service.savedFramePaths.size)
+    }
+
+    @Test
+    fun `manual screenshot rejects foreground mode before ipc`() = runTest(mainDispatcher) {
+        val service = FakePrivilegedService()
+        val settings = debugSettings.apply { runMode.value = RunMode.FOREGROUND }
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), settings = settings)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.CaptureVirtualDisplay)
+        advanceUntilIdle()
+
+        assertTrue(service.savedFramePaths.isEmpty())
+    }
+
     @Test
     fun `start with no executable tasks emits message`() = runTest(mainDispatcher) {
         val store = readyStore(tasks = listOf(ConfiguredTask("启动游戏", enabled = false, instanceId = "t1")))
@@ -640,6 +730,62 @@ class SessionViewModelTest {
      * 三条都断言**没发出** [SessionEffect.ShowOverlay]：面板真接通之前，
      * 任何一条漏到那儿都会挂出一个空壳窗口
      */
+    // ── 首页「请求权限」：Shizuku 没装 / 没起时照样引导（上游 359f49f8）──────────
+
+    /** 点过「跳过检查」后首页按钮不该白点：没起来就弹引导，不去请求 */
+    @Test
+    fun `requesting access while Shizuku is not running shows the guide even after skipping`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway().apply {
+            readiness.value = ShizukuReadiness(ShizukuReadinessStage.Ready)
+            readinessIgnoringSkip.value = ShizukuReadiness(ShizukuReadinessStage.NotRunning)
+        }
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.RequestRemoteAccess)
+        advanceUntilIdle()
+
+        assertEquals(ShizukuReadinessStage.NotRunning, vm.uiState.value.shizukuReadiness.stage)
+        assertEquals(0, permissions.requestCount)
+
+        // 关掉只是收起，跳过早就记过了，不再写一遍
+        vm.onIntent(SessionIntent.SkipShizukuCheck)
+        advanceUntilIdle()
+        assertEquals(ShizukuReadinessStage.Ready, vm.uiState.value.shizukuReadiness.stage)
+        assertEquals(0, permissions.skipCount)
+    }
+
+    @Test
+    fun `requesting access when only authorization is missing asks directly`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway().apply {
+            readinessIgnoringSkip.value = ShizukuReadiness(ShizukuReadinessStage.NeedAuth)
+        }
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.RequestRemoteAccess)
+        advanceUntilIdle()
+
+        assertEquals(1, permissions.requestCount)
+        assertEquals(ShizukuReadinessStage.Ready, vm.uiState.value.shizukuReadiness.stage)
+    }
+
+    /** Root 各家管理器不同，引导不了 */
+    @Test
+    fun `requesting root access asks directly`() = runTest(mainDispatcher) {
+        val permissions = FakePermissionGateway().apply {
+            state.value = RemoteAccessState(configuredBackend = RemoteBackend.ROOT)
+            readinessIgnoringSkip.value = ShizukuReadiness(ShizukuReadinessStage.NotInstalled)
+        }
+        val (vm, _, _) = createVm(permissions = permissions)
+        advanceUntilIdle()
+
+        vm.onIntent(SessionIntent.RequestRemoteAccess)
+        advanceUntilIdle()
+
+        assertEquals(1, permissions.requestCount)
+    }
+
     @Test
     fun `overlay is blocked until the privileged service is connected`() = runTest(mainDispatcher) {
         val permissions = FakePermissionGateway()
@@ -841,6 +987,85 @@ class SessionViewModelTest {
         assertEquals(before, project.reloadCount)
     }
 
+    /** 手动发起被受理就切到日志，从哪一侧点的就切哪一侧 */
+    @Test
+    fun `accepted manual start asks to show the run log`() = runTest(mainDispatcher) {
+        val (vm, _, _) = createVm()
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+
+        assertTrue(SessionEffect.ShowRunLog(TaskSurface.InApp) in effects)
+    }
+
+    /** 关目标应用：空闲时先强停再关屏；运行中只发确认，点了头才动 */
+    @Test
+    fun `close target app stops the app before the display and asks first while running`() = runTest(mainDispatcher) {
+        val calls = mutableListOf<String>()
+        val service = object : FakePrivilegedService() {
+            override fun stopTargetApp(): Boolean = true.also { calls += "stopTargetApp" }
+            override fun stopVirtualDisplay() {
+                calls += "stopVirtualDisplay"
+            }
+        }
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(servicePort = FakePrivilegedServicePort(service), runner = runner)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.CloseTargetApp)
+        advanceUntilIdle()
+        assertEquals(listOf("stopTargetApp", "stopVirtualDisplay"), calls)
+
+        calls.clear()
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        vm.onIntent(SessionIntent.CloseTargetApp)
+        advanceUntilIdle()
+        assertTrue(calls.isEmpty())
+        assertTrue(SessionEffect.ConfirmCloseTargetApp in effects)
+
+        vm.onIntent(SessionIntent.CloseTargetAppConfirmed)
+        advanceUntilIdle()
+        assertEquals(listOf("stopTargetApp", "stopVirtualDisplay"), calls)
+    }
+
+    /** 运行中系统语言被改：不弹锁定提示、当场不重载，这一轮结束再按新语言重载 */
+    @Test
+    fun `locale change while busy reloads once the run ends`() = runTest(mainDispatcher) {
+        val project = FakeProjectRepository(ProjectState.Ready(definition, emptyList()))
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val (vm, _, _) = createVm(project = project, runner = runner)
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        val before = project.reloadCount
+
+        vm.onIntent(SessionIntent.Start())
+        advanceUntilIdle()
+        vm.onIntent(SessionIntent.LocaleChanged)
+        advanceUntilIdle()
+        assertEquals(before, project.reloadCount)
+        assertTrue(effects.none { it is SessionEffect.ShowMessage && it.message.isResource(R.string.msg_locked_while_running) })
+
+        // 桩跑在 backgroundScope 里，advanceUntilIdle 不等它，推虚拟时间让它走完准备段、看到停止
+        vm.onIntent(SessionIntent.Stop)
+        advanceTimeBy(130_000)
+        advanceUntilIdle()
+        assertFalse(runner.state.value.phase.isBusy)
+        assertEquals(before + 1, project.reloadCount)
+    }
+
     @Test
     fun `canStart false without active configuration`() = runTest(mainDispatcher) {
         val store = InMemoryUserConfigurationStore(
@@ -853,4 +1078,53 @@ class SessionViewModelTest {
         assertFalse(vm.uiState.value.canStart)
         assertTrue(vm.uiState.value.activeConfiguration == null)
     }
+
+    @Test
+    fun `CreateFromTemplate rejects preset incompatible with current controller and allows after switching`() =
+        runTest(mainDispatcher) {
+            val multiControllerDef = definition.copy(
+                controllers = listOf(
+                    ControllerDefinition(name = "ADB", type = "Adb", label = "本地"),
+                    ControllerDefinition(name = "CloudADB", type = "Adb", label = "云游戏"),
+                ),
+                templates = listOf(
+                    com.aliothmoon.maafw.domain.ConfigurationTemplate(
+                        name = "CloudPreset",
+                        label = "云端预设",
+                        description = null,
+                        tasks = listOf(com.aliothmoon.maafw.domain.TemplateTask("启动游戏", true, emptyMap())),
+                        controllers = listOf("CloudADB"),
+                    ),
+                    com.aliothmoon.maafw.domain.ConfigurationTemplate(
+                        name = "PcPreset",
+                        label = "桌面预设",
+                        description = null,
+                        tasks = emptyList(),
+                        controllers = listOf("Win32"),
+                    ),
+                ),
+            )
+            val store = InMemoryUserConfigurationStore(
+                UserConfiguration(initialized = true, activeResourceName = "官服"),
+            )
+            val project = FakeProjectRepository(ProjectState.Ready(multiControllerDef, emptyList()))
+            val (vm, _, _) = createVm(store = store, project = project)
+            backgroundScope.launch { vm.uiState.collect {} }
+            advanceUntilIdle()
+
+            // Win32 预设被隐藏；CloudADB 预设当前不可用且阻止创建
+            assertEquals(listOf("CloudPreset"), vm.uiState.value.templates.map { it.template.name })
+            assertFalse(vm.uiState.value.templates.single().applicable)
+            vm.onIntent(SessionIntent.CreateFromTemplate("CloudPreset"))
+            advanceUntilIdle()
+            assertTrue(store.current.configurations.isEmpty())
+
+            // 切到 CloudADB 后可用并可创建
+            vm.onIntent(SessionIntent.SelectController("CloudADB"))
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.templates.single().applicable)
+            vm.onIntent(SessionIntent.CreateFromTemplate("CloudPreset"))
+            advanceUntilIdle()
+            assertEquals(listOf("云端预设"), store.current.configurations.map { it.name })
+        }
 }

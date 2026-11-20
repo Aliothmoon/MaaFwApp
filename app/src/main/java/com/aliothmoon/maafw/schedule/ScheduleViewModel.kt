@@ -46,6 +46,7 @@ private data class ConfigurationSnapshot(
 private data class HealthSettings(
     val backgroundMode: Boolean,
     val screenSaverEnabled: Boolean,
+    val anyRuleUsesScreenSaver: Boolean,
     val wakeUnlockType: String,
     val wakeCredential: String,
     val hasGesture: Boolean,
@@ -80,12 +81,16 @@ class ScheduleViewModel(
 
     private val healthSettings: Flow<HealthSettings> = combine(
         appSettings.runMode,
-        appSettings.screenSaverEnabled,
+        combine(appSettings.screenSaverEnabled, store.strategies) { saver, rules ->
+            // 一条都没启用时按要用屏保算：健康卡在建第一条规则之前就该把缺的报出来（见 ScheduleHealth.failingIssues）
+            val enabled = rules.filter { it.enabled }
+            saver to (enabled.isEmpty() || enabled.any { !it.hardwareScreenOff })
+        },
         appSettings.wakeUnlockType,
         appSettings.wakeCredential,
         gestureStore.gesture,
-    ) { runMode, screenSaver, unlockType, credential, gesture ->
-        HealthSettings(runMode == RunMode.BACKGROUND, screenSaver, unlockType, credential, gesture != null)
+    ) { runMode, (screenSaver, anyRuleUsesSaver), unlockType, credential, gesture ->
+        HealthSettings(runMode == RunMode.BACKGROUND, screenSaver, anyRuleUsesSaver, unlockType, credential, gesture != null)
     }
 
     private val health: Flow<HealthState> = combine(
@@ -96,6 +101,7 @@ class ScheduleViewModel(
     ) { access, system, (exact, secure), settings ->
         val snapshot = ScheduleHealthSnapshot(
             backendGranted = access.isGranted(access.configuredBackend),
+            backendAvailable = access.isAvailable(access.configuredBackend),
             batteryWhitelist = system.batteryWhitelist,
             exactAlarmAllowed = exact,
             notification = system.notification,
@@ -103,6 +109,7 @@ class ScheduleViewModel(
             overlayNeeded = ScheduleHealthLogic.overlayNeeded(
                 settings.backgroundMode,
                 settings.screenSaverEnabled,
+                settings.anyRuleUsesScreenSaver,
             ),
             wakeCredentialMissing = ScheduleHealthLogic.wakeCredentialMissing(
                 unlockType = settings.wakeUnlockType,
@@ -200,9 +207,8 @@ class ScheduleViewModel(
                 if (!intent.strategy.isValid) return
                 val existing = store.findById(intent.strategy.id)
                 if (existing == null) store.add(intent.strategy) else store.update(intent.strategy)
-                // 规则变了旧闹钟就不作数了，先撤后立
-                alarms.cancel(intent.strategy.id)
-                if (intent.strategy.enabled) alarms.scheduleNext(intent.strategy)
+                // 规则变了旧闹钟就不作数了，先撤后立；挂着的重试留着
+                alarms.replace(intent.strategy)
             }
 
             is ScheduleIntent.Delete -> {
@@ -211,11 +217,9 @@ class ScheduleViewModel(
             }
 
             is ScheduleIntent.SetEnabled -> {
-                store.setEnabled(intent.strategyId, intent.enabled)
+                val written = store.setEnabled(intent.strategyId, intent.enabled)
                 alarms.cancel(intent.strategyId)
-                if (intent.enabled) {
-                    store.findById(intent.strategyId)?.let { alarms.scheduleNext(it) }
-                }
+                if (written?.enabled == true) alarms.scheduleNext(written)
             }
 
             ScheduleIntent.LoadTriggerLog -> loadedLog.value = triggerLog.readAll()

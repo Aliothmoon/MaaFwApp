@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.util.HttpClientHelper
 import com.aliothmoon.maafw.util.int
+import com.aliothmoon.maafw.util.long
 import com.aliothmoon.maafw.util.parseJsonObject
 import com.aliothmoon.maafw.util.readBody
 import com.aliothmoon.maafw.util.string
@@ -25,6 +26,8 @@ internal class MirrorChyanLatestApi(
         val url: String?,
         val sha256: String?,
         val releaseNote: String?,
+        /** Unix 秒，只在带 cdk 的请求里返回 */
+        val cdkExpiredTime: Long? = null,
     )
 
     /**
@@ -87,6 +90,7 @@ internal class MirrorChyanLatestApi(
                 url = data.string("url"),
                 sha256 = data.string("sha256"),
                 releaseNote = data.string("release_note"),
+                cdkExpiredTime = data.long("cdk_expired_time")?.takeIf { it > 0 },
             ),
         )
     }
@@ -180,6 +184,66 @@ internal class MirrorChyanUpdateClient(
     }
 
     /**
+     * 先匿名问出最新版本号，再带 CDK、把 current_version 写成它问一次：已是最新时服务端不签发下载地址，
+     * 按第三方实测（Mirror酱 官方文档没写）不占当日下载次数，又能拿到 cdk_expired_time
+     */
+    suspend fun verifyCdk(request: CdkVerifyRequest): CdkVerification = try {
+        val rid = request.mirrorchyanRid?.trim()?.takeIf(String::isNotBlank)
+        val cdk = request.cdk.trim()
+        if (rid == null || cdk.isEmpty()) {
+            CdkVerification.Unverified
+        } else {
+            when (val latest = latestWithUniversalFallback(rid, request.channel, request.abi, request.currentVersion, cdk = null)) {
+                is UpdateSourceOutcome.Failed -> {
+                    Timber.tag("UpdateCheck").i("%s cdk precheck failed: %s", source, latest.reason)
+                    CdkVerification.Unverified
+                }
+
+                is UpdateSourceOutcome.Ok -> when (
+                    val outcome = latestWithUniversalFallback(rid, request.channel, request.abi, latest.value.version, cdk)
+                ) {
+                    is UpdateSourceOutcome.Ok -> {
+                        if (outcome.value.url != null) Timber.tag("UpdateCheck").w("%s cdk check was handed a download url", source)
+                        CdkVerification.Valid(outcome.value.cdkExpiredTime)
+                    }
+
+                    is UpdateSourceOutcome.Failed ->
+                        if (outcome.reason in CDK_REJECTIONS) CdkVerification.Rejected(outcome.reason) else CdkVerification.Unverified
+                }
+            }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.tag("UpdateCheck").w(e, "%s cdk check failed", source)
+        CdkVerification.Unverified
+    }
+
+    /** 给 GitHub 源定版本号；出什么错都返回 null，不把 Mirror酱 的错报给选了 GitHub 的用户 */
+    suspend fun latestRelease(
+        rid: String?,
+        channel: UpdateChannel,
+        abi: AndroidAbi,
+        currentVersion: String,
+    ): MirrorChyanLatestApi.Latest? {
+        val id = rid?.trim()?.takeIf(String::isNotBlank) ?: return null
+        return try {
+            when (val outcome = latestWithUniversalFallback(id, channel, abi, currentVersion, cdk = null)) {
+                is UpdateSourceOutcome.Ok -> outcome.value
+                is UpdateSourceOutcome.Failed -> {
+                    Timber.tag("UpdateCheck").i("%s precheck skipped: %s", source, outcome.reason)
+                    null
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag("UpdateCheck").w(e, "%s precheck failed", source)
+            null
+        }
+    }
+
+    /**
      * 服务端按 os/arch 精确匹配，不回退通用包；单 ABI 包那一架构下架后只剩 universal 时，
      * 再不带 arch 问一次。重试仍失败就报第一次的原因，那才是这个包自己的情况
      */
@@ -200,5 +264,12 @@ internal class MirrorChyanUpdateClient(
 
     private companion object {
         val ARCH_MISSING = setOf(UpdateCheckFailure.RESOURCE_NOT_FOUND, UpdateCheckFailure.INVALID_ARCH)
+        val CDK_REJECTIONS = setOf(
+            UpdateCheckFailure.CDK_EXPIRED,
+            UpdateCheckFailure.CDK_INVALID,
+            UpdateCheckFailure.CDK_QUOTA_EXHAUSTED,
+            UpdateCheckFailure.CDK_MISMATCHED,
+            UpdateCheckFailure.CDK_BLOCKED,
+        )
     }
 }

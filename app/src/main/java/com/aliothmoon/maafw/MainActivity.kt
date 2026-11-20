@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw
 
+import com.aliothmoon.maafw.i18n.AppLocales
 import com.aliothmoon.maafw.settings.search.SettingSearchNavigator
 import com.aliothmoon.maafw.ui.settings.search.ProvideSettingSearch
 import android.content.res.Configuration
@@ -39,6 +40,9 @@ class MainActivity : AppCompatActivity(), PipHost {
         val splash = installSplashScreen()
         splash.setKeepOnScreenCondition { !appSettings.loaded.value }
         super.onCreate(savedInstanceState)
+        // appcompat 在 attachBaseContext 里已读回存的语言
+        AppLocales.backupFromAndroidx()
+        AppLocales.syncApplicationResources(this)
 
         setContent {
             val uiScale by appSettings.uiScale.collectAsStateWithLifecycle()

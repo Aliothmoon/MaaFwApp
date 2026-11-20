@@ -67,6 +67,9 @@ static std::atomic<bool> g_renderThreadRunning{false};
 static ANativeWindow *g_pendingWindow = nullptr;
 static bool g_pendingDetach = false;
 static bool g_pendingBlank = false;
+// 渲染线程出了队、还没 AImage_delete 的那张；它借的 AHardwareBuffer 随 reader 一起失效
+static AImage *g_renderingImage = nullptr;
+static std::condition_variable g_renderDoneCv;
 
 static GLuint LoadShader(GLenum type, const char *source) {
     GLuint shader = glCreateShader(type);
@@ -327,6 +330,7 @@ static void RenderLoop() {
             if (!g_renderQueue.empty()) {
                 image = g_renderQueue.front();
                 g_renderQueue.pop();
+                g_renderingImage = image;
             }
         }
 
@@ -356,6 +360,11 @@ static void RenderLoop() {
                 RenderPreview(hb);
             }
             AImage_delete(image);
+            {
+                std::lock_guard<std::mutex> lock(g_renderMutex);
+                g_renderingImage = nullptr;
+            }
+            g_renderDoneCv.notify_all();
         }
     }
 
@@ -368,7 +377,7 @@ static void RenderLoop() {
     DestroyEgl();
 }
 
-/** 换窗口不停渲染线程：join 在 binder 事务里做，调用方主线程得一直等着。收摊走 [ShutdownPreview] */
+/** 换窗口不停渲染线程：join 会卡住 binder 线程。收摊走 [ShutdownPreview] */
 void SetPreviewSurface(JNIEnv *env, jobject jSurface) {
     std::lock_guard<std::mutex> lock(g_previewMutex);
 
@@ -477,9 +486,12 @@ bool DispatchPreview(AImage *image) {
     return true;
 }
 
-void DrainPreviewQueue() {
-    std::lock_guard<std::mutex> lock(g_renderMutex);
+bool DrainPreviewQueue(int timeoutMs) {
+    std::unique_lock<std::mutex> lock(g_renderMutex);
     DrainPreviewQueueLocked();
+    // 只清队列不够：渲染线程出队后就放了锁，正在画的那张还攥着 reader 的缓冲
+    return g_renderDoneCv.wait_for(lock, std::chrono::milliseconds(timeoutMs),
+                                   [] { return g_renderingImage == nullptr; });
 }
 
 void BlankPreview(int64_t expectedFrameCount) {

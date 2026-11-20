@@ -60,7 +60,8 @@ interface RemoteService {
     boolean clearForcedDisplaySize() = 19;
 
     // ── 预览 ──
-    void setMonitorSurface(in Surface surface) = 20;
+    // 主线程不等远端，同一 binder 上的 oneway 按序送达；后补的 oneway，旧进程多写的 reply 被丢弃，线格式兼容
+    oneway void setMonitorSurface(in Surface surface) = 20;
 
     oneway void setTouchCallback(ITouchEventCallback callback) = 21;
 
@@ -145,6 +146,38 @@ interface RemoteService {
      * 走文件不回传字节：一张 720p PNG 几百 KB，binder 事务缓冲总共才 1MB
      */
     boolean saveCachedImage(String path) = 75;
+
+    /** 把虚拟屏帧缓冲的当前画面存成 PNG 到 [path]；不经 controller，没在跑任务也能截，帧缓冲为空返回 false */
+    boolean saveDisplayFrame(String path) = 85;
+
+    // ── 诊断 ──
+
+    /** 任意包的进程退出记录（跨包要 DUMP，shell 自带），JSON 数组，元素是 ProcessExitRecord */
+    String getProcessExitRecords(String packageName, long sinceMs, int maxNum) = 86;
+
+    /** 替被杀的上一个特权进程翻系统日志：只留提到它 pid 或进程名前缀的行 */
+    String dumpSystemLog(long sinceMs, long untilMs, int pid, String processPrefix) = 87;
+
+    /** 后台虚拟屏的 flag 档位，0 为完整权限，大于 0 是兼容档，没建屏返回 -1 */
+    int getVirtualDisplayFlagTier() = 88;
+
+    /** 显示调用卡死时取线程栈：只留在处理 binder 调用或等锁的线程，带 native 采集收尾停在哪一步；不能加锁 */
+    String dumpThreads() = 89;
+
+    /** 同 setDisplayPower，但等做完并回结果：17 号是 oneway，改不了签名 */
+    boolean setDisplayPowerSync(boolean on) = 90;
+
+    /**
+     * 最近一次唤醒解锁（含自测）的步骤与耗时，不含 PIN 与轨迹
+     * sinceElapsedMs 为 App 发起解锁时的 elapsedRealtime，更早开始的返回空串
+     */
+    String getLastWakeTrace(long sinceElapsedMs) = 91;
+
+    /** 指定屏上可见任务的包名，供定时的应用黑名单判定；判不出返回 null */
+    List<String> getVisiblePackages(int displayId) = 92;
+
+    /** 当前帧编码成 JPEG 直接回传（长边缩到 1280）；无帧或失败返回 null。完成推送附图用 */
+    byte[] captureFrameJpeg(int quality) = 93;
 
     /** 后台虚拟屏上的目标游戏帧率；未监控返回 -1 */
     float getGameFps() = 76;

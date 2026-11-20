@@ -60,6 +60,27 @@ object RunOutcome {
     const val COMPLETED_WITH_FAILURES = 1
     const val CANCELLED = 2
     const val FAILED = 3
+
+    /** reason 只带失败 agent 的序号：细节是带设备路径的排障字面量，只进特权进程 logcat，不当用户文案 */
+    const val AGENT_LAUNCH_FAILED = 4
+
+    /** 建资源、控制器、Tasker 这一段没成；reason 是 [PrepareFailureCode]，细节同样只进 logcat */
+    const val PREPARE_FAILED = 5
+}
+
+/** [RunOutcome.PREPARE_FAILED] 的原因码；app 侧按它本地化，认不出的原样显示 */
+object PrepareFailureCode {
+    const val FRAMEWORK_NOT_LOADED = "framework-not-loaded"
+    const val BRIDGE_NOT_LOADED = "bridge-not-loaded"
+    const val CAPTURE_NOT_STARTED = "capture-not-started"
+    const val DISPLAY_NOT_STARTED = "display-not-started"
+    const val RESOURCE_CREATE = "resource-create"
+    const val RESOURCE_LOAD = "resource-load"
+    const val CONTROLLER_CREATE = "controller-create"
+    const val CONTROLLER_CONNECT = "controller-connect"
+    const val TASKER_CREATE = "tasker-create"
+    const val TASKER_BIND = "tasker-bind"
+    const val AGENT_SINKS = "agent-sinks"
 }
 
 /** 线格式的编解码；宽容未知字段，便于 app 与特权进程版本短暂不一致时不至于直接崩 */

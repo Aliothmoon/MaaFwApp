@@ -16,10 +16,13 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 
-/** 解锁 hook 只要 JSON，抽出来好在单测里换掉 */
-fun interface UnlockGestureReader {
+/** 解锁 hook 只要 JSON 与录制时间，抽出来好在单测里换掉 */
+interface UnlockGestureReader {
     /** 没录过返回空串 */
     suspend fun readJson(): String
+
+    /** 录制落盘的时刻；没录过或读不到为 null */
+    suspend fun recordedAtMs(): Long?
 }
 
 /**
@@ -82,6 +85,11 @@ class UnlockGestureStore(private val context: Context) : UnlockGestureReader {
     override suspend fun readJson(): String = withContext(MaaDispatchers.IO) {
         val gesture = _gesture.value ?: read() ?: return@withContext ""
         UnlockGestureJson.encodeToString(UnlockGesture.serializer(), gesture)
+    }
+
+    /** 轨迹里不存录制时间，取文件修改时间：写盘是 tmp + rename，写失败不动旧文件，与内存那份对得上 */
+    override suspend fun recordedAtMs(): Long? = withContext(MaaDispatchers.IO) {
+        gestureFile.takeIf { it.isFile }?.lastModified()?.takeIf { it > 0 }
     }
 
     private suspend fun read(): UnlockGesture? = withContext(MaaDispatchers.IO) {

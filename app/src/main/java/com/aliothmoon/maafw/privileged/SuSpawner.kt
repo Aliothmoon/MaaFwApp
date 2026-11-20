@@ -1,7 +1,6 @@
 package com.aliothmoon.maafw.privileged
 
 import com.topjohnwu.superuser.Shell
-import timber.log.Timber
 
 /**
  * libsu 共享 root shell 拉起：必须后台化，前台会阻塞整个 shell
@@ -9,8 +8,14 @@ import timber.log.Timber
  */
 object SuSpawner : ProcessSpawner {
 
+    /**
+     * su 默认继承 App 的挂载命名空间，降权后的 shell 在部分存储栈下进不了 Android/data；
+     * 进 init 的命名空间，与 Shizuku（adbd 拉起）同一环境。nsenter 不可用时照旧
+     */
     override fun wrapCommand(launcherPath: String, invocation: String): String =
-        "$invocation >/dev/null 2>&1 &"
+        "if nsenter -t 1 -m -- true 2>/dev/null; then " +
+            "nsenter -t 1 -m -- $invocation >/dev/null 2>&1 & " +
+            "else $invocation >/dev/null 2>&1 & fi"
 
     override fun spawn(command: String): SpawnHandle? {
         val result = Shell.cmd(command).exec()
@@ -20,8 +25,5 @@ object SuSpawner : ProcessSpawner {
         return null
     }
 
-    override fun killResidual(processName: String) {
-        runCatching { Shell.cmd(killByNameCommand(processName)).exec() }
-            .onFailure { Timber.w(it, "kill residual %s failed", processName) }
-    }
+    override fun run(command: String): List<String> = Shell.cmd(command).exec().out
 }

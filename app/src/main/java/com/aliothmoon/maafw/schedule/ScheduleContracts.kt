@@ -57,8 +57,6 @@ enum class CloseAppEffect {
     STRATEGY_ACTIVE,
     INACTIVE;
 
-    val willClose: Boolean get() = this == GLOBAL_OVERRIDE || this == STRATEGY_ACTIVE
-
     companion object {
         fun of(runMode: RunMode, globalOn: Boolean, strategyOn: Boolean): CloseAppEffect = when {
             runMode != RunMode.BACKGROUND -> FOREGROUND_INACTIVE

@@ -1,16 +1,17 @@
 package com.aliothmoon.maafw.runner
 
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
-import com.aliothmoon.maafw.project.PiInstaller
-import com.aliothmoon.maafw.project.isFilePath
-import com.aliothmoon.maafw.project.normalizeProjectPath
-import com.aliothmoon.maafw.MaaDispatchers
+import com.aliothmoon.maafw.privileged.callWithTimeout
+import com.aliothmoon.maafw.project.ProjectSource
+import com.aliothmoon.maafw.project.isExplicitProjectPath
+import com.aliothmoon.maafw.project.isProjectFileCandidate
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * focus 模板正文里的 `{image}` 占位符
@@ -39,7 +40,7 @@ interface FocusContentResolver {
  * 不为它们各起一个协程
  */
 fun focusContentNeedsIo(content: String): Boolean =
-    content.contains(FOCUS_IMAGE_PLACEHOLDER) || isFilePath(content)
+    content.contains(FOCUS_IMAGE_PLACEHOLDER) || isProjectFileCandidate(content)
 
 /**
  * 生产实现：`{image}` 找特权进程要缓存帧，文件路径形态读 PI 解包目录
@@ -48,7 +49,7 @@ fun focusContentNeedsIo(content: String): Boolean =
  * 序号轮转：日志里同时挂着好几张图时，新的不该把旧的盖掉，但也不能无限堆
  */
 class PrivilegedFocusContentResolver(
-    private val installer: PiInstaller,
+    private val source: ProjectSource,
     private val servicePort: PrivilegedServicePort,
 ) : FocusContentResolver {
 
@@ -64,31 +65,31 @@ class PrivilegedFocusContentResolver(
     /** 拿不到就替换成空串，与桌面端 MXU 一致：留着占位符更难看 */
     private suspend fun captureImageUri(): String {
         val target = File(AppPaths.FOCUS_DIR, "focus_${slot.getAndIncrement() % IMAGE_SLOTS}.png")
-        val saved = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) {
-            // 用 serviceOrNull 而不是 useService：一条日志不值得为它发起重连与授权请求
-            runCatching { servicePort.serviceOrNull()?.saveCachedImage(target.absolutePath) }
-                .onFailure { Timber.w(it, "focus {image}: failed to fetch cached frame") }
-                .getOrNull()
-        }
+        val saved = servicePort.callWithTimeout(CAPTURE_TIMEOUT) { it.saveCachedImage(target.absolutePath) }
         if (saved != true) return ""
         // Markwon 的 FileSchemeHandler 认这个 scheme；带上 mtime 防它按 URL 命中旧图的缓存
         return "file://${target.absolutePath}?t=${target.lastModified()}"
     }
 
     /** 读不到回落原文：PI 作者可能本来就想显示这行字 */
-    private fun readProjectFile(content: String): String = runCatching {
-        val root = installer.installedDir()
-        val file = File(root, normalizeProjectPath(content))
-        if (file.isFile) file.readText() else content
-    }.getOrElse {
-        Timber.w(it, "focus body read failed for file path: %s", content)
-        content
+    private fun readProjectFile(content: String): String {
+        val result = source.tryReadText(content)
+        val body = result.getOrNull()
+        if (body != null) return body
+
+        val error = result.exceptionOrNull()
+        if (error != null) {
+            Timber.w(error, "focus body read failed for file path: %s", content)
+        } else if (isExplicitProjectPath(content)) {
+            Timber.w("No project file for focus body: %s", content)
+        }
+        return content
     }
 
     private companion object {
         const val IMAGE_SLOTS = 8
 
         /** 缓存帧是现成的，慢只可能是 binder 排队；等太久不如不显示这张图 */
-        const val CAPTURE_TIMEOUT_MS = 3_000L
+        val CAPTURE_TIMEOUT = 3.seconds
     }
 }

@@ -57,7 +57,6 @@ typedef struct {
     const char *debug_name;
     const char *log_file;
     int uid;
-    bool keep_root;
 } LauncherArgs;
 
 /* ── 文件日志 ── */
@@ -117,7 +116,6 @@ static bool parse_args(int argc, char **argv, LauncherArgs *out) {
                 return false;
             }
         }
-        else if (strcmp(argv[i], "--keep-root") == 0) out->keep_root = true;
     }
 
     return out->apk_path != NULL
@@ -137,6 +135,21 @@ static char *format_arg(const char *prefix, const char *value) {
     if (out == NULL) { LOGE("malloc failed: %s", strerror(errno)); return NULL; }
     snprintf(out, size, "%s%s", prefix, value);
     return out;
+}
+
+/* 是否与 init 同一挂载命名空间：Root 拉起经 nsenter 进 init 的，与 Shizuku 一致；shell 身份读不到 init 的 */
+static void log_mount_ns(void) {
+    char self[64] = {0};
+    char init[64] = {0};
+    if (readlink("/proc/self/ns/mnt", self, sizeof(self) - 1) < 0) {
+        LOGFW("readlink self mnt ns failed: %s", strerror(errno));
+        return;
+    }
+    if (readlink("/proc/1/ns/mnt", init, sizeof(init) - 1) < 0) {
+        LOGFI("mnt ns: self=%s init=unreadable", self);
+        return;
+    }
+    LOGFI("mnt ns: self=%s same_as_init=%s", self, strcmp(self, init) == 0 ? "yes" : "no");
 }
 
 static void exec_app_process(const LauncherArgs *args) {
@@ -216,6 +229,7 @@ int main(int argc, char **argv) {
     }
 
     LOGFI("launcher start: apk=%s uid=%d", args.apk_path, args.uid);
+    log_mount_ns();
 
     /* 已是 shell 身份（Shizuku adb 模式）：无需降权，直接 exec 不 fork，
        调用方追踪到的就是服务进程本身，探活与退出码不隔一层 */
@@ -232,29 +246,28 @@ int main(int argc, char **argv) {
     }
 
     if (child == 0) {
-        if (!args.keep_root) {
-            static const size_t kGidCount =
-                    sizeof(kRequiredShellGids) / sizeof(kRequiredShellGids[0]);
+        /* 两种后端一律降到 shell：root 身份的注入、建屏与 shell 走的是两套权限，留 root 只会让两边行为分叉 */
+        static const size_t kGidCount =
+                sizeof(kRequiredShellGids) / sizeof(kRequiredShellGids[0]);
 
-            int sg_ret = setgroups((int) kGidCount, kRequiredShellGids);
-            if (sg_ret != 0) {
-                LOGFW("setgroups(%zu gids) failed: %s — continuing", kGidCount, strerror(errno));
-            } else {
-                LOGFI("setgroups(%zu gids): ok", kGidCount);
-            }
-
-            if (setresgid(kShellUid, kShellUid, kShellUid) != 0) {
-                LOGFE("setresgid(%u) failed: %s", (unsigned) kShellUid, strerror(errno));
-                _exit(1);
-            }
-            LOGFI("setresgid(%u): ok", (unsigned) kShellUid);
-
-            if (setresuid(kShellUid, kShellUid, kShellUid) != 0) {
-                LOGFE("setresuid(%u) failed: %s", (unsigned) kShellUid, strerror(errno));
-                _exit(1);
-            }
-            LOGFI("setresuid(%u): ok — exec app_process", (unsigned) kShellUid);
+        int sg_ret = setgroups((int) kGidCount, kRequiredShellGids);
+        if (sg_ret != 0) {
+            LOGFW("setgroups(%zu gids) failed: %s — continuing", kGidCount, strerror(errno));
+        } else {
+            LOGFI("setgroups(%zu gids): ok", kGidCount);
         }
+
+        if (setresgid(kShellUid, kShellUid, kShellUid) != 0) {
+            LOGFE("setresgid(%u) failed: %s", (unsigned) kShellUid, strerror(errno));
+            _exit(1);
+        }
+        LOGFI("setresgid(%u): ok", (unsigned) kShellUid);
+
+        if (setresuid(kShellUid, kShellUid, kShellUid) != 0) {
+            LOGFE("setresuid(%u) failed: %s", (unsigned) kShellUid, strerror(errno));
+            _exit(1);
+        }
+        LOGFI("setresuid(%u): ok — exec app_process", (unsigned) kShellUid);
 
         exec_app_process(&args);
         _exit(1);

@@ -5,8 +5,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.content.edit
 import com.aliothmoon.maafw.BuildConfig
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import timber.log.Timber
 import java.time.ZonedDateTime
 
@@ -23,7 +28,8 @@ class ScheduleAlarmManager(private val context: Context) {
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     /**
-     * 闹钟链的账本：每条规则最近投递的原定时刻、挂着的那发重试
+     * 闹钟链的账本：每条规则最近投递的原定时刻、挂着的那发重试、正常链挂上的触发点、
+     * 最近一次闹钟到达的原定时刻，以及判出来还没取走的漏触发
      *
      * AlarmManager 查不出挂着的是哪一发，进程一换就只剩这里。不进 [ScheduleStrategyStore]：
      * 这本账恰恰要在规则还没读出来的时候可用
@@ -36,16 +42,30 @@ class ScheduleAlarmManager(private val context: Context) {
      */
     private val ledgerLock = Any()
 
+    private val _missedQueued = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /** 漏触发入队即发，由应用进程取走补记（[drainMissed]） */
+    val missedQueued: SharedFlow<Unit> = _missedQueued.asSharedFlow()
+
+    /** [rebooted]：触发点之后设备重启过，可能到点时就是关机的 */
+    data class MissedTrigger(val strategyId: String, val scheduledTimeMs: Long, val rebooted: Boolean)
+
     fun scheduleNext(strategy: ScheduleStrategy, afterEpochMs: Long = 0L) {
         if (!strategy.enabled) return
         val next = computeNextTrigger(strategy, afterEpochMs)
         if (next == null) {
             Timber.d("Strategy %s has no next trigger; not scheduling", strategy.id)
             clearPendingRetry(strategy.id)
+            arm(strategy.id, 0L)
             return
         }
         val triggerMs = next.toInstant().toEpochMilli()
-        register(strategy.id, scheduledTimeMs = triggerMs, triggerMs = triggerMs)
+        // 没挂上也要撤掉旧触发点，否则过期后会被误报成漏触发
+        val registered = register(strategy.id, scheduledTimeMs = triggerMs, triggerMs = triggerMs)
+        arm(strategy.id, if (registered) triggerMs else 0L)
         Timber.i("Strategy %s next trigger %s", strategy.id, next)
     }
 
@@ -88,6 +108,19 @@ class ScheduleAlarmManager(private val context: Context) {
         Timber.i("Strategy %s waits for rules, check again in %dms", strategyId, RECONNECT_DELAY_MS)
     }
 
+    /**
+     * 闹钟到了，在 [ScheduleReceiver.onReceive] 第一行记，抢在进程启动的重排之前落盘，
+     * 否则晚到的投递会被当成漏触发
+     *
+     * 不复用 [markDelivered]：那一笔故意等规则读出来才记，提前记会让挂着的重试在重排时被判不可续
+     */
+    fun markFired(strategyId: String, scheduledTimeMs: Long) {
+        if (scheduledTimeMs <= 0L) return
+        synchronized(ledgerLock) {
+            ledger.edit(commit = true) { putLong(FIRED_PREFIX + strategyId, scheduledTimeMs) }
+        }
+    }
+
     /** 这一次已投递、即将发起；整批重排以它为界，见 [resyncAfterEpochMs] */
     fun markDelivered(strategyId: String, scheduledTimeMs: Long) {
         if (scheduledTimeMs <= 0L) return
@@ -96,7 +129,39 @@ class ScheduleAlarmManager(private val context: Context) {
         }
     }
 
-    private fun register(strategyId: String, scheduledTimeMs: Long, triggerMs: Long, retryCount: Int = 0) {
+    /** 换上新触发点前，旧的过了宽限还没到就记进漏触发队列；[scheduledTimeMs] 为 0 即撤掉 */
+    private fun arm(strategyId: String, scheduledTimeMs: Long) {
+        synchronized(ledgerLock) {
+            val armed = ledger.getLong(ARMED_PREFIX + strategyId, 0L)
+            val now = System.currentTimeMillis()
+            if (isMissed(armed, ledger.getLong(FIRED_PREFIX + strategyId, 0L), now)) {
+                val rebooted = now - SystemClock.elapsedRealtime() > armed
+                Timber.w("Strategy %s missed its trigger at %d, rebooted since: %s", strategyId, armed, rebooted)
+                ledger.edit(commit = true) { putBoolean("$MISSED_PREFIX$strategyId$MISSED_SEP$armed", rebooted) }
+                _missedQueued.tryEmit(Unit)
+            }
+            ledger.edit(commit = true) {
+                if (scheduledTimeMs > 0L) putLong(ARMED_PREFIX + strategyId, scheduledTimeMs) else remove(ARMED_PREFIX + strategyId)
+            }
+        }
+    }
+
+    /** 取走漏触发队列；同一触发点后来到了的（晚于重排）在此剔除 */
+    fun drainMissed(): List<MissedTrigger> = synchronized(ledgerLock) {
+        val entries = ledger.all.filterKeys { it.startsWith(MISSED_PREFIX) }
+        if (entries.isEmpty()) return emptyList()
+        ledger.edit(commit = true) { entries.keys.forEach(::remove) }
+        entries.mapNotNull { (key, rebooted) ->
+            val body = key.removePrefix(MISSED_PREFIX)
+            val id = body.substringBeforeLast(MISSED_SEP)
+            val time = body.substringAfterLast(MISSED_SEP).toLongOrNull() ?: return@mapNotNull null
+            if (ledger.getLong(FIRED_PREFIX + id, 0L) == time) return@mapNotNull null
+            MissedTrigger(id, time, rebooted as? Boolean ?: false)
+        }.sortedBy { it.scheduledTimeMs }
+    }
+
+    /** @return 闹钟有没有挂上 */
+    private fun register(strategyId: String, scheduledTimeMs: Long, triggerMs: Long, retryCount: Int = 0): Boolean {
         // 先记账再挂：挂上了却没记住，整批重排时这发重试会被正常的下一环顶掉
         if (retryCount > 0) {
             ledger.edit(commit = true) {
@@ -116,10 +181,13 @@ class ScheduleAlarmManager(private val context: Context) {
         } catch (e: SecurityException) {
             // 检查与调用之间权限被撤：系统随后杀进程、清闹钟，下次进程启动会重排，这里不能把调用方带崩
             Timber.e(e, "Strategy %s alarm rejected: exact alarm permission revoked", strategyId)
+            return false
         } catch (e: IllegalStateException) {
             // 部分 ROM 给单个 app 的闹钟数设了上限，超了直接抛
             Timber.e(e, "Strategy %s alarm rejected by the system", strategyId)
+            return false
         }
+        return true
     }
 
     /**
@@ -145,7 +213,38 @@ class ScheduleAlarmManager(private val context: Context) {
     /** 31 以下没有那个系统开关页，入口要藏掉，否则点了什么也不会发生 */
     fun hasExactAlarmToggle(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+    /**
+     * 编辑保存后换上新规则的闹钟
+     *
+     * 挂着的重试原样留着（连同旧触发点）：它补的是规则读不出时错过的那一次，投递时读到的就是新规则，
+     * 那次投递再接上下一环。重试与正常闹钟共用一个槽位，留它就不能同时排下一环。没有可续的重试才撤了重排
+     */
+    fun replace(strategy: ScheduleStrategy) {
+        if (!strategy.enabled) {
+            cancel(strategy.id)
+            return
+        }
+        synchronized(ledgerLock) {
+            val retry = pendingRetry(strategy.id)
+            if (retry != null && retry.isResumable(lastDelivered(strategy.id), System.currentTimeMillis())) {
+                Timber.i("Strategy %s keeps pending retry #%d across the edit", strategy.id, retry.retryCount)
+                return
+            }
+            cancel(strategy.id)
+            scheduleNext(strategy)
+        }
+    }
+
+    /** 禁用、删除、改规则：撤掉槽位与挂着的重试，旧触发点也不再算漏触发 */
     fun cancel(strategyId: String) {
+        cancelSlot(strategyId)
+        if (ledger.contains(ARMED_PREFIX + strategyId)) {
+            ledger.edit { remove(ARMED_PREFIX + strategyId) }
+        }
+    }
+
+    /** 只撤闹钟与重试；整批重排紧接着要拿旧触发点判漏触发，不能连它一起撤 */
+    private fun cancelSlot(strategyId: String) {
         val pendingIntent = buildTriggerIntent(strategyId, 0L)
         alarmManager.cancel(pendingIntent)
         pendingIntent.cancel()
@@ -155,9 +254,8 @@ class ScheduleAlarmManager(private val context: Context) {
     /** 规则确定已不在（删了，或规则文件损坏被重置）：撤掉槽位，账也一起清 */
     fun forget(strategyId: String) {
         cancel(strategyId)
-        if (ledger.contains(DELIVERED_PREFIX + strategyId)) {
-            ledger.edit { remove(DELIVERED_PREFIX + strategyId) }
-        }
+        val keys = listOf(DELIVERED_PREFIX + strategyId, FIRED_PREFIX + strategyId).filter(ledger::contains)
+        if (keys.isNotEmpty()) ledger.edit { keys.forEach(::remove) }
     }
 
     /**
@@ -182,7 +280,7 @@ class ScheduleAlarmManager(private val context: Context) {
                     register(strategy.id, retry.scheduledTimeMs, retry.resumeAt(now), retry.retryCount)
                     Timber.i("Strategy %s keeps pending retry #%d", strategy.id, retry.retryCount)
                 } else {
-                    cancel(strategy.id)
+                    cancelSlot(strategy.id)
                     scheduleNext(strategy, resyncAfterEpochMs(delivered, now))
                 }
             }
@@ -214,6 +312,8 @@ class ScheduleAlarmManager(private val context: Context) {
             when {
                 key.startsWith(DELIVERED_PREFIX) -> key.removePrefix(DELIVERED_PREFIX)
                 key.startsWith(RETRY_PREFIX) -> key.removePrefix(RETRY_PREFIX)
+                key.startsWith(ARMED_PREFIX) -> key.removePrefix(ARMED_PREFIX)
+                key.startsWith(FIRED_PREFIX) -> key.removePrefix(FIRED_PREFIX)
                 else -> null
             }
         }
@@ -256,9 +356,22 @@ class ScheduleAlarmManager(private val context: Context) {
         /** 重排时还接回挂着的重试的时限，按原定时刻算 */
         const val RETRY_RESUME_WINDOW_MS = 60 * 60_000L
 
+        /** 盖过重试（3 × 60 秒）和冷启动的投递延迟 */
+        const val MISSED_GRACE_MS = 10 * 60_000L
+
+        /** 挂上的触发点过了宽限、闹钟还没到过它，就是被漏掉了 */
+        fun isMissed(armedMs: Long, firedMs: Long, nowMs: Long): Boolean =
+            armedMs > 0L && armedMs + MISSED_GRACE_MS < nowMs && firedMs < armedMs
+
         private const val LEDGER_NAME = "schedule_alarm_ledger"
         private const val DELIVERED_PREFIX = "delivered:"
         private const val RETRY_PREFIX = "retry:"
+        private const val ARMED_PREFIX = "armed:"
+        private const val FIRED_PREFIX = "fired:"
+
+        /** 漏触发队列，"missed:<id>@<原定时刻>" → 是否重启过 */
+        private const val MISSED_PREFIX = "missed:"
+        private const val MISSED_SEP = '@'
     }
 }
 

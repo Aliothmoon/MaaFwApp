@@ -1,12 +1,12 @@
 package com.aliothmoon.maafw.update
 
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.constant.MiscConstants
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,6 +56,39 @@ class MirrorChyanUpdateTest {
         }
     """.trimIndent()
 
+    /** 第二次请求把 current_version 写成最新版本：已是最新时服务端不签发下载地址，不占下载次数 */
+    @Test
+    fun `verify cdk asks as the latest version and reads the expiry`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, apkPayload),
+            FakeHttpResponse(200, """{"code":0,"data":{"version_name":"v1.1.0","cdk_expired_time":1900000000}}"""),
+        )
+
+        val result = client(gateway).verifyCdk(
+            CdkVerifyRequest(cdk = "abc", currentVersion = "1.0.0", abi = AndroidAbi.ARM64, mirrorchyanRid = "M9A"),
+        )
+
+        assertEquals(CdkVerification.Valid(1_900_000_000L), result)
+        val (anonymous, withCdk) = gateway.requests.map { it.first.toHttpUrl() }
+        assertNull(anonymous.queryParameter("cdk"))
+        assertEquals("abc", withCdk.queryParameter("cdk"))
+        assertEquals("v1.1.0", withCdk.queryParameter("current_version"))
+    }
+
+    @Test
+    fun `verify cdk separates rejections from network trouble`() = runBlocking {
+        val latest = """{"code":0,"data":{"version_name":"v1.1.0"}}"""
+        val rejected = RecordingHttpClientHelper(
+            FakeHttpResponse(200, latest),
+            FakeHttpResponse(403, """{"code":7002,"msg":"invalid"}"""),
+        )
+        val request = CdkVerifyRequest(cdk = "abc", currentVersion = "1.0.0", abi = AndroidAbi.ARM64, mirrorchyanRid = "M9A")
+        assertEquals(CdkVerification.Rejected(UpdateCheckFailure.CDK_INVALID), client(rejected).verifyCdk(request))
+
+        val down = RecordingHttpClientHelper(FakeHttpResponse(500, "oops"))
+        assertEquals(CdkVerification.Unverified, client(down).verifyCdk(request))
+    }
+
     @Test
     fun `check reports version and release note without url`() = runBlocking {
         val gateway = RecordingHttpClientHelper(FakeHttpResponse(200, apkPayload))
@@ -85,7 +118,7 @@ class MirrorChyanUpdateTest {
         assertEquals("1.0.0", parsedUrl.queryParameter("current_version"))
         assertEquals("android", parsedUrl.queryParameter("os"))
         assertEquals("arm64", parsedUrl.queryParameter("arch"))
-        assertEquals(MiscConstants.UA, parsedUrl.queryParameter("user_agent"))
+        assertEquals("MaaFwApp", parsedUrl.queryParameter("user_agent"))
     }
 
     @Test
@@ -359,5 +392,28 @@ class MirrorChyanUpdateTest {
         client(gateway).check(checkRequest(abi = AndroidAbi.UNIVERSAL))
 
         assertEquals(1, gateway.requests.size)
+    }
+
+    @Test
+    fun `precheck asks for the latest release anonymously`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(FakeHttpResponse(200, apkPayload))
+
+        val latest = client(gateway).latestRelease("rid", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0")
+
+        assertEquals("v1.1.0", latest?.version)
+        assertNull(gateway.requests.single().first.toHttpUrl().queryParameter("cdk"))
+    }
+
+    @Test
+    fun `precheck gives up quietly`() = runBlocking {
+        val notFound = RecordingHttpClientHelper(FakeHttpResponse(404, """{"code":8001,"msg":"resource not found"}"""))
+        assertNull(client(notFound).latestRelease("rid", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0"))
+
+        val broken = RecordingHttpClientHelper()
+        assertNull(client(broken).latestRelease("rid", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0"))
+
+        val noRid = RecordingHttpClientHelper()
+        assertNull(client(noRid).latestRelease(" ", UpdateChannel.STABLE, AndroidAbi.UNIVERSAL, "1.0.0"))
+        assertTrue(noRid.requests.isEmpty())
     }
 }

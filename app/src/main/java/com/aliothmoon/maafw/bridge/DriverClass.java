@@ -53,6 +53,9 @@ public final class DriverClass {
             ret = ActivityUtils.ensureAppOnDisplay(target, displayId);
             if (!ret) {
                 Ln.e(TAG + ": " + target + " could not be pinned on display " + displayId);
+            } else {
+                // 到这里任务一定在屏上了；startApp 里那次在冷启动时常常还找不到任务
+                ActivityUtils.excludeFromRecents(target, displayId);
             }
         }
         if (ret) {
@@ -104,13 +107,17 @@ public final class DriverClass {
 
     /* 热路径：一次 Swipe / MultiSwipe 会连发几十次。坐标由框架记，这里不打日志 */
 
+    /**
+     * 系统丢掉的 DOWN 照样报成功：ADB 控制器只管写出去，点击被吞也是成功，PI 按这个写；
+     * 报失败的话 MaaFramework 直接判节点失败，不会再识别一轮重点
+     */
     public static boolean touchDown(int x, int y, int contact, int displayId) {
-        boolean ok = InputControlUtils.down(x, y, contact, displayId);
-        if (ok) {
+        InputControlUtils.TouchResult result = InputControlUtils.down(x, y, contact, displayId);
+        if (result == InputControlUtils.TouchResult.DELIVERED) {
             downAt.put(contact, SystemClock.uptimeMillis());
             moved.remove(contact);
         }
-        return ok;
+        return result != InputControlUtils.TouchResult.FAILED;
     }
 
     public static boolean touchMove(int x, int y, int contact, int displayId) {

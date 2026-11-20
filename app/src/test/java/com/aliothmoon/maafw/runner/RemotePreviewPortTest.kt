@@ -97,4 +97,58 @@ class RemotePreviewPortTest {
 
         assertEquals(0, port.surfaceEpoch.value)
     }
+
+    @Test
+    fun `rapid create and destroy reach the service in call order`() = runTest {
+        val service = SurfaceRecordingService()
+        val port = port(FakePrivilegedServicePort(service))
+        val surfaces = List(50) { mockk<Surface>() }
+
+        surfaces.forEach { surface ->
+            port.attachSurface(surface)
+            port.detachSurface()
+        }
+
+        // 头一个 null 是连上时按当前状态补发的那次：还没有 Surface
+        assertEquals(listOf<Surface?>(null) + surfaces.flatMap { listOf(it, null) }, service.surfaces)
+        assertEquals(0, port.surfaceEpoch.value)
+    }
+
+    @Test
+    fun `a surface destroyed while disconnected is not sent on reconnect`() = runTest {
+        val service = SurfaceRecordingService()
+        val servicePort = FakePrivilegedServicePort(service = null).apply {
+            emit(PrivilegedServiceState.Disconnected)
+        }
+        val port = port(servicePort)
+
+        port.attachSurface(mockk())
+        port.detachSurface()
+        reconnect(servicePort, service)
+
+        // 只补发当前状态：已经销毁了，就是 null
+        assertEquals(listOf<Surface?>(null), service.surfaces)
+    }
+
+    @Test
+    fun `a service swap during rapid switching sends later surfaces only to the new service`() = runTest {
+        val old = SurfaceRecordingService()
+        val new = SurfaceRecordingService()
+        val servicePort = FakePrivilegedServicePort(old)
+        val port = port(servicePort)
+        val first = mockk<Surface>()
+        val second = mockk<Surface>()
+        val replacement = mockk<Surface>()
+
+        port.attachSurface(first)
+        port.detachSurface()
+        port.attachSurface(second)
+        reconnect(servicePort, new)
+        port.detachSurface()
+        port.attachSurface(replacement)
+
+        assertEquals(listOf(null, first, null, second), old.surfaces)
+        assertEquals(listOf(null, replacement), new.surfaces)
+        assertEquals(1, port.surfaceEpoch.value)
+    }
 }

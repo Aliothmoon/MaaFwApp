@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.i18n.isResource
 import com.aliothmoon.maafw.domain.OptionDefinition
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.ResourceDefinition
 import com.aliothmoon.maafw.domain.RunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.UserConfiguration
@@ -42,11 +43,11 @@ class RunPlanBuilderTest {
         }
     }
 
-    private fun configWith(vararg tasks: ConfiguredTask): UserConfiguration {
+    private fun configWith(vararg tasks: ConfiguredTask, resource: String = "官服"): UserConfiguration {
         val id = RunConfigurationId("test")
         return UserConfiguration(
             initialized = true,
-            activeResourceName = "官服",
+            activeResourceName = resource,
             configurations = listOf(RunConfiguration(id, "测试", tasks.toList())),
             activeConfigurationId = id,
         )
@@ -121,6 +122,47 @@ class RunPlanBuilderTest {
     }
 
     @Test
+    fun `项目里已不存在的启用任务被跳过`() {
+        val result = RunPlanBuilder.build(
+            definition,
+            configWith(ConfiguredTask("已删除的任务"), ConfiguredTask("启动游戏")),
+        )
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(listOf("启动游戏"), plan.tasks.map { it.taskName })
+        val skipped = plan.skippedTasks.single()
+        assertEquals("已删除的任务", skipped.label)
+        assertTrue(skipped.reason.isResource(R.string.task_unavailable_missing))
+    }
+
+    @Test
+    fun `只剩已不存在的任务映射为 NoExecutableTasks`() {
+        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("已删除的任务")))
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    /** 起点之前的不跑也不算跳过；起点之后没勾选的照旧不跑 */
+    @Test
+    fun `从此处运行只编起点及其后的已勾选任务`() {
+        val first = ConfiguredTask("启动游戏")
+        val start = ConfiguredTask("切换账号")
+        val config = configWith(first, start, ConfiguredTask("常规作战", enabled = false), ConfiguredTask("启动游戏"))
+
+        val result = RunPlanBuilder.build(definition, config, startFromInstanceId = start.instanceId)
+
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(listOf("切换账号", "启动游戏"), plan.tasks.map { it.taskName })
+        assertTrue(plan.skippedTasks.isEmpty())
+    }
+
+    @Test
+    fun `起点已不在配置里映射为 NoExecutableTasks`() {
+        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")), startFromInstanceId = "gone")
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
     fun `全部禁用映射为 NoExecutableTasks`() {
         val result = RunPlanBuilder.build(
             definition,
@@ -185,6 +227,28 @@ class RunPlanBuilderTest {
         )
         val result = RunPlanBuilder.build(definition, config)
         assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    @Test
+    fun `勾着但不适用的任务带原因记进 skippedTasks，没勾的不记`() {
+        val config = configWith(
+            ConfiguredTask("切换账号", customLabel = "换号"),
+            ConfiguredTask("已删除的任务", enabled = false),
+            ConfiguredTask("启动游戏"),
+            resource = "B 服",
+        )
+        val plan = (RunPlanBuilder.build(definition, config) as RunPlanResult.Success).plan
+        val skipped = plan.skippedTasks.single()
+        assertEquals("换号", skipped.label)
+        assertEquals(
+            ConfigurationResolver.checkApplicability(
+                definition,
+                definition.task("切换账号")!!,
+                plan.controller,
+                "B 服",
+            ),
+            skipped.reason,
+        )
     }
 
     @Test
@@ -259,7 +323,10 @@ class RunPlanBuilderTest {
                     defaultCase = "Cloud",
                 )
             ),
-            // 夹具的启动游戏只写了 ADB；这里放开到两个，另起一条只限 ADB 的
+            // 夹具的资源与启动游戏只写了 ADB；这里放开到两个，另起一条只限 ADB 的任务
+            resources = definition.resources.map {
+                if (it.name == "官服") it.copy(controllers = it.controllers + "CloudADB") else it
+            },
             tasks = definition.tasks.map {
                 if (it.name == "启动游戏") it.copy(controllers = listOf("ADB", "CloudADB")) else it
             } + definition.task("启动游戏")!!.copy(name = "仅本地", controllers = listOf("ADB")),
@@ -277,5 +344,43 @@ class RunPlanBuilderTest {
         assertEquals("ADB", local.controller.name)
         assertEquals(listOf("启动游戏", "仅本地"), local.tasks.map { it.taskName })
         assertTrue(local.tasks.none { cloudPatch in it.pipelineOverrides })
+    }
+
+    @Test
+    fun `resource controller filter falls back to compatible resource and rejects when none match`() {
+        val withScopedResources = definition.copy(
+            controllers = listOf(
+                ControllerDefinition(name = "ADB", type = "Adb"),
+                ControllerDefinition(name = "CloudADB", type = "Adb"),
+            ),
+            resources = listOf(
+                ResourceDefinition("官服", listOf("./base")),
+                ResourceDefinition("云专属", listOf("./cloud"), controllers = listOf("CloudADB")),
+            ),
+            tasks = definition.tasks.map {
+                if (it.name == "启动游戏") it.copy(controllers = listOf("ADB", "CloudADB")) else it
+            },
+        )
+        val cloudSelected = configWith(ConfiguredTask("启动游戏"), resource = "云专属")
+            .copy(activeControllerName = "ADB")
+        val fallbackPlan = (RunPlanBuilder.build(withScopedResources, cloudSelected) as RunPlanResult.Success).plan
+        assertEquals("官服", fallbackPlan.resource.name)
+
+        val onlyWinResources = withScopedResources.copy(
+            resources = listOf(ResourceDefinition("桌面", listOf("./win"), controllers = listOf("Win32"))),
+        )
+        assertTrue(RunPlanBuilder.build(onlyWinResources, cloudSelected) is RunPlanResult.Invalid)
+    }
+
+    @Test
+    fun `userDataDir is forwarded to agent PI_USER_DATA_DIR`() {
+        val withAgents = definition.copy(agents = listOf(AgentDefinition("python", listOf("main.py"))))
+        val result = RunPlanBuilder.build(
+            definition = withAgents,
+            config = configWith(ConfiguredTask("启动游戏")),
+            userDataDir = "/data/pi",
+        ) as RunPlanResult.Success
+        assertEquals("/data/pi", result.plan.piEnv["PI_USER_DATA_DIR"])
+        assertEquals("v2.11.0", result.plan.piEnv["PI_INTERFACE_VERSION"])
     }
 }

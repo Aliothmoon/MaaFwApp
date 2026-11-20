@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.config
 
+import com.aliothmoon.maafw.domain.ConfigurationTemplate
 import com.aliothmoon.maafw.domain.ConfiguredTask
 import com.aliothmoon.maafw.domain.ControllerDefinition
 import com.aliothmoon.maafw.domain.Diagnostic
@@ -13,6 +14,7 @@ import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionKind
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ProjectDefinition
+import com.aliothmoon.maafw.domain.ResolvedConfigurationTemplate
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
 import com.aliothmoon.maafw.domain.ResolvedController
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
@@ -38,11 +40,6 @@ object ConfigurationResolver {
     fun resolve(definition: ProjectDefinition, config: UserConfiguration): ResolvedProjectSession {
         val diagnostics = mutableListOf<Diagnostic>()
 
-        val staleResource = staleResourceSelection(definition, config)
-        if (staleResource != null) diagnostics += staleResource
-        val resourceName = config.activeResourceName.takeIf { staleResource == null }
-            ?: definition.resources.firstOrNull()?.name
-
         val controller = definition.controller(config.activeControllerName)
         if (config.activeControllerName != null && controller.name != config.activeControllerName) {
             diagnostics += warning(
@@ -54,11 +51,18 @@ object ConfigurationResolver {
             )
         }
 
+        val availableResources = definition.resourcesFor(controller)
+        val staleResource = staleResourceSelection(definition, config)
+        if (staleResource != null) diagnostics += staleResource
+        // 存的 resource 仍在 PI 里但不支持当前 controller：不判失效，当前轮回退首项，切回原 controller 照常恢复
+        val activeResource = availableResources.firstOrNull { it.name == config.activeResourceName }
+            ?: availableResources.firstOrNull()
+        val resourceName = activeResource?.name
+
         val environment = ResolvedEnvironment(
             controller = ResolvedController(controller.name, controller.label),
-            resource = definition.resources.firstOrNull { it.name == resourceName }
-                ?.let { ResolvedResource(it.name, it.label, it.icon) },
-            resourceCandidates = definition.resources.map {
+            resource = activeResource?.let { ResolvedResource(it.name, it.label, it.icon) },
+            resourceCandidates = availableResources.map {
                 ResolvedResource(it.name, it.label, it.icon)
             },
             controllerCandidates = definition.controllers.map { ResolvedController(it.name, it.label) },
@@ -86,7 +90,7 @@ object ConfigurationResolver {
             settingSections = buildSettingSections(definition, globalOptions),
             resourceOptions = buildOptionEditors(
                 definition = definition,
-                optionNames = definition.resources.firstOrNull { it.name == resourceName }?.optionNames.orEmpty(),
+                optionNames = activeResource?.optionNames.orEmpty(),
                 values = resourceName?.let { config.resourceOptionValues[it] }.orEmpty(),
                 controller = controller,
                 resourceName = resourceName,
@@ -98,6 +102,7 @@ object ConfigurationResolver {
                 controller = controller,
                 resourceName = resourceName,
             ),
+            templates = buildTemplates(definition, controller),
             environment = environment,
             diagnostics = diagnostics,
         )
@@ -111,21 +116,28 @@ object ConfigurationResolver {
      */
     fun staleResourceSelection(definition: ProjectDefinition, config: UserConfiguration): Diagnostic? {
         val selected = config.activeResourceName ?: return null
-        val names = definition.resources.map { it.name }
-        if (selected in names) return null
-        return warning("resource", DiagnosticMessages.resourceSelectionMissing(selected, names.firstOrNull()))
+        if (definition.resources.any { it.name == selected }) return null
+        val controller = definition.controller(config.activeControllerName)
+        val fallback = definition.resourcesFor(controller).firstOrNull()?.name
+        return warning("resource", DiagnosticMessages.resourceSelectionMissing(selected, fallback))
     }
 
-    /** 每个 preset 一份配置；无 preset 则空列表 */
+    /** 每个适用当前 controller 的 preset 一份配置；无适用 preset 则空列表 */
     fun initialize(definition: ProjectDefinition, config: UserConfiguration): UserConfiguration {
+        val controller = definition.controller(config.activeControllerName)
         // 与「从模板创建」同路径，避免两条入口语义漂移
-        val configurations = definition.templates.mapNotNull { createFromTemplate(definition, it.name) }
+        val configurations = definition.templates
+            .filter { it.runsOn(controller) }
+            .mapNotNull { createFromTemplate(definition, it.name) }
+        val availableResources = definition.resourcesFor(controller)
+        val activeResource = config.activeResourceName
+            ?.takeIf { name -> availableResources.any { it.name == name } }
+            ?: availableResources.firstOrNull()?.name
         return config.copy(
             initialized = true,
             configurations = configurations,
             activeConfigurationId = configurations.firstOrNull()?.id,
-            activeResourceName = config.activeResourceName
-                ?: definition.resources.firstOrNull()?.name,
+            activeResourceName = activeResource,
         )
     }
 
@@ -197,7 +209,6 @@ object ConfigurationResolver {
                     applicable = applicability == null,
                     missingDefinition = false,
                     unavailableReason = applicability,
-                    unsupported = !isControllerSupported(definition, taskDefinition),
                     options = if (isActive) {
                         buildOptionEditors(
                             definition = definition,
@@ -224,6 +235,30 @@ object ConfigurationResolver {
     /** 外壳能驱动的 Adb controller 里有没有一个能跑它；一个都没有就是 Android 上永远跑不了 */
     fun isControllerSupported(definition: ProjectDefinition, task: TaskDefinition): Boolean =
         definition.controllers.any(task::runsOn)
+
+    /** 外壳能驱动的 Adb controller 里有没有一个支持该 preset；一个都没有就不展示 */
+    fun isControllerSupported(definition: ProjectDefinition, template: ConfigurationTemplate): Boolean =
+        definition.controllers.any(template::runsOn)
+
+    private fun buildTemplates(
+        definition: ProjectDefinition,
+        controller: ControllerDefinition,
+    ): List<ResolvedConfigurationTemplate> = definition.templates
+        .filter { isControllerSupported(definition, it) }
+        .map { template ->
+            val reason = if (template.runsOn(controller)) {
+                null
+            } else {
+                UnavailableReasons.controllerSwitchRequired(
+                    definition.controllers.filter(template::runsOn).map { it.label },
+                )
+            }
+            ResolvedConfigurationTemplate(
+                template = template,
+                applicable = reason == null,
+                unavailableReason = reason,
+            )
+        }
 
     /** null = 适用；否则给出不适用的原因文案 */
     fun checkApplicability(
@@ -311,9 +346,7 @@ object ConfigurationResolver {
         val value = values[option.name]
         return when (option) {
             is OptionDefinition.Choice -> {
-                val selected = (value as? OptionValue.SingleCase)?.case
-                    ?.takeIf { s -> option.cases.any { it.name == s } }
-                    ?: option.effectiveDefaultCase
+                val selected = option.selectedCase(value)?.name
                 OptionEditorState(
                     name = option.name,
                     label = option.label,
@@ -328,8 +361,7 @@ object ConfigurationResolver {
             }
 
             is OptionDefinition.Checkbox -> {
-                // emptyList() = 明确全不选；仅 Unset 才回退默认
-                val selected = (value as? OptionValue.MultipleCases)?.cases ?: option.defaultCases
+                val selected = option.selectedCases(value)
                 OptionEditorState(
                     name = option.name,
                     label = option.label,

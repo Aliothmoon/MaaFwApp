@@ -6,15 +6,18 @@
 用法:
     python scripts/setup_maa_framework.py                  # 取 latest release
     python scripts/setup_maa_framework.py --tag v5.13.0    # 取指定 tag
-    python scripts/setup_maa_framework.py --skip-download  # 只用缓存重新铺一遍
+    python scripts/setup_maa_framework.py --skip-download  # 不联网，用缓存里最新的版本重新铺（可配 --tag）
     python scripts/setup_maa_framework.py --abi arm64-v8a  # 只处理一个 ABI
+    python scripts/setup_maa_framework.py --force          # 内容一致也重新铺
 
 说明:
   - release 产物是 zip（`MAA-android-<arch>-<tag>.zip`），.so 在压缩包的 bin/ 下
   - libc++_shared.so 保留上游那份：MaaFramework 各 so 都链接它
   - bin/plugins/ 是 MaaPluginDemo 的示例插件，默认不打包，要的话加 --with-plugins
-  - 目标目录每次铺之前先清空，避免残留上个版本的 .so
+  - 目标目录和产物一致时跳过；否则先解到暂存目录，再整体换掉旧目录，不残留上个版本的 .so
+  - 下载先写 .part，下完整了才改名，缓存里不会留下残缺的 zip
   - 低于 MIN_VERSION 的 release 拒绝下载，缓存里的旧版本产物铺开时跳过
+  - 代理读 http_proxy / https_proxy；只设了 ALL_PROXY 时用它补上
 """
 
 import argparse
@@ -71,6 +74,12 @@ MIN_VERSION = (5, 13, 0)
 SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.\-]+)?(\+[0-9A-Za-z.\-]+)?$")
 
 
+def version_key(tag: str) -> tuple:
+    """同一核心版本里正式版排在 pre-release 之后"""
+    m = SEMVER_RE.match(tag)
+    return tuple(int(part) for part in m.group(1, 2, 3)), m.group(4) is None, m.group(4) or ""
+
+
 def min_version_text() -> str:
     return "v" + ".".join(map(str, MIN_VERSION))
 
@@ -97,6 +106,16 @@ def _request(url: str, accept: str, with_auth: bool, token: str | None):
     if with_auth and token:
         req.add_header("Authorization", f"token {token}")
     return req
+
+
+def install_proxy_opener() -> None:
+    """urllib 不认 ALL_PROXY：没设 http_proxy / https_proxy 时拿它补上，socks 代理 urllib 用不了，不补"""
+    proxies = urllib.request.getproxies()
+    fallback = proxies.get("all")
+    if fallback and fallback.lower().startswith(("http://", "https://")):
+        for scheme in ("http", "https"):
+            proxies.setdefault(scheme, fallback)
+    urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler(proxies)))
 
 
 def _print_rate_limit_hint(
@@ -174,10 +193,11 @@ def download_file(url: str, dest: Path):
         else:
             _print_rate_limit_hint(e, token_configured=bool(token))
             raise
+    part = dest.with_name(dest.name + ".part")
     with resp_ctx as resp:
         total = int(resp.headers.get("Content-Length", 0))
         downloaded = 0
-        with open(dest, "wb") as f:
+        with open(part, "wb") as f:
             while True:
                 chunk = resp.read(1024 * 1024)
                 if not chunk:
@@ -192,6 +212,9 @@ def download_file(url: str, dest: Path):
                         flush=True,
                     )
         print()
+    if total and downloaded != total:
+        raise OSError(f"{dest.name} 下载不完整：{downloaded}/{total} 字节")
+    part.replace(dest)
 
 
 def get_release_assets(tag: str | None) -> tuple[str, list]:
@@ -226,15 +249,24 @@ def find_android_assets(assets: list) -> dict:
     return result
 
 
-def deploy_zip(archive: Path, abi: str, project_root: Path, with_plugins: bool) -> dict:
-    jnilib_dir = project_root / JNILIBS_DIR / abi
-    if jnilib_dir.exists():
-        shutil.rmtree(jnilib_dir)
-    jnilib_dir.mkdir(parents=True, exist_ok=True)
+def cached_archives(cache_dir: Path) -> dict[str, dict[str, Path]]:
+    """缓存里支持的产物：版本 -> {abi: zip}"""
+    result: dict[str, dict[str, Path]] = {}
+    for archive in cache_dir.glob("MAA-android-*.zip"):
+        m = ZIP_VERSION_RE.search(archive.name)
+        if not m or not is_supported_version(m.group(1)):
+            continue
+        for keyword, abi in ABI_MAP.items():
+            if keyword in archive.name:
+                result.setdefault(m.group(1), {})[abi] = archive
+    return result
 
+
+def deploy_zip(archive: Path, abi: str, project_root: Path, with_plugins: bool, force: bool) -> dict:
+    jnilib_dir = project_root / JNILIBS_DIR / abi
     stats = {"so": 0, "skipped": 0, "plugins": 0}
-    print(f"  [EXTRACT] {archive.name} -> {abi}")
     with zipfile.ZipFile(archive) as zf:
+        picked: dict[str, zipfile.ZipInfo] = {}
         for info in zf.infolist():
             if info.is_dir():
                 continue
@@ -250,14 +282,32 @@ def deploy_zip(archive: Path, abi: str, project_root: Path, with_plugins: bool) 
                     stats["plugins"] += 1
                     continue
             # jniLibs/<abi>/ 是平铺的，同名会互相覆盖
-            dest = jnilib_dir / name
-            if dest.exists():
+            if name in picked:
                 print(f"    [WARN] 同名 .so 冲突，后者覆盖前者: {info.filename}")
-            with zf.open(info) as src, open(dest, "wb") as out:
-                shutil.copyfileobj(src, out)
-            stats["so"] += 1
+            picked[name] = info
+        stats["so"] = len(picked)
 
-    missing = REQUIRED_SO - {f.name for f in jnilib_dir.iterdir()}
+        current = {f.name: f.stat().st_size for f in jnilib_dir.iterdir()} if jnilib_dir.is_dir() else {}
+        if not force and current == {name: info.file_size for name, info in picked.items()}:
+            print(f"  [SKIP] {abi} 与 {archive.name} 一致，不重新铺")
+            return stats
+
+        print(f"  [EXTRACT] {archive.name} -> {abi}")
+        # 解压失败（残缺的 zip、磁盘满）时旧的 jniLibs 还在
+        staging = project_root / CACHE_DIR / f"deploy-{abi}"
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir(parents=True)
+        for name, info in picked.items():
+            with zf.open(info) as src, open(staging / name, "wb") as out:
+                shutil.copyfileobj(src, out)
+
+    if jnilib_dir.exists():
+        shutil.rmtree(jnilib_dir)
+    jnilib_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging.replace(jnilib_dir)
+
+    missing = REQUIRED_SO - set(picked)
     if missing:
         print(f"    [WARN] 缺少关键库: {', '.join(sorted(missing))}")
 
@@ -276,7 +326,9 @@ def main():
                         help="只处理指定 ABI，默认全部")
     parser.add_argument("--with-plugins", action="store_true",
                         help="连 bin/plugins/ 下的示例插件一起打包")
+    parser.add_argument("--force", "-f", action="store_true", help="jniLibs 与产物一致也重新铺")
     args = parser.parse_args()
+    install_proxy_opener()
 
     global API_BASE
     API_BASE = f"https://api.github.com/repos/{args.repo}"
@@ -315,24 +367,35 @@ def main():
     else:
         print("[SKIP] 跳过下载，使用缓存")
 
-    print("\n[DEPLOY] 铺开产物")
-    deployed_version = None
-    for archive in sorted(cache_dir.glob("MAA-android-*.zip")):
-        for keyword, abi in ABI_MAP.items():
-            if keyword in archive.name and abi in target_abis:
-                m = ZIP_VERSION_RE.search(archive.name)
-                if not m or not is_supported_version(m.group(1)):
-                    print(f"  [SKIP] {archive.name}: 低于最低支持版本 {min_version_text()}（或解析不出版本号）")
-                    continue
-                deploy_zip(archive, abi, project_root, args.with_plugins)
-                deployed_version = m.group(1)
-
-    if deployed_version is None:
+    # 只铺这一个版本，缓存里的其他版本不参与
+    cached = cached_archives(cache_dir) if cache_dir.is_dir() else {}
+    if args.skip_download:
+        version = args.tag or max(cached, key=version_key, default=None)
+    else:
+        version = tag_name
+    if version is None:
         print(f"[ERROR] 缓存里没有 {min_version_text()} 及以上的 MAA-android-*.zip，先不带 --skip-download 跑一次")
         sys.exit(1)
+    if not is_supported_version(version):
+        print(f"[ERROR] {version} 低于最低支持版本 {min_version_text()}（或解析不出版本号），拒绝安装")
+        sys.exit(1)
+    archives = cached.get(version, {})
+    missing = [abi for abi in target_abis if abi not in archives]
+    if missing:
+        print(f"[ERROR] 缓存里没有 {version} 的 {', '.join(missing)} 产物，先不带 --skip-download 跑一次")
+        sys.exit(1)
 
-    (project_root / VERSION_FILE).write_text(deployed_version + "\n", encoding="utf-8")
-    print(f"  [VERSION] {VERSION_FILE}: {deployed_version}")
+    print(f"\n[DEPLOY] 铺开 {version}")
+    for abi in target_abis:
+        try:
+            deploy_zip(archives[abi], abi, project_root, args.with_plugins, args.force)
+        except zipfile.BadZipFile as e:
+            shutil.rmtree(cache_dir / f"deploy-{abi}", ignore_errors=True)
+            print(f"[ERROR] {archives[abi].name} 已损坏（{e}），删掉它后重新运行；{abi} 的 jniLibs 没有改动")
+            sys.exit(1)
+
+    (project_root / VERSION_FILE).write_text(version + "\n", encoding="utf-8")
+    print(f"  [VERSION] {VERSION_FILE}: {version}")
 
     print("\n" + "=" * 55)
     print("[DONE] 部署完成")

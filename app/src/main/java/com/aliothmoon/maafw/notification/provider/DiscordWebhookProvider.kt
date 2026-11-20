@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.notification.provider
 
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.NotificationImage
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.util.HttpClientHelper
@@ -20,18 +21,28 @@ class DiscordWebhookProvider(
 
     override val id = "Discord Webhook"
 
-    override suspend fun send(title: String, content: String): NotificationSendResult {
+    override val supportsImage = true
+
+    override suspend fun send(title: String, content: String): NotificationSendResult =
+        sendInternal(title, content, image = null)
+
+    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        sendWithTextFallback(title, content) { sendInternal(title, content, image) }
+
+    private suspend fun sendInternal(title: String, content: String, image: NotificationImage?): NotificationSendResult {
         val settings = settingsManager.current()
         val webhookUrl = settings.discordWebhookUrl.takeIf { it.isNotBlank() }
             ?: return NotificationSendResult.Failed(
                 uiTextOf(R.string.notification_err_discord_webhook_empty),
             )
-        val body = providerJson.encodeToString(
-            DiscordWebhookRequest(content = "$title\n$content"),
-        )
+        val text = "$title\n$content".fitChars(MAX_CONTENT_LENGTH)
 
         return runCatching {
-            httpClient.post(webhookUrl, body).use { response ->
+            if (image == null) {
+                httpClient.post(webhookUrl, providerJson.encodeToString(DiscordWebhookRequest(content = text)))
+            } else {
+                httpClient.postMultipart(webhookUrl, discordMultipart(text, image))
+            }.use { response ->
                 val responseBody = response.body.string()
                 if (response.isSuccessful && responseBody.isEmpty()) {
                     return@use NotificationSendResult.Success
@@ -67,4 +78,9 @@ class DiscordWebhookProvider(
         val message: String? = null,
         val code: Int? = null,
     )
+
+    private companion object {
+        /** content 上限，超了接口回 400 */
+        const val MAX_CONTENT_LENGTH = 2000
+    }
 }

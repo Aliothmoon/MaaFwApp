@@ -14,12 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import java.io.IOException
@@ -40,19 +39,28 @@ class ScheduleStrategyStore(private val context: Context) {
     private val _isLoaded = MutableStateFlow(false)
     val isLoaded: StateFlow<Boolean> = _isLoaded.asStateFlow()
 
-    val strategies: StateFlow<List<ScheduleStrategy>> = context.store.data
-        .map { prefs ->
-            decode(prefs[STRATEGIES_KEY]).also { _isLoaded.value = true }
+    private val _strategies = MutableStateFlow<List<ScheduleStrategy>>(emptyList())
+    val strategies: StateFlow<List<ScheduleStrategy>> = _strategies.asStateFlow()
+
+    init {
+        // 先写规则再置位：分给 map 与 stateIn 两处做，等到 isLoaded 的人仍可能读到 emptyList()，整批重排会把规则当孤儿撤掉
+        scope.launch {
+            context.store.data
+                .map { prefs -> decode(prefs[STRATEGIES_KEY]) }
+                // 读盘 IOException 没人接会把进程带崩；隔一会儿重读，
+                // 期间 isLoaded 保持 false，闹钟那边按「读不出」走重试与慢速接链
+                .retryWhen { cause, _ ->
+                    if (cause !is IOException) return@retryWhen false
+                    Timber.w(cause, "Failed to read schedule rules; retrying")
+                    delay(READ_RETRY_DELAY_MS)
+                    true
+                }
+                .collect {
+                    _strategies.value = it
+                    _isLoaded.value = true
+                }
         }
-        // 读盘 IOException 没人接，stateIn 的协程会把进程带崩；隔一会儿重读，
-        // 期间 isLoaded 保持 false，闹钟那边按「读不出」走重试与慢速接链
-        .retryWhen { cause, _ ->
-            if (cause !is IOException) return@retryWhen false
-            Timber.w(cause, "Failed to read schedule rules; retrying")
-            delay(READ_RETRY_DELAY_MS)
-            true
-        }
-        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+    }
 
     suspend fun add(strategy: ScheduleStrategy) = mutate { it + strategy }
 
@@ -70,8 +78,13 @@ class ScheduleStrategyStore(private val context: Context) {
         current.filterNot { it.id == strategyId }
     }
 
-    suspend fun setEnabled(strategyId: String, enabled: Boolean) = mutate { current ->
-        current.map { if (it.id == strategyId) it.copy(enabled = enabled) else it }
+    /** @return 写进去的那条；[strategies] 异步回流，刚写完拿 [findById] 读到的还是旧值 */
+    suspend fun setEnabled(strategyId: String, enabled: Boolean): ScheduleStrategy? {
+        var written: ScheduleStrategy? = null
+        mutate { current ->
+            current.map { if (it.id == strategyId) it.copy(enabled = enabled).also { s -> written = s } else it }
+        }
+        return written
     }
 
     suspend fun recordTrigger(
