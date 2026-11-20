@@ -256,7 +256,7 @@ fun AppRoot(
             markers = { previewMarkersState.value },
             fps = { gameFpsState.value },
             surfaceEpoch = { previewSurfaceEpochState.value },
-            // 不等 setFixedSize 那一轮：搬一次家要 50ms+ 才对上尺寸，期间遮罩会盖住刚回来的画面
+            // 画中画武装不等 setFixedSize 那一轮，搬家时少 50ms 空窗
             onSurfaceCreated = { previewSurfaceReady = true },
             onSurfaceAvailable = {
                 viewModel.onIntent(SessionIntent.AttachPreviewSurface(it))

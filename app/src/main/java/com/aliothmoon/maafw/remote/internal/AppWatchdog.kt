@@ -74,8 +74,9 @@ object AppWatchdog {
         driftNotified = false
         diedNotified = false
         deadPolls = 0
-        _state.value = STATE_IDLE
-        Ln.i("AppWatchdog: start watching display ${VirtualDisplayManager.getDisplayId()}")
+        val displayId = VirtualDisplayManager.getDisplayId()
+        _state.value = if (displayId != DefaultDisplayConfig.DISPLAY_NONE) STATE_WATCHING else STATE_IDLE
+        Ln.i("AppWatchdog: start watching display $displayId")
         job = scope.launch {
             while (isActive && isRunActive()) {
                 delay(POLL_INTERVAL_MS)
@@ -119,7 +120,7 @@ object AppWatchdog {
 
         val pkg = targetPackage
         if (pkg == null) {
-            _state.value = STATE_IDLE
+            _state.value = STATE_WATCHING
             return
         }
 

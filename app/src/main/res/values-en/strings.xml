@@ -24,14 +24,12 @@
     <string name="tasks_empty_task_hint">Pick tasks to run from the task catalog</string>
     <string name="tasks_add_task">Add tasks</string>
     <string name="tasks_live_preview">Live preview</string>
-    <string name="tasks_preview_waiting_surface">Waiting for frames</string>
-    <string name="virtual_display_game_running">Running</string>
-    <string name="virtual_display_game_stopped">Stopped</string>
+    <string name="virtual_display_task_running">Task running</string>
+    <string name="virtual_display_game_stopped">App stopped</string>
     <string name="virtual_display_app_drifted">Off-display</string>
     <string name="virtual_display_idle">Idle</string>
     <string name="virtual_display_ready">Ready</string>
     <string name="tasks_preview_exit_fullscreen">Exit fullscreen</string>
-    <string name="tasks_preview_idle">Not running</string>
     <string name="tasks_remove">Remove</string>
     <string name="tasks_drag_reorder">Drag to reorder</string>
     <string name="tasks_rename">Rename</string>
