@@ -55,6 +55,11 @@ private fun rememberBufferedTextState(
     return localValue to onValueChange
 }
 
+// 多行也限高，LazyColumn 里高度无约束
+internal const val MULTI_LINE_MAX_LINES = 8
+
+private fun maxLinesOf(singleLine: Boolean): Int = if (singleLine) 1 else MULTI_LINE_MAX_LINES
+
 private fun KeyboardOptions.withDoneIfSingleLine(singleLine: Boolean): KeyboardOptions =
     if (singleLine && imeAction == ImeAction.Default) {
         copy(imeAction = ImeAction.Done)
@@ -111,6 +116,7 @@ fun ITextField(
             label = label?.let { { Text(it) } },
             placeholder = { Text(placeholder) },
             singleLine = singleLine,
+            maxLines = maxLinesOf(singleLine),
             enabled = enabled,
             shape = shape,
             supportingText = supportingText,
@@ -193,6 +199,7 @@ fun ITextFieldWithFocus(
             label = label?.let { { Text(it) } },
             placeholder = { Text(placeholder) },
             singleLine = singleLine,
+            maxLines = maxLinesOf(singleLine),
             enabled = enabled,
             supportingText = supportingText,
             visualTransformation = visualTransformation,

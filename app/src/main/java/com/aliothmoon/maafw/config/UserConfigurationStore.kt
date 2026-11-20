@@ -58,9 +58,9 @@ object UserConfigurationSerializer : Serializer<UserConfiguration> {
         val envelope = try {
             json.decodeFromString<PersistedUserConfiguration>(text)
         } catch (e: SerializationException) {
-            throw CorruptionException("UserConfiguration 反序列化失败", e)
+            throw CorruptionException("UserConfiguration deserialization failed", e)
         } catch (e: IllegalArgumentException) {
-            throw CorruptionException("UserConfiguration 结构非法", e)
+            throw CorruptionException("UserConfiguration structure invalid", e)
         }
         if (envelope.schemaVersion != SCHEMA_VERSION) return defaultValue
         return envelope.config.withSecretsOpened(OptionSecretCipher::open)

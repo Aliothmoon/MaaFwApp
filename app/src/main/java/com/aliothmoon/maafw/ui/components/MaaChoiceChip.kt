@@ -135,6 +135,8 @@ fun <T> MaaSingleChoiceFlow(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** 逐项的前置预览（色点、图标），传给 [MaaChoiceChip] 的 leading */
+    leading: (@Composable (T) -> Unit)? = null,
 ) {
     FlowRow(
         modifier = modifier
@@ -150,6 +152,7 @@ fun <T> MaaSingleChoiceFlow(
                 enabled = enabled,
                 role = Role.RadioButton,
                 onClick = { onSelect(value) },
+                leading = leading?.let { slot -> { slot(value) } },
             )
         }
     }

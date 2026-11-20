@@ -6,10 +6,14 @@ import android.os.IBinder
 import android.os.Process
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.domain.RemoteBackend
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,11 +21,39 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * binder 阻塞取消不掉：超时只是不再等，交给 [onStuck] 善后
+ * 判卡在 [scope] 里进行，调用方中途取消也照样善后，此时结果交给 [onAbandoned]
+ */
+internal suspend fun <R, E : Throwable> awaitOrAbandon(
+    scope: CoroutineScope,
+    timeoutMs: Long,
+    block: () -> R,
+    onAbandoned: (E) -> Unit,
+    onStuck: suspend () -> E,
+): R {
+    val pending = scope.async { block() }
+    val verdict = scope.async {
+        if (withTimeoutOrNull(timeoutMs.milliseconds) { pending.join() } == null) onStuck() else null
+    }
+    val stuck = try {
+        verdict.await()
+    } catch (e: CancellationException) {
+        scope.launch { runCatching { verdict.await()?.let(onAbandoned) } }
+        throw e
+    }
+    if (stuck != null) throw stuck
+    return pending.await()
+}
 
 object RemoteServiceManager : PrivilegedServicePort {
 
@@ -39,6 +71,8 @@ object RemoteServiceManager : PrivilegedServicePort {
     // 调用方默认等待须晚于兜底：先于连接器超时就只剩裸超时，launcher 日志尾部等根因全被截胡
     private const val CALLER_WAIT_MARGIN_MS = 1_000L
 
+    private const val DUMP_TIMEOUT_MS = 3_000L
+
     // 状态迁移（boundBackend / currentBinder / _state）统一在此锁内完成
     private val lock = Any()
 
@@ -47,6 +81,9 @@ object RemoteServiceManager : PrivilegedServicePort {
     private val _state = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
 
     private val timeoutScope = CoroutineScope(MaaDispatchers.Default + SupervisorJob())
+
+    // 卡住的调用挂在这，不拖住调用方
+    private val callScope = CoroutineScope(MaaDispatchers.IO + SupervisorJob())
     private val connectAttempt = AtomicInteger(0)
 
     private val connectors: Map<RemoteBackend, RemoteServiceConnectorBackend> = mapOf(
@@ -56,6 +93,9 @@ object RemoteServiceManager : PrivilegedServicePort {
 
     @Volatile
     private var boundBackend: RemoteBackend? = null
+
+    // 拉起进程时的身份（uid），guarded by lock
+    private var boundIdentity: Int? = null
 
     /**
      * 对外只给不带 binder 的投影：[ServiceState.Connected] 揣着 [RemoteService]，
@@ -79,6 +119,8 @@ object RemoteServiceManager : PrivilegedServicePort {
                 if (boundBackend != backend) {
                     ServiceBootLogger.event("CB_ON_CONNECTED_STALE", "backend=$backend bound=$boundBackend")
                     Timber.w("Ignoring stale %s connection", backend)
+                    // 没人认领的进程不收就成了孤儿
+                    runCatching { RemoteService.Stub.asInterface(binder).destroy() }
                     return
                 }
                 ServiceBootLogger.event("CB_ON_CONNECTED", "backend=$backend")
@@ -185,10 +227,11 @@ object RemoteServiceManager : PrivilegedServicePort {
     }
 
     override fun bind() {
-        val backend = RemoteAccessCoordinator.refresh().configuredBackend
-        if (!RemoteAccessCoordinator.isGranted(backend)) {
-            val exception = IllegalStateException("${backend.display} permission not granted")
-            ServiceBootLogger.event("BIND_DENIED", "backend=$backend not granted")
+        val access = RemoteAccessCoordinator.refresh()
+        val backend = access.configuredBackend
+        if (!access.isGranted(backend)) {
+            val exception = RemoteAccessException(backend, access.failureOf(backend))
+            ServiceBootLogger.event("BIND_DENIED", "backend=$backend ${exception.failure}")
             Timber.w(exception)
             synchronized(lock) {
                 boundBackend = null
@@ -197,10 +240,21 @@ object RemoteServiceManager : PrivilegedServicePort {
             return
         }
 
+        val identity = spawnIdentity(backend)
         val attempt: Int
         synchronized(lock) {
             if (_state.value is ServiceState.Connecting && boundBackend == backend) {
                 ServiceBootLogger.event("BIND_SKIP", "already connecting backend=$backend")
+                return
+            }
+            // Shizuku / su 重启不影响已经拉起的进程；授权一恢复就重绑会把在跑的那一轮打断。
+            // 身份变了（adb 起的 Shizuku 换成 root 起的）才重起，旧进程的权限不对
+            if (_state.value is ServiceState.Connected && boundBackend == backend &&
+                currentBinder.get()?.isBinderAlive == true &&
+                identity != null && identity == boundIdentity
+            ) {
+                ServiceBootLogger.event("BIND_SKIP", "already connected backend=$backend uid=$identity")
+                Timber.i("Keep connected %s service (uid=%d)", backend, identity)
                 return
             }
 
@@ -210,6 +264,7 @@ object RemoteServiceManager : PrivilegedServicePort {
             }
 
             boundBackend = backend
+            boundIdentity = identity
             attempt = connectAttempt.incrementAndGet()
             ServiceBootLogger.event("BIND", "backend=$backend attempt=$attempt")
             _state.value = ServiceState.Connecting
@@ -217,6 +272,11 @@ object RemoteServiceManager : PrivilegedServicePort {
             connectors.getValue(backend).connect(connectorCallbacks)
         }
         startConnectTimeout(attempt, backend)
+    }
+
+    private fun spawnIdentity(backend: RemoteBackend): Int? = when (backend) {
+        RemoteBackend.SHIZUKU -> ShizukuManager.serverUid()
+        RemoteBackend.ROOT -> 0
     }
 
     private fun startConnectTimeout(attempt: Int, backend: RemoteBackend) {
@@ -276,6 +336,29 @@ object RemoteServiceManager : PrivilegedServicePort {
         }
     }
 
+    private fun unbindIf(binder: IBinder) {
+        synchronized(lock) {
+            if (currentBinder.get() !== binder) return
+            unbind()
+        }
+    }
+
+    // 线程栈只进 service_boot_debug.log，不发 PI 作者的 Sentry。调用方走了就没人要这个结论，判卡时已经记过
+    override suspend fun <R> callOrRestart(
+        service: RemoteService,
+        call: String,
+        timeoutMs: Long,
+        block: (RemoteService) -> R,
+    ): R = awaitOrAbandon<R, RemoteCallStuckException>(callScope, timeoutMs, { block(service) }, onAbandoned = {}) {
+        val dump = withTimeoutOrNull(DUMP_TIMEOUT_MS.milliseconds) {
+            callScope.async { runCatching { service.dumpThreads() }.getOrNull() }.await()
+        }
+        ServiceBootLogger.event("CALL_STUCK", "call=$call after ${timeoutMs}ms" + dump?.let { "\n$it" }.orEmpty())
+        Timber.e("Remote call %s stuck for %dms, restarting privileged process", call, timeoutMs)
+        unbindIf(service.asBinder())
+        RemoteCallStuckException(call, dump)
+    }
+
     suspend fun getInstance(timeoutMs: Long? = null): RemoteService {
         serviceOrNull()?.let { return it }
 
@@ -309,7 +392,37 @@ object RemoteServiceManager : PrivilegedServicePort {
         if (_state.value is ServiceState.Connected) boundBackend else null
 
 
-    override suspend fun <R> useService(action: suspend (RemoteService) -> R): R {
+    // 整体切到 IO：授权刷新与 getInstance 里的 bind 都是同步 binder 调用，调用方忘了切就是 ANR
+    override suspend fun <R> useService(action: suspend (RemoteService) -> R): R = withContext(MaaDispatchers.IO) {
+        ensureAccess()?.let { throw RemoteAccessException(it.backend, it.failure) }
+        val service = getInstance()
+        action(service)
+    }
+
+    override suspend fun connect(): ServiceConnectResult = withContext(MaaDispatchers.IO) { connectOnIo() }
+
+    private suspend fun connectOnIo(): ServiceConnectResult {
+        ensureAccess()?.let { return it }
+        val backend = boundBackend ?: RemoteAccessCoordinator.configuredBackend()
+        return try {
+            getInstance()
+            ServiceConnectResult.Connected
+        } catch (e: TimeoutCancellationException) {
+            // 等连接超时与调用方自己的超时是同一个异常类型，外层取消了就别吞
+            currentCoroutineContext().ensureActive()
+            ServiceConnectResult.Failed(backend, e)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ServiceConnectResult.Failed(backend, e)
+        }
+    }
+
+    /** 未授权先请求一次；就绪返回 null，并把绑定切到当前后端 */
+    private suspend fun ensureAccess(): ServiceConnectResult.NotReady? {
+        // 已连着当前后端就直接用：Shizuku / su 停了，它拉起的进程照样活着，停止与新一轮都还能走
+        if (serviceOrNull() != null && boundBackend == RemoteAccessCoordinator.configuredBackend()) return null
+
         var accessState = RemoteAccessCoordinator.refresh()
         var backend = accessState.configuredBackend
         if (!accessState.isGranted(backend)) {
@@ -317,7 +430,7 @@ object RemoteServiceManager : PrivilegedServicePort {
             accessState = RemoteAccessCoordinator.refresh()
             backend = accessState.configuredBackend
             if (!granted || !accessState.isGranted(backend)) {
-                throw IllegalStateException("${backend.display} permission not granted")
+                return ServiceConnectResult.NotReady(backend, accessState.failureOf(backend))
             }
         }
 
@@ -325,11 +438,13 @@ object RemoteServiceManager : PrivilegedServicePort {
             Timber.i("Rebinding remote service from %s to %s", boundBackend, backend)
             unbind()
         }
-
-        val service = getInstance()
-        return action(service)
+        return null
     }
 }
+
+/** 只在未授权时有意义：没在跑也就谈不上授权，两者分开报 */
+private fun RemoteAccessState.failureOf(backend: RemoteBackend): RemoteAccessFailure =
+    if (isAvailable(backend)) RemoteAccessFailure.NOT_GRANTED else RemoteAccessFailure.UNAVAILABLE
 
 private fun RemoteServiceManager.ServiceState.toPrivilegedServiceState() = when (this) {
     is RemoteServiceManager.ServiceState.Connected -> PrivilegedServiceState.Connected

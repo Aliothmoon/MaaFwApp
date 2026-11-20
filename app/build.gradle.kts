@@ -44,6 +44,8 @@ baselineProfile {
 
 dependencies {
     compileOnly(project(":hidden-api"))
+    // 特权进程代码的单测要 mock 隐藏接口
+    testImplementation(project(":hidden-api"))
 
     implementation(project(":annotation-api"))
     ksp(project(":ksp-processor"))

@@ -1,9 +1,9 @@
 package com.aliothmoon.maafw.privileged
 
+import android.os.ParcelFileDescriptor
 import moe.shizuku.server.IRemoteProcess
 import moe.shizuku.server.IShizukuService
 import rikka.shizuku.Shizuku
-import timber.log.Timber
 
 /**
  * Shizuku newProcess 前台拉起：adb 模式下 launcher 已是 shell 身份，直接 exec 成服务进程，
@@ -23,16 +23,15 @@ object ShizukuSpawner : ProcessSpawner {
     override fun spawn(command: String): SpawnHandle =
         RemoteProcessHandle(requireServer().newProcess(arrayOf("sh", "-c", command), null, null))
 
-    override fun killResidual(processName: String) {
-        runCatching {
-            val process = requireServer().newProcess(
-                arrayOf("sh", "-c", killByNameCommand(processName)), null, null
-            )
-            // 同步等 kill 完成，避免与下一次拉起交错
+    override fun run(command: String): List<String> {
+        val process = requireServer().newProcess(arrayOf("sh", "-c", command), null, null)
+        try {
+            val out = ParcelFileDescriptor.AutoCloseInputStream(process.inputStream)
+                .bufferedReader().use { it.readLines() }
             runCatching { process.waitFor() }
+            return out
+        } finally {
             runCatching { process.destroy() }
-        }.onFailure {
-            Timber.w(it, "kill residual %s failed", processName)
         }
     }
 

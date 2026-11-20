@@ -35,7 +35,7 @@ class AppLogDetailViewModel(
                 val file = writer.listFiles().firstOrNull { it.name == fileName }
                     ?: return@withContext emptyList()
                 runCatching { file.readLines() }.getOrElse {
-                    Timber.w(it, "读错误日志失败：%s", fileName)
+                    Timber.w(it, "read app log failed: %s", fileName)
                     emptyList()
                 }
             }

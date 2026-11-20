@@ -9,7 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -61,6 +63,38 @@ class RunSessionLogStoreTest {
         assertEquals(RunLogKind.Info, (records[1] as RunSessionRecord.Line).kind)
         assertEquals("""{"name":"A"}""", (records[2] as RunSessionRecord.Line).detail)
         assertEquals(RunSessionOutcome.COMPLETED, (records[3] as RunSessionRecord.Footer).outcome)
+    }
+
+    @Test
+    fun `task marks round trip and plain lines do not spell out a null mark`() = runBlocking {
+        val mark = RunLogTaskMark(RunLogTaskEdge.Failed, "清体力")
+        val writer = checkNotNull(store.open(START, listOf("清体力")))
+        writer.write(
+            listOf(
+                RunSessionRecord.Line(START + 1, RunLogKind.Error, "任务失败: 清体力", task = mark),
+                RunSessionRecord.Line(START + 2, RunLogKind.Info, "好的"),
+            ),
+        )
+        writer.close()
+        val file = sessionFiles().single()
+
+        val lines = store.read(file.name).filterIsInstance<RunSessionRecord.Line>()
+        assertEquals(mark, lines[0].task)
+        assertNull(lines[1].task)
+        // 上千行里只有起止几行有标记，空值写成 "task":null 是白占体积
+        assertFalse(file.readLines().last().contains("\"task\""))
+    }
+
+    /** 旧版本写的行没有 task 字段，照样解得出来，详情页据此退回平铺 */
+    @Test
+    fun `lines written before task marks still decode`() = runBlocking {
+        checkNotNull(store.open(START, listOf("a"))).close()
+        val file = sessionFiles().single()
+        file.appendText("""{"type":"line","atMillis":1,"kind":"Info","text":"任务开始: a","detail":null}""" + "\n")
+
+        val line = store.read(file.name).filterIsInstance<RunSessionRecord.Line>().single()
+        assertEquals("任务开始: a", line.text)
+        assertNull(line.task)
     }
 
     /** 摘要全部来自文件名，列表页因此不必读内容 */

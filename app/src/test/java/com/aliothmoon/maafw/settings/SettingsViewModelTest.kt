@@ -22,6 +22,8 @@ import com.aliothmoon.maafw.update.UpdateDownloadFailure
 import com.aliothmoon.maafw.update.UpdateInfo
 import com.aliothmoon.maafw.update.UpdateResolveRequest
 import com.aliothmoon.maafw.update.UpdateResolveResult
+import com.aliothmoon.maafw.update.CdkVerification
+import com.aliothmoon.maafw.update.CdkVerifyRequest
 import com.aliothmoon.maafw.update.UpdateService
 import com.aliothmoon.maafw.update.UpdateSource
 import io.mockk.coEvery
@@ -78,6 +80,7 @@ class SettingsViewModelTest {
         var downloaded: ResolvedUpdate? = null
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } coAnswers {
                     val request = firstArg<UpdateCheckRequest>()
                     checkSources += request.source
@@ -112,9 +115,9 @@ class SettingsViewModelTest {
         viewModel.onIntent(SettingsIntent.DownloadUpdate)
         advanceUntilIdle()
 
-        // 手动一次 + 填 CDK 触发的静默检查一次；都打所选的 Mirror酱 源
-        assertEquals(2, checkRequests.size)
-        assertEquals(listOf(UpdateSource.MIRRORCHYAN, UpdateSource.MIRRORCHYAN), checkSources)
+        // 只有手动那一次；填 CDK 走的是 verifyCdk，不再白发一次检查
+        assertEquals(1, checkRequests.size)
+        assertEquals(listOf(UpdateSource.MIRRORCHYAN), checkSources)
         assertEquals(UpdateChannel.BETA, checkRequests.first().channel)
 
         // 只有下载这一次 resolve，源与 CDK 都来自设置
@@ -132,6 +135,7 @@ class SettingsViewModelTest {
         val resolveRequests = mutableListOf<UpdateResolveRequest>()
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } coAnswers {
                     checkSources += firstArg<UpdateCheckRequest>().source
                     UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("2.0.0"))
@@ -161,6 +165,7 @@ class SettingsViewModelTest {
         var resolved = false
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } returns
                     UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
                 coEvery { resolve(any()) } coAnswers {
@@ -188,6 +193,7 @@ class SettingsViewModelTest {
         var requests = 0
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } coAnswers {
                     requests++
                     gate.await()
@@ -209,6 +215,7 @@ class SettingsViewModelTest {
     fun `manual check that is up to date emits a message`() = runTest {
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } returns UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0")
             },
         )
@@ -241,6 +248,7 @@ class SettingsViewModelTest {
         var checks = 0
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } coAnswers {
                     checks++
                     UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
@@ -262,6 +270,7 @@ class SettingsViewModelTest {
         var checks = 0
         viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } coAnswers {
                     checks++
                     UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0")
@@ -277,6 +286,7 @@ class SettingsViewModelTest {
     fun `startup check that is up to date only toasts`() = runTest {
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } returns
                     UpdateCheckResult.UpToDate(UpdateSource.MIRRORCHYAN, "1.0.0")
             },
@@ -300,6 +310,7 @@ class SettingsViewModelTest {
     fun `startup check failure pops error dialog`() = runTest {
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } returns
                     UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.NETWORK)
             },
@@ -312,11 +323,30 @@ class SettingsViewModelTest {
         assertNull(panel.updatePrompt)
     }
 
+    /** PI 没配更新源是合法的，每次启动都弹错误窗用户也无从下手 */
+    @Test
+    fun `startup check stays quiet when the source is not configured`() = runTest {
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
+                coEvery { check(any()) } returns
+                    UpdateCheckResult.SourceFailed(UpdateSource.MIRRORCHYAN, UpdateCheckFailure.MISSING_CONFIGURATION)
+            },
+            settings = FakeAppSettingsGateway().also { it.setAutoCheckUpdate(true) },
+        )
+        advanceUntilIdle()
+
+        val panel = latestPanel(viewModel)
+        assertNull(panel.errorPrompt)
+        assertFalse(panel.checking)
+    }
+
     @Test
     fun `startup auto download downloads and installs without prompt`() = runTest {
         var downloaded = false
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } returns
                     UpdateCheckResult.UpdateAvailable(UpdateSource.GITHUB, UpdateInfo("2.0.0"))
                 coEvery { resolve(any()) } returns UpdateResolveResult.Resolved(
@@ -345,12 +375,15 @@ class SettingsViewModelTest {
         assertFalse(panel.downloading)
     }
 
+    /** 填 CDK 只验 CDK：不检查、不解析下载地址，面板只多一行状态 */
     @Test
-    fun `filling cdk triggers a silent check without any prompt`() = runTest {
+    fun `filling cdk verifies it without checking or resolving`() = runTest {
         var checks = 0
         var validations = 0
+        val verified = mutableListOf<CdkVerifyRequest>()
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { resolve(any()) } coAnswers {
                     validations++
                     UpdateResolveResult.Resolved(
@@ -361,30 +394,84 @@ class SettingsViewModelTest {
                     checks++
                     UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
                 }
+                coEvery { verifyCdk(capture(verified)) } returns CdkVerification.Valid(expiresAtSec = 1_900_000_000L)
             },
         )
         advanceUntilIdle()
-        assertEquals(0, checks)
 
         viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk("cdk-1"))
         advanceUntilIdle()
-        // 静默：查一次但不验证，结果整个丢弃，面板状态一个字段都不动
-        assertEquals(1, checks)
+        assertEquals(0, checks)
         assertEquals(0, validations)
+        assertEquals("cdk-1", verified.single().cdk)
+        assertEquals("mirror-rid", verified.single().mirrorchyanRid)
         val panel = latestPanel(viewModel)
+        assertEquals(CdkStatus.Done(CdkVerification.Valid(1_900_000_000L)), panel.cdkStatus)
         assertNull(panel.updatePrompt)
         assertNull(panel.errorPrompt)
-        assertNull(panel.checkResult)
 
+        // 清空 CDK：状态行跟着撤，不再发请求
         viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk(""))
         advanceUntilIdle()
-        assertEquals(1, checks)
+        assertEquals(1, verified.size)
+        assertEquals(CdkStatus.None, latestPanel(viewModel).cdkStatus)
+    }
+
+    /** 输完一秒内又清空：防抖不能把清空前那份吐出去验，状态行也不能卡在「正在验证」 */
+    @Test
+    fun `clearing the cdk within the debounce window verifies nothing`() = runTest {
+        val verified = mutableListOf<CdkVerifyRequest>()
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { check(any()) } returns
+                    UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
+                coEvery { verifyCdk(capture(verified)) } returns CdkVerification.Valid(null)
+            },
+        )
+        advanceUntilIdle()
+
+        viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk("cdk-1"))
+        advanceTimeBy(500)
+        viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk(""))
+        advanceUntilIdle()
+
+        assertEquals(emptyList<CdkVerifyRequest>(), verified)
+        assertEquals(CdkStatus.None, latestPanel(viewModel).cdkStatus)
+    }
+
+    /** 已验过有效的，进页再验时碰上网络失败不降级 */
+    @Test
+    fun `a verified cdk survives a later network failure`() = runTest {
+        val results = ArrayDeque(listOf(CdkVerification.Valid(null), CdkVerification.Unverified))
+        val viewModel = viewModel(
+            service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
+                coEvery { verifyCdk(any()) } coAnswers { results.removeFirst() }
+            },
+        )
+        viewModel.onIntent(SettingsIntent.SetMirrorchyanCdk("cdk-1"))
+        advanceUntilIdle()
+
+        viewModel.onIntent(SettingsIntent.VerifyCdk)
+        advanceUntilIdle()
+
+        assertEquals(CdkStatus.Done(CdkVerification.Valid(null)), latestPanel(viewModel).cdkStatus)
+    }
+
+    @Test
+    fun `days left rounds up and reports expired as zero`() {
+        val now = 1_000_000_000_000L
+        assertEquals(null, cdkDaysLeft(null, now))
+        assertEquals(0, cdkDaysLeft(now / 1_000, now))
+        assertEquals(1, cdkDaysLeft(now / 1_000 + 60, now))
+        assertEquals(8, cdkDaysLeft(now / 1_000 + 7 * 86_400 + 1, now))
     }
 
     @Test
     fun `download with invalid cdk pops error dialog`() = runTest {
         val viewModel = viewModel(
             service = mockk {
+                coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
                 coEvery { check(any()) } returns
                     UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
                 coEvery { resolve(any()) } returns
@@ -543,6 +630,7 @@ class SettingsViewModelTest {
 
     private fun viewModel(
         service: UpdateService = mockk {
+            coEvery { verifyCdk(any()) } returns CdkVerification.Unverified
             coEvery { check(any()) } returns
                 UpdateCheckResult.UpdateAvailable(UpdateSource.MIRRORCHYAN, UpdateInfo("2.0.0"))
             coEvery { resolve(any()) } returns UpdateResolveResult.Resolved(

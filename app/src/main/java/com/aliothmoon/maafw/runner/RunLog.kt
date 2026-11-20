@@ -15,12 +15,14 @@ import kotlinx.serialization.Serializable
  */
 data class RunLogEntry(
     val id: Long,
-    val atMillis: Long,
-    val kind: RunLogKind,
+    override val atMillis: Long,
+    override val kind: RunLogKind,
     val text: UiText,
     /** 原样 details_json；外壳自产与已合成的行没有 */
     val detail: String? = null,
-)
+    /** 只有任务开始 / 完成 / 失败那三句带，屏上按它分组，见 [groupRunLog] */
+    override val task: RunLogTaskMark? = null,
+) : RunLogLine
 
 /**
  * 日志分级，取自桌面端 MXU 的 `LogType`（info / success / warning / error / agent / focus）

@@ -289,6 +289,28 @@ class RunLogRecorderTest {
         )
     }
 
+    /** 任务起止标记跟着进屏上那份与会话文件，历史详情页才分得了组 */
+    @Test
+    fun `task marks reach both the screen and the session file`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("清体力"), ID)
+        runner.emit(RunnerEvent.Callback("Tasker.Task.Starting", """{"entry":"Sanity"}"""), taskLabel = "清体力")
+        runner.emit(RunnerEvent.Log("跑起来了"), taskLabel = "清体力")
+        runner.emit(RunnerEvent.Callback("Tasker.Task.Succeeded", """{"entry":"Sanity"}"""), taskLabel = "清体力")
+        settleRunLog()
+
+        val expected = listOf(
+            RunLogTaskMark(RunLogTaskEdge.Start, "清体力"),
+            null,
+            RunLogTaskMark(RunLogTaskEdge.Succeeded, "清体力"),
+        )
+        assertEquals(expected, recorder.runLog.value.progress.map { it.task })
+        recorder.finish(runner)
+        assertEquals(expected, sessionRecords().filterIsInstance<RunSessionRecord.Line>().map { it.task })
+    }
+
     /** 没投出去也要留一份：「昨晚为什么没跑」是查这份日志的头号问题 */
     @Test
     fun `a round that never dispatched still gets a footer`() = runTest(dispatcher) {

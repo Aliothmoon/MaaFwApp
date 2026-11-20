@@ -15,9 +15,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.overlay.OverlayViewModelOwner
 import com.aliothmoon.maafw.runner.FocusDispatcher
-import com.aliothmoon.maafw.runner.RunnerPhase
-import com.aliothmoon.maafw.runner.RunnerPort
-import com.aliothmoon.maafw.runner.isBusy
+import com.aliothmoon.maafw.runner.ScreenSaverShow
 import com.aliothmoon.maafw.runner.toLogText
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.theme.MaaFwTheme
@@ -38,7 +36,6 @@ import timber.log.Timber
  */
 class ScreenSaverOverlayManager(
     private val context: Context,
-    private val runnerPort: RunnerPort,
     private val focusDispatcher: FocusDispatcher,
     private val appSettings: AppSettingsGateway,
 ) {
@@ -53,7 +50,6 @@ class ScreenSaverOverlayManager(
     private val viewModelOwner = OverlayViewModelOwner()
 
     private var composeView: ComposeView? = null
-    private var phaseJob: Job? = null
     private var logJob: Job? = null
 
     private val _isShowing = MutableStateFlow(false)
@@ -62,54 +58,26 @@ class ScreenSaverOverlayManager(
     /** 屏保上滚动那一行；只保最新一条，历史留在运行日志里 */
     private val latestLog = MutableStateFlow<String?>(null)
 
+    /**
+     * 运行期的自动盖与撤归 `ScreenSaverHook`，这里只管切到前台模式时撤掉。
+     * 原先在这里跟着 phase 盖撤，与挂载物两头各管：关屏那轮照样盖上，收尾还没走到就先撤了
+     */
     fun setup() {
         scope.launch {
             appSettings.runMode.collect { mode ->
-                when (mode) {
-                    RunMode.BACKGROUND -> observePhase()
-                    RunMode.FOREGROUND -> {
-                        stopObservingPhase()
-                        hide()
-                    }
-                }
+                if (mode == RunMode.FOREGROUND) hide()
             }
         }
-    }
-
-    // ── 执行态 ──
-
-    private fun observePhase() {
-        if (phaseJob != null) return
-        phaseJob = scope.launch {
-            var previous: RunnerPhase = runnerPort.state.value.phase
-            runnerPort.state.collect { state ->
-                val current = state.phase
-                when {
-                    // 开关只管「自动盖」；手动盖上的那次不受它影响
-                    !previous.isBusy && current.isBusy ->
-                        if (appSettings.screenSaverEnabled.value) show()
-
-                    // 结束就撤，别让用户回来面对一块黑屏还得先滑一下
-                    previous.isBusy && !current.isBusy -> hide()
-                }
-                previous = current
-            }
-        }
-    }
-
-    private fun stopObservingPhase() {
-        phaseJob?.cancel()
-        phaseJob = null
     }
 
     // ── 显隐 ──
 
-    /** 返回是否真的盖上了；没有悬浮窗权限时 addView 会抛，这里吞掉并如实回 false */
-    suspend fun show(): Boolean = withContext(Dispatchers.Main.immediate) {
-        if (_isShowing.value) return@withContext true
+    /** 没有悬浮窗权限时 addView 会抛，这里吞掉并如实回 [ScreenSaverShow.FAILED] */
+    suspend fun show(): ScreenSaverShow = withContext(Dispatchers.Main.immediate) {
+        if (_isShowing.value) return@withContext ScreenSaverShow.ALREADY_SHOWN
         if (appSettings.runMode.value != RunMode.BACKGROUND) {
             Timber.w("Not in background mode; ignoring screen-saver show request")
-            return@withContext false
+            return@withContext ScreenSaverShow.FAILED
         }
 
         val view = createView()
@@ -122,7 +90,7 @@ class ScreenSaverOverlayManager(
                 Timber.d("Screen saver shown")
             }
             .onFailure { Timber.e(it, "Failed to show screen saver") }
-        _isShowing.value
+        if (_isShowing.value) ScreenSaverShow.SHOWN else ScreenSaverShow.FAILED
     }
 
     suspend fun hide() = withContext(Dispatchers.Main.immediate) {
@@ -155,6 +123,15 @@ class ScreenSaverOverlayManager(
         }
     }
 
+    private fun setBrightness(value: Float) {
+        val view = composeView ?: return
+        val params = view.layoutParams as? WindowManager.LayoutParams ?: return
+        if (params.screenBrightness == value) return
+        params.screenBrightness = value
+        runCatching { windowManager.updateViewLayout(view, params) }
+            .onFailure { Timber.w(it, "Failed to update screen saver brightness") }
+    }
+
     private fun createView(): ComposeView = ComposeView(context).apply {
         setViewTreeLifecycleOwner(viewModelOwner)
         setViewTreeViewModelStoreOwner(viewModelOwner)
@@ -166,6 +143,7 @@ class ScreenSaverOverlayManager(
                 ScreenSaverView(
                     latestLog = latestLog,
                     onUnlock = { scope.launch { hide() } },
+                    onBrightnessChange = ::setBrightness,
                 )
             }
         }
@@ -195,19 +173,17 @@ class ScreenSaverOverlayManager(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             flags,
-            PixelFormat.TRANSLUCENT,
+            // 整屏纯黑，不透明省掉与下层的混合
+            PixelFormat.OPAQUE,
         ).apply {
             gravity = Gravity.CENTER
-            screenBrightness = MIN_BRIGHTNESS
+            screenBrightness = DIM_BRIGHTNESS
             layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
     }
 
     private companion object {
-        /** 0f 在部分 ROM 上被当成「跟随系统」，给一个够小但非零的值 */
-        const val MIN_BRIGHTNESS = 0.01f
-
         /** 覆盖三大厂的手势条高度还有余量；解锁条本身离底 56dp，不会被这块挡住 */
         const val GESTURE_EXCLUSION_DP = 120
     }

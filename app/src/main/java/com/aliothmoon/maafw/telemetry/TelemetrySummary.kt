@@ -53,15 +53,13 @@ object TelemetrySummary {
 
         val selected = when (option) {
             is OptionDefinition.Choice -> {
-                val case = (value as? OptionValue.SingleCase)?.case
-                    ?.takeIf { s -> option.cases.any { it.name == s } }
-                    ?: option.effectiveDefaultCase
+                val case = option.selectedCase(value)?.name
                 if (case != null) put(optionName, if (option is OptionDefinition.Switch) switchValue(case) else case)
                 listOfNotNull(case)
             }
 
             is OptionDefinition.Checkbox -> {
-                val cases = (value as? OptionValue.MultipleCases)?.cases ?: option.defaultCases
+                val cases = option.selectedCases(value)
                 if (cases.isEmpty()) put(optionName, NONE)
                 cases.forEach { put("$optionName.$it", "true") }
                 cases

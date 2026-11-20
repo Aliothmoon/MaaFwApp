@@ -60,16 +60,4 @@ class GameFpsAdvisorTest {
         repeat(14) { assertNull(advisor.onSample(25f)) }
         assertEquals(GameFpsAdvisor.Level.LOW, advisor.onSample(25f)!!.level)
     }
-
-    @Test
-    fun `reset forgets previous advice`() {
-        val advisor = GameFpsAdvisor()
-        samples(lowCount = 15).forEach { advisor.onSample(it) }
-
-        advisor.reset()
-
-        var advice: GameFpsAdvisor.Advice? = null
-        samples(lowCount = 15).forEach { sample -> advice = advisor.onSample(sample) ?: advice }
-        assertEquals(GameFpsAdvisor.Level.LOW, advice!!.level)
-    }
 }

@@ -33,6 +33,9 @@ class RunLogComposer {
     private var resourceStarted = 0
     private var resourceSucceeded = 0
 
+    /** 当前任务开始的时刻；串行投递，同时只有一个任务在跑，不必按 task_id 建表 */
+    private var taskStartedAt: Long? = null
+
     fun reset() {
         lastKind = null
         lastText = null
@@ -40,6 +43,7 @@ class RunLogComposer {
         agentFlooded = false
         resourceStarted = 0
         resourceSucceeded = 0
+        taskStartedAt = null
     }
 
     /** 返回 null 表示这条不展示（认不出的回调、被去重掉的，或洪泛期的 agent 输出） */
@@ -78,7 +82,7 @@ class RunLogComposer {
                 detail = event.raw,
             )
 
-            is RunnerEvent.Callback -> callbackEntry(event, context) ?: return null
+            is RunnerEvent.Callback -> callbackEntry(event, atMillis, context) ?: return null
         }
 
         // 资源多路径逐条发同样的通知，合成后文案一模一样；连着重复只留第一条
@@ -87,7 +91,7 @@ class RunLogComposer {
         lastKind = composed.kind
         lastText = composed.text
 
-        return RunLogEntry(id, atMillis, composed.kind, composed.text, composed.detail)
+        return RunLogEntry(id, atMillis, composed.kind, composed.text, composed.detail, composed.task)
     }
 
     /**
@@ -135,7 +139,7 @@ class RunLogComposer {
      * `Node.*` 与点击、截图一秒几十条，只有事件名谁也看不懂；排障要的原文与 details
      * MaaFramework 自己的 maa.log 里都有全份，这里再抄一遍只会把人要看的行埋掉
      */
-    private fun callbackEntry(event: RunnerEvent.Callback, context: RunLogContext): Composed? {
+    private fun callbackEntry(event: RunnerEvent.Callback, atMillis: Long, context: RunLogContext): Composed? {
         // 落到 else 的 Node.* 是识别期最密的一档，它不看 details；compose 单协程，不必上锁
         val details by lazy(LazyThreadSafetyMode.NONE) { parseDetails(event.details) }
 
@@ -181,24 +185,44 @@ class RunLogComposer {
                 event.details,
             )
 
-            TASK_STARTING -> Composed(
-                RunLogKind.Info,
-                uiTextOf(R.string.run_log_task_starting, context.taskLabel(details)),
-            )
+            TASK_STARTING -> {
+                taskStartedAt = atMillis
+                val label = context.taskLabel(details)
+                Composed(
+                    RunLogKind.Info,
+                    uiTextOf(R.string.run_log_task_starting, label),
+                    task = RunLogTaskMark(RunLogTaskEdge.Start, label),
+                )
+            }
 
-            TASK_SUCCEEDED -> Composed(
-                RunLogKind.Success,
-                uiTextOf(R.string.run_log_task_succeeded, context.taskLabel(details)),
-            )
+            TASK_SUCCEEDED -> {
+                val label = context.taskLabel(details)
+                Composed(
+                    RunLogKind.Success,
+                    withElapsed(uiTextOf(R.string.run_log_task_succeeded, label), atMillis),
+                    task = RunLogTaskMark(RunLogTaskEdge.Succeeded, label),
+                )
+            }
 
-            TASK_FAILED -> Composed(
-                RunLogKind.Error,
-                uiTextOf(R.string.run_log_task_failed, context.taskLabel(details)),
-                event.details,
-            )
+            TASK_FAILED -> {
+                val label = context.taskLabel(details)
+                Composed(
+                    RunLogKind.Error,
+                    withElapsed(uiTextOf(R.string.run_log_task_failed, label), atMillis),
+                    event.details,
+                    RunLogTaskMark(RunLogTaskEdge.Failed, label),
+                )
+            }
 
             else -> null
         }
+    }
+
+    /** 对齐 MAA 的完成日志带用时；没见到开始（中途接上的日志）就不带 */
+    private fun withElapsed(line: UiText, atMillis: Long): UiText {
+        val startedAt = taskStartedAt ?: return line
+        taskStartedAt = null
+        return uiTextOf(R.string.run_log_task_elapsed, line, elapsedText(atMillis - startedAt))
     }
 
     private fun parseDetails(raw: String): JsonObject? =
@@ -208,6 +232,7 @@ class RunLogComposer {
         val kind: RunLogKind,
         val text: UiText,
         val detail: String? = null,
+        val task: RunLogTaskMark? = null,
     )
 
     private companion object {
@@ -256,6 +281,18 @@ data class RunLogContext(
         resourceLabel?.takeIf { it.isNotBlank() }
             ?: details.string("path")?.substringAfterLast('/')
             ?: UNKNOWN_SUBJECT
+}
+
+internal fun elapsedText(millis: Long): UiText {
+    val total = (millis / 1000).coerceAtLeast(0)
+    val hours = total / 3600
+    val minutes = total % 3600 / 60
+    val seconds = total % 60
+    return when {
+        hours > 0 -> uiTextOf(R.string.run_log_elapsed_hms, hours, minutes, seconds)
+        minutes > 0 -> uiTextOf(R.string.run_log_elapsed_ms, minutes, seconds)
+        else -> uiTextOf(R.string.run_log_elapsed_s, seconds)
+    }
 }
 
 internal fun JsonObject?.string(key: String): String? =

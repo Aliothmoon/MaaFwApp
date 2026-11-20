@@ -332,6 +332,7 @@ class RunLogRecorder(
                 kind = entry.kind,
                 text = renderText(entry.text),
                 detail = entry.detail?.takeIf { writeDetail },
+                task = entry.task,
             ),
         )
     }

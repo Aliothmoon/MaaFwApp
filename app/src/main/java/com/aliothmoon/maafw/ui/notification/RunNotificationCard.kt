@@ -25,6 +25,7 @@ import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaCard
 import com.aliothmoon.maafw.ui.components.MaaFieldLabel
 import com.aliothmoon.maafw.ui.components.MaaLabeledControlRow
+import com.aliothmoon.maafw.ui.components.MaaNavigationRow
 import com.aliothmoon.maafw.ui.components.MaaSingleChoiceFlow
 import com.aliothmoon.maafw.ui.settings.search.SettingSearchTarget
 import timber.log.Timber
@@ -48,9 +49,16 @@ private val LiveBackend.noteRes: Int
  *
  * 只列本机有的那几档；选中档还差哪项系统开关就在下面列出来，点了去应用的通知设置页开。
  * 选的档眼下用不了时写明实际会用哪档，免得以为选了就生效
+ *
+ * 样式页入口只在实际生效的那档有能改的项时出现；MaaMeow 把它放在设置页的通知分组，
+ * 本项目那一组只是进本页的入口，所以挂在这一节
  */
 @Composable
-internal fun RunNotificationCard(state: NotificationUiState, onIntent: (NotificationIntent) -> Unit) {
+internal fun RunNotificationCard(
+    state: NotificationUiState,
+    onIntent: (NotificationIntent) -> Unit,
+    onOpenLiveStyle: () -> Unit,
+) {
     // 焦点通知、实时更新、通知权限都在系统设置里改，回到这页就重读一遍
     LifecycleResumeEffect(Unit) {
         onIntent(NotificationIntent.RefreshLiveCapability)
@@ -98,6 +106,13 @@ internal fun RunNotificationCard(state: NotificationUiState, onIntent: (Notifica
                 text = stringResource(R.string.notification_live_fallback, stringResource(live.backend.labelRes)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaaTheme.palette.warning.content,
+            )
+        }
+        if (live.styleConfigurable) {
+            MaaNavigationRow(
+                label = stringResource(R.string.live_style_title),
+                description = stringResource(R.string.live_style_entry_desc),
+                onClick = onOpenLiveStyle,
             )
         }
         val title = stringResource(R.string.notification_live_test_title)

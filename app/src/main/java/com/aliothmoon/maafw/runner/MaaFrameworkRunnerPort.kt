@@ -11,9 +11,16 @@ import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.i18n.UiText
 import com.aliothmoon.maafw.i18n.uiTextFromFramework
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.privileged.DISPLAY_CALL_TIMEOUT_MS
 import com.aliothmoon.maafw.privileged.LogcatServiceManager
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
+import com.aliothmoon.maafw.privileged.RemoteCallStuckException
+import com.aliothmoon.maafw.privileged.START_DISPLAY_TIMEOUT_MS
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
+import com.aliothmoon.maafw.privileged.message
+import com.aliothmoon.maafw.privileged.remoteAccessMessage
+import com.aliothmoon.maafw.privileged.remoteAccessMessageOrNull
 import com.aliothmoon.maafw.project.PiInstaller
 import com.aliothmoon.maafw.remote.AgentRuntimeDescriptor
 import com.aliothmoon.maafw.remote.AgentRuntimeEntry
@@ -91,17 +98,21 @@ class MaaFrameworkRunnerPort(
             val entry = agentRuntimes.getOrNull(it)
             uiTextOf(R.string.msg_fail_agent_launch, agentLabel(entry?.name, entry?.executable.orEmpty(), it))
         } ?: uiTextOf(R.string.msg_fail_agent_launch_any)
-        return if (debugMode()) failed else uiTextOf(R.string.msg_fail_debug_hint, failed)
+        return withDebugHint(failed)
     }
 
+    /** 细节只在特权进程 logcat 里，调试模式才抓得下来 */
+    private fun withDebugHint(failed: UiText): UiText =
+        if (debugMode()) failed else uiTextOf(R.string.msg_fail_debug_hint, failed)
+
     init {
-        // 特权进程死了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
-        // 跟着卡死，UI 全灰且再也发不起下一轮。只认 Died：主动 unbind 只是断了 app 这侧的
-        // binder，远端仍握着我们的 callback stub，那一轮还在跑、结果照样会回来
+        // 特权进程没了 onFinished 就永远不会来，phase 卡在 Running，configurationLocked
+        // 跟着卡死，UI 全灰且再也发不起下一轮。没了不只 Died 一种：主动 unbind 与换身份重起
+        // 都会 destroy 远端，而死亡通知在那之前就解绑了，状态只落到 Disconnected / Connecting
         scope.launch {
             servicePort.serviceState.collect { serviceState ->
-                if (serviceState == PrivilegedServiceState.Died) {
-                    abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process died mid-run, forcing abort")
+                if (remoteGone(serviceState)) {
+                    abortRun(uiTextOf(R.string.msg_fail_privileged_exited), "privileged process gone mid-run ($serviceState), forcing abort")
                 }
             }
         }
@@ -135,6 +146,18 @@ class MaaFrameworkRunnerPort(
     }
 
     /** null = 问不出来（没连上或调用失败），不能据此判定，只有明确的 false 才算数 */
+    /**
+     * Preparing 里 `start` 自己在连：换后端时 `connect` 会先 unbind 再重绑，冒出来的
+     * Disconnected / Connecting 是正常过程，那时收回执行态会让 `start` 在新进程上投出孤儿轮；
+     * 这段的失败由 `start` 自己的错误路径收。投出去之后再见到它们，只能是远端被 destroy 了
+     */
+    private fun remoteGone(serviceState: PrivilegedServiceState): Boolean = when (serviceState) {
+        PrivilegedServiceState.Died -> true
+        PrivilegedServiceState.Disconnected, PrivilegedServiceState.Connecting ->
+            _state.value.phase == RunnerPhase.Running || _state.value.phase == RunnerPhase.Stopping
+        else -> false
+    }
+
     private suspend fun remoteRunning(): Boolean? = withContext(MaaDispatchers.IO) {
         runCatching { servicePort.serviceOrNull()?.isRunning() }.getOrNull()
     }
@@ -252,6 +275,7 @@ class MaaFrameworkRunnerPort(
                 RunOutcome.COMPLETED_WITH_FAILURES -> ExecutionResult.CompletedWithFailures(results)
                 RunOutcome.CANCELLED -> ExecutionResult.Cancelled(results)
                 RunOutcome.AGENT_LAUNCH_FAILED -> ExecutionResult.Failed(agentLaunchFailure(reason?.toIntOrNull()), results)
+                RunOutcome.PREPARE_FAILED -> ExecutionResult.Failed(withDebugHint(prepareFailureText(reason)), results)
                 else -> ExecutionResult.Failed(if (reason.isNullOrBlank()) uiTextOf(R.string.msg_fail_default) else uiTextFromFramework(reason), results)
             }
             emit(RunnerEvent.ExecutionFinished(result))
@@ -294,6 +318,9 @@ class MaaFrameworkRunnerPort(
 
         return withContext(MaaDispatchers.IO) {
             try {
+                connectFailure()?.let { (reason, error) ->
+                    return@withContext failPreparation(reason, executionId, error)
+                }
                 val rejection = launchOnService(plan, executionId)
                 if (rejection != null) return@withContext failPreparation(rejection, executionId)
                 // Stop 可能在 Preparing 窗口里已经把 phase 打成 Stopping，甚至 onFinished 已收回 Idle
@@ -318,10 +345,14 @@ class MaaFrameworkRunnerPort(
             } catch (cancellation: CancellationException) {
                 failPreparation(uiTextOf(R.string.msg_fail_default), executionId)
                 throw cancellation
+            } catch (stuck: RemoteCallStuckException) {
+                Timber.e(stuck, "Privileged process stuck during start")
+                failPreparation(uiTextOf(R.string.msg_fail_privileged_stuck), executionId, error = stuck)
             } catch (throwable: Throwable) {
                 Timber.e(throwable, "Failed to start run")
                 failPreparation(
-                    uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
+                    throwable.remoteAccessMessageOrNull()
+                        ?: uiTextFromFramework(throwable.message ?: throwable.javaClass.simpleName),
                     executionId,
                     error = throwable,
                 )
@@ -349,16 +380,25 @@ class MaaFrameworkRunnerPort(
     }
 
     /**
+     * 先连上再投递：连不上时 useService 抛出来的只剩一句英文 message，当不了文案
+     * connect 会先刷新授权、必要时发起授权请求，后端换了也会重新绑定
+     */
+    private suspend fun connectFailure(): Pair<UiText, Throwable?>? = when (val result = servicePort.connect()) {
+        ServiceConnectResult.Connected -> null
+        is ServiceConnectResult.NotReady -> remoteAccessMessage(result.backend, result.failure) to null
+        is ServiceConnectResult.Failed -> result.message() to result.error
+    }
+
+    /**
      * 返回 null 表示已受理，否则返回拒绝原因
-     * 走 useService 而非取当前实例：它会先刷新授权状态、必要时发起授权请求，
-     * 后端换了也会重新绑定
+     * 前面已经 connect 过，这里的 useService 只是取现成连接；中途断了照常抛
      */
     private suspend fun launchOnService(plan: RunPlan, executionId: String): UiText? {
         val piRoot = installer.installedDir()
         return servicePort.useService { service -> prepareAndStart(plan, piRoot, service, executionId) }
     }
 
-    private fun prepareAndStart(
+    private suspend fun prepareAndStart(
         plan: RunPlan,
         piRoot: File,
         service: RemoteService,
@@ -389,19 +429,20 @@ class MaaFrameworkRunnerPort(
         runCatching { service.setTextInputSink(textInputSink()) }
             .onFailure { Timber.w(it, "setTextInputSink failed") }
         val mode = runMode()
-        if (!service.setVirtualDisplayMode(mode.displayMode)) {
+        if (!service.bounded("setVirtualDisplayMode") { it.setVirtualDisplayMode(mode.displayMode) }) {
             return uiTextOf(R.string.msg_reject_switch_display_mode, mode)
         }
         // 主屏模式不建屏也不设分辨率：尺寸是设备当下的物理尺寸，由特权进程侧的采集器供数
         val (width, height) = if (mode == RunMode.BACKGROUND) {
             val preset = resolutionPreset()
             preset.resolution.also { (w, h) ->
-                service.setVirtualDisplayResolution(w, h, preset.dpi)
+                // 屏还在时改分辨率会重建采集，同样可能卡在 native 收尾
+                service.bounded("setVirtualDisplayResolution") { it.setVirtualDisplayResolution(w, h, preset.dpi) }
             }
         } else {
             DisplayResolution(0, 0)
         }
-        if (service.startVirtualDisplay() == DefaultDisplayConfig.DISPLAY_NONE) {
+        if (service.bounded("startVirtualDisplay", START_DISPLAY_TIMEOUT_MS) { it.startVirtualDisplay() } == DefaultDisplayConfig.DISPLAY_NONE) {
             return if (mode == RunMode.FOREGROUND) uiTextOf(R.string.msg_reject_primary_capture) else uiTextOf(R.string.msg_reject_virtual_display)
         }
 
@@ -422,7 +463,12 @@ class MaaFrameworkRunnerPort(
             agents = plan.agents.map { AgentPayload(it.childExec, it.childArgs) },
             apkPath = apkPath,
             nativeLibraryDir = nativeLibraryDir,
-            piEnv = plan.piEnv,
+            // 便携式布局下 PI_USER_DATA_DIR 即 agent 工作目录（PI 解包根）；plan 未显式指定时在此补齐
+            piEnv = if (plan.agents.isEmpty()) {
+                plan.piEnv
+            } else {
+                mapOf(PiAgentEnv.USER_DATA_DIR_KEY to piRoot.absolutePath) + plan.piEnv
+            },
         )
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return uiTextOf(R.string.msg_reject_service_rejected)
@@ -433,6 +479,12 @@ class MaaFrameworkRunnerPort(
         }
         return null
     }
+
+    private suspend fun <R> RemoteService.bounded(
+        call: String,
+        timeoutMs: Long = DISPLAY_CALL_TIMEOUT_MS,
+        block: (RemoteService) -> R,
+    ): R = servicePort.callOrRestart(this, call, timeoutMs, block)
 
     private fun shouldRetryStop(executionId: String): Boolean {
         val current = _state.value

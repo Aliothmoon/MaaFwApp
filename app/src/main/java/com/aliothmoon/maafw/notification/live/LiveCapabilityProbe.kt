@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.os.SystemClock
 import androidx.core.app.NotificationManagerCompat
+import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
 import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.xzakota.hyper.notification.focus.util.FocusUtils
 
@@ -65,9 +66,8 @@ class LiveCapabilityProbe(
 
     private fun liveUpdateGranted(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA) return false
-        // 三星的 One UI 没给这项开关，查询恒为 false，但请求照样生效（对齐 MaaMeow）
-        if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) return true
-        return runCatching { manager.canPostPromotedNotifications() }.getOrDefault(false)
+        // 与真正发通知时请求的口径一致，三星的豁免也在那里
+        return runCatching { manager.canRequestPromotedOngoing() }.getOrDefault(false)
     }
 
     private companion object {

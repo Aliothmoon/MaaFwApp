@@ -20,6 +20,8 @@ import com.aliothmoon.maafw.project.FakeProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
@@ -94,6 +96,11 @@ class RunLauncherTest {
         journal = journal,
         renderText = { text -> (text as? UiText.Verbatim)?.value ?: "<res>" },
     )
+
+    private fun precheck(id: String = "test", verdict: suspend (RunContext) -> Verdict) = object : RunPrecheck {
+        override val id = id
+        override suspend fun evaluate(ctx: RunContext) = verdict(ctx)
+    }
 
     private fun fastStub(scope: CoroutineScope) = StubRunnerPort(
         scope = scope,
@@ -200,7 +207,7 @@ class RunLauncherTest {
         val launcher = launcher(
             scope = backgroundScope,
             runner = runner,
-            prechecks = listOf(RunPrecheck { Verdict.Block(uiTextOf(R.string.runner_foreground_blocked)) }),
+            prechecks = listOf(precheck { Verdict.Block(uiTextOf(R.string.runner_foreground_blocked)) }),
             hooks = listOf(hook),
         )
 
@@ -208,6 +215,7 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.runner_foreground_blocked))
+        assertEquals(BlockSource.Precheck("test"), result.source)
         // 检查在改环境之前，挂载物一个都不该跑
         assertEquals(emptyList<String>(), hook.log)
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
@@ -225,14 +233,17 @@ class RunLauncherTest {
         // 悬浮窗手动开跑是前台模式的正路
         assertEquals(RunLaunchResult.Started, launchIn(RunMode.FOREGROUND))
         assertEquals(RunLaunchResult.Started, launchIn(RunMode.BACKGROUND))
-        assertTrue(launchIn(RunMode.FOREGROUND, RunTrigger.Schedule("s1")) is RunLaunchResult.Blocked)
+        assertEquals(
+            BlockSource.Precheck(ForegroundModePrecheck.ID),
+            (launchIn(RunMode.FOREGROUND, RunTrigger.Schedule("s1")) as RunLaunchResult.Blocked).source,
+        )
     }
 
     /** 确认循环：先问，带着 token 重跑就该放行 */
     @Test
     fun `confirmation is asked once and the re-run passes`() = runTest(testDispatcher) {
         val token = ConfirmToken("demo")
-        val check = RunPrecheck { ctx ->
+        val check = precheck { ctx ->
             if (token in ctx.acknowledged) Verdict.Pass
             else Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks))
         }
@@ -257,7 +268,7 @@ class RunLauncherTest {
             scope = backgroundScope,
             runner = fastStub(backgroundScope),
             prechecks = listOf(
-                RunPrecheck { Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks)) },
+                precheck { Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks)) },
             ),
         )
 
@@ -265,6 +276,8 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.msg_no_executable_tasks))
+        // 降级来的拦截也要认得出是哪一道，定时记账靠它分档
+        assertEquals(BlockSource.Precheck("test"), result.source)
 
         // 悬浮窗同样没地方弹框
         assertTrue(launcher.launch(RunTrigger.Overlay) is RunLaunchResult.Blocked)
@@ -278,7 +291,7 @@ class RunLauncherTest {
             scope = backgroundScope,
             runner = fastStub(backgroundScope),
             prechecks = listOf(
-                RunPrecheck {
+                precheck {
                     Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks), advisory = true)
                 },
             ),
@@ -297,7 +310,7 @@ class RunLauncherTest {
             scope = backgroundScope,
             runner = fastStub(backgroundScope),
             prechecks = listOf(
-                RunPrecheck { Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks)) },
+                precheck { Verdict.NeedsConfirmation(token, uiTextOf(R.string.msg_no_executable_tasks)) },
             ),
         )
 
@@ -404,6 +417,7 @@ class RunLauncherTest {
         // engage 抛出的异常一路带到收尾与调用方，堆栈才进得了日志
         assertEquals("解锁失败", notRun.error?.message)
         assertEquals("解锁失败", (result as RunLaunchResult.Blocked).error?.message)
+        assertEquals(BlockSource.Hook("bad", NotRunCause.HookFailed), result.source)
         assertEquals(RunnerPhase.Idle, runner.state.value.phase)
     }
 
@@ -443,6 +457,8 @@ class RunLauncherTest {
 
         assertTrue(result is RunLaunchResult.Blocked)
         assertTrue((result as RunLaunchResult.Blocked).reason.isResource(R.string.run_countdown_cancelled))
+        // 用户取消与真失败分开：前者不该发「没跑起来」的通知
+        assertEquals(BlockSource.Hook("countdown", NotRunCause.Cancelled), result.source)
         assertEquals(
             RunEndReason.NotRun(NotRunCause.Cancelled, uiTextOf(R.string.run_countdown_cancelled)),
             recorder.releaseReason,
@@ -630,7 +646,7 @@ class RunLauncherTest {
 
             // Timber 把堆栈拼在正文后面，堆栈里又有本用例的方法名，只能按开头认
             val entry = logs.entries.single { it.priority == Log.WARN && it.message.startsWith("run ") }
-            assertTrue(entry.message, entry.message.startsWith("run schedule:s1 (active) blocked: "))
+            assertTrue(entry.message, entry.message.startsWith("run schedule:s1 (active) blocked by Hook(id=bad, cause=HookFailed): "))
             assertEquals("解锁失败", entry.error?.message)
         } finally {
             Timber.uproot(logs)
@@ -659,6 +675,190 @@ class RunLauncherTest {
         override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
             entries += Entry(priority, message, t)
         }
+    }
+
+    // ── 排队 ─────────────────────────────────────────────────────────
+
+    /** 两条定时同一刻到：后到的先等前一发投递完，再等那一轮连收尾都走完 */
+    @Test
+    fun `a queued launch waits for the earlier round to dispatch, run and release`() = runTest(testDispatcher) {
+        val log = mutableListOf<String>()
+        val slowEngage = object : RunEnvHook {
+            override val id = "slow"
+            override val anchor = Anchor.BeforeDispatch
+            override val order = 0
+            override val gating = false
+            override suspend fun engage(ctx: RunContext): EngageResult {
+                log += "engage"
+                delay(500)
+                return EngageResult.Engaged(Release { log += "release" })
+            }
+        }
+        val waits = mutableListOf<String>()
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = slowStub(backgroundScope),
+            hooks = listOf(slowEngage),
+        )
+        fun queued(strategyId: String) = async {
+            launcher.launch(
+                RunTrigger.Schedule(strategyId),
+                whenBusy = WhenBusy.Queue(60_000),
+                progress = RunProgress { hookId, _ -> waits += "$strategyId:$hookId" },
+            )
+        }
+
+        val first = queued("s1")
+        val second = queued("s2")
+        advanceTimeBy(2_000)
+
+        assertEquals(RunLaunchResult.Started, first.await())
+        assertEquals(RunLaunchResult.Started, second.await())
+        assertEquals(listOf("engage", "release", "engage", "release"), log)
+        assertEquals(listOf("s2:${WhenBusy.Queue.PROGRESS_ID}"), waits)
+    }
+
+    @Test
+    fun `a rejecting launch during another dispatch is blocked as busy`() = runTest(testDispatcher) {
+        val slowEngage = object : RunEnvHook {
+            override val id = "slow"
+            override val anchor = Anchor.BeforeDispatch
+            override val order = 0
+            override val gating = false
+            override suspend fun engage(ctx: RunContext): EngageResult {
+                delay(500)
+                return EngageResult.Skipped()
+            }
+        }
+        val launcher = launcher(
+            scope = backgroundScope,
+            runner = fastStub(backgroundScope),
+            hooks = listOf(slowEngage),
+        )
+
+        val first = async { launcher.launch(RunTrigger.Manual) }
+        val second = launcher.launch(RunTrigger.Overlay)
+        advanceTimeBy(1_000)
+
+        assertEquals(BlockSource.Busy, (second as RunLaunchResult.Blocked).source)
+        assertEquals(RunLaunchResult.Started, first.await())
+    }
+
+    /** 上一轮已落回 Idle、收尾还在跑：当场 engage 会被它的收尾掐掉，要等它收完，且算作有人在等 */
+    @Test
+    fun `a launch right after a round waits for that round's release`() = runTest(testDispatcher) {
+        for (whenBusy in listOf(WhenBusy.Reject, WhenBusy.Preempt)) {
+            val log = mutableListOf<String>()
+            var waitersSeenInRelease: Boolean? = null
+            lateinit var launcher: RunLauncher
+            val slowRelease = object : RunEnvHook {
+                override val id = "slow-release"
+                override val anchor = Anchor.BeforeDispatch
+                override val order = 0
+                override val gating = false
+                override suspend fun engage(ctx: RunContext): EngageResult {
+                    log += "engage"
+                    return EngageResult.Engaged(Release {
+                        delay(2_000)
+                        if (waitersSeenInRelease == null) waitersSeenInRelease = launcher.hasWaiters
+                        log += "release"
+                    })
+                }
+            }
+            launcher = launcher(scope = backgroundScope, runner = slowStub(backgroundScope), hooks = listOf(slowRelease))
+
+            assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+            // 跑完只要两三百毫秒，此刻已 Idle，收尾还卡在 delay 里
+            advanceTimeBy(1_000)
+            val second = async { launcher.launch(RunTrigger.Manual, whenBusy = whenBusy) }
+            advanceTimeBy(6_000)
+
+            assertEquals(whenBusy.toString(), RunLaunchResult.Started, second.await())
+            assertEquals(whenBusy.toString(), listOf("engage", "release", "engage", "release"), log)
+            assertEquals(whenBusy.toString(), true, waitersSeenInRelease)
+        }
+    }
+
+    /** 进门时上一轮还在跑、检查期间才停下：挂载前仍要等它收尾，检查那段也要算作有人在等 */
+    @Test
+    fun `a round that stops during prechecks is still waited out`() = runTest(testDispatcher) {
+        val log = mutableListOf<String>()
+        var waitersSeenInRelease: Boolean? = null
+        var slowCheck = false
+        lateinit var launcher: RunLauncher
+        val slowRelease = object : RunEnvHook {
+            override val id = "slow-release"
+            override val anchor = Anchor.BeforeDispatch
+            override val order = 0
+            override val gating = false
+            override suspend fun engage(ctx: RunContext): EngageResult {
+                log += "engage"
+                return EngageResult.Engaged(Release {
+                    delay(2_000)
+                    if (waitersSeenInRelease == null) waitersSeenInRelease = launcher.hasWaiters
+                    log += "release"
+                })
+            }
+        }
+        launcher = launcher(
+            scope = backgroundScope,
+            runner = slowStub(backgroundScope),
+            prechecks = listOf(precheck { if (slowCheck) delay(1_000); Verdict.Pass }),
+            hooks = listOf(slowRelease),
+        )
+
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+        slowCheck = true
+        // 此刻上一轮还在跑；它在本轮检查的那一秒里停下并开始收尾
+        val second = async { launcher.launch(RunTrigger.Manual) }
+        advanceTimeBy(8_000)
+
+        assertEquals(RunLaunchResult.Started, second.await())
+        assertEquals(listOf("engage", "release", "engage", "release"), log)
+        assertEquals(true, waitersSeenInRelease)
+    }
+
+    /** 重新解压持着闸门：当场起跑的报正在启动，排队的定时等它解完才投 */
+    @Test
+    fun `launches wait out a whenIdle block`() = runTest(testDispatcher) {
+        val launcher = launcher(scope = backgroundScope, runner = fastStub(backgroundScope))
+        val log = mutableListOf<String>()
+
+        val reinstall = async {
+            launcher.whenIdle {
+                log += "unpack start"
+                delay(1_000)
+                log += "unpack end"
+            }
+        }
+        advanceTimeBy(100)
+        val rejected = launcher.launch(RunTrigger.Overlay)
+        val queued = async {
+            launcher.launch(RunTrigger.Schedule("s1"), whenBusy = WhenBusy.Queue(60_000)).also { log += "queued started" }
+        }
+        advanceTimeBy(2_000)
+        reinstall.await()
+
+        assertEquals(BlockSource.Busy, (rejected as RunLaunchResult.Blocked).source)
+        assertEquals(RunLaunchResult.Started, queued.await())
+        assertEquals(listOf("unpack start", "unpack end", "queued started"), log)
+    }
+
+    @Test
+    fun `a queued launch gives up once its window passes`() = runTest(testDispatcher) {
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val launcher = launcher(scope = backgroundScope, runner = runner)
+        assertEquals(RunLaunchResult.Started, launcher.launch(RunTrigger.Manual))
+
+        val queued = async {
+            launcher.launch(RunTrigger.Schedule("s1"), whenBusy = WhenBusy.Queue(1_000))
+        }
+        advanceTimeBy(2_000)
+
+        assertEquals(RunLaunchResult.QueueTimedOut, queued.await())
     }
 
     private class RecordingHook(

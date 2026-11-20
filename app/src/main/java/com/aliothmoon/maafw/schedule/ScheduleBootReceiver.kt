@@ -26,6 +26,10 @@ class ScheduleBootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in RESYNC_ACTIONS) return
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            // adb 模式的 Shizuku 一重启就没了，过一会儿查它回来没有
+            GlobalContext.get().get<ShizukuDownMonitor>().armAfterBoot()
+        }
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + MaaDispatchers.IO + scheduleReceiverExceptionHandler).launch {
             try {

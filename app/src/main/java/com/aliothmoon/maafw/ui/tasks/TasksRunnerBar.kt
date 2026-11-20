@@ -50,11 +50,13 @@ import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.OpaqueTheme
 import com.aliothmoon.maafw.ui.components.MaaButton
 import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaSemanticOutlinedButton
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaCheckbox
+import com.aliothmoon.maafw.ui.components.maaClickable
 
 /**
  * 底部启停条
@@ -152,129 +154,132 @@ internal fun TasksQuickOptionsPanel(
 ) {
     val scrimInteraction = remember { MutableInteractionSource() }
     val cardInteraction = remember { MutableInteractionSource() }
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss),
-    ) {
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(
-                    start = MaaDesignTokens.Spacing.lg,
-                    end = MaaDesignTokens.Spacing.lg,
-                    bottom = PanelBottomInset,
-                )
-                // 吞掉卡片上的点击，否则会穿到下面的 scrim 上把自己关掉
-                .clickable(interactionSource = cardInteraction, indication = null, onClick = {}),
-            shape = RoundedCornerShape(MaaTheme.style.radii.card),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outlineVariant),
-            shadowElevation = MaaTheme.style.cardElevation,
+    // 同窗口浮层、没有遮罩：玻璃配色的 surface 只有 82% 不透明，会透出下层任务列表
+    OpaqueTheme {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .clickable(interactionSource = scrimInteraction, indication = null, onClick = onDismiss),
         ) {
-            Column(
-                modifier = Modifier.padding(MaaDesignTokens.Spacing.md),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(
+                        start = MaaDesignTokens.Spacing.lg,
+                        end = MaaDesignTokens.Spacing.lg,
+                        bottom = PanelBottomInset,
+                    )
+                    // 吞掉卡片上的点击，否则会穿到下面的 scrim 上把自己关掉
+                    .clickable(interactionSource = cardInteraction, indication = null, onClick = {}),
+                shape = RoundedCornerShape(MaaTheme.style.radii.card),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = MaaTheme.style.cardElevation,
             ) {
-                GroupLabel(stringResource(R.string.quick_actions_title))
-                // 运行日志不在这儿：入口已经在配置行右侧，同一个动作不留两处
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                Column(
+                    modifier = Modifier.padding(MaaDesignTokens.Spacing.md),
+                    verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                 ) {
-                    when (state.runMode) {
-                        // 前台模式没有虚拟屏，屏保与「关目标应用」两格都无从谈起
-                        RunMode.BACKGROUND -> {
-                            ActionTile(
-                                icon = Icons.Outlined.PowerSettingsNew,
-                                label = stringResource(R.string.quick_action_screen_saver),
+                    GroupLabel(stringResource(R.string.quick_actions_title))
+                    // 运行日志不在这儿：入口已经在配置行右侧，同一个动作不留两处
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                    ) {
+                        when (state.runMode) {
+                            // 前台模式没有虚拟屏，屏保与「关目标应用」两格都无从谈起
+                            RunMode.BACKGROUND -> {
+                                ActionTile(
+                                    icon = Icons.Outlined.PowerSettingsNew,
+                                    label = stringResource(R.string.quick_action_screen_saver),
+                                    accent = MaterialTheme.colorScheme.tertiary,
+                                    onClick = {
+                                        onDismiss()
+                                        onIntent(SessionIntent.ShowScreenSaver)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ActionTile(
+                                    icon = Icons.AutoMirrored.Outlined.ExitToApp,
+                                    label = stringResource(R.string.quick_action_close_app),
+                                    accent = MaterialTheme.colorScheme.error,
+                                    onClick = {
+                                        onDismiss()
+                                        onIntent(SessionIntent.CloseTargetApp)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+
+                            RunMode.FOREGROUND -> ActionTile(
+                                icon = Icons.Outlined.Layers,
+                                label = stringResource(R.string.settings_overlay_show),
                                 accent = MaterialTheme.colorScheme.tertiary,
                                 onClick = {
                                     onDismiss()
-                                    onIntent(SessionIntent.ShowScreenSaver)
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                            ActionTile(
-                                icon = Icons.AutoMirrored.Outlined.ExitToApp,
-                                label = stringResource(R.string.quick_action_close_app),
-                                accent = MaterialTheme.colorScheme.error,
-                                onClick = {
-                                    onDismiss()
-                                    onIntent(SessionIntent.CloseTargetApp)
+                                    onIntent(SessionIntent.ShowOverlay)
                                 },
                                 modifier = Modifier.weight(1f),
                             )
                         }
-
-                        RunMode.FOREGROUND -> ActionTile(
-                            icon = Icons.Outlined.Layers,
-                            label = stringResource(R.string.settings_overlay_show),
-                            accent = MaterialTheme.colorScheme.tertiary,
-                            onClick = {
-                                onDismiss()
-                                onIntent(SessionIntent.ShowOverlay)
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
                     }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-                ) {
-                    ActionTile(
-                        icon = Icons.Outlined.Refresh,
-                        label = stringResource(R.string.settings_reload_project),
-                        accent = MaterialTheme.colorScheme.secondary,
-                        enabled = !state.configurationLocked,
-                        onClick = {
-                            onDismiss()
-                            onIntent(SessionIntent.ReloadProject)
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (state.debugMode && state.runMode == RunMode.BACKGROUND) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
+                    ) {
                         ActionTile(
-                            icon = Icons.Outlined.PhotoCamera,
-                            label = stringResource(R.string.quick_action_screenshot),
+                            icon = Icons.Outlined.Refresh,
+                            label = stringResource(R.string.settings_reload_project),
                             accent = MaterialTheme.colorScheme.secondary,
+                            enabled = !state.configurationLocked,
                             onClick = {
                                 onDismiss()
-                                onIntent(SessionIntent.CaptureVirtualDisplay)
+                                onIntent(SessionIntent.ReloadProject)
                             },
                             modifier = Modifier.weight(1f),
                         )
+                        if (state.runMode == RunMode.BACKGROUND) {
+                            ActionTile(
+                                icon = Icons.Outlined.PhotoCamera,
+                                label = stringResource(R.string.quick_action_screenshot),
+                                accent = MaterialTheme.colorScheme.secondary,
+                                onClick = {
+                                    onDismiss()
+                                    onIntent(SessionIntent.CaptureVirtualDisplay)
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
-                }
 
-                GroupLabel(stringResource(R.string.quick_settings_title))
-                if (state.runMode == RunMode.BACKGROUND) {
-                    SettingSearchTarget(SettingAnchors.SCREEN_SAVER) {
+                    GroupLabel(stringResource(R.string.quick_settings_title))
+                    if (state.runMode == RunMode.BACKGROUND) {
+                        SettingSearchTarget(SettingAnchors.SCREEN_SAVER) {
+                            SettingToggleRow(
+                                icon = Icons.Outlined.Nightlight,
+                                label = stringResource(R.string.settings_screen_saver_auto),
+                                checked = state.screenSaverEnabled,
+                                onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
+                            )
+                        }
+                        SettingSearchTarget(SettingAnchors.CLOSE_APP_AFTER_TASK) {
+                            SettingToggleRow(
+                                icon = Icons.Outlined.Cancel,
+                                label = stringResource(R.string.quick_setting_close_app_after_task),
+                                checked = state.closeAppAfterTask,
+                                onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterTask(it)) },
+                            )
+                        }
+                    }
+                    SettingSearchTarget(SettingAnchors.TOUCH_PREVIEW) {
                         SettingToggleRow(
-                            icon = Icons.Outlined.Nightlight,
-                            label = stringResource(R.string.settings_screen_saver_auto),
-                            checked = state.screenSaverEnabled,
-                            onCheckedChange = { onIntent(SessionIntent.SetScreenSaverEnabled(it)) },
+                            icon = Icons.Outlined.TouchApp,
+                            label = stringResource(R.string.quick_setting_touch_preview),
+                            checked = state.touchPreviewEnabled,
+                            onCheckedChange = { onIntent(SessionIntent.SetTouchPreviewEnabled(it)) },
                         )
                     }
-                    SettingSearchTarget(SettingAnchors.CLOSE_APP_AFTER_TASK) {
-                        SettingToggleRow(
-                            icon = Icons.Outlined.Cancel,
-                            label = stringResource(R.string.quick_setting_close_app_after_task),
-                            checked = state.closeAppAfterTask,
-                            onCheckedChange = { onIntent(SessionIntent.SetCloseAppAfterTask(it)) },
-                        )
-                    }
-                }
-                SettingSearchTarget(SettingAnchors.TOUCH_PREVIEW) {
-                    SettingToggleRow(
-                        icon = Icons.Outlined.TouchApp,
-                        label = stringResource(R.string.quick_setting_touch_preview),
-                        checked = state.touchPreviewEnabled,
-                        onCheckedChange = { onIntent(SessionIntent.SetTouchPreviewEnabled(it)) },
-                    )
                 }
             }
         }
@@ -359,7 +364,7 @@ private fun SettingToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
+            .maaClickable { onCheckedChange(!checked) }
             .padding(vertical = MaaDesignTokens.Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),

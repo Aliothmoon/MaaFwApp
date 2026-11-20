@@ -39,7 +39,8 @@ object PrimaryDisplayManager {
     }
 
 
-    private fun onDisplayChange(displayId: Int) {
+    // 在监听线程上来，与 binder 线程的起停抢同一份 capturer
+    private fun onDisplayChange(displayId: Int): Unit = synchronized(DisplayLifecycle.lock) {
         if (displayId != DISPLAY_ID) {
             return
         }
@@ -59,7 +60,7 @@ object PrimaryDisplayManager {
         onDisplayChange(DISPLAY_ID)
     }
 
-    fun start(): Int {
+    fun start(): Int = synchronized(DisplayLifecycle.lock) {
         if (!setup.get()) {
             setup()
             setup.set(true)
@@ -68,17 +69,17 @@ object PrimaryDisplayManager {
             Ln.w("start: already capturing")
             return DISPLAY_ID
         }
-        return startInternal()
+        startInternal()
     }
 
-    fun stop() {
+    fun stop(): Unit = synchronized(DisplayLifecycle.lock) {
         if (!state.compareAndSet(STATE_CAPTURING, STATE_IDLE)) {
             return
         }
         releaseResources()
     }
 
-    fun restart() {
+    fun restart(): Unit = synchronized(DisplayLifecycle.lock) {
         if (state.get() != STATE_CAPTURING) {
             return
         }
@@ -87,12 +88,19 @@ object PrimaryDisplayManager {
     }
 
     private fun startInternal(): Int {
-        val info = displayInfo.get()
-        val width = info.size().width()
-        val height = info.size().height()
-        val surface = NativeBridgeLib.setupNativeCapturer(width, height)
-        createVirtualDisplay(surface, info)
-        return DISPLAY_ID
+        try {
+            val info = displayInfo.get()
+            val width = info.size().width()
+            val height = info.size().height()
+            val surface = NativeBridgeLib.setupNativeCapturer(width, height)
+            createVirtualDisplay(surface, info)
+            return DISPLAY_ID
+        } catch (t: Throwable) {
+            // 同虚拟屏：capturer 先于建屏分配，建屏失败要撤；异常照旧抛给调用方
+            runCatching { releaseResources() }.onFailure { Ln.e("release after failed start failed", it) }
+            state.set(STATE_IDLE)
+            throw t
+        }
     }
 
     /**

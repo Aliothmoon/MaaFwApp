@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -28,8 +29,11 @@ sealed interface ConfigReadResult {
     data class Ready(val import: ConfigImport) : ConfigReadResult
     data class Failed(val error: ConfigImportError) : ConfigReadResult
 
-    /** 文件读不出来（权限没了、太大） */
+    /** 文件读不出来（权限没了、文件不在） */
     data object Unreadable : ConfigReadResult
+
+    /** 超过 [ConfigBackupService] 的读取上限，不是配置文件 */
+    data object TooLarge : ConfigReadResult
     data object ProjectNotReady : ConfigReadResult
 }
 
@@ -81,21 +85,46 @@ class ConfigBackupService(
     }
 
     suspend fun read(source: Uri): ConfigReadResult = withContext(MaaDispatchers.IO) {
-        val text = runCatching {
-            context.contentResolver.openInputStream(source)?.use { input ->
-                val out = ByteArrayOutputStream()
-                val buffer = ByteArray(16 * 1024)
-                while (true) {
-                    val n = input.read(buffer)
-                    if (n < 0) break
-                    out.write(buffer, 0, n)
-                    check(out.size() <= MAX_FILE_BYTES) { "configuration file too large" }
-                }
-                out.toByteArray().decodeToString()
+        when (val raw = readCapped(source)) {
+            is CappedRead.Text -> parse(raw.text, context.contentResolver.displayName(source))
+            CappedRead.TooLarge -> ConfigReadResult.TooLarge
+            CappedRead.Unreadable -> ConfigReadResult.Unreadable
+        }
+    }
+
+    private sealed interface CappedRead {
+        data class Text(val text: String) : CappedRead
+        data object TooLarge : CappedRead
+        data object Unreadable : CappedRead
+    }
+
+    /** 流式限量读：超限当场停，不把整份读进内存再判 */
+    private fun readCapped(source: Uri): CappedRead = try {
+        context.contentResolver.openInputStream(source)?.use { input ->
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(16 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                out.write(buffer, 0, n)
+                if (out.size() > MAX_FILE_BYTES) return CappedRead.TooLarge
             }
-        }.onFailure { Timber.w(it, "Failed to read configuration from %s", source) }.getOrNull()
-            ?: return@withContext ConfigReadResult.Unreadable
-        parse(text, context.contentResolver.displayName(source))
+            CappedRead.Text(out.toByteArray().decodeToString())
+        } ?: CappedRead.Unreadable
+    } catch (e: IOException) {
+        Timber.w(e, "Failed to read configuration from %s", source)
+        CappedRead.Unreadable
+    } catch (e: SecurityException) {
+        // SAF 授权随进程或重启丢了
+        Timber.w(e, "Lost access to configuration file %s", source)
+        CappedRead.Unreadable
+    } catch (e: IllegalArgumentException) {
+        Timber.w(e, "Unknown configuration uri %s", source)
+        CappedRead.Unreadable
+    } catch (e: RuntimeException) {
+        // 第三方网盘的 DocumentsProvider 什么都可能抛（IllegalState、UnsupportedOperation、NPE）
+        Timber.w(e, "Document provider failed reading %s", source)
+        CappedRead.Unreadable
     }
 
     /** 粘贴进来的 MXU 分享码 */
@@ -135,7 +164,7 @@ class ConfigBackupService(
         val restored = configurationStore.update { ConfigBackupCodec.restore(backup, it, definition) }
         val schedules = ConfigBackupCodec.restoreSchedules(backup, restored.configurations.mapTo(HashSet()) { it.id })
         val kept = schedules.mapTo(HashSet()) { it.id }
-        // 账本只记投递过、在重试的规则，没响过的闹钟 rescheduleAll 认不出来，得在这里撤
+        // rescheduleAll 只撤账本里认得出的孤儿；被删的规则按规则表直接撤，不依赖账本记全
         scheduleStore.strategies.value.map { it.id }.filterNot { it in kept }.forEach(alarms::forget)
         scheduleStore.replaceAll(schedules)
         alarms.rescheduleAll(schedules)
@@ -148,9 +177,10 @@ class ConfigBackupService(
     private fun definition(): ProjectDefinition? =
         (projectRepository.state.value as? ProjectState.Ready)?.definition
 
-    private companion object {
+    companion object {
         /** MXU 的整份配置几十 KB；放宽到 8MB，再大就不是配置文件 */
-        const val MAX_FILE_BYTES = 8 * 1024 * 1024
-        const val STORE_READY_TIMEOUT_MS = 5_000L
+        const val MAX_FILE_MB = 8
+        private const val MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
+        private const val STORE_READY_TIMEOUT_MS = 5_000L
     }
 }

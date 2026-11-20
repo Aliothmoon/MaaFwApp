@@ -7,9 +7,6 @@ enum class ShizukuReadinessStage {
     /** 已安装但服务未启动 */
     NotRunning,
 
-    /** 检测到 Sui（Magisk 模块）提供服务 */
-    SuiAvailable,
-
     /** 服务运行中但未授权 */
     NeedAuth,
 

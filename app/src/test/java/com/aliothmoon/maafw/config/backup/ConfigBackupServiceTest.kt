@@ -146,7 +146,7 @@ class ConfigBackupServiceTest {
         val uri = mockk<Uri>()
         every { resolver.openInputStream(uri) } returns endless
 
-        assertEquals(ConfigReadResult.Unreadable, service.read(uri))
+        assertEquals(ConfigReadResult.TooLarge, service.read(uri))
         // 读到上限再多一块就停，不会把整条流读完
         assertEquals(true, served <= 8L * 1024 * 1024 + 16 * 1024)
     }

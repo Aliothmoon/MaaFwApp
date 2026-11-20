@@ -116,10 +116,15 @@ internal object ConfigImportParser {
         definition: ProjectDefinition,
         current: UserConfiguration,
     ): ConfigImportParse {
+        val controller = definition.controller(current.activeControllerName)
+        val availableResources = definition.resourcesFor(controller)
+        val fallbackResourceName = current.activeResourceName
+            ?.takeIf { name -> availableResources.any { it.name == name } }
+            ?: availableResources.firstOrNull()?.name
         val result = MxuConfigMapper(
             definition = definition,
-            controllerName = definition.controller(current.activeControllerName).name,
-            fallbackResourceName = current.activeResourceName ?: definition.resources.firstOrNull()?.name,
+            controllerName = controller.name,
+            fallbackResourceName = fallbackResourceName,
         ).map(instances, globalValues)
         // 一个已知任务都没有，多半是别的项目的文件被改了名
         if (result.configurations.none { it.tasks.isNotEmpty() } && result.globalOptionValues.isEmpty()) {

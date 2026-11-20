@@ -13,6 +13,7 @@ import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.constant.DisplayMode
 import com.aliothmoon.maafw.maa.MaaFrameworkLoader
 import com.aliothmoon.maafw.remote.internal.ActivityUtils
+import com.aliothmoon.maafw.remote.internal.DisplayLifecycle
 import com.aliothmoon.maafw.remote.internal.AppWatchdog
 import com.aliothmoon.maafw.remote.internal.GameFpsMonitor
 import com.aliothmoon.maafw.remote.internal.GestureRecorder
@@ -24,10 +25,17 @@ import com.aliothmoon.maafw.remote.internal.ScreenManager
 import com.aliothmoon.maafw.remote.internal.StaleFrameGuard
 import com.aliothmoon.maafw.constant.PrivilegedGrant
 import com.aliothmoon.maafw.log.LogExportCollector
+import com.aliothmoon.maafw.log.toWireJson
+import com.aliothmoon.maafw.remote.internal.LogcatRetention
 import com.aliothmoon.maafw.remote.internal.MaafwLogRetention
+import com.aliothmoon.maafw.remote.internal.PathDiagnosis
+import com.aliothmoon.maafw.remote.internal.ProcessExitQuery
+import com.aliothmoon.maafw.remote.internal.SystemLogDump
+import com.aliothmoon.maafw.remote.internal.ThreadDump
 import com.aliothmoon.maafw.remote.internal.VirtualDisplayManager
 import com.aliothmoon.maafw.remote.internal.WakeUnlockController
 import com.aliothmoon.maafw.remote.internal.XmsfFirewall
+import com.aliothmoon.maafw.root.ProcessExit
 import com.aliothmoon.maafw.third.FakeContext
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
@@ -36,10 +44,10 @@ import android.graphics.Bitmap
 import android.view.Surface
 import android.os.Process
 import android.provider.Settings
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.system.exitProcess
 
 /**
  * 特权进程的入口对象：由 Shizuku 或 root starter 反射实例化，实例化即完成进程内初始化
@@ -54,7 +62,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     // 两者互相引用：host 要把 child 的输出交回 runner 的回调。用 lazy 打破初始化顺序——
     // host 的 lambda 到真正有输出时才读 runner，那会儿它早已建好
-    private val runner: MaaRunner by lazy { MaaRunner(agentHost) }
+    private val runnerDelegate = lazy { MaaRunner(agentHost, onRunFinished = ::syncUserActivityKeepAlive) }
+    private val runner: MaaRunner by runnerDelegate
     private val agentHost: ExecAgentHost by lazy {
         ExecAgentHost(
             onOutput = { line, fromStderr -> runner.onAgentLine(line, fromStderr) },
@@ -63,12 +72,17 @@ class RemoteServiceImpl : RemoteService.Stub() {
         )
     }
 
+    // 主屏真实触摸会占满全局 userActivity 节流，预览或任务期间单独给虚拟屏续命
+    private val keepAliveLock = Any()
+    private var previewKeepAlive = false
+
     @Volatile
     private var logDir: String? = null
 
     init {
         RemoteBootTrace.mark("CTOR_START")
         Workarounds.apply()
+        // 正常退出走 ProcessExit 的 halt 不经这里，只兜直接 System.exit 的路径
         Runtime.getRuntime().addShutdownHook(
             Thread { runCatching(::cleanup) }.apply { name = "remote-shutdown-hook" }
         )
@@ -80,14 +94,15 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     override fun destroy() {
-        if (!destroyed.compareAndSet(false, true)) return
-        Ln.i("$TAG: destroy()")
-        stopDisplayWatchers()
-        InputControlUtils.setTouchCallback(null)
-        TextInputDispatcher.sink = null
-        runner.destroy()
-        cleanup()
-        exitProcess(0)
+        destroyed.set(true)
+        ProcessExit.exit("destroy requested") {
+            stopDisplayWatchers()
+            InputControlUtils.setTouchCallback(null)
+            TextInputDispatcher.sink = null
+            cleanup()
+            // 最可能卡住、又随进程释放：垫底，卡住了由退出期限收场，别挡住前面撤主屏尺寸与电源
+            step("runner") { runner.destroy() }
+        }
     }
 
     override fun exit() = destroy()
@@ -101,7 +116,24 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun pid(): Int = Process.myPid()
 
-    override fun watchdogState(): Int = AppWatchdog.state.value
+    /**
+     * 看门狗一轮跑完就回空闲，虚拟屏却不拆：目标应用还在屏上、点全屏也能操作时报「就绪」。
+     * 直接问 isAppOnDisplay，不走 isAppOnVirtualDisplay——那个没屏时回 true、命中还拉起帧率监控；
+     * 短任务在看门狗首拍前结束时还没有 targetPackage，兜底探一次屏上是否有任务
+     */
+    override fun watchdogState(): Int {
+        val state = AppWatchdog.state.value
+        if (state != AppWatchdog.STATE_IDLE) return state
+        val displayId = VirtualDisplayManager.getDisplayId()
+        if (displayId == DefaultDisplayConfig.DISPLAY_NONE) return state
+        val target = AppWatchdog.targetPackage
+        val onDisplay = if (target != null) {
+            ActivityUtils.isAppOnDisplay(target, displayId)
+        } else {
+            ActivityUtils.probeDisplay(displayId) is ActivityUtils.DisplayOccupancy.Occupied
+        }
+        return if (onDisplay) AppWatchdog.STATE_READY else state
+    }
 
     override fun watchdogTargetPackage(): String = AppWatchdog.targetPackage.orEmpty()
 
@@ -158,7 +190,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun setup(piRoot: String?, logDir: String?, isDebug: Boolean): Boolean {
         if (piRoot.isNullOrBlank() || !File(piRoot).isDirectory) {
-            Ln.e("$TAG: setup failed - PI root not readable: $piRoot")
+            // 属主与挂载点能分清是 root 建坏的目录，还是存储栈不让 shell 进 Android/data
+            val diagnosis = piRoot?.takeIf { it.isNotBlank() }?.let { PathDiagnosis.diagnose(File(it)) } ?: "no path"
+            Ln.e("$TAG: setup failed - PI root not readable: $piRoot ($diagnosis)")
             return false
         }
         this.piRoot = piRoot
@@ -176,6 +210,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
             Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")
         }
         pruneMaafwBackups()
+        logDir?.let { pruneLogcatCaptures(File(it).parentFile) }
         Ln.i("$TAG: setup ok, piRoot=$piRoot")
         return true
     }
@@ -190,6 +225,26 @@ class RemoteServiceImpl : RemoteService.Stub() {
                 .onFailure { Ln.w("$TAG: prune maafw log backups failed: ${it.message}") }
         }.apply { name = "maafw-log-prune"; isDaemon = true }.start()
     }
+
+    /** 放在这里而非 logcat 进程：调试模式关掉后不再起 logcat 进程，旧文件也得有人收 */
+    private fun pruneLogcatCaptures(root: File?) {
+        root ?: return
+        Thread {
+            runCatching { LogcatRetention.prune(File(File(root, AppFiles.DEBUG_DIR), AppFiles.LOGCAT_DIR)) }
+                .onSuccess { if (it > 0) Ln.i("$TAG: pruned $it old logcat captures") }
+                .onFailure { Ln.w("$TAG: prune logcat captures failed: ${it.message}") }
+        }.apply { name = "logcat-prune"; isDaemon = true }.start()
+    }
+
+    override fun getProcessExitRecords(packageName: String?, sinceMs: Long, maxNum: Int): String =
+        ProcessExitQuery.query(packageName, sinceMs, maxNum).toWireJson()
+
+    override fun getVirtualDisplayFlagTier(): Int = VirtualDisplayManager.getFlagTier()
+
+    override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String =
+        SystemLogDump.dump(sinceMs, untilMs, pid, processPrefix.orEmpty())
+
+    override fun dumpThreads(): String = ThreadDump.capture()
 
     override fun setSaveOnError(enabled: Boolean): Boolean {
         runner.setSaveOnError(enabled)
@@ -207,46 +262,80 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     // ── 显示 ──
 
-    override fun setVirtualDisplayMode(mode: Int): Boolean = when (mode) {
-        DisplayMode.PRIMARY -> {
-            GameFpsMonitor.stop()
-            VirtualDisplayManager.stop()
-            virtualDisplayMode.set(mode)
-            true
-        }
-
-        DisplayMode.BACKGROUND -> {
-            PrimaryDisplayManager.stop()
-            virtualDisplayMode.set(mode)
-            true
-        }
-
-        else -> false
-    }
-
-    override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) {
-        VirtualDisplayManager.setResolution(width, height, dpi)
-    }
-
-    override fun startVirtualDisplay(): Int = when (virtualDisplayMode.get()) {
-        DisplayMode.PRIMARY -> PrimaryDisplayManager.start()
-        DisplayMode.BACKGROUND -> VirtualDisplayManager.start().also { displayId ->
-            if (displayId != DefaultDisplayConfig.DISPLAY_NONE) {
-                PowerController.startUserActivityKeepAlive(displayId)
+    // 读模式与起停在同一把锁里：切模式与起屏交错时，会按旧模式起出一块没人撤的屏
+    override fun setVirtualDisplayMode(mode: Int): Boolean = synchronized(DisplayLifecycle.lock) {
+        when (mode) {
+            DisplayMode.PRIMARY -> {
+                virtualDisplayMode.set(mode)
+                stopBackgroundDisplay()
+                true
             }
-        }
 
-        else -> DefaultDisplayConfig.DISPLAY_NONE
+            DisplayMode.BACKGROUND -> {
+                PrimaryDisplayManager.stop()
+                virtualDisplayMode.set(mode)
+                true
+            }
+
+            else -> false
+        }
+    }
+
+    override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) = synchronized(DisplayLifecycle.lock) {
+        VirtualDisplayManager.setResolution(width, height, dpi)
+        syncUserActivityKeepAlive()
+    }
+
+    override fun startVirtualDisplay(): Int = synchronized(DisplayLifecycle.lock) {
+        when (virtualDisplayMode.get()) {
+            DisplayMode.PRIMARY -> PrimaryDisplayManager.start()
+            DisplayMode.BACKGROUND -> startBackgroundDisplay()
+            else -> DefaultDisplayConfig.DISPLAY_NONE
+        }
+    }
+
+    private fun startBackgroundDisplay(): Int {
+        val reused = VirtualDisplayManager.getDisplayId()
+        if (reused != DefaultDisplayConfig.DISPLAY_NONE && !PowerController.ensureDisplayAwake(reused)) {
+            Ln.w("$TAG: display $reused asleep, recreating")
+            stopBackgroundDisplay()
+        }
+        return VirtualDisplayManager.start().also { syncUserActivityKeepAlive() }
+    }
+
+    private fun stopBackgroundDisplay() {
+        GameFpsMonitor.stop()
+        StaleFrameGuard.stop()
+        VirtualDisplayManager.stop()
+        syncUserActivityKeepAlive()
+    }
+
+    private fun backgroundDisplayId(): Int? = VirtualDisplayManager.getDisplayId().takeIf {
+        virtualDisplayMode.get() == DisplayMode.BACKGROUND && it != DefaultDisplayConfig.DISPLAY_NONE
+    }
+
+    private fun isTaskKeepAlive(): Boolean = runnerDelegate.isInitialized() && runner.isRunning()
+
+    private fun syncUserActivityKeepAlive() = synchronized(keepAliveLock) {
+        val target = PowerController.targetKeepAliveDisplay(
+            backgroundDisplayId(),
+            taskKeepAlive = isTaskKeepAlive(),
+            previewKeepAlive = previewKeepAlive,
+        )
+        if (target != null) {
+            PowerController.startUserActivityKeepAlive(target)
+        } else {
+            PowerController.stopUserActivityKeepAlive()
+        }
     }
 
     override fun stopVirtualDisplay() {
         stopDisplayWatchers()
         GameFpsMonitor.stop()
-        when (virtualDisplayMode.get()) {
-            DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
-            DisplayMode.BACKGROUND -> {
-                PowerController.stopUserActivityKeepAlive()
-                VirtualDisplayManager.stop()
+        synchronized(DisplayLifecycle.lock) {
+            when (virtualDisplayMode.get()) {
+                DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
+                DisplayMode.BACKGROUND -> stopBackgroundDisplay()
             }
         }
     }
@@ -277,6 +366,12 @@ class RemoteServiceImpl : RemoteService.Stub() {
         PowerController.setDisplayPower(on)
     }
 
+    override fun setDisplayPowerSync(on: Boolean): Boolean = PowerController.setDisplayPower(on)
+
+    override fun getLastWakeTrace(sinceElapsedMs: Long): String = WakeUnlockController.lastTrace(sinceElapsedMs)
+
+    override fun getVisiblePackages(displayId: Int): List<String>? = ActivityUtils.visiblePackages(displayId)
+
     /**
      * 改主屏分辨率会把整个系统的 UI 重排一遍，失败要报出去而不是吞掉——
      * 用户看到「已修改」却什么都没变，只会以为是自己屏幕不支持
@@ -299,8 +394,12 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     override fun setMonitorSurface(surface: Surface?) {
         Ln.i("$TAG: setMonitorSurface(${surface != null})")
-        VirtualDisplayManager.setMonitorSurface(surface)
         NativeBridgeLib.setPreviewSurface(surface)
+        synchronized(keepAliveLock) {
+            previewKeepAlive = surface != null
+            if (previewKeepAlive) backgroundDisplayId()?.let { PowerController.ensureDisplayAwake(it) }
+            syncUserActivityKeepAlive()
+        }
     }
 
     override fun setTouchCallback(callback: ITouchEventCallback?) {
@@ -339,8 +438,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
         StaleFrameGuard.blankIfVacant()
         val started = runner.start(runPlanJson)
         if (started) {
-            AppWatchdog.startWatching()
+            AppWatchdog.startWatching(runner::isRunning)
             StaleFrameGuard.start(runner::isRunning)
+            syncUserActivityKeepAlive()
         }
         return started
     }
@@ -376,6 +476,30 @@ class RemoteServiceImpl : RemoteService.Stub() {
         }
     }
 
+    override fun captureFrameJpeg(quality: Int): ByteArray? {
+        var frame: Bitmap? = null
+        var scaled: Bitmap? = null
+        return try {
+            frame = NativeBridgeLib.getFrameBufferBitmap() ?: return null
+            // 前台模式是原生分辨率，缩到长边 1280 免得撑爆 binder 缓冲
+            val scale = JPEG_MAX_EDGE.toFloat() / maxOf(frame.width, frame.height)
+            scaled = if (scale < 1f) {
+                Bitmap.createScaledBitmap(frame, (frame.width * scale).toInt(), (frame.height * scale).toInt(), true)
+            } else {
+                frame
+            }
+            ByteArrayOutputStream().use { out ->
+                if (scaled.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)) out.toByteArray() else null
+            }
+        } catch (e: Throwable) {
+            Ln.w("$TAG: captureFrameJpeg failed: ${e.message}")
+            null
+        } finally {
+            if (scaled !== frame) scaled?.recycle()
+            frame?.recycle()
+        }
+    }
+
     override fun getGameFps(): Float = GameFpsMonitor.currentFps()
 
     override fun maaVersion(): String? = MaaFrameworkLoader.library?.MaaVersion()
@@ -389,7 +513,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
         var granted = 0
         // 结果不进返回位免改 AIDL 返回协议；放开失败由 App 侧预检兜底
         if (permissions and PrivilegedGrant.FGS_SPECIAL_USE != 0) {
-            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName)
+            PermissionGrantHelper.grantForegroundServiceSpecialUse(packageName, uid)
+        }
+        if (permissions and PrivilegedGrant.SCHEDULE != 0) {
+            PermissionGrantHelper.grantScheduleOps(packageName, uid)
         }
         if (permissions and PrivilegedGrant.NOTIFICATION != 0 &&
             PermissionGrantHelper.grantNotificationPermission(packageName, uid)
@@ -445,10 +572,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
         step("game fps") { GameFpsMonitor.stop() }
         step("screen size") { ScreenManager.destroy() }
         step("power") { PowerController.destroy() }
+        // 排在拆屏之前：拆屏要排在卡住的显示调用后面等锁，被退出期限掐掉时断网规则还留在 netd 里，得等下次拉起才放开
+        step("xmsf") { XmsfFirewall.restoreIfNeeded() }
         step("primary display") { PrimaryDisplayManager.stop() }
         step("virtual display") { VirtualDisplayManager.stop() }
         step("preview") { shutdownPreview() }
-        step("xmsf") { XmsfFirewall.restoreIfNeeded() }
     }
 
     private inline fun step(name: String, action: () -> Unit) {
@@ -499,6 +627,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
     }
 
     private companion object {
+        private const val JPEG_MAX_EDGE = 1280
         const val TAG = "RemoteService"
         const val HEARTBEAT_INTERVAL_MS = 5_000L
         const val PREVIEW_SHUTDOWN_TIMEOUT_MS = 1_000L

@@ -9,6 +9,7 @@ import com.aliothmoon.maafw.notification.live.FocusSequenceStore
 import com.aliothmoon.maafw.notification.live.LiveCapabilityProbe
 import com.aliothmoon.maafw.notification.live.RunNotificationFactory
 import com.aliothmoon.maafw.notification.live.RunNotificationTester
+import com.aliothmoon.maafw.notification.live.TrackerIconStore
 import com.aliothmoon.maafw.notification.live.XmsfNetworkGate
 import com.aliothmoon.maafw.notification.provider.BarkProvider
 import com.aliothmoon.maafw.notification.provider.CustomWebhookProvider
@@ -18,6 +19,7 @@ import com.aliothmoon.maafw.notification.provider.DiscordWebhookProvider
 import com.aliothmoon.maafw.notification.provider.GotifyProvider
 import com.aliothmoon.maafw.notification.provider.KookProvider
 import com.aliothmoon.maafw.notification.provider.QmsgProvider
+import com.aliothmoon.maafw.notification.provider.QmsgV3Provider
 import com.aliothmoon.maafw.notification.provider.ServerChanProvider
 import com.aliothmoon.maafw.notification.provider.SmtpProvider
 import com.aliothmoon.maafw.notification.provider.TelegramProvider
@@ -33,7 +35,8 @@ val notificationModule = module {
     // 运行通知的三种展示方式：前台服务按它们拼进度通知，通知设置页读能力、发测试
     single { LiveCapabilityProbe(androidContext(), get()) }
     single { FocusSequenceStore(androidContext()) }
-    single { RunNotificationFactory(androidContext(), get()) }
+    single { TrackerIconStore(androidContext(), get()) }
+    single { RunNotificationFactory(androidContext(), get(), get(), get()) }
     single { XmsfNetworkGate(androidContext(), get(), get(named<AppCoroutineScope>())) }
     single { RunNotificationTester(androidContext(), get(), get(), get(), get(named<AppCoroutineScope>())) }
 
@@ -52,6 +55,7 @@ val notificationModule = module {
                 SmtpProvider(settings),
                 BarkProvider(http, settings),
                 QmsgProvider(http, settings),
+                QmsgV3Provider(http, settings),
                 GotifyProvider(http, settings),
                 CustomWebhookProvider(http, settings),
             ),

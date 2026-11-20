@@ -2,7 +2,6 @@ package com.aliothmoon.maafw.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
@@ -54,16 +53,6 @@ fun ShizukuReadinessDialog(
             neutralText = switchToRootText,
             onNeutralClick = onSwitchToRoot,
             dismissText = skipText,
-            onDismissRequest = onDismiss,
-        )
-
-        // Sui 以 Root 身份跑，兼容性未知；只告知一次，不给出口
-        ShizukuReadinessStage.SuiAvailable -> MaaPromptDialog(
-            title = stringResource(R.string.dialog_sui_detected_title),
-            message = stringResource(R.string.dialog_sui_detected_message),
-            icon = Icons.Outlined.Info,
-            confirmText = stringResource(R.string.common_got_it),
-            onConfirm = onDismiss,
             onDismissRequest = onDismiss,
         )
 

@@ -7,11 +7,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -51,6 +47,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -97,6 +96,8 @@ private object ScreenSaverDimens {
 fun ScreenSaverView(
     latestLog: StateFlow<String?>,
     onUnlock: () -> Unit,
+    /** 窗口亮度由宿主窗口的 LayoutParams 管，这里只说要多亮 */
+    onBrightnessChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val log by latestLog.collectAsState()
@@ -119,6 +120,17 @@ fun ScreenSaverView(
     val barDriftDownPx = with(density) { 40.dp.roundToPx() }
     var barOffsetX by remember { mutableIntStateOf(0) }
     var barOffsetY by remember { mutableIntStateOf(0) }
+    // 显示与每次按下各算一次唤醒：稍微提亮方便看清，随后慢慢暗回去；光带也跟着扫几遍
+    var wakeCount by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(wakeCount) {
+        onBrightnessChange(WAKE_BRIGHTNESS)
+        delay(WAKE_HOLD_MS)
+        for (step in 1..DIM_STEPS) {
+            onBrightnessChange(WAKE_BRIGHTNESS + (DIM_BRIGHTNESS - WAKE_BRIGHTNESS) * step / DIM_STEPS)
+            delay(DIM_STEP_MS)
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -134,7 +146,15 @@ fun ScreenSaverView(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                // 只观察不消费，拖动解锁照常
+                awaitPointerEventScope {
+                    while (true) {
+                        if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) wakeCount++
+                    }
+                }
+            },
     ) {
         Column(
             modifier = Modifier
@@ -170,6 +190,7 @@ fun ScreenSaverView(
         }
 
         SlideToUnlockBar(
+            shimmerWake = wakeCount,
             onUnlock = onUnlock,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -188,6 +209,7 @@ fun ScreenSaverView(
  */
 @Composable
 private fun SlideToUnlockBar(
+    shimmerWake: Int,
     onUnlock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -206,16 +228,14 @@ private fun SlideToUnlockBar(
     val displayOffset = if (isAnimating) releaseAnim.value else dragOffset
     val progress = if (maxOffset > 0f) (displayOffset / maxOffset).coerceIn(0f, 1f) else 0f
 
-    val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerPos by shimmerTransition.animateFloat(
-        initialValue = -0.5f,
-        targetValue = 1.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(SHIMMER_DURATION_MS, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "shimmerPos",
-    )
+    // 屏保常亮且一挂几小时，光带不能一直出帧：唤醒后扫几遍就停在条外
+    val shimmerPos = remember { Animatable(SHIMMER_END) }
+    LaunchedEffect(shimmerWake) {
+        repeat(SHIMMER_SWEEPS) {
+            shimmerPos.snapTo(SHIMMER_START)
+            shimmerPos.animateTo(SHIMMER_END, tween(SHIMMER_DURATION_MS, easing = LinearEasing))
+        }
+    }
     // 拖到越后面越不需要提示，扫光跟着淡出
     val shimmerAlpha = (1f - progress) * 0.28f
 
@@ -234,8 +254,8 @@ private fun SlideToUnlockBar(
                             Color.White.copy(alpha = shimmerAlpha),
                             Color.Transparent,
                         ),
-                        startX = shimmerPos * size.width - sweepWidth,
-                        endX = shimmerPos * size.width + sweepWidth,
+                        startX = shimmerPos.value * size.width - sweepWidth,
+                        endX = shimmerPos.value * size.width + sweepWidth,
                     ),
                 )
             }
@@ -345,6 +365,16 @@ private fun Intent.toBatteryState(): BatteryState? {
 /** 时钟刷新与防烧屏漂移共用这一拍；再密就是白耗电 */
 private const val DRIFT_INTERVAL_MS = 30_000L
 private const val SHIMMER_DURATION_MS = 2_400
+private const val SHIMMER_START = -0.5f
+private const val SHIMMER_END = 1.5f
+private const val SHIMMER_SWEEPS = 3
+
+/** 0f 在部分 ROM 上被当成「跟随系统」，给一个够小但非零的值 */
+internal const val DIM_BRIGHTNESS = 0.01f
+private const val WAKE_BRIGHTNESS = 0.15f
+private const val WAKE_HOLD_MS = 6_000L
+private const val DIM_STEPS = 10
+private const val DIM_STEP_MS = 150L
 private const val SNAP_DURATION_MS = 120
 
 /** 拖过七成、或快速轻扫都算解锁——只认前者会让快扫的用户以为条卡住了 */

@@ -10,6 +10,9 @@ import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHED
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_SCHEDULED_TIME
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_STRATEGY_ID
+import com.aliothmoon.maafw.notification.NotificationCenter
+import com.aliothmoon.maafw.notification.ScheduleNotice
+import com.aliothmoon.maafw.ui.schedule.asUiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +31,8 @@ class ScheduleReceiver : BroadcastReceiver() {
         val scheduledTime = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0L)
         val retryCount = intent.getIntExtra(EXTRA_RETRY_COUNT, 0)
         Timber.i("Schedule alarm fired: %s, retry=%d", strategyId, retryCount)
+        runCatching { GlobalContext.get().get<ScheduleAlarmManager>().markFired(strategyId, scheduledTime) }
+            .onFailure { Timber.w(it, "markFired failed: %s", strategyId) }
 
         val serviceIntent = Intent(context, ScheduleExecutionService::class.java).apply {
             action = ACTION_SCHEDULE_TRIGGER
@@ -80,6 +85,8 @@ class ScheduleReceiver : BroadcastReceiver() {
                     Timber.w("Schedule strategy no longer exists: %s", strategyId)
                     alarms.forget(strategyId)
                 } else {
+                    // 这一次已记成失败，算投递过：整批重排不会再把它挂回来，挂着的重试也不再续
+                    alarms.markDelivered(strategy.id, scheduledTime)
                     alarms.scheduleNext(strategy, scheduledTime)
                     store.recordTrigger(strategyId, TriggerResult.FAILED_SERVICE_START, reason)
                     // 用户查「昨晚为什么没跑」看的是触发日志，只记在规则上等于没记
@@ -92,6 +99,12 @@ class ScheduleReceiver : BroadcastReceiver() {
                             result = TriggerResult.FAILED_SERVICE_START,
                             detail = reason,
                         ),
+                    )
+                    // 异常原文只进触发日志
+                    koin.get<NotificationCenter>().onScheduleNotStarted(
+                        strategy.name,
+                        TriggerResult.FAILED_SERVICE_START.asUiText(),
+                        ScheduleNotice.FAILED,
                     )
                 }
             } finally {

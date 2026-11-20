@@ -53,6 +53,9 @@ public final class DriverClass {
             ret = ActivityUtils.ensureAppOnDisplay(target, displayId);
             if (!ret) {
                 Ln.e(TAG + ": " + target + " could not be pinned on display " + displayId);
+            } else {
+                // 到这里任务一定在屏上了；startApp 里那次在冷启动时常常还找不到任务
+                ActivityUtils.excludeFromRecents(target, displayId);
             }
         }
         if (ret) {

@@ -22,10 +22,13 @@ import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.domain.UserConfiguration
 import com.aliothmoon.maafw.domain.duplicate
+import com.aliothmoon.maafw.privileged.DISPLAY_CALL_TIMEOUT_MS
 import com.aliothmoon.maafw.privileged.DisplaySizeGateway
 import com.aliothmoon.maafw.privileged.DisplaySizeResult
 import com.aliothmoon.maafw.privileged.PermissionGateway
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.RemoteAccessFailure
+import com.aliothmoon.maafw.privileged.remoteAccessMessage
 import com.aliothmoon.maafw.privileged.PrivilegedServiceState
 import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.privileged.ServiceBindResult
@@ -33,12 +36,14 @@ import com.aliothmoon.maafw.privileged.ShizukuReadiness
 import com.aliothmoon.maafw.privileged.SystemPermission
 import com.aliothmoon.maafw.privileged.SystemPermissionState
 import com.aliothmoon.maafw.privileged.callWithTimeout
+import com.aliothmoon.maafw.privileged.ShizukuReadinessStage
 import com.aliothmoon.maafw.project.PiInstallCoordinator
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.project.ResolvedWelcome
 import com.aliothmoon.maafw.project.WelcomeResolver
 import com.aliothmoon.maafw.domain.ResolvedProjectSession
+import com.aliothmoon.maafw.domain.RemoteBackend
 import com.aliothmoon.maafw.runner.FocusChannel
 import com.aliothmoon.maafw.runner.FocusDispatcher
 import com.aliothmoon.maafw.runner.FocusMessage
@@ -65,7 +70,9 @@ import com.aliothmoon.maafw.ui.i18n.diagnosticsSummaryUiText
 import com.aliothmoon.maafw.settings.AppSettingsGateway
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.i18n.AppLocales
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -80,13 +87,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.seconds
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** app 设置的一次快照；combine 的元数上限是 5，几项设置得先并成一个 */
 private data class SettingsSnapshot(
@@ -140,10 +151,21 @@ class SessionViewModel(
     private val welcomeResolver: WelcomeResolver,
 ) : ViewModel() {
 
+    /**
+     * 首页「请求权限」在 Shizuku 没装 / 没起时置位：照样弹引导，点过「跳过检查」也弹（照上游 359f49f8）。
+     * 置位期间引导跟着不看跳过的那份就绪状态走，用户去启动了 Shizuku 回来，弹窗自己往下一步走
+     */
+    private val shizukuGuideForced = MutableStateFlow(false)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val shownReadiness: Flow<ShizukuReadiness> = shizukuGuideForced.flatMapLatest { forced ->
+        if (forced) permissionGateway.readinessIgnoringSkip else permissionGateway.readiness
+    }
+
     private val privilegedState: Flow<PrivilegedSnapshot> = combine(
         permissionGateway.state,
         permissionGateway.isGranting,
-        permissionGateway.readiness,
+        shownReadiness,
         permissionGateway.serviceState,
         permissionGateway.systemPermissions,
     ) { access, granting, readiness, service, system ->
@@ -241,7 +263,19 @@ class SessionViewModel(
     // Intent 串行消费，保证配置写入不交错
     private val intents = Channel<SessionIntent>(Channel.UNLIMITED)
 
+    private var reinstallJob: Job? = null
+    private var closeTargetJob: Job? = null
+    private var startJob: Job? = null
+
+    /** 运行中到的语言切换；这一轮结束时补重载，否则 PI 文案停在旧语言直到进程重启 */
+    private val localeReloadPending = AtomicBoolean(false)
+
     init {
+        viewModelScope.launch {
+            runnerPort.state.map { it.phase.isBusy }.distinctUntilChanged().collect { busy ->
+                if (!busy && localeReloadPending.compareAndSet(true, false)) projectRepository.reload()
+            }
+        }
         // 解包在前、加载在后；解包没成不要 reload，半包会被当成已解包
         viewModelScope.launch {
             if (piInstall.ensureInstalled()) projectRepository.ensureLoaded()
@@ -377,6 +411,7 @@ class SessionViewModel(
             settingSections = session.settingSections,
             resourceOptions = session.resourceOptions,
             controllerOptions = session.controllerOptions,
+            templates = session.templates,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
             previewResolution = settings.resolutionPreset.resolution,
@@ -391,6 +426,12 @@ class SessionViewModel(
 
             is SessionIntent.CreateFromTemplate -> guarded {
                 val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition
+                val config = configurationStore.data.first()
+                val controller = definition?.controller(config.activeControllerName)
+                val template = definition?.templates?.firstOrNull { it.name == intent.templateName }
+                if (template != null && controller != null && !template.runsOn(controller)) {
+                    return@guarded
+                }
                 val created = definition?.let {
                     ConfigurationResolver.createFromTemplate(
                         definition = it,
@@ -594,12 +635,9 @@ class SessionViewModel(
             SessionIntent.ResetForegroundResolution -> resetForegroundResolution()
             SessionIntent.ShowScreenSaver -> emitEffect(SessionEffect.ShowScreenSaver)
             SessionIntent.CaptureVirtualDisplay -> captureVirtualDisplay()
-            // 关目标应用即停虚拟屏：屏没了应用跟着退，不必让 app 侧知道包名
-            // serviceOrNull 而不是 useService：一颗次级按钮，不值得为它弹授权请求
-            SessionIntent.CloseTargetApp -> servicePort.serviceOrNull()?.let { service ->
-                runCatching { service.stopVirtualDisplay() }
-                    .onFailure { Timber.w(it, "stopVirtualDisplay failed") }
-            }
+            SessionIntent.CloseTargetApp ->
+                if (locked()) emitEffect(SessionEffect.ConfirmCloseTargetApp) else launchCloseTargetApp()
+            SessionIntent.CloseTargetAppConfirmed -> launchCloseTargetApp()
 
             // 语言切换会触发 PI 重载（翻译加载期物化），运行中同样拦截
             is SessionIntent.SetLanguage -> guarded {
@@ -610,6 +648,8 @@ class SessionViewModel(
                 projectRepository.reload()
             }
 
+            SessionIntent.LocaleChanged -> reloadForLocale()
+
             SessionIntent.DismissWelcome -> {
                 val fingerprint = resolvedWelcome.value?.fingerprint
                 if (fingerprint != null) {
@@ -617,11 +657,16 @@ class SessionViewModel(
                 }
             }
 
+            // whenIdle 要等上一轮连收尾都走完，可能几小时：放进循环里等，「停止」就一直排在后面
             SessionIntent.ReinstallPi -> guarded {
-                if (piInstall.reinstall()) projectRepository.reload()
+                if (reinstallJob?.isActive != true) {
+                    reinstallJob = viewModelScope.launch {
+                        runLauncher.whenIdle { if (piInstall.reinstall()) projectRepository.reload() }
+                    }
+                }
             }
 
-            is SessionIntent.Start -> start(intent.surface, intent.acknowledged)
+            is SessionIntent.Start -> launchStart(intent)
             SessionIntent.Stop -> stop()
 
             // 不走 guarded：预览与配置写入无关，运行中反而更需要它
@@ -635,9 +680,11 @@ class SessionViewModel(
             }
 
             // 提权一律不走 guarded：它不改 UserConfiguration，运行中断了连也得能重授
-            SessionIntent.RequestRemoteAccess -> permissionGateway.requestRemoteAccess()
+            SessionIntent.RequestRemoteAccess -> requestRemoteAccess()
             SessionIntent.TogglePrivilegedService -> togglePrivilegedService()
-            SessionIntent.SkipShizukuCheck -> permissionGateway.skipShizukuCheck()
+            // 强制弹出来的那次关掉只是收起：用户早就点过跳过，不必再写一遍
+            SessionIntent.SkipShizukuCheck ->
+                if (shizukuGuideForced.value) shizukuGuideForced.value = false else permissionGateway.skipShizukuCheck()
             SessionIntent.InstallShizuku -> emitEffect(SessionEffect.InstallShizuku)
             SessionIntent.OpenShizuku -> emitEffect(SessionEffect.OpenShizuku)
             is SessionIntent.RequestSystemPermission -> requestSystemPermission(intent.permission)
@@ -648,8 +695,34 @@ class SessionViewModel(
         }
     }
 
+    /**
+     * 先强停看门狗盯着的目标应用，再停虚拟屏：只停屏的话按钮名不副实，应用还在后台活着。
+     * 没有目标包（还没跑过一轮）或强停失败都照样关屏——屏一没，屏上的应用也跟着走
+     *
+     * 只用现成连接：一颗次级按钮，不值得为它弹授权请求
+     */
+    /** 收尾卡住时要等到判卡（15s 起），不能占着 intent 循环；连点只跑一次 */
+    private fun launchCloseTargetApp() {
+        if (closeTargetJob?.isActive == true) return
+        closeTargetJob = viewModelScope.launch { closeTargetApp() }
+    }
+
+    private suspend fun closeTargetApp() {
+        val service = servicePort.serviceOrNull() ?: return
+        val stopped = servicePort.callWithTimeout(CLOSE_TARGET_TIMEOUT) { it.stopTargetApp() }
+        if (stopped != true) Timber.w("stopTargetApp did not succeed (%s), closing the display anyway", stopped)
+        try {
+            servicePort.callOrRestart(service, "stopVirtualDisplay", DISPLAY_CALL_TIMEOUT_MS) { it.stopVirtualDisplay() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 卡死已重启特权进程、进程已死，两种情况屏都随进程没了
+            Timber.w(e, "stopVirtualDisplay failed")
+        }
+    }
+
     private suspend fun captureVirtualDisplay() {
-        if (!appSettings.debugMode.value || appSettings.runMode.value != RunMode.BACKGROUND) {
+        if (appSettings.runMode.value != RunMode.BACKGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_screenshot_failed)))
             return
         }
@@ -677,7 +750,8 @@ class SessionViewModel(
 
     /** Screen 禁用之外的第二层写锁：写入前再读 RunnerState */
     private suspend fun guarded(block: suspend () -> Unit) {
-        if (locked()) {
+        // 起跑在循环外：检查与挂载那段 phase 还没 busy，计划却已按当时的配置冻好，这时写进去界面就和在跑的对不上
+        if (locked() || startJob?.isActive == true) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_locked_while_running)))
             return
         }
@@ -685,6 +759,16 @@ class SessionViewModel(
     }
 
     private fun locked(): Boolean = runnerPort.state.value.phase.isBusy
+
+    private suspend fun reloadForLocale() {
+        if (!locked()) {
+            projectRepository.reload()
+            return
+        }
+        localeReloadPending.set(true)
+        // 记账与这一轮落回 Idle 可能前后脚：收集器已经过去了的话，这里自己补
+        if (!locked() && localeReloadPending.compareAndSet(true, false)) projectRepository.reload()
+    }
 
     private suspend fun appendAndActivate(configuration: RunConfiguration) {
         configurationStore.update { config ->
@@ -734,7 +818,7 @@ class SessionViewModel(
     }
 
     /**
-     * 断开只是解绑，特权进程本体还在（它有自己的看门狗）
+     * 断开会 destroy 特权进程，在跑的那一轮随之结束，Runner 见到 Disconnected 自己收回
      * 运行中不拦：跑飞了的时候用户就该能一脚踹开这条连接
      */
     private suspend fun togglePrivilegedService() {
@@ -745,10 +829,10 @@ class SessionViewModel(
         val message = when (val result = permissionGateway.bindService()) {
             ServiceBindResult.Started, ServiceBindResult.AlreadyConnected -> return
             is ServiceBindResult.BackendUnavailable ->
-                uiTextOf(R.string.msg_backend_unavailable, result.backend.display)
+                remoteAccessMessage(result.backend, RemoteAccessFailure.UNAVAILABLE)
 
             is ServiceBindResult.AuthRejected ->
-                uiTextOf(R.string.msg_backend_auth_rejected, result.backend.display)
+                remoteAccessMessage(result.backend, RemoteAccessFailure.NOT_GRANTED)
 
             is ServiceBindResult.Failed -> uiTextOf(R.string.msg_bind_service_failed, result.reason)
         }
@@ -797,12 +881,21 @@ class SessionViewModel(
     }
 
     /**
+     * 准备阶段要连特权进程、建虚拟屏，几十秒起：放进 intent 循环里等的话，「停止」与预览操作全排在它后面。
+     * 连点只受理一次，并发起跑本来也会被 RunLauncher 的闸门挡下
+     */
+    private fun launchStart(intent: SessionIntent.Start) {
+        if (startJob?.isActive == true) return
+        startJob = viewModelScope.launch { start(intent.surface, intent.acknowledged, intent.startFromInstanceId) }
+    }
+
+    /**
      * 发起本身在 [RunLauncher]（进程级，定时触发共用同一条）；这里只把结局翻成 UI 消息
      *
      * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
      * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
      */
-    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>) {
+    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>, startFromInstanceId: String?) {
         if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
             return
@@ -812,9 +905,11 @@ class SessionViewModel(
             TaskSurface.InApp -> RunTrigger.Manual
             TaskSurface.Overlay -> RunTrigger.Overlay
         }
-        when (val result = runLauncher.launch(trigger, acknowledged)) {
-            // 手动发起不传 requestId，这条到不了
-            RunLaunchResult.Started, RunLaunchResult.DuplicateRequest -> Unit
+        when (val result = runLauncher.launch(trigger, acknowledged, startFromInstanceId = startFromInstanceId)) {
+            RunLaunchResult.Started -> emitEffect(SessionEffect.ShowRunLog(surface))
+
+            // 手动发起不传 requestId、不排队，这两条到不了
+            RunLaunchResult.DuplicateRequest, RunLaunchResult.QueueTimedOut -> Unit
 
             RunLaunchResult.ProjectNotReady ->
                 emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.msg_project_not_loaded)))
@@ -847,8 +942,24 @@ class SessionViewModel(
                 emitEffect(SessionEffect.ShowMessage(result.reason))
 
             is RunLaunchResult.NeedsConfirmation ->
-                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token))
+                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token, startFromInstanceId))
         }
+    }
+
+    /**
+     * 差授权就直接请求；Shizuku 没装 / 没起时请求只会白返回 false、界面毫无反应，改弹引导。
+     * Root 各家管理器不同，引导不了，照旧直接请求
+     */
+    private suspend fun requestRemoteAccess() {
+        if (permissionGateway.state.value.configuredBackend == RemoteBackend.SHIZUKU) {
+            val stage = permissionGateway.resolveReadinessIgnoringSkip().stage
+            if (stage == ShizukuReadinessStage.NotInstalled || stage == ShizukuReadinessStage.NotRunning) {
+                shizukuGuideForced.value = true
+                return
+            }
+        }
+        shizukuGuideForced.value = false
+        permissionGateway.requestRemoteAccess()
     }
 
     private suspend fun stop() {
@@ -862,6 +973,7 @@ class SessionViewModel(
     private companion object {
         // 整帧 PNG 编码在特权进程里做，高分辨率下要几百毫秒
         val CAPTURE_TIMEOUT = 5.seconds
+        val CLOSE_TARGET_TIMEOUT = 5.seconds
         const val MANUAL_SCREENSHOT_KEEP = 20
         val SCREENSHOT_STAMP = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US)
     }

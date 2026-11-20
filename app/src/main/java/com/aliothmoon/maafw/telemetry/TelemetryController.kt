@@ -2,9 +2,11 @@ package com.aliothmoon.maafw.telemetry
 
 import android.content.Context
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppFiles
 import com.aliothmoon.maafw.constant.AppPaths
 import com.aliothmoon.maafw.domain.TelemetryDefinition
+import com.aliothmoon.maafw.privileged.PrivilegedServicePort
 import com.aliothmoon.maafw.project.ProjectRepository
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunPlan
@@ -33,7 +35,8 @@ import java.io.File
  * DSN 只来自 PI，外壳没有自己的上报去处；用户开关关着或 PI 压根没声明这一段时不初始化。
  * 开关缺省为开，与 MXU `helpImproveSoftware ?? true` 一致；debug 构建同样上报，靠 `maafwapp.build_type` 区分
  *
- * 上报面：哈希后的设备 ID、硬件摘要、版本、任务名、脱敏后的选项（[TelemetrySummary]）、
+ * 上报面：哈希后的设备 ID、硬件摘要、版本、每轮的运行模式 / 后台分辨率 / 目标应用版本（[TelemetryRunTags]）、
+ * 任务名、脱敏后的选项（[TelemetrySummary]）、
  * 任务与节点的结果（[RunTracer]）、任务终态失败的事件（[TaskFailure]）。
  * 任务失败时另带这个任务期间新写的日志尾巴与 `on_error/` 出错截图（[TaskEvidence]），
  * 日志里的 PI password 先换成掩码；任务没失败就不碰日志和截图，focus 正文任何时候都不带。
@@ -44,6 +47,8 @@ class TelemetryController(
     private val projectRepository: ProjectRepository,
     private val settings: AppSettingsManager,
     private val runnerPort: RunnerPort,
+    /** 目标包名只在特权进程手里，取目标应用版本用 */
+    private val servicePort: PrivilegedServicePort,
     private val scope: CoroutineScope,
     /** 当前保存着的 PI password 明文，失败日志上传前打码用 */
     private val secrets: suspend () -> Collection<String>,
@@ -87,7 +92,7 @@ class TelemetryController(
     fun setup() {
         scope.launch {
             // 开关关着也记：用户反馈问题时可凭这行在 Sentry 后台按 user.id 定位
-            Timber.i("[telemetry] 匿名设备 ID (Sentry user.id) = %s", TelemetryUserId.get(context))
+            Timber.i("[telemetry] anonymous device id (Sentry user.id) = %s", TelemetryUserId.get(context))
         }
         scope.launch {
             combine(
@@ -170,7 +175,20 @@ class TelemetryController(
     }
 
     /** 由 [TelemetryHook] 在投递前调用 */
-    fun begin(executionId: String, plan: RunPlan) = synchronized(lock) { tracer.begin(executionId, plan) }
+    fun begin(executionId: String, plan: RunPlan) {
+        val enabled = synchronized(lock) {
+            tracer.begin(executionId, plan)
+            active != null
+        }
+        // 问包名是 binder、查版本要碰 PackageManager，调用方在投递路径上
+        if (enabled) scope.launch(MaaDispatchers.IO) { refreshRunTags() }
+    }
+
+    private fun refreshRunTags() {
+        val target = runCatching { servicePort.serviceOrNull()?.watchdogTargetPackage() }.getOrNull()?.takeIf { it.isNotBlank() }
+        TelemetryRunTags.collect(context, settings.runMode.value, settings.resolutionPreset.value, target)
+            .forEach { (key, value) -> Sentry.setTag(key, value) }
+    }
 
     fun forget(executionId: String) = synchronized(lock) { tracer.forget(executionId) }
 

@@ -38,6 +38,9 @@ object RunPlanBuilder {
     /**
      * [clientVersion] / [clientLanguage] 只为拼 agent 的 `PI_*`，默认空表示「不声明」
      * 取值在 app 侧（BuildConfig 与 per-app locale），此处不反查环境，保持纯函数
+     *
+     * [startFromInstanceId]：「从此处运行」只跑这一条及其后的任务，只影响本轮，不改 enabled、不落盘。
+     * 前面的任务不算跳过，不进 [RunPlan.skippedTasks]；起点那条已不在配置里就没有可执行任务
      */
     fun build(
         definition: ProjectDefinition,
@@ -45,16 +48,19 @@ object RunPlanBuilder {
         configurationId: RunConfigurationId? = null,
         clientVersion: String? = null,
         clientLanguage: String? = null,
+        userDataDir: String? = null,
+        startFromInstanceId: String? = null,
     ): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
-        val resource = definition.resources.firstOrNull { it.name == config.activeResourceName }
-            ?: definition.resources.firstOrNull()
+        val controller = definition.controller(config.activeControllerName)
+        val availableResources = definition.resourcesFor(controller)
+        val resource = availableResources.firstOrNull { it.name == config.activeResourceName }
+            ?: availableResources.firstOrNull()
         if (resource == null) {
             diagnostics += runtimeError("environment", DiagnosticMessages.runtimeNoResource())
             return RunPlanResult.Invalid(diagnostics)
         }
-        val controller = definition.controller(config.activeControllerName)
 
         val runConfiguration = config.configuration(configurationId ?: config.activeConfigurationId)
             ?: return RunPlanResult.NoExecutableTasks
@@ -103,7 +109,12 @@ object RunPlanBuilder {
 
         val runtimeTasks = mutableListOf<RuntimeTask>()
         val skippedTasks = mutableListOf<SkippedTask>()
-        for (configured in runConfiguration.tasks) {
+        val candidates = if (startFromInstanceId == null) {
+            runConfiguration.tasks
+        } else {
+            runConfiguration.tasks.dropWhile { it.instanceId != startFromInstanceId }
+        }
+        for (configured in candidates) {
             if (!configured.enabled) continue
             // 已不在项目里的任务也只跳过不报错：勾选框已锁，拦下整轮用户只能去删
             val task = definition.task(configured.taskName)
@@ -178,6 +189,7 @@ object RunPlanBuilder {
                         translations = definition.translations,
                         clientVersion = clientVersion,
                         clientLanguage = clientLanguage,
+                        userDataDir = userDataDir,
                     )
                 },
                 skippedTasks = skippedTasks,
@@ -212,21 +224,12 @@ object RunPlanBuilder {
             if (!option.applicability.matches(controllerName, resourceName)) return
             when (option) {
                 is OptionDefinition.Choice -> {
-                    val value = values[name] as? OptionValue.SingleCase
-                    // 回落与 Resolver 同源，见 OptionDefinition.Choice.effectiveDefaultCase
-                    val selectedName = value?.case ?: option.effectiveDefaultCase
-                    if (selectedName == null) {
-                        diagnostics += runtimeError(
-                            scopeLabel,
-                            DiagnosticMessages.optionUnsetWithoutDefault(name),
-                        )
-                        return
-                    }
-                    val case = option.cases.firstOrNull { it.name == selectedName }
+                    // 存的 case 失效与未设值同样回落，与 Resolver 同源
+                    val case = option.selectedCase(values[name])
                     if (case == null) {
                         diagnostics += runtimeError(
                             scopeLabel,
-                            DiagnosticMessages.selectedCaseMissing(name, selectedName),
+                            DiagnosticMessages.optionUnsetWithoutDefault(name),
                         )
                         return
                     }
@@ -235,22 +238,14 @@ object RunPlanBuilder {
                 }
 
                 is OptionDefinition.Checkbox -> {
-                    val value = values[name] as? OptionValue.MultipleCases
-                    val selected = value?.cases?.toSet() ?: option.defaultCases.toSet()
-                    (selected - option.cases.mapTo(mutableSetOf()) { it.name }).forEach {
-                        diagnostics += runtimeError(
-                            scopeLabel,
-                            DiagnosticMessages.selectedCaseMissing(name, it),
-                        )
-                    }
+                    val selected = option.selectedCases(values[name]).toSet()
                     // 协议要求不带着不满足上下限的选择启动；PI 更新后收紧了限制，旧配置也在这里拦
-                    val selectedCount = option.cases.count { it.name in selected }
-                    if (!option.acceptsCount(selectedCount)) {
+                    if (!option.acceptsCount(selected.size)) {
                         diagnostics += runtimeError(
                             scopeLabel,
                             DiagnosticMessages.checkboxCountOutOfRange(
                                 name,
-                                selectedCount,
+                                selected.size,
                                 option.minCount,
                                 option.maxCount,
                             ),

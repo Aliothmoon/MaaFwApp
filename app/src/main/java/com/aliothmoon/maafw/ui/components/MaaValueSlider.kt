@@ -19,10 +19,12 @@ import kotlin.math.roundToInt
  *
  * 拖动只改本地值，松手才 [onValueCommit]：每一帧都落盘会把 DataStore 写爆，
  * 落盘后的回流还会和手指抢位置。要跟手预览的调用方接 [onDrag]
+ *
+ * [label] 为 null 时不出标签行：调用方已有自己的标题行（设置列表的 [MaaSettingRow]），当前值由它借 [onDrag] 自己显示
  */
 @Composable
 fun MaaValueSlider(
-    label: String,
+    label: String?,
     value: Int,
     range: IntRange,
     onValueCommit: (Int) -> Unit,
@@ -35,16 +37,18 @@ fun MaaValueSlider(
     LaunchedEffect(value) { sliderValue = value.toFloat() }
     val current = sliderValue.roundToInt().coerceIn(range)
     Column(modifier = modifier.fillMaxWidth()) {
-        MaaLabeledControlRow(
-            label = label,
-            trailing = {
-                Text(
-                    text = valueText(current),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-        )
+        if (label != null) {
+            MaaLabeledControlRow(
+                label = label,
+                trailing = {
+                    Text(
+                        text = valueText(current),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
+        }
         Slider(
             value = sliderValue,
             onValueChange = {

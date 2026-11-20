@@ -11,10 +11,14 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.aliothmoon.maafw.BuildConfig
+import com.aliothmoon.maafw.notification.NotificationCenter
+import com.aliothmoon.maafw.notification.ScheduleNotice
 import com.aliothmoon.maafw.notification.canRequestPromotedOngoing
+import com.aliothmoon.maafw.ui.schedule.asUiText
 import com.aliothmoon.maafw.MainActivity
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.i18n.resolve
+import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.ACTION_SCHEDULE_TRIGGER
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager.Companion.EXTRA_RETRY_COUNT
@@ -28,10 +32,10 @@ import com.aliothmoon.maafw.settings.AppSettingsManager
 import com.aliothmoon.maafw.service.SpecialUseFgsGate
 import com.aliothmoon.maafw.runner.RunProgress
 import com.aliothmoon.maafw.runner.ScheduleRunOptions
-import com.aliothmoon.maafw.runner.RunRequestId
 import com.aliothmoon.maafw.runner.RunSignals
 import com.aliothmoon.maafw.runner.RunStepSink
 import com.aliothmoon.maafw.runner.RunTrigger
+import com.aliothmoon.maafw.runner.WhenBusy
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,6 +71,7 @@ class ScheduleExecutionService : Service() {
     private val appSettings: AppSettingsManager by inject()
     private val projectRepository: ProjectRepository by inject()
     private val piInstall: PiInstallCoordinator by inject()
+    private val notifications: NotificationCenter by inject()
 
     /** 记账写盘的 IOException 不能把进程带崩：那会连同刚受理的这一轮一起杀掉 */
     private val serviceScope = CoroutineScope(
@@ -119,8 +124,11 @@ class ScheduleExecutionService : Service() {
 
         val scheduledTime = intent.getLongExtra(EXTRA_SCHEDULED_TIME, 0L)
         val retryCount = intent.getIntExtra(EXTRA_RETRY_COUNT, 0)
-        // 锁覆盖到 launch 受理为止：亮屏解锁、倒计时、投递都在这段，之后的保活归 RunForegroundService
-        val wakeLock = ScheduleWakeLock.acquire(this, TRIGGER_WAKE_TIMEOUT_MS)
+        // 锁覆盖到 launch 受理为止：排队、亮屏解锁、倒计时、投递都在这段，之后的保活归 RunForegroundService。
+        // 排队也得持锁：前一轮收尾放掉它的锁后 CPU 随时会睡，本轮就拖到下次有人亮屏
+        val queueWindowMs = triggerTimeLeftMs(scheduledTime, System.currentTimeMillis())
+            .coerceIn(0L, TRIGGER_EXPIRE_AFTER_MS)
+        val wakeLock = ScheduleWakeLock.acquire(this, TRIGGER_WAKE_TIMEOUT_MS + queueWindowMs)
         // 必须先于 launch：协程调度前计数还是 0，会被并发触发的收尾停掉
         inFlight.incrementAndGet()
         serviceScope.launch {
@@ -187,6 +195,19 @@ class ScheduleExecutionService : Service() {
         alarms.markDelivered(strategy.id, scheduledTimeMs)
         alarms.scheduleNext(strategy, scheduledTimeMs)
 
+        val timeLeftMs = triggerTimeLeftMs(scheduledTimeMs, now)
+        if (timeLeftMs <= 0L) {
+            Timber.w("Schedule %s delivered %d min late; dropped", strategy.id, (now - scheduledTimeMs) / 60_000L)
+            record(
+                strategy,
+                scheduledTimeMs,
+                now,
+                failedOutcome(TriggerFailureReason.EXPIRED),
+                steps = emptyList(),
+            )
+            return
+        }
+
         val steps = mutableListOf<TriggerStep>()
         val signals = RunSignals()
         // 倒计时期间用户要能打断，而那会儿 Activity 多半不在——落点只能是本服务的通知
@@ -204,12 +225,13 @@ class ScheduleExecutionService : Service() {
                         autoSleepAfterTask = strategy.autoSleepAfterTask,
                         skipAutoSleepIfAwake = strategy.skipAutoSleepIfAwake,
                         closeAppAfterTask = strategy.closeAppAfterTask,
+                        hardwareScreenOff = strategy.hardwareScreenOff,
+                        collapseAfterTask = strategy.collapseAfterTask,
                     ),
                 ),
                 configurationId = RunConfigurationId(strategy.runConfigurationId),
-                // 策略 + 原定时刻唯一确定一次触发；系统重投同一个 PendingIntent 时算得出同一个 id
-                requestId = RunRequestId($$"${strategy.id}@$scheduledTimeMs"),
-                force = strategy.forceStart,
+                requestId = scheduleRequestId(strategy.id, scheduledTimeMs),
+                whenBusy = if (strategy.forceStart) WhenBusy.Preempt else WhenBusy.Queue(timeLeftMs),
                 steps = RunStepSink {
                     steps += TriggerStep(
                         it.hookId,
@@ -217,8 +239,12 @@ class ScheduleExecutionService : Service() {
                     )
                 },
                 signals = signals,
-                progress = RunProgress { _, detail ->
-                    updateNotification(detail.resolve(this), strategy.id, interruptible = true)
+                progress = RunProgress { hookId, detail ->
+                    updateNotification(
+                        detail.resolve(this),
+                        strategy.id,
+                        interruptible = hookId != WhenBusy.Queue.PROGRESS_ID,
+                    )
                 },
             )
         } finally {
@@ -238,8 +264,17 @@ class ScheduleExecutionService : Service() {
         if (outcome.result != TriggerResult.STARTED) {
             Timber.w("Schedule %s did not start: %s", strategy.id, launchResult)
         }
-        val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
+        record(strategy, scheduledTimeMs, now, outcome, steps)
+    }
 
+    private suspend fun record(
+        strategy: ScheduleStrategy,
+        scheduledTimeMs: Long,
+        now: Long,
+        outcome: ScheduleLaunchOutcome,
+        steps: List<TriggerStep>,
+    ) {
+        val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
         triggerLog.append(
             TriggerLogEntry(
                 strategyId = strategy.id,
@@ -249,10 +284,14 @@ class ScheduleExecutionService : Service() {
                 result = outcome.result,
                 failureReason = outcome.failureReason,
                 detail = frozen,
+                blockedBy = outcome.blockedBy,
                 steps = steps,
             ),
         )
         store.recordTrigger(strategy.id, outcome.result, message = frozen, triggeredAt = now)
+        val notice = outcome.notice ?: return
+        val reason = outcome.detail ?: outcome.failureReason?.asUiText() ?: outcome.result.asUiText()
+        notifications.onScheduleNotStarted(strategy.name, reason, notice)
     }
 
     /**
@@ -302,6 +341,11 @@ class ScheduleExecutionService : Service() {
             }
         }
         Timber.w("Schedule data unavailable: %s, attempt=%d, retried=%s", strategyId, retryCount, retried)
+        val detail = when {
+            retried -> uiTextOf(R.string.schedule_detail_data_unavailable_retry, retryCount + 1)
+            reconnecting -> uiTextOf(R.string.schedule_detail_data_unavailable_waiting)
+            else -> uiTextOf(R.string.schedule_detail_data_unavailable_gave_up)
+        }
         triggerLog.append(
             TriggerLogEntry(
                 strategyId = strategyId,
@@ -309,13 +353,11 @@ class ScheduleExecutionService : Service() {
                 scheduledAt = scheduledTimeMs,
                 actualAt = now,
                 result = TriggerResult.FAILED_VALIDATION,
-                detail = when {
-                    retried -> getString(R.string.schedule_detail_data_unavailable_retry, retryCount + 1)
-                    reconnecting -> getString(R.string.schedule_detail_data_unavailable_waiting)
-                    else -> getString(R.string.schedule_detail_data_unavailable_gave_up)
-                },
+                detail = detail.resolve(this),
             ),
         )
+        // 排了重试就先别报：重试成了，这条就是误报。规则已删的也不报，通知里只剩个 id
+        if (!retried && (strategy != null || reconnecting)) notifications.onScheduleNotStarted(strategy?.name ?: strategyId, detail, ScheduleNotice.FAILED)
     }
 
     /**
@@ -346,8 +388,9 @@ class ScheduleExecutionService : Service() {
     private fun startAsForeground(notification: Notification) {
         try {
             SpecialUseFgsGate.startForeground(this, NOTIFICATION_ID, notification)
-        } catch (e: SecurityException) {
-            // specialUse 被系统拒绝：尽力继续触发，uid 转空闲后服务可能被系统停掉
+        } catch (e: RuntimeException) {
+            // specialUse 被系统拒绝（SecurityException），或 12+ 后台起前台被拒
+            // （ForegroundServiceStartNotAllowedException）：尽力继续触发，uid 转空闲后服务可能被系统停掉
             Timber.w(e, "ScheduleExecutionService: startForeground denied, continue without FGS")
         }
     }

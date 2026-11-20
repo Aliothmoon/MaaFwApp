@@ -8,6 +8,7 @@ import com.aliothmoon.maafw.privileged.RemoteAccessState
 import com.aliothmoon.maafw.runner.RunDurationLimit
 import com.aliothmoon.maafw.theme.UiScale
 import com.aliothmoon.maafw.update.UpdateChannel
+import com.aliothmoon.maafw.update.CdkVerification
 import com.aliothmoon.maafw.update.UpdateCheckResult
 import com.aliothmoon.maafw.update.UpdateSource
 
@@ -53,10 +54,31 @@ data class UpdatePanelState(
     /** 每秒字节数；刚开始还算不出时为负 */
     val bytesPerSecond: Long = -1L,
     val errorMessage: UiText? = null,
+    /** CDK 校验结果；到期时间只在内存里，进设置页与改 CDK 时各查一次 */
+    val cdkStatus: CdkStatus = CdkStatus.None,
 ) {
     val availableUpdate: UpdateCheckResult.UpdateAvailable?
         get() = checkResult as? UpdateCheckResult.UpdateAvailable
 }
+
+sealed interface CdkStatus {
+    /** 没填，或刚改过还没开始查 */
+    data object None : CdkStatus
+    data object Checking : CdkStatus
+    data class Done(val result: CdkVerification) : CdkStatus
+}
+
+/** 还剩几天到期（不足一天算一天）；已过期为 0，没有到期时间为 null */
+fun cdkDaysLeft(expiresAtSec: Long?, nowMs: Long): Int? {
+    expiresAtSec ?: return null
+    val left = expiresAtSec * 1_000 - nowMs
+    return if (left <= 0) 0 else ((left + DAY_MS - 1) / DAY_MS).toInt()
+}
+
+/** 到期前这么多天内状态行转警示色，对齐 MaaMeow */
+const val CDK_EXPIRY_WARNING_DAYS = 7
+
+private const val DAY_MS = 86_400_000L
 
 /** 一次性 Effect，不进 UiState */
 sealed interface SettingsEffect {
@@ -73,6 +95,9 @@ sealed interface SettingsIntent {
     data class SetUpdateSource(val source: UpdateSource) : SettingsIntent
     /** 只在 Mirror酱 源时有意义；空值在下载前置拦截（CDK_REQUIRED） */
     data class SetMirrorchyanCdk(val cdk: String) : SettingsIntent
+
+    /** 进设置页时验一次已填的 CDK */
+    data object VerifyCdk : SettingsIntent
     data class SetAutoCheckUpdate(val enabled: Boolean) : SettingsIntent
     data class SetAutoDownloadUpdate(val enabled: Boolean) : SettingsIntent
     data class SetPipOnHome(val enabled: Boolean) : SettingsIntent

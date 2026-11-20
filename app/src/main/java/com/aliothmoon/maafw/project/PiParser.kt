@@ -52,6 +52,8 @@ data class PiResourceContent(
     /** 原样条目，PI_RESOURCE 要整条 */
     val raw: JsonObject = JsonObject(emptyMap()),
     val optionNames: List<String> = emptyList(),
+    /** `resource[].controller`；空 = 全部 controller 适用 */
+    val controllers: List<String> = emptyList(),
 )
 
 /**
@@ -166,6 +168,7 @@ object PiParser {
                     obj.iconPath(),
                     obj,
                     obj.stringList("option"),
+                    obj.stringList("controller"),
                 )
             }
         }
@@ -714,6 +717,7 @@ object PiParser {
             description = text.description(obj.string("description")),
             tasks = tasks,
             icon = obj.iconPath(),
+            controllers = obj.stringList("controller"),
         )
     }
 

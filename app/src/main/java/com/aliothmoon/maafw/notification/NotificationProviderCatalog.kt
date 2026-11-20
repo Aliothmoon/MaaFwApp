@@ -13,6 +13,7 @@ val NOTIFICATION_PROVIDER_ORDER: List<String> = listOf(
     "SMTP",
     "Bark",
     "Qmsg",
+    "QmsgV3",
     "Gotify",
     "CustomWebhook",
 )

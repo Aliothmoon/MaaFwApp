@@ -152,9 +152,7 @@ internal fun TaskList(
                         onIntent(SessionIntent.DuplicateTask(active.id, task.instanceId, copyName))
                     },
                     onRename = { renamingTask = task },
-                    onClick = {
-                        if (task.hasOptions) onEditTask(task.instanceId)
-                    },
+                    onClick = { onEditTask(task.instanceId) },
                     modifier = Modifier.animateItem(),
                 )
             }

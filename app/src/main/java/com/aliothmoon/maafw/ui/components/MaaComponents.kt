@@ -40,6 +40,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +59,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -132,21 +138,7 @@ fun MaaCard(
             ) {
                 // 动画状态放在 chevron 内部：不可折叠的卡片压根不组合它，也就不必付一个
                 // Animatable 与常驻协程（全仓 24 个调用点里只有 8 个可折叠）
-                val chevron: @Composable () -> Unit = {
-                    val rotation by animateFloatAsState(
-                        targetValue = if (expanded) 180f else 0f,
-                        animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
-                        label = "chevron",
-                    )
-                    Icon(
-                        imageVector = MaaIcons.ChevronDown,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .size(MaaDesignTokens.IconSize.sm)
-                            .rotate(rotation),
-                    )
-                }
+                val chevron: @Composable () -> Unit = { MaaExpandChevron(expanded) }
                 when {
                     // trailing 已占住表头右侧，此时只有箭头本身可点，避免与开关抢同一片区域
                     trailing != null -> MaaLabeledControlRow(
@@ -381,6 +373,9 @@ fun MaaSemanticOutlinedButton(
  *
  * [MaaLabeledControlRow] 的尾部什么控件都能放，这个只固定成开关——省掉每处再写一遍
  * `trailing = { MaaSwitch(...) }`。尾部不是开关（状态点、转圈、下拉）时仍用前者
+ *
+ * 整行可点，与任务页快捷面板里同样的行一个点法；开关本身只显示状态，不另接点击，
+ * 否则点在开关上会切两次。读屏按一个开关报（Role.Switch + 当前状态）
  */
 @Composable
 fun MaaSwitchRow(
@@ -392,9 +387,14 @@ fun MaaSwitchRow(
 ) {
     MaaLabeledControlRow(
         label = label,
-        modifier = modifier,
+        modifier = modifier
+            .cardRowClickable(LocalCardRowBleed.current, enabled = enabled) { onCheckedChange(!checked) }
+            .semantics(mergeDescendants = true) {
+                role = Role.Switch
+                toggleableState = ToggleableState(checked)
+            },
         trailing = {
-            MaaSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+            MaaSwitch(checked = checked, onCheckedChange = null, enabled = enabled)
         },
     )
 }
@@ -403,7 +403,7 @@ fun MaaSwitchRow(
  * 点进二级页面的一行：标题 + 说明 + 右侧箭头
  *
  * 与 [MaaLabeledControlRow] 分开：那个的尾部是控件、点的是控件本身；这个整行可点，
- * 语义是「离开当前页」
+ * 语义是「离开当前页」。[external] 为 true 是离开本应用（开浏览器），行尾换成 ↗，与进二级页的 › 分开
  */
 @Composable
 fun MaaNavigationRow(
@@ -411,6 +411,7 @@ fun MaaNavigationRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     description: String? = null,
+    external: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -434,7 +435,7 @@ fun MaaNavigationRow(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = if (external) MaaIcons.ExternalLink else Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(MaaDesignTokens.IconSize.md),
@@ -460,18 +461,23 @@ fun MaaCardSurface(
     )
 }
 
-/** 未选中态走调色板的 `switchOff`：outline 与轨道同色会糊，onSurfaceVariant 又压得慌 */
+/**
+ * 未选中态走调色板的 `switchOff`：outline 与轨道同色会糊，onSurfaceVariant 又压得慌
+ *
+ * [onCheckedChange] 为 null 是只显示状态（点击交给整行）：M3 这时不再套 48dp 的最小触控尺寸，
+ * 这里补回去，行高不跟着缩
+ */
 @Composable
 fun MaaSwitch(
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+    onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
-        modifier = modifier,
+        modifier = if (onCheckedChange == null) modifier.minimumInteractiveComponentSize() else modifier,
         enabled = enabled,
         colors = SwitchDefaults.colors(
             uncheckedThumbColor = MaaTheme.palette.switchOff,
@@ -671,7 +677,8 @@ fun MaaToneBadge(
                 vertical = MaaDesignTokens.Spacing.xxs,
             ),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs),
+        // 调用方定宽（列表里逐条对齐）时居中；自适应宽度没有多余空间，不受影响
+        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xs, Alignment.CenterHorizontally),
     ) {
         if (icon != null) {
             Icon(
@@ -687,4 +694,22 @@ fun MaaToneBadge(
             color = tone.content,
         )
     }
+}
+
+/** 折叠区块的展开箭头：收起朝下，展开转 180° */
+@Composable
+fun MaaExpandChevron(expanded: Boolean, modifier: Modifier = Modifier) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = MaaMotion.enter(MaaMotion.DURATION_SHORT),
+        label = "chevron",
+    )
+    Icon(
+        imageVector = MaaIcons.ChevronDown,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+            .size(MaaDesignTokens.IconSize.sm)
+            .rotate(rotation),
+    )
 }

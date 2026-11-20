@@ -25,41 +25,41 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import com.aliothmoon.maafw.R
-import com.aliothmoon.maafw.i18n.asString
-import com.aliothmoon.maafw.runner.RunLogEntry
-import com.aliothmoon.maafw.runner.RunLogKind
 import com.aliothmoon.maafw.runner.RunLogSnapshot
+import com.aliothmoon.maafw.runner.elapsedText
+import com.aliothmoon.maafw.runner.groupRunLog
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.ui.components.MaaChoiceChip
-import com.aliothmoon.maafw.ui.components.MaaMarkdown
-import com.aliothmoon.maafw.ui.components.ansiAnnotated
+import com.aliothmoon.maafw.ui.components.MaaRunLogTaskHeader
 import com.aliothmoon.maafw.ui.components.maaClickable
-import com.aliothmoon.maafw.ui.components.rememberAnsiColorResolver
-import com.aliothmoon.maafw.ui.components.runLogColor
+import com.aliothmoon.maafw.ui.components.rememberRunLogCardStyle
+import com.aliothmoon.maafw.ui.components.rememberRunLogLevelPrefixes
+import com.aliothmoon.maafw.ui.components.runLogLineFrame
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,11 +72,15 @@ import java.util.Locale
  *
  * 「进度」档是 `RunLogComposer` 合成过的人话；「全部」档另外露出 agent 的 stdout / stderr。
  * 带 details_json 的行（失败类）可展开看原样；认不出的回调合成器已经丢掉，全份在 maa.log
+ *
+ * 按任务分组成卡片（切法见 [groupRunLog]），首个任务前的连接与加载照旧平铺在最上面
  */
 @Composable
 internal fun RunLogPanel(
     /** 取值而不是值：这里才是真正显示日志的地方，订阅落在这一层 */
     entries: () -> RunLogSnapshot,
+    /** 这一轮还没收尾：最后一组没等到结束行时算「进行中」，否则算「已中断」 */
+    running: Boolean,
     onExport: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
@@ -84,14 +88,10 @@ internal fun RunLogPanel(
     var essentialOnly by rememberSaveable { mutableStateOf(true) }
     val snapshot = entries()
     val visible = if (essentialOnly) snapshot.progress else snapshot.all
+    // 浮窗日志页也用这个面板，按快照记住：几百行不该每次重组都重切一遍
+    val groups = remember(snapshot, essentialOnly) { groupRunLog(visible) }
     // 原始行因限额丢过时，在最老一条保留下来的原始行前面插一句，免得以为日志断档是 bug
-    val omittedAt = remember(snapshot, essentialOnly) {
-        if (essentialOnly || snapshot.omittedRaw <= 0) {
-            -1
-        } else {
-            visible.indexOfFirst { it.id == snapshot.firstRawId }
-        }
-    }
+    val omittedBefore = if (!essentialOnly && snapshot.omittedRaw > 0) snapshot.firstRawId else null
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -143,10 +143,16 @@ internal fun RunLogPanel(
         }
 
         // 一次只展开一条：details_json 展开就是十来行，多条同时展开这个列表没法看了
-        var expandedId by remember { mutableStateOf<Long?>(null) }
+        // 两者都要 saveable：悬浮窗切到别的页会把这块撤掉，回来还得是原样
+        var expandedId by rememberSaveable { mutableStateOf<Long?>(null) }
+        // 用户点过的分组以点过的为准，按起点行 id 记；没点过的走 RunLogGroup.expandedByDefault
+        val toggled = rememberSaveable(saver = ToggledGroupsSaver) { mutableStateMapOf() }
+        val rows by remember(groups, running, omittedBefore) {
+            derivedStateOf { buildRunLogRows(groups, running, toggled, omittedBefore) }
+        }
         val listState = rememberLazyListState()
         val scope = rememberCoroutineScope()
-        val lastItemIndex = visible.lastIndex + if (omittedAt >= 0) 1 else 0
+        val lastItemIndex = rows.lastIndex
 
         // 跟随底部是一个独立状态，只随用户的滚动改变：
         // 不能每来一批新行再看「最后一行在不在屏上」——一批攒了好几行时，它们一进来最后一行就在屏外了，
@@ -164,9 +170,19 @@ internal fun RunLogPanel(
                 .filter { !it }
                 .collect { following = !listState.canScrollForward }
         }
-        // 不用 animateScrollToItem：高频事件下动画会排队打架
-        LaunchedEffect(visible.lastOrNull()?.id) {
+        // 不用 animateScrollToItem：高频事件下动画会排队打架。
+        // 按行结构而不只按末条 id：新任务开始时上一组默认收起、点开或收起一组，列表高度都会跳
+        LaunchedEffect(rows) {
             if (following) listState.scrollToItem(lastItemIndex)
+        }
+        // 跟随中可视高度变了（转屏、分屏改大小）就重新贴底：LazyColumn 保住的是首行，底部会被挤出屏，
+        // 要等下一条日志才回来
+        val currentLastIndex by rememberUpdatedState(lastItemIndex)
+        LaunchedEffect(listState) {
+            snapshotFlow { listState.layoutInfo.viewportSize.height }
+                .drop(1)
+                .distinctUntilChanged()
+                .collect { if (following) listState.scrollToItem(currentLastIndex) }
         }
         // 切档是换了一份列表，停在旧档的位置没有意义，直接回到底部接着跟
         LaunchedEffect(essentialOnly) {
@@ -174,26 +190,41 @@ internal fun RunLogPanel(
             listState.scrollToItem(lastItemIndex)
         }
         val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
+        val cardStyle = rememberRunLogCardStyle()
+        val prefixes = rememberRunLogLevelPrefixes()
         Box(modifier = Modifier.weight(1f)) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
             ) {
-                val row: @Composable (RunLogEntry) -> Unit = { entry ->
-                    RunLogRow(
-                        entry = entry,
-                        time = formatter.format(Date(entry.atMillis)),
-                        expanded = expandedId == entry.id,
-                        onToggle = { expandedId = if (expandedId == entry.id) null else entry.id },
-                    )
-                }
-                if (omittedAt < 0) {
-                    items(visible, key = { it.id }) { row(it) }
-                } else {
-                    items(visible.subList(0, omittedAt), key = { it.id }) { row(it) }
-                    item(key = OMITTED_ROW_KEY) { RawOmittedRow(snapshot.omittedRaw) }
-                    items(visible.subList(omittedAt, visible.size), key = { it.id }) { row(it) }
+                items(rows, key = { it.key }, contentType = { it.contentType }) { row ->
+                    when (row) {
+                        is RunLogHeaderRow -> MaaRunLogTaskHeader(
+                            title = row.title,
+                            status = row.status,
+                            elapsed = row.elapsedMillis?.let(::elapsedText),
+                            warnings = row.warnings,
+                            expanded = row.expanded,
+                            expandable = row.expandable,
+                            style = cardStyle,
+                            closesCard = row.closesCard,
+                            onToggle = { toggled[row.startId] = !row.expanded },
+                        )
+
+                        is RunLogLineRow -> RunLogRow(
+                            entry = row.entry,
+                            time = formatter.format(Date(row.entry.atMillis)),
+                            expanded = expandedId == row.entry.id,
+                            prefixes = prefixes,
+                            onToggle = { expandedId = if (expandedId == row.entry.id) null else row.entry.id },
+                            modifier = Modifier.runLogLineFrame(cardStyle, row.inCard, row.last),
+                        )
+
+                        is RunLogOmittedRow -> RawOmittedRow(
+                            count = snapshot.omittedRaw,
+                            modifier = Modifier.runLogLineFrame(cardStyle, row.inCard, last = false),
+                        )
+                    }
                 }
             }
             // 往上翻着看时给一个回到底部的入口；点了就接着跟
@@ -236,99 +267,6 @@ private fun ScrollToBottomButton(visible: Boolean, onClick: () -> Unit, modifier
     }
 }
 
-/** 省略提示那一行；完整记录在会话文件里，导出即可看到 */
-@Composable
-private fun RawOmittedRow(count: Long) {
-    val quantity = count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-    Text(
-        text = pluralStringResource(R.plurals.run_log_raw_omitted, quantity, count),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = MaaDesignTokens.Spacing.xxs),
-    )
-}
-
-/** 与条目 id（Long）不同类型，不会撞键 */
-private const val OMITTED_ROW_KEY = "raw-omitted"
-
-@Composable
-private fun RunLogRow(
-    entry: RunLogEntry,
-    time: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-) {
-    val pretty = rememberPrettyDetail(entry)
-    val body = entry.text.asString()
-    // agent 按「输出到终端」配色，转义符只有它这两类会有；其余 kind 不必白跑一趟解析
-    val ansiColor = rememberAnsiColorResolver()
-    val rendered = remember(body, entry.kind, ansiColor) {
-        if (entry.kind == RunLogKind.Agent || entry.kind == RunLogKind.AgentError) {
-            ansiAnnotated(body, ansiColor)
-        } else {
-            AnnotatedString(body)
-        }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (entry.detail != null) Modifier.maaClickable(onClick = onToggle) else Modifier),
-        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-    ) {
-        Text(
-            text = time,
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            // PI 模板正文按协议支持 Markdown 与 HTML 子集，等宽直出会把标签露给用户
-            if (entry.kind == RunLogKind.Focus) {
-                MaaMarkdown(
-                    text = body,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = runLogColor(entry.kind),
-                )
-                return@Column
-            }
-            Text(
-                text = rendered,
-                style = MaterialTheme.typography.labelSmall,
-                // ANSI 指定的颜色写在 span 上，压过这里的整行色；没指定的段落仍按 kind 走
-                color = runLogColor(entry.kind),
-            )
-            if (expanded) {
-                Text(
-                    text = pretty ?: entry.detail.orEmpty(),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = MaaDesignTokens.Spacing.xxs),
-                )
-            }
-        }
-    }
-}
-
-/**
- * 解析推迟到渲染这一刻
- *
- * 日志条目是在 ViewModel 的收集协程（主线程）上建的，在那里给每条都解一次 JSON
- * 会把主线程压死；LazyColumn 只组合可见行，配 remember 后一条最多解一次
- */
-@Composable
-private fun rememberPrettyDetail(entry: RunLogEntry): String? = remember(entry.id) {
-    val detail = entry.detail ?: return@remember null
-    val root = runCatching { LOG_JSON.parseToJsonElement(detail) }.getOrNull() as? JsonObject
-        ?: return@remember null
-    runCatching { PRETTY_JSON.encodeToString(JsonElement.serializer(), root) }.getOrNull()
-}
-
-private val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
-private val PRETTY_JSON = Json { prettyPrint = true }
-
 /**
  * 工具栏右侧的「导出 / 清空」：文字样式与内边距照抄 [MaaChoiceChip]，整行高度就等于筛选胶囊
  *
@@ -348,3 +286,13 @@ private fun LogToolbarAction(label: String, enabled: Boolean, onClick: () -> Uni
             .padding(horizontal = MaaDesignTokens.Spacing.md, vertical = MaaDesignTokens.Spacing.sm),
     )
 }
+
+/** 只存用户点过的分组，摊平成 [id, expanded, id, expanded, …]；Long 与 Boolean 都进得了 Bundle */
+private val ToggledGroupsSaver = listSaver<SnapshotStateMap<Long, Boolean>, Any>(
+    save = { map -> map.flatMap { (id, expanded) -> listOf(id, expanded) } },
+    restore = { flat ->
+        mutableStateMapOf<Long, Boolean>().apply {
+            flat.chunked(2).forEach { (id, expanded) -> put(id as Long, expanded as Boolean) }
+        }
+    },
+)

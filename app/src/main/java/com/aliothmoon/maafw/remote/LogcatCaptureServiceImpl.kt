@@ -3,13 +3,14 @@ package com.aliothmoon.maafw.remote
 import android.util.Log
 import com.aliothmoon.maafw.ILogcatService
 import com.aliothmoon.maafw.constant.AppFiles
+import com.aliothmoon.maafw.remote.internal.LogcatNoiseFilter
+import com.aliothmoon.maafw.remote.internal.RollingLogFile
+import com.aliothmoon.maafw.root.ProcessExit
 import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.system.exitProcess
 
 /**
  * 跑在独立特权进程（:logcat / :root_logcat）里的 logcat 抓取实现
@@ -22,6 +23,9 @@ class LogcatCaptureServiceImpl : ILogcatService.Stub() {
 
     companion object {
         private const val TAG = "LogcatCapture"
+
+        /** 单次 logcat 抓取上限，分两段滚动，只留最新 */
+        private const val MAX_CAPTURE_BYTES = 16L * 1024 * 1024
     }
 
     private val watchTargets = ConcurrentHashMap<Int, Process>()
@@ -41,7 +45,10 @@ class LogcatCaptureServiceImpl : ILogcatService.Stub() {
         }.apply { name = "logcat-watchdog"; isDaemon = true }.start()
     }
 
-    override fun destroy() = exitProcess(0)
+    override fun destroy() {
+        // logcat --pid 盯着的进程死后不再有输出，等不来 SIGPIPE，不收就成了孤儿
+        ProcessExit.exit("destroy requested") { watchTargets.values.forEach { it.destroyForcibly() } }
+    }
 
     override fun startCapture(appPid: Int, servicePid: Int, userDir: String) {
         val debugDir = File(userDir, AppFiles.DEBUG_DIR).apply { mkdirs() }
@@ -69,8 +76,16 @@ class LogcatCaptureServiceImpl : ILogcatService.Stub() {
 
         Thread {
             try {
-                process.inputStream.use { input ->
-                    FileOutputStream(outFile, true).use { output -> input.copyTo(output) }
+                val filter = LogcatNoiseFilter()
+                RollingLogFile(outFile, MAX_CAPTURE_BYTES / 2).use { output ->
+                    process.inputStream.bufferedReader().use { reader ->
+                        while (true) {
+                            val line = reader.readLine() ?: break
+                            if (filter.accept(line)) output.writeLine(line)
+                            // 管道读空就落盘，崩溃前最后几行不能压在缓冲里
+                            if (!reader.ready()) output.flush()
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "pipeLogcat pid=$pid failed: ${e.message}")

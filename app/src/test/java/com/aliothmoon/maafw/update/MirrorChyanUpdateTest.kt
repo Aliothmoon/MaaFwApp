@@ -56,6 +56,39 @@ class MirrorChyanUpdateTest {
         }
     """.trimIndent()
 
+    /** 第二次请求把 current_version 写成最新版本：已是最新时服务端不签发下载地址，不占下载次数 */
+    @Test
+    fun `verify cdk asks as the latest version and reads the expiry`() = runBlocking {
+        val gateway = RecordingHttpClientHelper(
+            FakeHttpResponse(200, apkPayload),
+            FakeHttpResponse(200, """{"code":0,"data":{"version_name":"v1.1.0","cdk_expired_time":1900000000}}"""),
+        )
+
+        val result = client(gateway).verifyCdk(
+            CdkVerifyRequest(cdk = "abc", currentVersion = "1.0.0", abi = AndroidAbi.ARM64, mirrorchyanRid = "M9A"),
+        )
+
+        assertEquals(CdkVerification.Valid(1_900_000_000L), result)
+        val (anonymous, withCdk) = gateway.requests.map { it.first.toHttpUrl() }
+        assertNull(anonymous.queryParameter("cdk"))
+        assertEquals("abc", withCdk.queryParameter("cdk"))
+        assertEquals("v1.1.0", withCdk.queryParameter("current_version"))
+    }
+
+    @Test
+    fun `verify cdk separates rejections from network trouble`() = runBlocking {
+        val latest = """{"code":0,"data":{"version_name":"v1.1.0"}}"""
+        val rejected = RecordingHttpClientHelper(
+            FakeHttpResponse(200, latest),
+            FakeHttpResponse(403, """{"code":7002,"msg":"invalid"}"""),
+        )
+        val request = CdkVerifyRequest(cdk = "abc", currentVersion = "1.0.0", abi = AndroidAbi.ARM64, mirrorchyanRid = "M9A")
+        assertEquals(CdkVerification.Rejected(UpdateCheckFailure.CDK_INVALID), client(rejected).verifyCdk(request))
+
+        val down = RecordingHttpClientHelper(FakeHttpResponse(500, "oops"))
+        assertEquals(CdkVerification.Unverified, client(down).verifyCdk(request))
+    }
+
     @Test
     fun `check reports version and release note without url`() = runBlocking {
         val gateway = RecordingHttpClientHelper(FakeHttpResponse(200, apkPayload))

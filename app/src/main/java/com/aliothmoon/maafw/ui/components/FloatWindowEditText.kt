@@ -136,6 +136,8 @@ fun FloatWindowEditText(
                         // imeOptions 须在 inputType 之后设置, 否则会被冲掉
                         this.inputType = inputType
                         this.isSingleLine = singleLine
+                        // setSingleLine(false) 会放开行数，LazyColumn 里高度无约束
+                        if (!singleLine) maxLines = MULTI_LINE_MAX_LINES
                         this.isEnabled = enabled
                         this.hint = hint
                         applyDoneImeOptions(singleLine)
@@ -193,6 +195,7 @@ fun FloatWindowEditText(
                     if (appliedSingleLine.value != singleLine) {
                         appliedSingleLine.value = singleLine
                         et.isSingleLine = singleLine
+                        if (!singleLine) et.maxLines = MULTI_LINE_MAX_LINES
                         et.applyDoneImeOptions(singleLine)
                     }
                     et.setTextColor(textColorInt)

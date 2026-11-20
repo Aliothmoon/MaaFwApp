@@ -71,6 +71,10 @@ data class ScheduleStrategy(
     val skipAutoSleepIfAwake: Boolean = true,
     /** 任务结束后关闭目标应用；仅后台模式生效，手动停止不关 */
     val closeAppAfterTask: Boolean = false,
+    /** 跑的时候关闭屏幕电源代替屏保；仅后台模式、且到点时设备没在用 */
+    val hardwareScreenOff: Boolean = false,
+    /** 跑到头后断开特权进程、关掉界面，进程留着；手动停止不收 */
+    val collapseAfterTask: Boolean = false,
     /** [ScheduleType.FIXED_TIME]：命中的星期 */
     val daysOfWeek: Set<@Serializable(with = DayOfWeekSerializer::class) DayOfWeek> = emptySet(),
     /** [ScheduleType.FIXED_TIME]：每天的触发时刻，已排序 */
@@ -113,7 +117,7 @@ enum class TriggerResult {
  * [TriggerResult.FAILED_START] 的细分
  *
  * 存枚举而不是文案：与 [TriggerLogEntry] 同一条理由，落盘的字符串会把语言冻住。
- * 拦截来自哪道检查存不下（那是 `UiText`），只进 Timber
+ * 拦下的是哪道检查记在 [TriggerLogEntry.blockedBy]
  */
 @Serializable
 enum class TriggerFailureReason {
@@ -131,8 +135,20 @@ enum class TriggerFailureReason {
     /** 被某道前置检查拦下；定时触发下「需要确认」也降级到这里 */
     BLOCKED,
 
-    /** RunnerPort 拒绝，多半是已有执行在跑 */
+    /** RunnerPort 拒绝投递：定时走排队或抢占，拒绝多半来自准备阶段（setup、建虚拟屏） */
     REJECTED,
+
+    /** 超过 [TRIGGER_EXPIRE_AFTER_MS] 还没开跑，作废 */
+    EXPIRED,
+
+    /** 到点没被系统唤起（进程被杀清了闹钟），事后重排时补记 */
+    MISSED,
+
+    /** 同上，但触发点之后设备重启过，多半到点时关着机 */
+    MISSED_REBOOTED,
+
+    /** 后台模式到点时主屏上开着应用黑名单里的应用 */
+    BLACKLISTED,
 }
 /** 编辑期字段级校验；空集 = 可保存 */
 enum class ScheduleFieldError { NAME, CONFIGURATION, DAYS, TIMES, START, INTERVAL }

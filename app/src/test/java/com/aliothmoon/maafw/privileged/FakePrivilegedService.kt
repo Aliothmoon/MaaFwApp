@@ -160,6 +160,36 @@ open class FakePrivilegedService : RemoteService {
     /** 缓存帧要真 controller 才有；测试里没有可落盘的东西 */
     override fun saveCachedImage(path: String?): Boolean = false
 
+    override fun getProcessExitRecords(packageName: String?, sinceMs: Long, maxNum: Int): String = "[]"
+
+    override fun dumpSystemLog(sinceMs: Long, untilMs: Long, pid: Int, processPrefix: String?): String = ""
+
+    var flagTier: Int = -1
+    override fun getVirtualDisplayFlagTier(): Int = flagTier
+    override fun dumpThreads(): String = ""
+
+    var displayPowerSyncResult: Boolean = true
+    var displayPowerSyncCalls: MutableList<Boolean> = mutableListOf()
+        private set
+
+    var lastWakeTrace: String = ""
+
+    override fun getLastWakeTrace(sinceElapsedMs: Long): String = lastWakeTrace
+
+    /** null = 判不出 */
+    var visiblePackages: List<String>? = null
+
+    override fun getVisiblePackages(displayId: Int): List<String>? = visiblePackages
+
+    var frameJpeg: ByteArray? = null
+
+    override fun captureFrameJpeg(quality: Int): ByteArray? = frameJpeg
+
+    override fun setDisplayPowerSync(on: Boolean): Boolean {
+        displayPowerSyncCalls += on
+        return displayPowerSyncResult
+    }
+
     override fun saveDisplayFrame(path: String?): Boolean {
         savedFramePaths += path.orEmpty()
         return saveDisplayFrameResult
@@ -180,8 +210,12 @@ class FakePrivilegedServicePort(
 
     override val currentBackend: RemoteBackend? = RemoteBackend.SHIZUKU
 
+    var unbindCount = 0
+
     override fun bind() = Unit
-    override fun unbind() = Unit
+    override fun unbind() {
+        unbindCount++
+    }
 
     override fun serviceOrNull(): RemoteService? = service
 
@@ -191,5 +225,33 @@ class FakePrivilegedServicePort(
     override suspend fun <R> useService(action: suspend (RemoteService) -> R): R {
         holdUseService?.await()
         return action(checkNotNull(service) { "fake service unavailable" })
+    }
+
+    /** 非 null 时 [callOrRestart] 遇到同名调用就当它卡死，抛 [RemoteCallStuckException] 而不调 */
+    var stuckCall: String? = null
+
+    override suspend fun <R> callOrRestart(
+        service: RemoteService,
+        call: String,
+        timeoutMs: Long,
+        block: (RemoteService) -> R,
+    ): R {
+        if (call == stuckCall) throw RemoteCallStuckException(call, threadDump = null)
+        return block(service)
+    }
+
+    /** 非 null 时 [connect] 直接交回它；null 时按 [service] 在不在给 Connected / Failed */
+    var connectResult: ServiceConnectResult? = null
+    var connectCount: Int = 0
+        private set
+
+    override suspend fun connect(): ServiceConnectResult {
+        connectCount++
+        connectResult?.let { return it }
+        return if (service != null) {
+            ServiceConnectResult.Connected
+        } else {
+            ServiceConnectResult.Failed(RemoteBackend.SHIZUKU, IllegalStateException("fake service unavailable"))
+        }
     }
 }

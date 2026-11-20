@@ -403,4 +403,87 @@ class ConfigurationResolverTest {
             session.diagnostics.any { it.message.isResource(R.string.diagnostic_controller_selection_missing) },
         )
     }
+
+    @Test
+    fun `initialize skips presets incompatible with initial controller and picks first compatible resource`() {
+        val def = definition(
+            controllers = localAndCloud,
+            resources = listOf(
+                ResourceDefinition("WinOnly", listOf("./win"), controllers = listOf("Win32")),
+                ResourceDefinition("CloudOnly", listOf("./cloud"), controllers = listOf("CloudADB")),
+                ResourceDefinition("Shared", listOf("./base")),
+            ),
+            templates = listOf(
+                ConfigurationTemplate("Desktop", "桌面预设", null, listOf(TemplateTask("T1", true, emptyMap())), controllers = listOf("Win32")),
+                ConfigurationTemplate("Cloud", "云游戏预设", null, listOf(TemplateTask("T1", true, emptyMap())), controllers = listOf("CloudADB")),
+                ConfigurationTemplate("Local", "本地预设", null, listOf(TemplateTask("T1", true, emptyMap())), controllers = listOf("ADB")),
+                ConfigurationTemplate("Any", "通用预设", null, listOf(TemplateTask("T1", true, emptyMap()))),
+            ),
+        )
+        val result = ConfigurationResolver.initialize(def, UserConfiguration())
+        assertEquals(listOf("本地预设", "通用预设"), result.configurations.map { it.name })
+        assertEquals("Shared", result.activeResourceName)
+    }
+
+    @Test
+    fun `preset controller filter hides non-Adb presets and disables other-Adb presets with switch reason`() {
+        val def = definition(
+            controllers = localAndCloud,
+            templates = listOf(
+                ConfigurationTemplate("Any", "通用", null, emptyList()),
+                ConfigurationTemplate("Local", "本地", null, emptyList(), controllers = listOf("ADB")),
+                ConfigurationTemplate("Cloud", "云游戏", null, emptyList(), controllers = listOf("CloudADB")),
+                ConfigurationTemplate("PC", "桌面", null, emptyList(), controllers = listOf("Win32")),
+            ),
+        )
+        val localSession = ConfigurationResolver.resolve(def, selecting("ADB"))
+        assertEquals(listOf("Any", "Local", "Cloud"), localSession.templates.map { it.template.name })
+        val localByName = localSession.templates.associateBy { it.template.name }
+        assertTrue(localByName.getValue("Any").applicable)
+        assertTrue(localByName.getValue("Local").applicable)
+        assertFalse(localByName.getValue("Cloud").applicable)
+        assertTrue(
+            localByName.getValue("Cloud").unavailableReason
+                .isResource(R.string.task_unavailable_controller_switch, "云游戏"),
+        )
+
+        val cloudSession = ConfigurationResolver.resolve(def, selecting("CloudADB"))
+        val cloudByName = cloudSession.templates.associateBy { it.template.name }
+        assertFalse(cloudByName.getValue("Local").applicable)
+        assertTrue(
+            cloudByName.getValue("Local").unavailableReason
+                .isResource(R.string.task_unavailable_controller_switch, "安卓端"),
+        )
+        assertTrue(cloudByName.getValue("Cloud").applicable)
+    }
+
+    @Test
+    fun `resource controller filter hides mismatched resources and preserves dormant selection across switches`() {
+        val def = definition(
+            controllers = localAndCloud,
+            resources = listOf(
+                ResourceDefinition("Shared", listOf("./base")),
+                ResourceDefinition("CloudRes", listOf("./cloud"), controllers = listOf("CloudADB")),
+                ResourceDefinition("PcRes", listOf("./pc"), controllers = listOf("Win32")),
+            ),
+        )
+        // 在 CloudADB 下选中 CloudRes
+        val cloudConfig = UserConfiguration(
+            initialized = true,
+            activeControllerName = "CloudADB",
+            activeResourceName = "CloudRes",
+        )
+        val cloudSession = ConfigurationResolver.resolve(def, cloudConfig)
+        assertEquals(listOf("Shared", "CloudRes"), cloudSession.environment.resourceCandidates.map { it.name })
+        assertEquals("CloudRes", cloudSession.environment.resource?.name)
+        assertTrue(cloudSession.diagnostics.isEmpty())
+
+        // 切回 ADB：CloudRes 不出现在候选中，回退到 Shared，且不报「resource 已不存在」警告
+        val localConfig = cloudConfig.copy(activeControllerName = "ADB")
+        val localSession = ConfigurationResolver.resolve(def, localConfig)
+        assertEquals(listOf("Shared"), localSession.environment.resourceCandidates.map { it.name })
+        assertEquals("Shared", localSession.environment.resource?.name)
+        assertNull(ConfigurationResolver.staleResourceSelection(def, localConfig))
+        assertTrue(localSession.diagnostics.isEmpty())
+    }
 }

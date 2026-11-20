@@ -10,6 +10,7 @@ class ScheduleHealthLogicTest {
 
     private val healthy = ScheduleHealthSnapshot(
         backendGranted = true,
+        backendAvailable = true,
         batteryWhitelist = true,
         exactAlarmAllowed = true,
         notification = true,
@@ -20,6 +21,7 @@ class ScheduleHealthLogicTest {
 
     private val allFailing = ScheduleHealthSnapshot(
         backendGranted = false,
+        backendAvailable = false,
         batteryWhitelist = false,
         exactAlarmAllowed = false,
         notification = false,
@@ -33,9 +35,25 @@ class ScheduleHealthLogicTest {
         assertEquals(emptyList<ScheduleHealthIssue>(), ScheduleHealthLogic.failingIssues(healthy))
     }
 
+    /** 没在运行与未授权互斥：前者成立时后者无从谈起，只报前者 */
     @Test
     fun `issues follow enum order`() {
-        assertEquals(ScheduleHealthIssue.entries, ScheduleHealthLogic.failingIssues(allFailing))
+        assertEquals(
+            ScheduleHealthIssue.entries - ScheduleHealthIssue.BACKEND,
+            ScheduleHealthLogic.failingIssues(allFailing),
+        )
+    }
+
+    @Test
+    fun `a running backend without access is reported as not granted`() {
+        assertEquals(
+            listOf(ScheduleHealthIssue.BACKEND),
+            ScheduleHealthLogic.failingIssues(healthy.copy(backendGranted = false)),
+        )
+        assertEquals(
+            listOf(ScheduleHealthIssue.BACKEND_DOWN),
+            ScheduleHealthLogic.failingIssues(healthy.copy(backendGranted = false, backendAvailable = false)),
+        )
     }
 
     @Test
@@ -67,6 +85,10 @@ class ScheduleHealthLogicTest {
         assertTrue(ScheduleHealthLogic.overlayNeeded(backgroundMode = true, screenSaverEnabled = true))
         assertFalse(ScheduleHealthLogic.overlayNeeded(backgroundMode = false, screenSaverEnabled = true))
         assertFalse(ScheduleHealthLogic.overlayNeeded(backgroundMode = true, screenSaverEnabled = false))
+        // 启用的规则都改用关屏幕电源，屏保用不上
+        assertFalse(
+            ScheduleHealthLogic.overlayNeeded(backgroundMode = true, screenSaverEnabled = true, anyRuleUsesScreenSaver = false),
+        )
     }
 
     @Test

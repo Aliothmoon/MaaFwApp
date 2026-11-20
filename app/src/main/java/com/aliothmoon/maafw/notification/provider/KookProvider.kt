@@ -1,11 +1,13 @@
 package com.aliothmoon.maafw.notification.provider
 
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.NotificationImage
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.notification.toPrefBoolean
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.util.HttpClientHelper
 import kotlinx.serialization.Serializable
+import okhttp3.MultipartBody
 import kotlinx.serialization.SerialName
 import timber.log.Timber
 
@@ -18,6 +20,45 @@ class KookProvider(
 ) : NotificationProvider {
 
     override val id = "KOOK"
+
+    override val supportsImage = true
+
+    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        sendThenAttach(title, content) { sendImage(image) }
+
+    private suspend fun sendImage(image: NotificationImage) {
+        val settings = settingsManager.current()
+        val headers = mapOf("Authorization" to "Bot ${settings.kookBotToken}")
+        val url = uploadAsset(image, headers) ?: return
+        val body = providerJson.encodeToString(
+            KookRequest(type = MSG_TYPE_IMAGE, targetId = settings.kookTargetId, content = url),
+        )
+        val direct = settings.kookDirectMessage.toPrefBoolean()
+        httpClient.post(if (direct) DIRECT_URL else CHANNEL_URL, body, headers = headers).use { response ->
+            val responseBody = response.body.string()
+            val code = runCatching { providerJson.decodeFromString<KookResponse>(responseBody).code }.getOrDefault(-1)
+            if (!response.isSuccessful || code != 0) {
+                Timber.w("KOOK image message rejected: HTTP %d, body=%s", response.code, responseBody)
+            }
+        }
+    }
+
+    /** 图片必须由机器人自己上传，外链会报找不到资源 */
+    private suspend fun uploadAsset(image: NotificationImage, headers: Map<String, String>): String? {
+        val upload = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("file", image.fileName, image.toRequestBody())
+            .build()
+        return httpClient.postMultipart(ASSET_URL, upload, headers).use { response ->
+            val responseBody = response.body.string()
+            val url = runCatching { providerJson.decodeFromString<KookAssetResponse>(responseBody) }
+                .getOrNull()
+                ?.takeIf { it.code == 0 }
+                ?.data?.url
+            if (url == null) Timber.w("KOOK asset upload rejected: HTTP %d, body=%s", response.code, responseBody)
+            url
+        }
+    }
 
     override suspend fun send(title: String, content: String): NotificationSendResult {
         val settings = settingsManager.current()
@@ -33,9 +74,9 @@ class KookProvider(
 
         val body = providerJson.encodeToString(
             KookRequest(
-                type = KMARKDOWN,
+                type = MSG_TYPE_KMARKDOWN,
                 targetId = targetId,
-                content = "**$title**\n$content",
+                content = "**$title**\n$content".fitChars(MAX_CONTENT_LENGTH),
             ),
         )
 
@@ -95,11 +136,22 @@ class KookProvider(
     @Serializable
     private data class KookResponse(val code: Int = -1, val message: String = "")
 
+    @Serializable
+    private data class KookAssetResponse(val code: Int = -1, val data: KookAsset? = null)
+
+    @Serializable
+    private data class KookAsset(val url: String? = null)
+
     private companion object {
         const val CHANNEL_URL = "https://www.kookapp.cn/api/v3/message/create"
         const val DIRECT_URL = "https://www.kookapp.cn/api/v3/direct-message/create"
+        const val ASSET_URL = "https://www.kookapp.cn/api/v3/asset/create"
+        const val MSG_TYPE_IMAGE = 2
 
         /** KOOK 消息类型 9 = KMarkdown */
-        const val KMARKDOWN = 9
+        const val MSG_TYPE_KMARKDOWN = 9
+
+        /** 文档建议消息内容不超过 8000 字符 */
+        const val MAX_CONTENT_LENGTH = 8000
     }
 }

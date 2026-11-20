@@ -5,6 +5,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.DoNotDisturbOn
@@ -46,6 +48,34 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material.icons.outlined.AspectRatio
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material.icons.outlined.Update
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.aliothmoon.maafw.semiicons.SemiIconRes
@@ -130,6 +160,10 @@ object MaaIcons {
     val Info: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.info_circle, Icons.Outlined.Info)
 
+    /** 设置行标题旁的说明展开钮（对齐 MaaMeow 的 SettingInfoToggle） */
+    val Help: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.help_circle_stroked, Icons.AutoMirrored.Outlined.HelpOutline)
+
     val Skipped: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.minus_circle, Icons.Filled.DoNotDisturbOn)
 
@@ -190,6 +224,96 @@ object MaaIcons {
     val KeyboardArrowRight: ImageVector
         @Composable get() =
             themed(SemiIconRes.Mono.chevron_right, Icons.AutoMirrored.Filled.KeyboardArrowRight)
+
+    /** 离开本应用的链接行尾标，与进二级页的 › 分开 */
+    val ExternalLink: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.external_open, Icons.AutoMirrored.Outlined.OpenInNew)
+
+    // ── 设置页行首图标：一行一个，按这一行管的事起名；Semi 那侧有 _stroked 的优先取它，与线框的 Material 同一观感 ──
+
+    val Update: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.sync, Icons.Outlined.Update)
+
+    val Download: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.download_stroked, Icons.Outlined.Download)
+
+    val Contrast: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.contrast, Icons.Outlined.Contrast)
+
+    val Palette: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.color_palette, Icons.Outlined.Palette)
+
+    val FontSize: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.font, Icons.Outlined.FormatSize)
+
+    val Wallpaper: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.image_stroked, Icons.Outlined.Wallpaper)
+
+    val Language: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.language, Icons.Outlined.Translate)
+
+    val Timer: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.stopwatch_stroked, Icons.Outlined.Timer)
+
+    val Notification: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.bell_stroked, Icons.Outlined.Notifications)
+
+    val Article: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.book_open_stroked, Icons.AutoMirrored.Outlined.Article)
+
+    val Share: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.share_stroked, Icons.Outlined.IosShare)
+
+    val Debug: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.wrench_stroked, Icons.Outlined.BugReport)
+
+    val DebugImage: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.camera_stroked, Icons.Outlined.PhotoLibrary)
+
+    val Export: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.export, Icons.Outlined.FileUpload)
+
+    val Import: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.import, Icons.Outlined.FileDownload)
+
+    val ShareCode: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.ticket_code_stroked, Icons.Outlined.ContentPaste)
+
+    val Reinstall: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.refresh, Icons.Outlined.RestartAlt)
+
+    val Privileged: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.shield_stroked, Icons.Outlined.AdminPanelSettings)
+
+    val Resolution: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.monitor_stroked, Icons.Outlined.AspectRatio)
+
+    val PictureInPicture: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.mini_player, Icons.Outlined.PictureInPictureAlt)
+
+    val Telemetry: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.pulse, Icons.Outlined.Insights)
+
+    val Announcement: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.horn_stroked, Icons.Outlined.Campaign)
+
+    val Contact: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.comment_stroked, Icons.Outlined.Forum)
+
+    val License: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.book_stroked, Icons.Outlined.Gavel)
+
+    val Repository: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.code_stroked, Icons.Outlined.Code)
+
+    val AppVersion: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.smartphone_stroked, Icons.Outlined.PhoneAndroid)
+
+    val ProjectVersion: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.box, Icons.Outlined.Inventory2)
+
+    val FrameworkVersion: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.server_stroked, Icons.Outlined.Memory)
 
     @Composable
     fun mono(@DrawableRes resId: Int): ImageVector = SemiIcons.mono(resId)

@@ -126,6 +126,8 @@ internal class MapProjectSource(private val files: Map<String, String>) : Projec
 
     override fun read(path: String): String =
         files[path] ?: throw IllegalArgumentException("no file: $path")
+
+    override fun tryReadText(path: String): Result<String?> = Result.success(files[path])
 }
 
 /** 生成合法的 V2 根文件：interface_version + import 声明，body 追加其余顶层字段 */
@@ -785,25 +787,26 @@ class ProjectLoaderWelcomeTest {
     }
 
     @Test
-    fun `welcome 文件读取失败保留原始路径并记 warning`() {
+    fun `welcome 显式路径读取失败才记 warning 并保留原文`() {
         val ready = load(
             mapOf(
                 "interface.json" to piRoot(
                     "tasks/a.json",
-                    body = """"welcome":["missing.md","announcements/second.md"]""",
+                    body = """"welcome":["missing.md","./missing.md","announcements/second.md"]""",
                 ),
                 "tasks/a.json" to """{"task":[{"name":"T1","entry":"E1"}]}""",
                 "announcements/second.md" to "# Second",
             ),
         )
 
-        assertEquals(listOf("missing.md", "# Second"), ready.definition.metadata.welcome)
+        assertEquals(listOf("missing.md", "./missing.md", "# Second"), ready.definition.metadata.welcome)
+        assertEquals(1, ready.diagnostics.count { it.message.isResource(R.string.diagnostic_description_read_failed) })
         assertTrue(
             ready.diagnostics.any {
                 it.severity == DiagnosticSeverity.Warning &&
                     it.message.isResource(
                         R.string.diagnostic_description_read_failed,
-                        "no file: missing.md",
+                        "Not a project file: missing.md",
                     )
             },
         )
@@ -864,5 +867,48 @@ class ProjectLoaderAgentTest {
                     it.message.isResource(R.string.diagnostic_required_field_missing, "agent", "child_exec")
             },
         )
+    }
+
+    @Test
+    fun `解析 preset 与 resource 的 controller 过滤字段（根与 import 分片）`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/presets.json",
+                    body = """
+                        "controller":[
+                            {"name":"Android","type":"Adb"},
+                            {"name":"Desktop","type":"Win32"}
+                        ],
+                        "resource":[
+                            {"name":"shared","path":["res/base"]},
+                            {"name":"android_only","path":["res/android"],"controller":["Android"]},
+                            {"name":"desktop_only","path":["res/win"],"controller":["Desktop"]}
+                        ],
+                        "task":[{"name":"T1","entry":"E1"}],
+                        "preset":[
+                            {"name":"all","task":[{"name":"T1"}]},
+                            {"name":"root_android","controller":["Android"],"task":[{"name":"T1"}]}
+                        ]
+                    """.trimIndent(),
+                ),
+                "tasks/presets.json" to """
+                    {
+                        "preset": [
+                            {"name":"import_desktop","controller":["Desktop"],"task":[{"name":"T1"}]}
+                        ]
+                    }
+                """.trimIndent(),
+            ),
+        )
+        val resources = ready.definition.resources.associateBy { it.name }
+        assertEquals(emptyList<String>(), resources.getValue("shared").controllers)
+        assertEquals(listOf("Android"), resources.getValue("android_only").controllers)
+        assertEquals(listOf("Desktop"), resources.getValue("desktop_only").controllers)
+
+        val templates = ready.definition.templates.associateBy { it.name }
+        assertEquals(emptyList<String>(), templates.getValue("all").controllers)
+        assertEquals(listOf("Android"), templates.getValue("root_android").controllers)
+        assertEquals(listOf("Desktop"), templates.getValue("import_desktop").controllers)
     }
 }

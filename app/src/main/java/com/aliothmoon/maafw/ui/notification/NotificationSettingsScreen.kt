@@ -61,6 +61,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun NotificationSettingsScreen(
     onBack: () -> Unit,
+    onOpenLiveStyle: () -> Unit,
     viewModel: NotificationSettingsViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -104,7 +105,7 @@ fun NotificationSettingsScreen(
             contentPadding = PaddingValues(MaaDesignTokens.Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
         ) {
-            item(key = "live") { RunNotificationCard(state, viewModel::onIntent) }
+            item(key = "live") { RunNotificationCard(state, viewModel::onIntent, onOpenLiveStyle) }
             item(key = "internal") { InternalCard(state, viewModel::onIntent) }
             item(key = "triggers") { TriggerCard(state, viewModel::onIntent) }
             items(NOTIFICATION_PROVIDER_ORDER, key = { it }) { id ->
@@ -190,6 +191,20 @@ private fun TriggerCard(state: NotificationUiState, onIntent: (NotificationInten
                 checked = state.settings.includeLogDetails.toPrefBoolean(),
                 onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(includeLogDetails = value.toString()) }) },
             )
+        }
+        SettingSearchTarget(SettingAnchors.NOTIFY_SCREENSHOT) {
+            Column {
+                MaaSwitchRow(
+                    label = stringResource(R.string.notification_attach_screenshot),
+                    checked = state.settings.attachScreenshot.toPrefBoolean(),
+                    onCheckedChange = { value -> onIntent(NotificationIntent.UpdateSettings { copy(attachScreenshot = value.toString()) }) },
+                )
+                Text(
+                    text = stringResource(R.string.notification_attach_screenshot_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -407,6 +422,20 @@ private fun ProviderConfig(
             )
         }
 
+        "QmsgV3" -> {
+            Field(
+                value = settings.qmsgV3Key,
+                label = stringResource(R.string.notification_label_qmsg_key),
+                onValueChange = { v -> onIntent(NotificationIntent.UpdateSettings { copy(qmsgV3Key = v) }) },
+            )
+            Field(
+                value = settings.qmsgV3Group,
+                label = stringResource(R.string.notification_label_qmsg_group),
+                placeholder = stringResource(R.string.notification_placeholder_qmsg_group),
+                onValueChange = { v -> onIntent(NotificationIntent.UpdateSettings { copy(qmsgV3Group = v) }) },
+            )
+        }
+
         "Gotify" -> {
             Field(
                 value = settings.gotifyServer,
@@ -479,6 +508,7 @@ private fun providerNameRes(id: String): Int = when (id) {
     "SMTP" -> R.string.notification_provider_smtp
     "Bark" -> R.string.notification_provider_bark
     "Qmsg" -> R.string.notification_provider_qmsg
+    "QmsgV3" -> R.string.notification_provider_qmsg_v3
     "Gotify" -> R.string.notification_provider_gotify
     else -> R.string.notification_provider_custom_webhook
 }

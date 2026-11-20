@@ -27,11 +27,11 @@ fun orientByExif(path: String, source: Bitmap): Bitmap {
                 postScale(-1f, 1f)
             }
             ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
+            // 不在 1..8 里的脏值按正常方向：单位阵下 createBitmap 会把不可变的原图原样返回，回收它就等于回收了结果
+            else -> return source
         }
     }
-    return try {
-        Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
-    } finally {
-        source.recycle()
-    }
+    val result = Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    if (result !== source) source.recycle()
+    return result
 }

@@ -2,6 +2,7 @@ package com.aliothmoon.maafw.log
 
 import android.annotation.SuppressLint
 import android.app.ActivityManager
+import android.app.AlarmManager
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
@@ -31,6 +32,7 @@ object DeviceInfoCollector {
         memory = memoryInfo(context),
         storage = storageInfo(storageDir),
         batteryOptimization = batteryOptimized(context),
+        exactAlarm = exactAlarm(context),
         selinux = selinuxMode(),
     )
 
@@ -63,6 +65,15 @@ object DeviceInfoCollector {
             "ignored (app exempt)"
         } else {
             "NOT ignored (schedule may be killed)"
+        }
+    }.getOrDefault(UNKNOWN)
+
+    // 12+ 没给就退成 inexact，定时可能被 Doze 推迟；排查「没按时跑」先看这一行
+    private fun exactAlarm(context: Context): String = runCatching {
+        when {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> "not required (API < 31)"
+            context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms() -> "allowed"
+            else -> "DENIED (schedule may be delayed)"
         }
     }.getOrDefault(UNKNOWN)
 

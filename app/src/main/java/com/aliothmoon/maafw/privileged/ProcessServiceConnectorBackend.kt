@@ -2,17 +2,19 @@ package com.aliothmoon.maafw.privileged
 
 import com.aliothmoon.maafw.MaaDispatchers
 import android.content.Context
-import android.os.Build
 import android.os.IBinder
 import android.os.Process
 import com.aliothmoon.maafw.BuildConfig
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.AppPaths
+import com.aliothmoon.maafw.constant.ShellDirs
 import com.aliothmoon.maafw.root.BootstrapRegistry
+import com.aliothmoon.maafw.root.ProcessExit
 import com.aliothmoon.maafw.root.RootServiceBootstrapRegistry
 import com.aliothmoon.maafw.root.RootServiceStarter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
@@ -25,10 +27,7 @@ import timber.log.Timber
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeoutException
-
-/** Android 14+ 输入注入需要 Root UID；launcher 在 shell 身份下忽略该标志 */
-internal val keepRootForInputInjection: Boolean
-    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+import com.aliothmoon.maafw.util.userIdOf
 
 /**
  * 自研 starter 进程路径的公共基座：launcher 拉起 app_process，
@@ -44,8 +43,12 @@ abstract class ProcessServiceConnectorBackend(
 
     protected open val spawnTimeoutMs: Long = 15_000L
 
-    // spawn 同步调用与超时后的 kill / dump 不在 withTimeout 内，另计余量
-    override val worstCaseConnectMs: Long get() = spawnTimeoutMs + SPAWN_OVERHEAD_MS
+    /** 同名残留的退出宽限：比服务退出期限长，正在收尾的旧进程不误杀 */
+    protected open val residualGraceMs: Long = ProcessExit.DEADLINE_MS + 1_000L
+
+    // spawn 同步调用、残留等待与超时后的 kill / dump 不在 withTimeout 内，另计余量
+    override val worstCaseConnectMs: Long
+        get() = spawnTimeoutMs + residualGraceMs + SPAWN_OVERHEAD_MS
 
     protected abstract val eventPrefix: String
 
@@ -57,8 +60,6 @@ abstract class ProcessServiceConnectorBackend(
     /** 各连接器独立，launcher O_TRUNC 打开，共用会互相覆盖 */
     protected abstract val logFileName: String
 
-    protected open val keepRoot: Boolean get() = false
-
     // 单并发：spawn 与 killResidual 都是阻塞调用，独占队列位，先入队者先做完
     private val scope = CoroutineScope(MaaDispatchers.IO.limitedParallelism(1) + SupervisorJob())
 
@@ -69,7 +70,8 @@ abstract class ProcessServiceConnectorBackend(
 
     val isConnecting: Boolean get() = activeLaunch?.job?.isActive == true
 
-    private val processName: String get() = "${appContext.packageName}:$processNameSuffix"
+    private val processName: String
+        get() = elevatedProcessName(appContext.packageName, processNameSuffix, appContext.applicationInfo.uid)
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
@@ -87,6 +89,7 @@ abstract class ProcessServiceConnectorBackend(
             var spawned = false
             // 整段包住：check(launcherFile) 等异常逃逸会让协程未捕获致崩溃
             val result = runCatching {
+                reapResidual()
                 // 先清旧日志，确保 dump 到的一定是本次启动的产物
                 logFile.delete()
                 val command = buildStartCommand(token, logFile)
@@ -97,7 +100,8 @@ abstract class ProcessServiceConnectorBackend(
             }
             if (activeLaunch?.token != token) {
                 registry.unregister(token)
-                result.getOrNull()?.let { binder ->
+                // 被取代前已回投的进程没人认领，不收就成了孤儿
+                arrivedBinder(result, deferred)?.let { binder ->
                     runCatching { destroyRemote(binder) }
                         .onFailure { Timber.w(it, "destroy superseded %s binder failed", backend) }
                 }
@@ -143,13 +147,43 @@ abstract class ProcessServiceConnectorBackend(
             append(" --package=").append(shellQuote(appContext.packageName))
             append(" --class=").append(shellQuote(serviceClass.name))
             append(" --uid=").append(Process.myUid())
-            if (keepRoot) append(" --keep-root")
             append(" --log-file=").append(shellQuote(logFile.absolutePath))
             if (BuildConfig.DEBUG) {
                 append(" --debug-name=").append(shellQuote(processName))
             }
         }
-        return spawner.wrapCommand(launcher.absolutePath, invocation)
+        // 两个后端都降到 shell；以前留 root 时解出的 agent 目录归 0，降权后写不进去，每次拉起都修回
+        return "${shellOwnershipRepairCommand(ShellDirs.AGENT_DIR.absolutePath)}; " +
+            spawner.wrapCommand(launcher.absolutePath, invocation)
+    }
+
+    /** 取消会盖掉 await 的结果，回投是否已到还得看 deferred */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun arrivedBinder(result: Result<IBinder>, deferred: Deferred<IBinder>): IBinder? =
+        result.getOrNull() ?: deferred.takeIf { it.isCompleted && !it.isCancelled }?.getCompleted()
+
+    /**
+     * 拉起前清同名残留：正常退出的进程宽限内会自己走，超期还在就是孤儿，硬杀并留痕
+     * 所在队列单并发，不会误杀本连接器随后拉起的新进程
+     */
+    private suspend fun reapResidual() {
+        var residual = spawner.findProcesses(processName)
+        if (residual.isEmpty()) return
+        val found = residual.joinToString { "pid=${it.pid} etime=${it.elapsed}" }
+        ServiceBootLogger.event("${eventPrefix}_RESIDUAL_FOUND", found)
+        Timber.w("Residual %s found before spawn: %s", processName, found)
+        repeat((residualGraceMs / RESIDUAL_POLL_MS).toInt()) {
+            delay(RESIDUAL_POLL_MS)
+            residual = spawner.findProcesses(processName)
+            if (residual.isEmpty()) {
+                ServiceBootLogger.event("${eventPrefix}_RESIDUAL_EXITED", found)
+                return
+            }
+        }
+        val pids = residual.map { it.pid }
+        ServiceBootLogger.event("${eventPrefix}_RESIDUAL_KILLED", "pids=$pids")
+        Timber.e("Residual %s still alive after %dms, force killing %s", processName, residualGraceMs, pids)
+        spawner.forceKill(pids)
     }
 
     protected open fun debugLogFile(): File {
@@ -265,6 +299,17 @@ abstract class ProcessServiceConnectorBackend(
     private companion object {
         const val SPAWN_OVERHEAD_MS = 3_000L
         const val ALIVE_POLL_INTERVAL_MS = 400L
+        const val RESIDUAL_POLL_MS = 300L
         const val LOG_TAIL_LINES = 5
     }
 }
+
+/**
+ * 分身等非主用户的实例共用同一个 Shizuku，同名进程会被对方当残留硬杀
+ * 主用户保持原名，升级前的残留照清
+ */
+internal fun elevatedProcessName(packageName: String, suffix: String, uid: Int): String {
+    val userId = userIdOf(uid)
+    return if (userId == 0) "$packageName:$suffix" else "$packageName:${suffix}_u$userId"
+}
+

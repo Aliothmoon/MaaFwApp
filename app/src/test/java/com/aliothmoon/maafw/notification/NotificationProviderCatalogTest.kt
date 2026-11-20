@@ -10,6 +10,7 @@ import com.aliothmoon.maafw.notification.provider.KookProvider
 import com.aliothmoon.maafw.util.HttpClientHelper
 import com.aliothmoon.maafw.notification.provider.NotificationProvider
 import com.aliothmoon.maafw.notification.provider.QmsgProvider
+import com.aliothmoon.maafw.notification.provider.QmsgV3Provider
 import com.aliothmoon.maafw.notification.provider.ServerChanProvider
 import com.aliothmoon.maafw.notification.provider.SmtpProvider
 import com.aliothmoon.maafw.notification.provider.TelegramProvider
@@ -38,6 +39,7 @@ class NotificationProviderCatalogTest {
         SmtpProvider(settings),
         BarkProvider(http, settings),
         QmsgProvider(http, settings),
+        QmsgV3Provider(http, settings),
         GotifyProvider(http, settings),
         CustomWebhookProvider(http, settings),
     )

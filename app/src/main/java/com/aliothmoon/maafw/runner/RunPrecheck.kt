@@ -12,7 +12,10 @@ import com.aliothmoon.maafw.i18n.UiText
  * 零副作用还换来两件事：确认期间环境变了（用户盯着框，特权进程断了）能被重跑当场发现；
  * 同一套检查可以拿去算 Start 按钮的可用态而不必真的动手
  */
-fun interface RunPrecheck {
+interface RunPrecheck {
+    /** 拦下时随 [RunLaunchResult.Blocked] 带出去，下游按它分档，不比对文案 */
+    val id: String
+
     suspend fun evaluate(ctx: RunContext): Verdict
 }
 

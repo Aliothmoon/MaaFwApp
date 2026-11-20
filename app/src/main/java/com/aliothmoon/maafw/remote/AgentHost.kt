@@ -57,5 +57,5 @@ class AgentLaunchException(message: String, cause: Throwable? = null) : Exceptio
 /** 显式关闭 agent 支持；生产路径不用，留给不带运行时的构建与测试 */
 object NoAgentHost : AgentHost {
     override fun launch(request: AgentLaunchRequest): Nothing =
-        throw AgentLaunchException("本包未带 agent 运行时，无法拉起 ${request.agent.childExec}")
+        throw AgentLaunchException("no agent runtime bundled, cannot launch ${request.agent.childExec}")
 }

@@ -1,5 +1,6 @@
 package com.aliothmoon.maafw.runner
 
+import android.os.SystemClock
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.RemoteService
 import com.aliothmoon.maafw.constant.WakeUnlockResult
@@ -8,6 +9,9 @@ import com.aliothmoon.maafw.domain.UnlockCredential
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.i18n.uiTextOf
 import com.aliothmoon.maafw.privileged.PrivilegedServicePort
+import com.aliothmoon.maafw.privileged.ServiceConnectResult
+import com.aliothmoon.maafw.privileged.message
+import com.aliothmoon.maafw.privileged.remoteAccessMessage
 import com.aliothmoon.maafw.schedule.UnlockGestureReader
 import com.aliothmoon.maafw.schedule.WakeResult
 import com.aliothmoon.maafw.settings.AppSettingsGateway
@@ -79,6 +83,9 @@ private suspend fun <R> PrivilegedServicePort.callConnecting(
  * 倒计时排最后：等待期间屏幕该已经亮着、屏保该已经盖好，用户看到的才是最终态
  */
 internal object HookOrder {
+    /** 收尾排在最后：熄屏、通知、会话日志都撤完了才断开特权进程 */
+    const val COLLAPSE = -20
+
     /** 排在所有环境动作之前，收尾时因此最后关：文件开着的窗口覆盖住整轮 */
     const val SESSION_LOG = -10
 
@@ -87,11 +94,32 @@ internal object HookOrder {
 
     /** 紧随会话日志：收尾时排在所有环境动作之后，播报的是环境都撤干净之后的结局 */
     const val NOTIFICATION = -5
+
+    /** 不改环境，排在四个环境挂载物之前：它们都要特权进程 */
+    const val PRIVILEGED_CONNECT = -2
+
+    /** 连上之后、唤醒之前：唤醒之后再采，屏幕永远是亮的 */
+    const val IDLE_PROBE = -1
     const val AUTO_SLEEP = 0
+
+    /** 要唤醒前的设备状态，又得赶在唤醒、盖屏保之前拦下；自动熄屏只采样，排它前后都行 */
+    const val APP_BLACKLIST = 5
     const val WAKE_UNLOCK = 10
     const val SCREEN_SAVER = 20
     const val CLOSE_APP = 30
+
+    /** 收尾排在关闭目标应用之前：结束画面要趁目标应用还在屏上截 */
+    const val COMPLETION_SCREENSHOT = 35
     const val COUNTDOWN = 40
+
+    /** 倒计时走完再查一次 */
+    const val APP_BLACKLIST_RECHECK = 42
+
+    /** 紧挨投递：倒计时期间用户还可能点开面板 */
+    const val OVERLAY_CLEAR = 45
+
+    /** 受理之后最先做：倒计时早已走完，目标应用还没起来 */
+    const val SCREEN_POWER_OFF = 48
 
     /** 只是挂一个监听，排在最后，收尾时最先摘掉 */
     const val WATCHDOG_NOTICE = 50
@@ -106,6 +134,47 @@ internal object HookOrder {
     const val RUN_DURATION_LIMIT = 60
 }
 
+/** 规则开了关屏幕电源、且是后台模式；真关还要开始时设备没在用，见 [screenPowerOffPlanned] */
+private val RunContext.wantsScreenPowerOff: Boolean
+    get() = (trigger as? RunTrigger.Schedule)?.options?.hardwareScreenOff == true && runMode == RunMode.BACKGROUND
+
+/** 本轮会关屏幕电源：关屏、屏保让位、收起前先上锁都按这一条判 */
+internal val RunContext.screenPowerOffPlanned: Boolean
+    get() = wantsScreenPowerOff && deviceAtStart.get()?.idle == true
+
+/**
+ * 投递前先把特权进程连上
+ *
+ * 解锁、熄屏采样、投递都要它；连不上时前两步各自回落默认值，拉起失败会被报成「解锁失败」，
+ * 真原因就丢了。gating：连不上整轮跑不起来，早拦下早给原因
+ *
+ * 未授权会在这里当场请求（手动那轮用户在跟前），所以超时要盖住授权弹窗加一次拉起
+ */
+class PrivilegedConnectHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
+
+    override val id: String = ID
+    override val anchor: Anchor = Anchor.BeforeDispatch
+    override val order: Int = HookOrder.PRIVILEGED_CONNECT
+    override val gating: Boolean = true
+    override val engageTimeoutMs: Long = ENGAGE_TIMEOUT_MS
+
+    override suspend fun engage(ctx: RunContext): EngageResult =
+        when (val result = withContext(MaaDispatchers.IO) { servicePort.connect() }) {
+            ServiceConnectResult.Connected -> EngageResult.Skipped()
+            is ServiceConnectResult.NotReady ->
+                EngageResult.Failed(remoteAccessMessage(result.backend, result.failure))
+            is ServiceConnectResult.Failed ->
+                EngageResult.Failed(result.message(), error = result.error)
+        }
+
+    companion object {
+        private const val ENGAGE_TIMEOUT_MS = 60_000L
+
+        /** 进触发日志的 steps，落盘了就别改 */
+        const val ID = "privileged-connect"
+    }
+}
+
 /**
  * 亮屏解锁
  *
@@ -118,6 +187,8 @@ class WakeUnlockHook(
     private val settings: AppSettingsGateway,
     private val gestures: UnlockGestureReader,
     private val keyguardLocked: () -> Boolean,
+    /** 设了安全锁屏（要密码）；只进失败取证 */
+    private val deviceSecure: () -> Boolean,
 ) : RunEnvHook {
 
     override val id: String = ID
@@ -142,6 +213,7 @@ class WakeUnlockHook(
                 ""
             },
         )
+        val startedAt = SystemClock.elapsedRealtime()
         val code = servicePort.callConnecting("unlock", WakeUnlockResult.IPC_FAILED) {
             when (credential) {
                 UnlockCredential.Swipe -> it.unlock("")
@@ -149,9 +221,31 @@ class WakeUnlockHook(
                 is UnlockCredential.Gesture -> it.unlockWithGesture(credential.json)
             }
         }
-        val result = WakeResult.fromCodeOrNull(code)
-        if (result?.isUnlocked == true || !keyguardLocked()) return EngageResult.Skipped()
-        return EngageResult.Failed(result?.message ?: uiTextOf(R.string.wake_result_unknown, code))
+        val result = WakeResult.fromCode(code)
+        if (result.isUnlocked || !keyguardLocked()) return EngageResult.Skipped()
+        recordFailure(ctx, credential, startedAt)
+        return EngageResult.Failed(result.message)
+    }
+
+    /**
+     * 解锁失败多半没人在跟前，只一句原因查不下去：配置摘要与特权侧的步骤耗时写进本轮运行日志
+     * （会话日志排在解锁前，没跑起来的一轮也归档）。运行日志可能随推送外发，两段都不带 PIN、位数与轨迹
+     */
+    private suspend fun recordFailure(ctx: RunContext, credential: UnlockCredential, startedAt: Long) {
+        val recordedAt = if (credential is UnlockCredential.Gesture) gestures.recordedAtMs() else null
+        ctx.journal.warn(
+            ctx.executionId,
+            wakeConfigText(
+                unlockType = settings.wakeUnlockType.value,
+                credential = credential,
+                gestureRecordedAtMs = recordedAt,
+                passwordRequired = deviceSecure(),
+                before = ctx.deviceAtStart.get(),
+            ),
+        )
+        // 旧版特权进程没有这个方法，proxy 读回 null
+        val trace = servicePort.callOrDefault("getLastWakeTrace", "") { it.getLastWakeTrace(startedAt).orEmpty() }
+        if (trace.isNotBlank()) ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_wake_trace, trace))
     }
 
     companion object {
@@ -182,12 +276,18 @@ class ScreenSaverHook(
         if (ctx.runMode != RunMode.BACKGROUND) return EngageResult.Skipped()
         if (!settings.screenSaverEnabled.value) return EngageResult.Skipped()
 
+        // 本轮由 ScreenPowerOffHook 关屏；开始时设备在用的不关屏，屏保照盖
+        if (ctx.screenPowerOffPlanned) return EngageResult.Skipped()
+
         // 只有确实是本轮盖上的才登记撤销：用户自己手动盖的那份不归这一轮管
-        if (!screenSaver.show()) {
-            ctx.journal.warn(ctx.executionId, uiTextOf(R.string.run_log_screen_saver_skipped))
-            return EngageResult.Skipped()
+        return when (screenSaver.show()) {
+            ScreenSaverShow.SHOWN -> EngageResult.Engaged(Release { screenSaver.hide() })
+            ScreenSaverShow.ALREADY_SHOWN -> EngageResult.Skipped()
+            ScreenSaverShow.FAILED -> {
+                ctx.journal.warn(ctx.executionId, uiTextOf(R.string.run_log_screen_saver_skipped))
+                EngageResult.Skipped()
+            }
         }
-        return EngageResult.Engaged(Release { screenSaver.hide() })
     }
 }
 
@@ -225,11 +325,72 @@ class CloseTargetAppHook(
 }
 
 /**
- * 跑完自动上锁息屏
+ * 唤醒之前采「设备在不在用」，写进 [RunContext.deviceAtStart]
  *
- * order 最小不是因为它先做事——engage 只采样。它要在**唤醒之前**读到屏幕状态，
- * 唤醒之后 isScreenOn 永远是 true，「用户本来就在用手机」就判不出来了
+ * 只采不改，只采定时触发：手动发起时人就在跟前。熄屏或锁屏都算没在用——没设锁屏的机器熄了屏也不上锁，
+ * 只看 keyguard 会把它判成在用
  */
+class IdleProbeHook(
+    private val servicePort: PrivilegedServicePort,
+    private val keyguardLocked: () -> Boolean,
+) : RunEnvHook {
+
+    override val id: String = "idle-probe"
+    override val anchor: Anchor = Anchor.BeforeDispatch
+    override val order: Int = HookOrder.IDLE_PROBE
+    override val gating: Boolean = false
+
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        if (ctx.trigger !is RunTrigger.Schedule) return EngageResult.Skipped()
+        val screenOn = servicePort.callConnecting("isScreenOn", true) { it.isScreenOn() }
+        ctx.deviceAtStart.set(DeviceAtStart(screenOn = screenOn, keyguardLocked = keyguardLocked()))
+        return EngageResult.Skipped()
+    }
+}
+
+/**
+ * 定时规则开了「结束后收起」：跑到头（含到时长上限）后断开特权进程、关掉界面
+ *
+ * 不退进程：开着无障碍时系统会为重绑它立刻重建进程，冷启动时授权观察器拿到首值就去 bind，
+ * 特权进程又回来了，等于白退；进程内 unbind 后授权状态不变，不会被拉回。虚拟屏带
+ * DESTROY_CONTENT_ON_REMOVAL，特权进程一退目标应用界面随之销毁，不会跳到主屏
+ *
+ * 手动停止不收：多半是用户要接手现场。有定时在排队也不收：它要接着用这条连接
+ */
+class CollapseAfterRunHook(
+    private val servicePort: PrivilegedServicePort,
+    private val runQueued: () -> Boolean,
+    private val closeUi: suspend () -> Unit,
+) : RunEnvHook {
+
+    override val id: String = "collapse-after-run"
+    override val anchor: Anchor = Anchor.BeforeDispatch
+    override val order: Int = HookOrder.COLLAPSE
+    override val gating: Boolean = false
+
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
+        if (!options.collapseAfterTask) return EngageResult.Skipped()
+        return EngageResult.Engaged(Release { reason ->
+            val ranToEnd = reason is RunEndReason.Ran &&
+                (reason.result !is ExecutionResult.Cancelled || ctx.stoppedAtLimit.get())
+            if (!ranToEnd) return@Release
+            if (runQueued()) {
+                Timber.i("collapse skipped: another run is waiting")
+                return@Release
+            }
+            // 关过屏幕电源而系统还醒着：特权进程一退面板就被点亮，先上锁休眠
+            if (ctx.screenPowerOffPlanned) {
+                servicePort.callOrDefault("lockAndSleep", WakeUnlockResult.IPC_FAILED) { it.lockAndSleep() }
+            }
+            Timber.i("collapsing after run: unbinding the privileged process")
+            servicePort.unbind()
+            closeUi()
+        })
+    }
+}
+
+/** 跑完自动上锁息屏；「用户本来就在用手机」读 [RunContext.deviceAtStart]，engage 时就捕进闭包 */
 class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
 
     override val id: String = "auto-sleep"
@@ -241,7 +402,7 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
         val options = (ctx.trigger as? RunTrigger.Schedule)?.options ?: return EngageResult.Skipped()
         if (!options.autoSleepAfterTask) return EngageResult.Skipped()
 
-        val tookOverIdleDevice = !servicePort.callConnecting("isScreenOn", true) { it.isScreenOn() }
+        val tookOverIdleDevice = ctx.deviceAtStart.get()?.idle == true
         val skipIfAwake = options.skipAutoSleepIfAwake
         // 两个采样值都在这里捕进闭包：收尾时再去读，读到的是那时的屏幕状态与开关，不是本轮开始时的
         return EngageResult.Engaged(Release { reason ->
@@ -257,6 +418,37 @@ class AutoSleepHook(private val servicePort: PrivilegedServicePort) : RunEnvHook
                 }
             }
         })
+    }
+}
+
+/**
+ * 定时规则开了「关闭屏幕电源」：受理之后（倒计时早已走完）关掉物理屏，只关不恢复，代替屏保
+ *
+ * 只在后台模式、且本轮开始时设备没在用才关：人正拿着手机就把屏关了说不过去。面板关着时系统仍算亮屏，
+ * 按电源键由系统点亮；特权进程退出时系统还醒着才兜底点亮。结果如实落进触发日志的步骤
+ */
+class ScreenPowerOffHook(private val servicePort: PrivilegedServicePort) : RunEnvHook {
+
+    override val id: String = "screen-power-off"
+    override val anchor: Anchor = Anchor.AfterAccepted
+    override val order: Int = HookOrder.SCREEN_POWER_OFF
+    override val gating: Boolean = false
+
+    override suspend fun engage(ctx: RunContext): EngageResult {
+        if (!ctx.wantsScreenPowerOff) return EngageResult.Skipped()
+        if (!ctx.screenPowerOffPlanned) {
+            ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_screen_power_off_skipped_awake))
+            return EngageResult.Skipped()
+        }
+        if (!servicePort.callOrDefault("setDisplayPowerSync", false) { it.setDisplayPowerSync(false) }) {
+            val reason = uiTextOf(R.string.run_log_screen_power_off_failed)
+            ctx.journal.warn(ctx.executionId, reason)
+            return EngageResult.Failed(reason)
+        }
+        ctx.journal.info(ctx.executionId, uiTextOf(R.string.run_log_screen_power_off))
+        // 收尾什么都不做：同手动熄屏挂机，一轮跑完屏幕仍关着，由用户按电源键点亮。
+        // 仍报 Engaged 而不是 Skipped，触发日志的步骤才记得下「关过屏」
+        return EngageResult.Engaged(Release { })
     }
 }
 
@@ -316,7 +508,9 @@ object CountdownHook : RunEnvHook {
  * 隔一层这几个 hook 才进得了 JVM 单测
  */
 interface RunScreenSaver {
-    /** 返回是否确实由本次调用盖上 */
-    suspend fun show(): Boolean
+    suspend fun show(): ScreenSaverShow
     suspend fun hide()
 }
+
+/** 已经盖着的要与盖失败分开：前者是用户手动盖的，本轮既不该撤它，也不该记成「没盖上」 */
+enum class ScreenSaverShow { SHOWN, ALREADY_SHOWN, FAILED }

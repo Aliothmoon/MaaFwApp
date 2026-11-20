@@ -145,10 +145,7 @@ internal class GitHubReleasesApi(
         )
     }
 
-    private fun String.matchesAlias(alias: String): Boolean = Regex(
-        """(^|[ _.\-/])${Regex.escape(alias)}($|[ _.\-/])""",
-        RegexOption.IGNORE_CASE,
-    ).containsMatchIn(this)
+    private fun String.matchesAlias(alias: String): Boolean = ALIAS_PATTERNS.getValue(alias).containsMatchIn(this)
 
     private fun buildApiUrl(repository: String): String =
         "https://api.github.com/repos/$repository/releases"
@@ -192,6 +189,11 @@ internal class GitHubReleasesApi(
 
         /** 任一 ABI 的标记：命中即视为拆分变体，不进 universal 回退 */
         val ALL_ABI_MARKERS = ABI_MARKERS.values.flatten().distinct()
+
+        /** 标记两侧须是分隔符或首尾，免得 arm 撞上 arm64；预编译好，挑包是资产数 × 标记数次匹配 */
+        private val ALIAS_PATTERNS: Map<String, Regex> = ALL_ABI_MARKERS.associateWith { alias ->
+            Regex("""(^|[ _.\-/])${Regex.escape(alias)}($|[ _.\-/])""", RegexOption.IGNORE_CASE)
+        }
     }
 }
 

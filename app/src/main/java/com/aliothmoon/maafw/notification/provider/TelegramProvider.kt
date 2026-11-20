@@ -1,11 +1,13 @@
 package com.aliothmoon.maafw.notification.provider
 
 import com.aliothmoon.maafw.i18n.uiTextOf
+import com.aliothmoon.maafw.notification.NotificationImage
 import com.aliothmoon.maafw.notification.NotificationSettingsManager
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.util.HttpClientHelper
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import okhttp3.MultipartBody
 import timber.log.Timber
 
 class TelegramProvider(
@@ -14,6 +16,35 @@ class TelegramProvider(
 ) : NotificationProvider {
 
     override val id = "Telegram"
+
+    override val supportsImage = true
+
+    /** sendPhoto 的 caption 只有 1024 字，放不下日志，文字和图片分两条发 */
+    override suspend fun send(title: String, content: String, image: NotificationImage): NotificationSendResult =
+        sendThenAttach(title, content) { sendPhoto(image) }
+
+    private suspend fun sendPhoto(image: NotificationImage) {
+        val settings = settingsManager.current()
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("chat_id", settings.telegramChatId)
+            .apply {
+                settings.telegramTopicId.takeIf { it.isNotEmpty() }?.let { addFormDataPart("message_thread_id", it) }
+            }
+            .addFormDataPart("photo", image.fileName, image.toRequestBody())
+            .build()
+        runCatching {
+            httpClient.postMultipart("https://api.telegram.org/bot${settings.telegramBotToken}/sendPhoto", body)
+                .use { response ->
+                    val responseBody = response.body.string()
+                    val ok = runCatching { providerJson.decodeFromString<TelegramResponse>(responseBody).ok }
+                        .getOrDefault(false)
+                    if (!response.isSuccessful || !ok) {
+                        Timber.w("Telegram sendPhoto rejected: HTTP %d, body=%s", response.code, responseBody)
+                    }
+                }
+        }.onFailure { Timber.e(it, "Telegram sendPhoto failed") }
+    }
 
     override suspend fun send(title: String, content: String): NotificationSendResult {
         val settings = settingsManager.current()
@@ -30,7 +61,7 @@ class TelegramProvider(
         val body = providerJson.encodeToString(
             TelegramRequest(
                 chatId = chatId,
-                text = "$title: $content",
+                text = "$title: $content".fitChars(MAX_TEXT_LENGTH),
                 messageThreadId = settings.telegramTopicId.takeIf { it.isNotEmpty() },
             ),
         )
@@ -64,4 +95,9 @@ class TelegramProvider(
 
     @Serializable
     private data class TelegramResponse(val ok: Boolean = false)
+
+    private companion object {
+        /** sendMessage 的 text 上限，超了直接 400 整条发不出去 */
+        const val MAX_TEXT_LENGTH = 4096
+    }
 }

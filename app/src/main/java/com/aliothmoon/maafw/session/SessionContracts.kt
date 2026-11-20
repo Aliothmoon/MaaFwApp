@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionSectionState
 import com.aliothmoon.maafw.domain.OptionValue
+import com.aliothmoon.maafw.domain.ResolvedConfigurationTemplate
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RemoteBackend
@@ -50,6 +51,8 @@ data class SessionUiState(
     val resourceOptions: List<OptionEditorState> = emptyList(),
     /** 空 = 当前 controller 没有 option[]，设置页不出「控制器设置」 */
     val controllerOptions: List<OptionEditorState> = emptyList(),
+    /** Android 上支持的 PI preset 投影（含当前 controller 适用性）；非 Adb 专属预设已过滤 */
+    val templates: List<ResolvedConfigurationTemplate> = emptyList(),
     val projectMetadata: ProjectMetadata = ProjectMetadata(),
     /** PI 声明了 telemetry；没声明时设置页不出这一行 */
     val telemetryDeclared: Boolean = false,
@@ -250,7 +253,7 @@ sealed interface SessionIntent {
 
     /**
      * null = 跟随系统；事实来源 AppLocales
-     * 落地：Activity 重建 → AppRoot 检测 locale → ReloadProject
+     * 落地：Activity 重建 → AppRoot 检测 locale → [LocaleChanged]
      */
     data class SetLanguage(val localeTag: String?) : SessionIntent
     data class SetDebugMode(val enabled: Boolean) : SessionIntent
@@ -273,8 +276,11 @@ sealed interface SessionIntent {
 
     data class SetTelemetryEnabled(val enabled: Boolean) : SessionIntent
 
-    /** 立刻关掉目标应用：停虚拟屏，屏上的应用跟着一起没 */
+    /** 关掉目标应用：先强停它再停虚拟屏；运行中先要用户点头（[SessionEffect.ConfirmCloseTargetApp]） */
     data object CloseTargetApp : SessionIntent
+
+    /** 运行中点过头的那次，不再问 */
+    data object CloseTargetAppConfirmed : SessionIntent
 
 
 
@@ -302,6 +308,13 @@ sealed interface SessionIntent {
 
     data object ReloadProject : SessionIntent
 
+    /**
+     * Activity 重建后发现语言变了，要按新语言重载 PI；与手点的 [ReloadProject] 分开
+     *
+     * 运行中系统语言被改、或 13+ 在系统设置改应用语言也会到这：那时只记一笔、不弹锁定提示，一轮结束再重载
+     */
+    data object LocaleChanged : SessionIntent
+
     data object DismissWelcome : SessionIntent
 
     /** 无条件重解 PI 再重载；失败弹窗的重试与设置页的手动重来是同一个动作 */
@@ -311,11 +324,13 @@ sealed interface SessionIntent {
      * 发起一轮执行
      *
      * [surface] 区分入口：应用内前台仍拦，悬浮窗放行。定时不走这条 Intent。
-     * [acknowledged] 是用户在 [SessionEffect.ConfirmStart] 上点过头的项，原样带回来重发
+     * [acknowledged] 是用户在 [SessionEffect.ConfirmStart] 上点过头的项，原样带回来重发。
+     * [startFromInstanceId] 是「从此处运行」的起点，只影响这一轮
      */
     data class Start(
         val surface: TaskSurface = TaskSurface.InApp,
         val acknowledged: Set<ConfirmToken> = emptySet(),
+        val startFromInstanceId: String? = null,
     ) : SessionIntent
     data object Stop : SessionIntent
 
@@ -372,7 +387,18 @@ sealed interface SessionEffect {
      *
      * [acknowledged] 已含本次这项：几项都要问时逐个弹，前面点过的跟着累积，VM 不必记
      */
-    data class ConfirmStart(val prompt: UiText, val acknowledged: Set<ConfirmToken>) : SessionEffect
+    data class ConfirmStart(
+        val prompt: UiText,
+        val acknowledged: Set<ConfirmToken>,
+        /** 点头后原样带回 [SessionIntent.Start]，否则从此处运行的那一轮重发成整份 */
+        val startFromInstanceId: String? = null,
+    ) : SessionEffect
+
+    /** 手动发起被受理：从 [surface] 那一侧切到日志，人就在跟前；定时触发不切 */
+    data class ShowRunLog(val surface: TaskSurface) : SessionEffect
+
+    /** 运行中点了「关闭目标应用」：拆屏会让正在跑的这一轮中断，同意就发 [SessionIntent.CloseTargetAppConfirmed] */
+    data object ConfirmCloseTargetApp : SessionEffect
 
     /** 拉起外部 Activity 需要 Context，由 Route 层执行 */
     data object InstallShizuku : SessionEffect

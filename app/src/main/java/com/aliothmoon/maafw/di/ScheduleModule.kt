@@ -2,7 +2,9 @@ package com.aliothmoon.maafw.di
 
 import com.aliothmoon.maafw.config.backup.ConfigBackupService
 import com.aliothmoon.maafw.schedule.ScheduleAlarmManager
+import com.aliothmoon.maafw.schedule.ScheduleMissedReporter
 import com.aliothmoon.maafw.schedule.ScheduleStrategyStore
+import com.aliothmoon.maafw.schedule.ShizukuDownMonitor
 import com.aliothmoon.maafw.schedule.UnlockGestureStore
 import com.aliothmoon.maafw.schedule.WakeUnlockEngine
 import com.aliothmoon.maafw.schedule.ScheduleTriggerLog
@@ -14,9 +16,19 @@ val scheduleModule = module {
     single { ScheduleStrategyStore(androidContext()) }
     single { ScheduleAlarmManager(androidContext()) }
     single { ScheduleTriggerLog() }
+    single { ScheduleMissedReporter(alarms = get(), store = get(), triggerLog = get(), notifications = get()) }
     // 手势：解锁 hook（进程级）与唤醒解锁页共用一份，录完回来两边立刻看到
     single { UnlockGestureStore(androidContext()) }
     single { WakeUnlockEngine(get()) }
+    single {
+        ShizukuDownMonitor(
+            context = androidContext(),
+            access = get(),
+            appSettings = get(),
+            store = get(),
+            notifications = get(),
+        )
+    }
     // 配置导入导出横跨运行配置、定时与 app 设置三处存储
     single {
         ConfigBackupService(

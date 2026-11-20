@@ -3,6 +3,8 @@ package com.aliothmoon.maafw.runner
 import com.aliothmoon.maafw.MaaDispatchers
 import com.aliothmoon.maafw.constant.AppPaths
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -37,15 +39,23 @@ sealed interface RunSessionRecord {
      * 本来就是 MaaFramework 与 agent 的原文（不参与本地化），只有合成过的那几句能翻译，
      * 为这几句建一张跨版本稳定的 key 表不划算。同一取舍见 `UiText` 的「或原文」
      */
+    @OptIn(ExperimentalSerializationApi::class)
     @Serializable
     @SerialName("line")
     data class Line(
-        val atMillis: Long,
-        val kind: RunLogKind,
+        override val atMillis: Long,
+        override val kind: RunLogKind,
         val text: String,
         /** 原样 details_json；只有调试模式下才写，平时它占掉文件的绝大部分体积 */
         val detail: String? = null,
-    ) : RunSessionRecord
+        /**
+         * 任务起止标记，历史详情页靠它分组；旧版本写的文件没有这个字段，读出来是 null，详情页退回平铺
+         *
+         * 空值不写：一份文件上千行里只有任务起止那几行有它，写死 `null` 白占体积
+         */
+        @EncodeDefault(EncodeDefault.Mode.NEVER)
+        override val task: RunLogTaskMark? = null,
+    ) : RunSessionRecord, RunLogLine
 
     @Serializable
     @SerialName("footer")
@@ -107,7 +117,7 @@ class RunSessionLogStore {
                 val writer = RunSessionWriter(BufferedWriter(FileWriter(file, true)))
                 writer.write(listOf(RunSessionRecord.Header(startedAt, tasks)))
                 writer
-            }.onFailure { Timber.w(it, "开会话日志文件失败") }.getOrNull()
+            }.onFailure { Timber.w(it, "open session log file failed") }.getOrNull()
         }
 
     suspend fun list(): List<RunSessionLogFile> = withContext(MaaDispatchers.IO) {
@@ -118,7 +128,7 @@ class RunSessionLogStore {
                 ?.sortedByDescending { it.startedAt }
                 .orEmpty()
         }.getOrElse {
-            Timber.w(it, "列会话日志失败")
+            Timber.w(it, "list session logs failed")
             emptyList()
         }
     }
@@ -134,7 +144,7 @@ class RunSessionLogStore {
                     runCatching { JSON.decodeFromString<RunSessionRecord>(line) }.getOrNull()
                 }
         }.getOrElse {
-            Timber.w(it, "读会话日志失败：%s", fileName)
+            Timber.w(it, "read session log failed: %s", fileName)
             emptyList()
         }
     }
@@ -204,10 +214,10 @@ class RunSessionWriter internal constructor(private val writer: BufferedWriter) 
                 writer.newLine()
             }
             writer.flush()
-        }.onFailure { Timber.w(it, "写会话日志失败") }
+        }.onFailure { Timber.w(it, "write session log failed") }
     }
 
     fun close() {
-        runCatching { writer.close() }.onFailure { Timber.w(it, "关会话日志失败") }
+        runCatching { writer.close() }.onFailure { Timber.w(it, "close session log failed") }
     }
 }

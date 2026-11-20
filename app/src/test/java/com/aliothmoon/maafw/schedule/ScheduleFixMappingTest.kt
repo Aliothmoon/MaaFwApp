@@ -1,5 +1,7 @@
 package com.aliothmoon.maafw.schedule
 
+import com.aliothmoon.maafw.runner.PrivilegedAccessPrecheck
+import com.aliothmoon.maafw.runner.PrivilegedConnectHook
 import com.aliothmoon.maafw.runner.WakeUnlockHook
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -11,6 +13,7 @@ class ScheduleFixMappingTest {
         result: TriggerResult,
         reason: TriggerFailureReason? = null,
         steps: List<TriggerStep> = emptyList(),
+        blockedBy: String? = null,
     ) = TriggerLogEntry(
         strategyId = "s",
         strategyName = "s",
@@ -18,8 +21,39 @@ class ScheduleFixMappingTest {
         actualAt = 0L,
         result = result,
         failureReason = reason,
+        blockedBy = blockedBy,
         steps = steps,
     )
+
+    @Test
+    fun `backend outage points to the remote access request`() {
+        assertEquals(
+            ScheduleFixAction.BACKEND,
+            ScheduleFixMapping.fixActionFor(
+                entry(TriggerResult.FAILED_START, TriggerFailureReason.BLOCKED, blockedBy = PrivilegedAccessPrecheck.ID),
+            ),
+        )
+        assertEquals(
+            ScheduleFixAction.BACKEND,
+            ScheduleFixMapping.fixActionFor(
+                entry(
+                    TriggerResult.FAILED_START,
+                    TriggerFailureReason.BLOCKED,
+                    steps = listOf(TriggerStep(PrivilegedConnectHook.ID, TriggerStepOutcome.FAILED)),
+                ),
+            ),
+        )
+    }
+
+    /** 关机期间漏的没什么可修；没被唤起的多半是自启动 / 后台管控 */
+    @Test
+    fun `only a missed trigger without reboot points to auto start`() {
+        assertEquals(
+            ScheduleFixAction.AUTO_START,
+            ScheduleFixMapping.fixActionFor(entry(TriggerResult.FAILED_START, TriggerFailureReason.MISSED)),
+        )
+        assertNull(ScheduleFixMapping.fixActionFor(entry(TriggerResult.FAILED_START, TriggerFailureReason.MISSED_REBOOTED)))
+    }
 
     @Test
     fun `failed wake unlock step points to the unlock settings`() {
