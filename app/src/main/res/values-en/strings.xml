@@ -131,6 +131,7 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_pure_dark">Pure black</string>
+    <string name="settings_row_info">Details</string>
     <string name="settings_ui_scale">Page scale</string>
     <string name="settings_ui_scale_desc">Scales the whole interface, spacing included. Auto picks a size from the screen width; the system font size still applies on top. Affects both the app and the floating window</string>
     <string name="settings_ui_scale_auto_value">Auto · %1$d%%</string>
@@ -152,7 +153,6 @@
     <string name="settings_theme_style_default">Default</string>
     <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">Language</string>
-    <string name="settings_language_hint">Switching language reloads the project; unavailable while running</string>
     <string name="settings_run_mode">Run mode</string>
     <string name="settings_run_mode_background">Background mode</string>
     <string name="settings_run_mode_foreground">Foreground mode</string>

@@ -233,7 +233,6 @@ private fun DisplaySection(
             MaaSettingNavRow(
                 title = stringResource(R.string.wallpaper_title),
                 icon = MaaIcons.Wallpaper,
-                description = stringResource(R.string.wallpaper_desc),
                 onClick = onOpenWallpaper,
             )
         }
@@ -241,7 +240,6 @@ private fun DisplaySection(
             MaaSettingRow(
                 title = stringResource(R.string.settings_language),
                 icon = MaaIcons.Language,
-                description = stringResource(R.string.settings_language_hint),
                 footer = { LanguageChoice(state, onIntent) },
             )
         }
@@ -321,7 +319,6 @@ private fun LogSection(
             MaaSettingNavRow(
                 title = stringResource(R.string.log_archive_title),
                 icon = MaaIcons.History,
-                description = stringResource(R.string.settings_log_archive_desc),
                 onClick = onOpenRunLogArchive,
             )
         }
@@ -329,7 +326,6 @@ private fun LogSection(
             MaaSettingNavRow(
                 title = stringResource(R.string.app_log_title),
                 icon = MaaIcons.Article,
-                description = stringResource(R.string.settings_log_error_desc),
                 onClick = onOpenAppLog,
             )
         }
@@ -337,7 +333,6 @@ private fun LogSection(
             MaaSettingNavRow(
                 title = stringResource(R.string.log_export_title),
                 icon = MaaIcons.Share,
-                description = stringResource(R.string.settings_log_export_desc),
                 onClick = onExportLogs,
             )
         }
@@ -346,7 +341,7 @@ private fun LogSection(
             MaaSettingSwitchRow(
                 title = stringResource(R.string.settings_debug_mode),
                 icon = MaaIcons.Debug,
-                description = stringResource(R.string.settings_debug_mode_desc),
+                info = stringResource(R.string.settings_debug_mode_desc),
                 checked = state.debugMode,
                 onCheckedChange = { enabled ->
                     if (enabled) showEnableConfirm = true
@@ -396,7 +391,7 @@ private fun BackupSection(onConfigBackup: (ConfigBackupAction) -> Unit) {
             MaaSettingNavRow(
                 title = stringResource(R.string.config_export_title),
                 icon = MaaIcons.Export,
-                description = stringResource(R.string.config_export_desc),
+                info = stringResource(R.string.config_export_desc),
                 onClick = { onConfigBackup(ConfigBackupAction.Export) },
             )
         }
@@ -404,7 +399,7 @@ private fun BackupSection(onConfigBackup: (ConfigBackupAction) -> Unit) {
             MaaSettingNavRow(
                 title = stringResource(R.string.config_import_title),
                 icon = MaaIcons.Import,
-                description = stringResource(R.string.config_import_desc),
+                info = stringResource(R.string.config_import_desc),
                 onClick = { onConfigBackup(ConfigBackupAction.Import) },
             )
         }
@@ -412,7 +407,6 @@ private fun BackupSection(onConfigBackup: (ConfigBackupAction) -> Unit) {
             MaaSettingNavRow(
                 title = stringResource(R.string.config_import_share_code_title),
                 icon = MaaIcons.ShareCode,
-                description = stringResource(R.string.config_import_share_code_desc),
                 onClick = { onConfigBackup(ConfigBackupAction.PasteShareCode) },
             )
         }
@@ -436,7 +430,7 @@ private fun PiSection(onIntent: (SessionIntent) -> Unit) {
             MaaSettingNavRow(
                 title = stringResource(R.string.pi_reinstall_title),
                 icon = MaaIcons.Reinstall,
-                description = stringResource(R.string.pi_reinstall_desc),
+                info = stringResource(R.string.pi_reinstall_desc),
                 onClick = { showConfirm = true },
             )
         }
@@ -489,7 +483,6 @@ private fun UpdateSection(
             MaaSettingSwitchRow(
                 title = stringResource(R.string.settings_update_auto_download),
                 icon = MaaIcons.Download,
-                description = stringResource(R.string.settings_update_auto_download_desc),
                 checked = update.autoDownloadUpdate,
                 enabled = update.autoCheckUpdate && settingsEnabled,
                 onCheckedChange = { onSettingsIntent(SettingsIntent.SetAutoDownloadUpdate(it)) },
@@ -536,8 +529,8 @@ private fun OtherSection(
             MaaSettingRow(
                 title = stringResource(R.string.settings_resolution),
                 icon = MaaIcons.Resolution,
-                // 预设来自打包配方，label 语言无关；具体尺寸与 dpi 写在说明里
-                description = stringResource(
+                // 预设来自打包配方，label 语言无关；具体尺寸与 dpi 放同行右侧，同页面缩放
+                value = stringResource(
                     R.string.settings_resolution_detail,
                     state.resolutionPreset.resolution.width,
                     state.resolutionPreset.resolution.height,
@@ -559,7 +552,7 @@ private fun OtherSection(
                 MaaSettingSwitchRow(
                     title = stringResource(R.string.settings_pip_on_home),
                     icon = MaaIcons.PictureInPicture,
-                    description = stringResource(R.string.settings_pip_on_home_desc),
+                    info = stringResource(R.string.settings_pip_on_home_desc),
                     checked = settingsState.pipOnHome,
                     onCheckedChange = { onSettingsIntent(SettingsIntent.SetPipOnHome(it)) },
                 )
@@ -570,7 +563,7 @@ private fun OtherSection(
                 MaaSettingSwitchRow(
                     title = stringResource(R.string.settings_telemetry),
                     icon = MaaIcons.Telemetry,
-                    description = stringResource(R.string.settings_telemetry_desc),
+                    info = stringResource(R.string.settings_telemetry_desc),
                     checked = state.telemetryEnabled,
                     onCheckedChange = { onIntent(SessionIntent.SetTelemetryEnabled(it)) },
                 )
@@ -787,7 +780,7 @@ private fun UiScaleSetting(stored: Int, onCommit: (Int) -> Unit) {
     MaaSettingRow(
         title = stringResource(R.string.settings_ui_scale),
         icon = MaaIcons.FontSize,
-        description = stringResource(R.string.settings_ui_scale_desc),
+        info = stringResource(R.string.settings_ui_scale_desc),
         value = valueText,
         footer = {
             Column(verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm)) {

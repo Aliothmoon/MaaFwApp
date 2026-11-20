@@ -125,6 +125,7 @@
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
     <string name="settings_theme_pure_dark">纯黑</string>
+    <string name="settings_row_info">说明</string>
     <string name="settings_ui_scale">页面缩放</string>
     <string name="settings_ui_scale_desc">调整界面整体大小（含间距）。自动档按屏幕宽度推荐，系统字体大小在此之上另外生效。主界面与悬浮窗都跟随此设置</string>
     <string name="settings_ui_scale_auto_value">自动 · %1$d%%</string>
@@ -146,7 +147,6 @@
     <string name="settings_theme_style_default">默认</string>
     <string name="settings_theme_style_semi">Semi Design</string>
     <string name="settings_language">语言</string>
-    <string name="settings_language_hint">切换语言会重新加载项目，运行期间不可切换</string>
     <string name="settings_run_mode">运行模式</string>
     <string name="settings_run_mode_background">后台模式</string>
     <string name="settings_run_mode_foreground">前台模式</string>

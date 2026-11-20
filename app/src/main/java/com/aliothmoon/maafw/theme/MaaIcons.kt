@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.Checklist
@@ -158,6 +159,10 @@ object MaaIcons {
 
     val Info: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.info_circle, Icons.Outlined.Info)
+
+    /** 设置行标题旁的说明展开钮（对齐 MaaMeow 的 SettingInfoToggle） */
+    val Help: ImageVector
+        @Composable get() = themed(SemiIconRes.Mono.help_circle_stroked, Icons.AutoMirrored.Outlined.HelpOutline)
 
     val Skipped: ImageVector
         @Composable get() = themed(SemiIconRes.Mono.minus_circle, Icons.Filled.DoNotDisturbOn)

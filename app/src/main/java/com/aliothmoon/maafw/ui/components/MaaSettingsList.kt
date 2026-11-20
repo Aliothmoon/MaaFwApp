@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -28,17 +29,20 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.Dp
+import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.theme.MaaDesignTokens
 import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
@@ -171,8 +175,10 @@ fun MaaSettingIcon(icon: ImageVector, enabled: Boolean = true) {
 }
 
 /**
- * 设置列表的一行：图标 + 标题（+ 说明）+ 行尾，[footer] 挂在下面、与标题左对齐（chip、滑块、输入框）
+ * 设置列表的一行：图标 + 标题（+ 可选说明）+ 行尾，[footer] 挂在下面、与标题左对齐（chip、滑块、输入框）
  *
+ * [info] 默认收起，标题旁给一个问号钮，点开在整项下方展开（对齐 MaaMeow 的 SettingRow）；
+ * [description] 用于必须常显的短副标题，设置主页尽量少用。
  * [onClick] 非空时整行可点并铺满卡片两边；[toggled] 非空时读屏按一个开关报。
  * [value] 是当前值，只跟标题同一行：放进 [trailing] 会贴在多行说明右边，把说明挤成窄条
  */
@@ -182,6 +188,7 @@ fun MaaSettingRow(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     description: String? = null,
+    info: String? = null,
     value: String? = null,
     enabled: Boolean = true,
     toggled: Boolean? = null,
@@ -192,6 +199,7 @@ fun MaaSettingRow(
     val titleColor = MaterialTheme.colorScheme.onSurface
     val descriptionColor = MaterialTheme.colorScheme.onSurfaceVariant
     val alpha = if (enabled) 1f else MaaDesignTokens.Alpha.disabledContent
+    var infoExpanded by rememberSaveable { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -221,12 +229,24 @@ fun MaaSettingRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                 ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = titleColor.copy(alpha = alpha),
+                    Row(
                         modifier = Modifier.weight(1f),
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = titleColor.copy(alpha = alpha),
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (info != null) {
+                            SettingInfoToggle(
+                                expanded = infoExpanded,
+                                onToggle = { infoExpanded = !infoExpanded },
+                            )
+                        }
+                    }
                     value?.let {
                         Text(
                             text = it,
@@ -254,6 +274,46 @@ fun MaaSettingRow(
                 it()
             }
         }
+        if (info != null) {
+            AnimatedVisibility(
+                visible = infoExpanded,
+                enter = CardExpand,
+                exit = CardCollapse,
+            ) {
+                Text(
+                    text = info,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = descriptionColor,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (icon != null) Modifier.padding(start = TextInset) else Modifier)
+                        .padding(bottom = MaaDesignTokens.Spacing.md),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingInfoToggle(expanded: Boolean, onToggle: () -> Unit) {
+    val label = stringResource(R.string.settings_row_info)
+    Box(
+        modifier = Modifier
+            .size(MaaDesignTokens.IconContainer.sm)
+            .clip(CircleShape)
+            .clickable(onClickLabel = label, onClick = onToggle),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = MaaIcons.Help,
+            contentDescription = label,
+            tint = if (expanded) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size(MaaDesignTokens.IconSize.sm),
+        )
     }
 }
 
@@ -266,6 +326,7 @@ fun MaaSettingSwitchRow(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     description: String? = null,
+    info: String? = null,
     enabled: Boolean = true,
     footer: (@Composable () -> Unit)? = null,
 ) {
@@ -274,6 +335,7 @@ fun MaaSettingSwitchRow(
         modifier = modifier,
         icon = icon,
         description = description,
+        info = info,
         enabled = enabled,
         toggled = checked,
         onClick = { onCheckedChange(!checked) },
@@ -290,6 +352,7 @@ fun MaaSettingNavRow(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     description: String? = null,
+    info: String? = null,
     external: Boolean = false,
     enabled: Boolean = true,
 ) {
@@ -298,6 +361,7 @@ fun MaaSettingNavRow(
         modifier = modifier,
         icon = icon,
         description = description,
+        info = info,
         enabled = enabled,
         onClick = onClick,
         trailing = {
