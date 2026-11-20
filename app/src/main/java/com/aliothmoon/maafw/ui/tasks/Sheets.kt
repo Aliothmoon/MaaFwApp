@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +45,7 @@ import com.aliothmoon.maafw.domain.TaskCatalogGroup
 import com.aliothmoon.maafw.domain.TaskCatalogItem
 import com.aliothmoon.maafw.i18n.asString
 import com.aliothmoon.maafw.theme.MaaDesignTokens
+import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
 import com.aliothmoon.maafw.theme.MaaTone
 import com.aliothmoon.maafw.ui.components.MaaButton
@@ -53,7 +56,6 @@ import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
-import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSkipReason
@@ -342,24 +344,46 @@ fun TaskOptionSheet(
     /** 「从此处运行」：只跑这一条及其后的任务；不可起跑或这条没勾选时置灰 */
     canRunFromHere: Boolean,
     onRunFromHere: () -> Unit,
+    /** 前台模式灰显但仍可点，对齐启停条：点了由 SessionViewModel 拦下并给提示 */
+    foregroundBlocked: Boolean = false,
 ) {
     MaaModalSheet(onDismiss = onDismiss) { sheetModifier ->
-        Column(
-            modifier = sheetModifier.padding(bottom = MaaDesignTokens.Spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-        ) {
+        Column(modifier = sheetModifier) {
             TaskOptionContent(
                 task = task,
                 locked = locked,
                 onSetOption = onSetOption,
                 onClose = onDismiss,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
             )
-            MaaOutlinedButton(
+            HorizontalDivider(
+                thickness = MaaDesignTokens.Separator.thickness,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            MaaButton(
                 onClick = onRunFromHere,
                 enabled = canRunFromHere,
-                modifier = Modifier.fillMaxWidth(),
+                colors = if (foregroundBlocked) {
+                    ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    )
+                } else {
+                    ButtonDefaults.buttonColors()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        top = MaaDesignTokens.Spacing.md,
+                        bottom = MaaDesignTokens.Spacing.lg,
+                    ),
             ) {
+                Icon(
+                    imageVector = MaaIcons.Play,
+                    contentDescription = null,
+                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                )
+                Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
                 Text(stringResource(R.string.tasks_run_from_here))
             }
         }
@@ -387,7 +411,8 @@ internal fun TaskOptionContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = MaaDesignTokens.Spacing.md),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
             OptionEditorList(

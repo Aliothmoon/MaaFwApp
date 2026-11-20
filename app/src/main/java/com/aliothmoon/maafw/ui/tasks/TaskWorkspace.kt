@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
+import com.aliothmoon.maafw.domain.RunMode
 import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.session.SessionIntent
@@ -149,6 +150,7 @@ internal fun TaskWorkspace(
             onDismiss = { editingTaskInstanceId = null },
             // 没勾选的不当起点：起点顺延到下一条已勾选的，用户点的和跑的就对不上了
             canRunFromHere = state.canStart && !locked && editingTask.effectiveEnabled,
+            foregroundBlocked = state.runMode == RunMode.FOREGROUND,
             onRunFromHere = {
                 editingTaskInstanceId = null
                 onIntent(SessionIntent.Start(startFromInstanceId = editingTask.instanceId))
