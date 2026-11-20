@@ -19,6 +19,8 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 private val DATE_TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm")
+private val DATE_ONLY = DateTimeFormatter.ofPattern("MM-dd")
+private val FULL_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 private val TIME_ONLY = DateTimeFormatter.ofPattern("HH:mm")
 
 /** 规则各段之间的间隔，比单个空格宽才分得开 */
@@ -32,6 +34,17 @@ fun formatTriggerTime(epochMs: Long): String {
     val zoned = Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault())
     val formatter = if (zoned.toLocalDate() == LocalDate.now(ZoneId.systemDefault())) TIME_ONLY else DATE_TIME
     return zoned.format(formatter)
+}
+
+/** 已按日期分组时，行内只留 HH:mm */
+fun formatTriggerClock(epochMs: Long): String =
+    Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()).format(TIME_ONLY)
+
+/** 触发日志的日期分组标题：今天 / 昨天 / MM-dd（跨年带年份） */
+fun triggerLogDateHeaderUiText(date: LocalDate, today: LocalDate = LocalDate.now(ZoneId.systemDefault())): UiText = when (date) {
+    today -> uiTextOf(R.string.schedule_log_date_today)
+    today.minusDays(1) -> uiTextOf(R.string.schedule_log_date_yesterday)
+    else -> uiTextFormatted(date.format(if (date.year == today.year) DATE_ONLY else FULL_DATE))
 }
 
 /** 星期名取当前 locale 的短名（周一 / Mon），不自己维护译名表 */
@@ -90,19 +103,33 @@ fun TriggerFailureReason.asUiText(): UiText = when (this) {
 }
 
 /**
- * 一次触发的时刻行：实际时刻，延迟超过阈值才补上延迟量
- * 延迟就是 Doze 与厂商省电策略造成的，几秒的抖动没有展示价值
+ * 延迟超过阈值才生成「延迟 …」；延迟就是 Doze 与厂商省电策略造成的，几秒的抖动没有展示价值
  */
+fun triggerLogDelayUiText(actualAt: Long, scheduledAt: Long): UiText? {
+    val delaySeconds = ((actualAt - scheduledAt) / 1000L).coerceAtLeast(0L)
+    if (scheduledAt <= 0L || delaySeconds < DELAY_THRESHOLD_SECONDS) return null
+    val totalMinutes = (delaySeconds / 60L).toInt()
+    val duration = when {
+        totalMinutes >= 60 -> {
+            val hours = totalMinutes / 60
+            val minutes = totalMinutes % 60
+            if (minutes == 0) {
+                uiTextOf(R.string.schedule_log_delay_hours_exact, hours)
+            } else {
+                uiTextOf(R.string.schedule_log_delay_hours, hours, minutes)
+            }
+        }
+        totalMinutes >= 1 -> uiTextOf(R.string.schedule_log_delay_minutes, totalMinutes)
+        else -> uiTextOf(R.string.schedule_log_delay_seconds, delaySeconds.toInt())
+    }
+    return uiTextOf(R.string.schedule_log_delay, duration)
+}
+
+/** 一次触发的时刻行：实际时刻 + 可选延迟量 */
 fun triggerLogTimeUiText(actualAt: Long, scheduledAt: Long): UiText {
     val actual = uiTextFormatted(formatTriggerTime(actualAt))
-    val delaySeconds = ((actualAt - scheduledAt) / 1000L).coerceAtLeast(0L)
-    if (scheduledAt <= 0L || delaySeconds < DELAY_THRESHOLD_SECONDS) return actual
-    val delay = if (delaySeconds >= 60L) {
-        uiTextOf(R.string.schedule_interval_minutes, (delaySeconds / 60L).toInt())
-    } else {
-        uiTextFormatted("${delaySeconds}s")
-    }
-    return uiTextJoin(actual, uiTextOf(R.string.schedule_log_delay, delay), separator = " · ")
+    val delay = triggerLogDelayUiText(actualAt, scheduledAt) ?: return actual
+    return uiTextJoin(actual, delay, separator = " · ")
 }
 
 /** 规则完整才会被闹钟接受；UI 用它决定要不要提示「保存后不会触发」 */

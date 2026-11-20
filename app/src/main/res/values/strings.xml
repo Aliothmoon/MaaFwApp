@@ -370,8 +370,17 @@
 
     <string name="schedule_log_title">触发日志</string>
     <string name="schedule_log_empty">暂无触发记录</string>
+    <string name="schedule_log_empty_hint">定时规则触发后的记录会显示在这里</string>
     <string name="schedule_log_clear">清空</string>
+    <string name="schedule_log_clear_title">清空触发日志</string>
+    <string name="schedule_log_clear_message">删除全部定时触发记录？此操作不可撤销</string>
+    <string name="schedule_log_date_today">今天</string>
+    <string name="schedule_log_date_yesterday">昨天</string>
     <string name="schedule_log_delay">延迟 %1$s</string>
+    <string name="schedule_log_delay_seconds">%1$d 秒</string>
+    <string name="schedule_log_delay_minutes">%1$d 分钟</string>
+    <string name="schedule_log_delay_hours">%1$d 小时 %2$d 分</string>
+    <string name="schedule_log_delay_hours_exact">%1$d 小时</string>
     <string name="schedule_result_triggered">已触发</string>
     <string name="schedule_result_started">已开始执行</string>
     <string name="schedule_result_duplicate">重复触发，已跳过</string>

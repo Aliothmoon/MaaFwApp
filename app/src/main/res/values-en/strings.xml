@@ -378,8 +378,17 @@
 
     <string name="schedule_log_title">Trigger log</string>
     <string name="schedule_log_empty">No triggers</string>
+    <string name="schedule_log_empty_hint">Records of scheduled rule triggers will appear here</string>
     <string name="schedule_log_clear">Clear</string>
+    <string name="schedule_log_clear_title">Clear trigger log</string>
+    <string name="schedule_log_clear_message">Delete all scheduled trigger records? This cannot be undone</string>
+    <string name="schedule_log_date_today">Today</string>
+    <string name="schedule_log_date_yesterday">Yesterday</string>
     <string name="schedule_log_delay">%1$s late</string>
+    <string name="schedule_log_delay_seconds">%1$ds</string>
+    <string name="schedule_log_delay_minutes">%1$d min</string>
+    <string name="schedule_log_delay_hours">%1$dh %2$dm</string>
+    <string name="schedule_log_delay_hours_exact">%1$dh</string>
     <string name="schedule_result_triggered">Triggered</string>
     <string name="schedule_result_started">Run started</string>
     <string name="schedule_result_duplicate">Duplicate trigger, skipped</string>
