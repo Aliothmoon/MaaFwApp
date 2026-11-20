@@ -24,7 +24,6 @@ import androidx.compose.ui.res.stringResource
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunMode
-import com.aliothmoon.maafw.project.ProjectState
 import com.aliothmoon.maafw.runner.RunLogSnapshot
 import com.aliothmoon.maafw.session.SessionIntent
 import com.aliothmoon.maafw.session.SessionUiState
@@ -161,7 +160,7 @@ internal fun TaskWorkspace(
     if (showConfigSheet) {
         ConfigurationSheet(
             state = state,
-            templates = (state.projectState as? ProjectState.Ready)?.definition?.templates.orEmpty(),
+            templates = state.templates,
             locked = locked,
             onSelect = { id ->
                 showConfigSheet = false

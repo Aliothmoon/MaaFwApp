@@ -411,6 +411,7 @@ class SessionViewModel(
             settingSections = session.settingSections,
             resourceOptions = session.resourceOptions,
             controllerOptions = session.controllerOptions,
+            templates = session.templates,
             environment = session.environment,
             sessionDiagnostics = session.diagnostics,
             previewResolution = settings.resolutionPreset.resolution,
@@ -425,6 +426,12 @@ class SessionViewModel(
 
             is SessionIntent.CreateFromTemplate -> guarded {
                 val definition = (projectRepository.state.value as? ProjectState.Ready)?.definition
+                val config = configurationStore.data.first()
+                val controller = definition?.controller(config.activeControllerName)
+                val template = definition?.templates?.firstOrNull { it.name == intent.templateName }
+                if (template != null && controller != null && !template.runsOn(controller)) {
+                    return@guarded
+                }
                 val created = definition?.let {
                     ConfigurationResolver.createFromTemplate(
                         definition = it,

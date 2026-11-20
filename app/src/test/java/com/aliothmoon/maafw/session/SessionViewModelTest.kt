@@ -1078,4 +1078,53 @@ class SessionViewModelTest {
         assertFalse(vm.uiState.value.canStart)
         assertTrue(vm.uiState.value.activeConfiguration == null)
     }
+
+    @Test
+    fun `CreateFromTemplate rejects preset incompatible with current controller and allows after switching`() =
+        runTest(mainDispatcher) {
+            val multiControllerDef = definition.copy(
+                controllers = listOf(
+                    ControllerDefinition(name = "ADB", type = "Adb", label = "本地"),
+                    ControllerDefinition(name = "CloudADB", type = "Adb", label = "云游戏"),
+                ),
+                templates = listOf(
+                    com.aliothmoon.maafw.domain.ConfigurationTemplate(
+                        name = "CloudPreset",
+                        label = "云端预设",
+                        description = null,
+                        tasks = listOf(com.aliothmoon.maafw.domain.TemplateTask("启动游戏", true, emptyMap())),
+                        controllers = listOf("CloudADB"),
+                    ),
+                    com.aliothmoon.maafw.domain.ConfigurationTemplate(
+                        name = "PcPreset",
+                        label = "桌面预设",
+                        description = null,
+                        tasks = emptyList(),
+                        controllers = listOf("Win32"),
+                    ),
+                ),
+            )
+            val store = InMemoryUserConfigurationStore(
+                UserConfiguration(initialized = true, activeResourceName = "官服"),
+            )
+            val project = FakeProjectRepository(ProjectState.Ready(multiControllerDef, emptyList()))
+            val (vm, _, _) = createVm(store = store, project = project)
+            backgroundScope.launch { vm.uiState.collect {} }
+            advanceUntilIdle()
+
+            // Win32 预设被隐藏；CloudADB 预设当前不可用且阻止创建
+            assertEquals(listOf("CloudPreset"), vm.uiState.value.templates.map { it.template.name })
+            assertFalse(vm.uiState.value.templates.single().applicable)
+            vm.onIntent(SessionIntent.CreateFromTemplate("CloudPreset"))
+            advanceUntilIdle()
+            assertTrue(store.current.configurations.isEmpty())
+
+            // 切到 CloudADB 后可用并可创建
+            vm.onIntent(SessionIntent.SelectController("CloudADB"))
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.templates.single().applicable)
+            vm.onIntent(SessionIntent.CreateFromTemplate("CloudPreset"))
+            advanceUntilIdle()
+            assertEquals(listOf("云端预设"), store.current.configurations.map { it.name })
+        }
 }

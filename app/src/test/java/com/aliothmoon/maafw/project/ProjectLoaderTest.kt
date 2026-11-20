@@ -868,4 +868,47 @@ class ProjectLoaderAgentTest {
             },
         )
     }
+
+    @Test
+    fun `解析 preset 与 resource 的 controller 过滤字段（根与 import 分片）`() {
+        val ready = load(
+            mapOf(
+                "interface.json" to piRoot(
+                    "tasks/presets.json",
+                    body = """
+                        "controller":[
+                            {"name":"Android","type":"Adb"},
+                            {"name":"Desktop","type":"Win32"}
+                        ],
+                        "resource":[
+                            {"name":"shared","path":["res/base"]},
+                            {"name":"android_only","path":["res/android"],"controller":["Android"]},
+                            {"name":"desktop_only","path":["res/win"],"controller":["Desktop"]}
+                        ],
+                        "task":[{"name":"T1","entry":"E1"}],
+                        "preset":[
+                            {"name":"all","task":[{"name":"T1"}]},
+                            {"name":"root_android","controller":["Android"],"task":[{"name":"T1"}]}
+                        ]
+                    """.trimIndent(),
+                ),
+                "tasks/presets.json" to """
+                    {
+                        "preset": [
+                            {"name":"import_desktop","controller":["Desktop"],"task":[{"name":"T1"}]}
+                        ]
+                    }
+                """.trimIndent(),
+            ),
+        )
+        val resources = ready.definition.resources.associateBy { it.name }
+        assertEquals(emptyList<String>(), resources.getValue("shared").controllers)
+        assertEquals(listOf("Android"), resources.getValue("android_only").controllers)
+        assertEquals(listOf("Desktop"), resources.getValue("desktop_only").controllers)
+
+        val templates = ready.definition.templates.associateBy { it.name }
+        assertEquals(emptyList<String>(), templates.getValue("all").controllers)
+        assertEquals(listOf("Android"), templates.getValue("root_android").controllers)
+        assertEquals(listOf("Desktop"), templates.getValue("import_desktop").controllers)
+    }
 }

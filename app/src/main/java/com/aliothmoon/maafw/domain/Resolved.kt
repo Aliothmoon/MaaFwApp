@@ -17,8 +17,17 @@ data class ResolvedProjectSession(
     val resourceOptions: List<OptionEditorState> = emptyList(),
     /** 当前选中 controller 的 `option[]`；同上，按 controller name 分桶 */
     val controllerOptions: List<OptionEditorState> = emptyList(),
+    /** Android 上至少有一个 Adb controller 支持的 PI preset 投影，按声明顺序 */
+    val templates: List<ResolvedConfigurationTemplate> = emptyList(),
     val environment: ResolvedEnvironment,
     val diagnostics: List<Diagnostic>,
+)
+
+/** PI preset 在当前 controller 下的投影；所有 Adb 都不支持的 preset 不进入列表 */
+data class ResolvedConfigurationTemplate(
+    val template: ConfigurationTemplate,
+    val applicable: Boolean = true,
+    val unavailableReason: UiText? = null,
 )
 
 data class ResolvedEnvironment(

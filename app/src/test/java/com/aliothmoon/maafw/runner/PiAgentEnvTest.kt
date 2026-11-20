@@ -27,6 +27,7 @@ class PiAgentEnvTest {
         translations: Map<String, String> = emptyMap(),
         clientVersion: String? = "abc1234",
         clientLanguage: String? = "zh-CN",
+        userDataDir: String? = "/storage/emulated/0/Android/data/com.aliothmoon.maafw/files/pi",
     ) = PiAgentEnv.build(
         projectVersion = projectVersion,
         controller = controller,
@@ -34,16 +35,21 @@ class PiAgentEnvTest {
         translations = translations,
         clientVersion = clientVersion,
         clientLanguage = clientLanguage,
+        userDataDir = userDataDir,
     )
 
     @Test
-    fun `按协议注入七项，MAAFW 版本留给特权进程侧`() {
+    fun `按协议注入八项，MAAFW 版本留给特权进程侧`() {
         val env = build()
-        assertEquals("v2.5.0", env["PI_INTERFACE_VERSION"])
+        assertEquals("v2.11.0", env["PI_INTERFACE_VERSION"])
         assertEquals("MaaFwApp", env["PI_CLIENT_NAME"])
         assertEquals("abc1234", env["PI_CLIENT_VERSION"])
         assertEquals("zh-CN", env["PI_CLIENT_LANGUAGE"])
         assertEquals("v0.1.0", env["PI_VERSION"])
+        assertEquals(
+            "/storage/emulated/0/Android/data/com.aliothmoon.maafw/files/pi",
+            env["PI_USER_DATA_DIR"],
+        )
         assertTrue(env.containsKey("PI_CONTROLLER"))
         assertTrue(env.containsKey("PI_RESOURCE"))
         assertFalse("MaaVersion 只有特权进程问得到", env.containsKey("PI_CLIENT_MAAFW_VERSION"))
@@ -88,13 +94,15 @@ class PiAgentEnvTest {
             resource = ResourceDefinition("官服", listOf("./resource/base")),
             clientVersion = null,
             clientLanguage = "",
+            userDataDir = "   ",
         )
         assertFalse(env.containsKey("PI_VERSION"))
         assertFalse(env.containsKey("PI_CLIENT_VERSION"))
         assertFalse(env.containsKey("PI_CLIENT_LANGUAGE"))
+        assertFalse(env.containsKey("PI_USER_DATA_DIR"))
         assertFalse("PI 没声明 controller 时不该硬拼一条", env.containsKey("PI_CONTROLLER"))
         assertFalse(env.containsKey("PI_RESOURCE"))
         // 常量项与是否有 PI 数据无关
-        assertEquals("v2.5.0", env["PI_INTERFACE_VERSION"])
+        assertEquals("v2.11.0", env["PI_INTERFACE_VERSION"])
     }
 }

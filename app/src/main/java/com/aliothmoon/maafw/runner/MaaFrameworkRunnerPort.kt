@@ -463,7 +463,12 @@ class MaaFrameworkRunnerPort(
             agents = plan.agents.map { AgentPayload(it.childExec, it.childArgs) },
             apkPath = apkPath,
             nativeLibraryDir = nativeLibraryDir,
-            piEnv = plan.piEnv,
+            // 便携式布局下 PI_USER_DATA_DIR 即 agent 工作目录（PI 解包根）；plan 未显式指定时在此补齐
+            piEnv = if (plan.agents.isEmpty()) {
+                plan.piEnv
+            } else {
+                mapOf(PiAgentEnv.USER_DATA_DIR_KEY to piRoot.absolutePath) + plan.piEnv
+            },
         )
         if (!service.startRun(runPlanWireJson.encodeToString(payload))) {
             return uiTextOf(R.string.msg_reject_service_rejected)

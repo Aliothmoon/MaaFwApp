@@ -44,6 +44,10 @@ data class ProjectDefinition(
     fun controller(name: String?): ControllerDefinition =
         controllers.firstOrNull { it.name == name } ?: controllers.first()
 
+    /** 当前 controller 下可用的 resource 列表，按 PI 声明顺序 */
+    fun resourcesFor(controller: ControllerDefinition): List<ResourceDefinition> =
+        resources.filter { it.runsOn(controller) }
+
     private val taskIndex: Map<String, TaskDefinition> by lazy { tasks.associateBy { it.name } }
 }
 
@@ -113,7 +117,12 @@ data class ResourceDefinition(
     val icon: String? = null,
     /** PI v2.3.0 `resource[].option`：当前选中这份时参与每个任务的 override */
     val optionNames: List<String> = emptyList(),
-)
+    /** PI `resource[].controller`；空 = 全部 controller 适用 */
+    val controllers: List<String> = emptyList(),
+) {
+    /** 协议里 resource 的 `controller[]` 按 controller 名比，不按 type 比 */
+    fun runsOn(controller: ControllerDefinition): Boolean = controllers.isEmpty() || controller.name in controllers
+}
 
 data class AgentDefinition(
     val childExec: String,
@@ -315,9 +324,14 @@ data class ConfigurationTemplate(
     val description: String?,
     val tasks: List<TemplateTask>,
     val icon: String? = null,
+    /** PI v2.10.4 `preset.controller[]`；空 = 全部 controller 适用 */
+    val controllers: List<String> = emptyList(),
 ) {
     /** 同名任务保留先声明的一条；resolver 与 UI 必须一致 */
     val distinctTasks: List<TemplateTask> get() = tasks.distinctBy { it.taskName }
+
+    /** 协议里 preset 的 `controller[]` 与 task 同语义：按 controller 名比，不按 type 比 */
+    fun runsOn(controller: ControllerDefinition): Boolean = controllers.isEmpty() || controller.name in controllers
 }
 
 data class TemplateTask(

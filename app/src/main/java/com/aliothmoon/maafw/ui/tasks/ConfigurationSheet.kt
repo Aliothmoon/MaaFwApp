@@ -55,6 +55,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.ConfigurationTemplate
+import com.aliothmoon.maafw.domain.ResolvedConfigurationTemplate
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RunConfigurationId
 import com.aliothmoon.maafw.domain.TaskCatalogGroup
@@ -106,7 +107,7 @@ private sealed interface ConfigSheetPage {
 @Composable
 internal fun ConfigurationSheet(
     state: SessionUiState,
-    templates: List<ConfigurationTemplate>,
+    templates: List<ResolvedConfigurationTemplate>,
     locked: Boolean,
     onSelect: (RunConfigurationId) -> Unit,
     onDuplicate: (RunConfigurationId, String) -> Unit,
@@ -179,19 +180,19 @@ internal fun ConfigurationSheet(
                 )
 
                 is ConfigSheetPage.TemplatePreview -> {
-                    val template = templates.firstOrNull { it.name == current.templateName }
-                    if (template == null) {
+                    val entry = templates.firstOrNull { it.template.name == current.templateName && it.applicable }
+                    if (entry == null) {
                         LaunchedEffect(current) { page = ConfigSheetPage.Home }
                     } else {
                         TemplatePreviewPage(
-                            template = template,
+                            template = entry.template,
                             catalog = state.taskCatalog,
                             existingNames = existingNames,
                             writeEnabled = !locked,
                             onBack = { page = ConfigSheetPage.Home },
                             onClose = onDismiss,
                             onCreate = { name, taskNames ->
-                                onCreateFromTemplate(template.name, name, taskNames)
+                                onCreateFromTemplate(entry.template.name, name, taskNames)
                             },
                         )
                     }
@@ -204,7 +205,7 @@ internal fun ConfigurationSheet(
 @Composable
 private fun ConfigSheetHomePage(
     state: SessionUiState,
-    templates: List<ConfigurationTemplate>,
+    templates: List<ResolvedConfigurationTemplate>,
     locked: Boolean,
     tab: Int,
     onTabChange: (Int) -> Unit,
@@ -273,11 +274,11 @@ private fun ConfigSheetHomePage(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
                     ) {
-                        items(templates, key = { "template-${it.name}" }) { template ->
+                        items(templates, key = { "template-${it.template.name}" }) { entry ->
                             TemplateCard(
-                                template = template,
+                                entry = entry,
                                 writeEnabled = !locked,
-                                onClick = { onOpenTemplate(template.name) },
+                                onClick = { onOpenTemplate(entry.template.name) },
                             )
                         }
                     }
@@ -609,14 +610,16 @@ private fun ConfigRowCard(
 
 @Composable
 private fun TemplateCard(
-    template: ConfigurationTemplate,
+    entry: ResolvedConfigurationTemplate,
     writeEnabled: Boolean,
     onClick: () -> Unit,
 ) {
+    val template = entry.template
+    val enabled = writeEnabled && entry.applicable
     MaaCard(
         modifier = Modifier
-            .maaClickable(enabled = writeEnabled, shape = MaterialTheme.shapes.medium, onClick = onClick)
-            .alpha(if (writeEnabled) 1f else MaaDesignTokens.Alpha.disabled),
+            .maaClickable(enabled = enabled, shape = MaterialTheme.shapes.medium, onClick = onClick)
+            .alpha(if (enabled) 1f else MaaDesignTokens.Alpha.disabled),
         contentPadding = PaddingValues(MaaDesignTokens.Spacing.md),
     ) {
         Row(
@@ -642,6 +645,9 @@ private fun TemplateCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        entry.unavailableReason?.let { reason ->
+            MaaSkipReason(reason.asString())
         }
         template.description?.takeIf { it.isNotBlank() }?.let {
             MaaDescriptionPanel {

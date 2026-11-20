@@ -152,6 +152,7 @@ class ProjectLoader(
                         it.raw,
                         it.icon,
                         it.optionNames.filter { name -> name in state.options },
+                        it.controllers,
                     )
                 }
                 .takeIf { it.isNotEmpty() }

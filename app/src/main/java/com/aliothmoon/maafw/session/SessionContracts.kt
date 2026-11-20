@@ -6,6 +6,7 @@ import com.aliothmoon.maafw.domain.Diagnostic
 import com.aliothmoon.maafw.domain.OptionEditorState
 import com.aliothmoon.maafw.domain.OptionSectionState
 import com.aliothmoon.maafw.domain.OptionValue
+import com.aliothmoon.maafw.domain.ResolvedConfigurationTemplate
 import com.aliothmoon.maafw.domain.ResolvedEnvironment
 import com.aliothmoon.maafw.domain.ResolvedRunConfiguration
 import com.aliothmoon.maafw.domain.RemoteBackend
@@ -50,6 +51,8 @@ data class SessionUiState(
     val resourceOptions: List<OptionEditorState> = emptyList(),
     /** 空 = 当前 controller 没有 option[]，设置页不出「控制器设置」 */
     val controllerOptions: List<OptionEditorState> = emptyList(),
+    /** Android 上支持的 PI preset 投影（含当前 controller 适用性）；非 Adb 专属预设已过滤 */
+    val templates: List<ResolvedConfigurationTemplate> = emptyList(),
     val projectMetadata: ProjectMetadata = ProjectMetadata(),
     /** PI 声明了 telemetry；没声明时设置页不出这一行 */
     val telemetryDeclared: Boolean = false,

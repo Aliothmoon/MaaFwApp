@@ -48,17 +48,19 @@ object RunPlanBuilder {
         configurationId: RunConfigurationId? = null,
         clientVersion: String? = null,
         clientLanguage: String? = null,
+        userDataDir: String? = null,
         startFromInstanceId: String? = null,
     ): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
-        val resource = definition.resources.firstOrNull { it.name == config.activeResourceName }
-            ?: definition.resources.firstOrNull()
+        val controller = definition.controller(config.activeControllerName)
+        val availableResources = definition.resourcesFor(controller)
+        val resource = availableResources.firstOrNull { it.name == config.activeResourceName }
+            ?: availableResources.firstOrNull()
         if (resource == null) {
             diagnostics += runtimeError("environment", DiagnosticMessages.runtimeNoResource())
             return RunPlanResult.Invalid(diagnostics)
         }
-        val controller = definition.controller(config.activeControllerName)
 
         val runConfiguration = config.configuration(configurationId ?: config.activeConfigurationId)
             ?: return RunPlanResult.NoExecutableTasks
@@ -187,6 +189,7 @@ object RunPlanBuilder {
                         translations = definition.translations,
                         clientVersion = clientVersion,
                         clientLanguage = clientLanguage,
+                        userDataDir = userDataDir,
                     )
                 },
                 skippedTasks = skippedTasks,
