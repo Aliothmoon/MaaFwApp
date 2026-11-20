@@ -1,15 +1,17 @@
 package com.aliothmoon.maafw.remote.internal
 
 import android.os.Build
+import android.os.SystemClock
+import androidx.annotation.VisibleForTesting
 import com.aliothmoon.maafw.constant.AndroidVersions
 import com.aliothmoon.maafw.constant.DefaultDisplayConfig
 import com.aliothmoon.maafw.third.Ln
 import com.aliothmoon.maafw.third.wrappers.DisplayControl
+import com.aliothmoon.maafw.third.wrappers.DisplayManager
+import com.aliothmoon.maafw.third.wrappers.PowerManager
 import com.aliothmoon.maafw.third.wrappers.ServiceManager
 import com.aliothmoon.maafw.third.wrappers.SurfaceControl
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 
 object PowerController {
     private const val TAG = "PowerController"
@@ -19,9 +21,31 @@ object PowerController {
     // 进程被杀后面板由用户唤醒时系统恢复
     private val poweredOff = AtomicBoolean(false)
 
-    private val keepAliveDisplayId = AtomicInteger(DefaultDisplayConfig.DISPLAY_NONE)
-    private val keepAliveRunning = AtomicBoolean(false)
-    private val keepAliveWhile = AtomicReference<() -> Boolean> { false }
+    private val keepAliveLock = Any()
+    private var keepAliveDisplayId = DefaultDisplayConfig.DISPLAY_NONE
+    private var keepAliveThread: Thread? = null
+
+    @VisibleForTesting
+    internal var displayManager: () -> DisplayManager = { ServiceManager.getDisplayManager() }
+
+    @VisibleForTesting
+    internal var powerManager: () -> PowerManager = { ServiceManager.getPowerManager() }
+
+    /** 判不出按醒着处理，宁可点亮 */
+    @VisibleForTesting
+    internal var systemAwake: () -> Boolean = {
+        runCatching { powerManager().isScreenOnOrNull(0) }.getOrNull() ?: true
+    }
+
+    fun hasOwnPowerGroup(displayId: Int): Boolean =
+        runCatching { displayManager().getDisplayGroupId(displayId) }.getOrDefault(-1) > 0
+
+    // 同主屏电源组时预览不续命，避免主屏无法自然息屏
+    internal fun targetKeepAliveDisplay(
+        displayId: Int?,
+        taskKeepAlive: Boolean,
+        previewKeepAlive: Boolean,
+    ): Int? = displayId?.takeIf { taskKeepAlive || (previewKeepAlive && hasOwnPowerGroup(it)) }
 
     fun setDisplayPower(on: Boolean): Boolean {
         poweredOff.set(!on)
@@ -73,41 +97,59 @@ object PowerController {
         return SurfaceControl.setDisplayPowerMode(d, mode)
     }
 
-    /** [isActive] 转 false 即自停；接着排队的下一轮在线程醒来前到达时，换上新的判定继续续 */
-    fun startUserActivityKeepAlive(displayId: Int, isActive: () -> Boolean) {
-        keepAliveWhile.set(isActive)
-        keepAliveDisplayId.set(displayId)
-        if (!keepAliveRunning.compareAndSet(false, true)) return
-        Thread {
-            Ln.i("$TAG: userActivity keep-alive started, displayId=$displayId")
-            while (true) {
-                val id = keepAliveDisplayId.get()
-                if (id == DefaultDisplayConfig.DISPLAY_NONE) break
-                try {
-                    Thread.sleep(USER_ACTIVITY_INTERVAL_MS)
-                } catch (_: InterruptedException) {
-                    break
+    fun startUserActivityKeepAlive(displayId: Int) {
+        synchronized(keepAliveLock) {
+            val prev = keepAliveDisplayId
+            keepAliveDisplayId = displayId
+            if (keepAliveThread != null) {
+                if (prev != displayId && prev != DefaultDisplayConfig.DISPLAY_NONE) {
+                    Ln.i("$TAG: userActivity keep-alive switched displayId=$prev -> $displayId")
                 }
-                val currentId = keepAliveDisplayId.get()
-                if (currentId == DefaultDisplayConfig.DISPLAY_NONE || !keepAliveWhile.get()()) break
-                runCatching { ServiceManager.getPowerManager().userActivity(currentId) }
-                    .onFailure { Ln.e("$TAG: userActivity failed", it) }
+                return
             }
-            keepAliveRunning.set(false)
-            Ln.i("$TAG: userActivity keep-alive stopped")
-        }.apply {
-            name = "power-user-activity-keepalive"
-            isDaemon = true
-        }.start()
+            Ln.i("$TAG: userActivity keep-alive started, displayId=$displayId")
+            keepAliveThread = Thread(::runKeepAlive).apply {
+                name = "power-user-activity-keepalive"
+                isDaemon = true
+                start()
+            }
+        }
     }
 
     fun stopUserActivityKeepAlive() {
-        keepAliveDisplayId.set(DefaultDisplayConfig.DISPLAY_NONE)
+        synchronized(keepAliveLock) { keepAliveDisplayId = DefaultDisplayConfig.DISPLAY_NONE }
     }
 
-    /** 判不出按醒着处理，宁可点亮 */
-    internal var systemAwake: () -> Boolean = {
-        runCatching { ServiceManager.getPowerManager().isScreenOnOrNull(0) }.getOrNull() ?: true
+    // 退出与清零 keepAliveThread 同锁，防停后立刻重启撞上线程收尾
+    private fun nextKeepAliveDisplay(): Int = synchronized(keepAliveLock) {
+        keepAliveDisplayId.also { if (it == DefaultDisplayConfig.DISPLAY_NONE) keepAliveThread = null }
+    }
+
+    private fun runKeepAlive() {
+        while (true) {
+            val id = nextKeepAliveDisplay()
+            if (id == DefaultDisplayConfig.DISPLAY_NONE) break
+            runCatching { powerManager().userActivity(id) }
+                .onFailure { Ln.e("$TAG: userActivity failed", it) }
+            SystemClock.sleep(USER_ACTIVITY_INTERVAL_MS)
+        }
+        Ln.i("$TAG: userActivity keep-alive stopped")
+    }
+
+    // 仅管独立电源组（同主屏组唤醒会点亮主屏）；14+ 可按屏查交互态，16+ 可按屏唤醒
+    fun ensureDisplayAwake(displayId: Int): Boolean =
+        ensureDisplayAwake(displayId, Build.VERSION.SDK_INT)
+
+    @VisibleForTesting
+    internal fun ensureDisplayAwake(displayId: Int, sdkInt: Int): Boolean {
+        if (sdkInt < AndroidVersions.API_34_ANDROID_14 || !hasOwnPowerGroup(displayId)) return true
+        val pm = runCatching { powerManager() }.getOrNull() ?: return true
+        if (pm.isScreenOnOrNull(displayId) != false) return true
+        val woke = sdkInt >= AndroidVersions.API_36_ANDROID_16
+            && pm.wakeUp(displayId)
+            && pm.isScreenOnOrNull(displayId) == true
+        Ln.i("$TAG: display $displayId asleep, wake ${if (woke) "ok" else "failed"}")
+        return woke
     }
 
     fun destroy() {

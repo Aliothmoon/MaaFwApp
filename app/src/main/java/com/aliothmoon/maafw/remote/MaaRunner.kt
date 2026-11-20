@@ -35,7 +35,10 @@ import java.util.concurrent.atomic.AtomicReference
  * native handle 全部只存在于这里；app 侧只经 binder 拿事件与结果
  * 单工作线程串行：MaaFramework 的一个 Tasker 同时只跑一轮
  */
-class MaaRunner(private val agentHost: AgentHost) {
+class MaaRunner(
+    private val agentHost: AgentHost,
+    private val onRunFinished: () -> Unit = {},
+) {
 
     // agent child 由这条线程 fork，PDEATHSIG 认线程：线程被换掉时 child 一并收走，下一轮判不可复用重拉
     private val worker = Executors.newSingleThreadExecutor { r ->
@@ -321,6 +324,8 @@ class MaaRunner(private val agentHost: AgentHost) {
                 running = false
                 stopRequested = false
             }
+            runCatching(onRunFinished)
+                .onFailure { Ln.w("MaaRunner: onRunFinished failed: ${it.message}") }
             // agent 输出按窗口攒批，晚于终局到 app 就进不了这一轮的日志。比如 go-service 在任务开始时
             // 查出分辨率不对，先打警告再 PostStop，警告还攒在批里这一轮就收尾了。同一线程先交，顺序不会乱
             agents.forEach { runCatching { it.session.flushOutput() } }

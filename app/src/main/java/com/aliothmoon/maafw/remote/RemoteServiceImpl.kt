@@ -62,7 +62,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
 
     // 两者互相引用：host 要把 child 的输出交回 runner 的回调。用 lazy 打破初始化顺序——
     // host 的 lambda 到真正有输出时才读 runner，那会儿它早已建好
-    private val runner: MaaRunner by lazy { MaaRunner(agentHost) }
+    private val runnerDelegate = lazy { MaaRunner(agentHost, onRunFinished = ::syncUserActivityKeepAlive) }
+    private val runner: MaaRunner by runnerDelegate
     private val agentHost: ExecAgentHost by lazy {
         ExecAgentHost(
             onOutput = { line, fromStderr -> runner.onAgentLine(line, fromStderr) },
@@ -70,6 +71,10 @@ class RemoteServiceImpl : RemoteService.Stub() {
             crashDir = { logDir?.let { File(it, AppFiles.CRASH_DIR) } },
         )
     }
+
+    // 主屏真实触摸会占满全局 userActivity 节流，预览或任务期间单独给虚拟屏续命
+    private val keepAliveLock = Any()
+    private var previewKeepAlive = false
 
     @Volatile
     private var logDir: String? = null
@@ -255,9 +260,8 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun setVirtualDisplayMode(mode: Int): Boolean = synchronized(DisplayLifecycle.lock) {
         when (mode) {
             DisplayMode.PRIMARY -> {
-                GameFpsMonitor.stop()
-                VirtualDisplayManager.stop()
                 virtualDisplayMode.set(mode)
+                stopBackgroundDisplay()
                 true
             }
 
@@ -271,15 +275,51 @@ class RemoteServiceImpl : RemoteService.Stub() {
         }
     }
 
-    override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) {
+    override fun setVirtualDisplayResolution(width: Int, height: Int, dpi: Int) = synchronized(DisplayLifecycle.lock) {
         VirtualDisplayManager.setResolution(width, height, dpi)
+        syncUserActivityKeepAlive()
     }
 
     override fun startVirtualDisplay(): Int = synchronized(DisplayLifecycle.lock) {
         when (virtualDisplayMode.get()) {
             DisplayMode.PRIMARY -> PrimaryDisplayManager.start()
-            DisplayMode.BACKGROUND -> VirtualDisplayManager.start()
+            DisplayMode.BACKGROUND -> startBackgroundDisplay()
             else -> DefaultDisplayConfig.DISPLAY_NONE
+        }
+    }
+
+    private fun startBackgroundDisplay(): Int {
+        val reused = VirtualDisplayManager.getDisplayId()
+        if (reused != DefaultDisplayConfig.DISPLAY_NONE && !PowerController.ensureDisplayAwake(reused)) {
+            Ln.w("$TAG: display $reused asleep, recreating")
+            stopBackgroundDisplay()
+        }
+        return VirtualDisplayManager.start().also { syncUserActivityKeepAlive() }
+    }
+
+    private fun stopBackgroundDisplay() {
+        GameFpsMonitor.stop()
+        StaleFrameGuard.stop()
+        VirtualDisplayManager.stop()
+        syncUserActivityKeepAlive()
+    }
+
+    private fun backgroundDisplayId(): Int? = VirtualDisplayManager.getDisplayId().takeIf {
+        virtualDisplayMode.get() == DisplayMode.BACKGROUND && it != DefaultDisplayConfig.DISPLAY_NONE
+    }
+
+    private fun isTaskKeepAlive(): Boolean = runnerDelegate.isInitialized() && runner.isRunning()
+
+    private fun syncUserActivityKeepAlive() = synchronized(keepAliveLock) {
+        val target = PowerController.targetKeepAliveDisplay(
+            backgroundDisplayId(),
+            taskKeepAlive = isTaskKeepAlive(),
+            previewKeepAlive = previewKeepAlive,
+        )
+        if (target != null) {
+            PowerController.startUserActivityKeepAlive(target)
+        } else {
+            PowerController.stopUserActivityKeepAlive()
         }
     }
 
@@ -289,10 +329,7 @@ class RemoteServiceImpl : RemoteService.Stub() {
         synchronized(DisplayLifecycle.lock) {
             when (virtualDisplayMode.get()) {
                 DisplayMode.PRIMARY -> PrimaryDisplayManager.stop()
-                DisplayMode.BACKGROUND -> {
-                    PowerController.stopUserActivityKeepAlive()
-                    VirtualDisplayManager.stop()
-                }
+                DisplayMode.BACKGROUND -> stopBackgroundDisplay()
             }
         }
     }
@@ -352,6 +389,11 @@ class RemoteServiceImpl : RemoteService.Stub() {
     override fun setMonitorSurface(surface: Surface?) {
         Ln.i("$TAG: setMonitorSurface(${surface != null})")
         NativeBridgeLib.setPreviewSurface(surface)
+        synchronized(keepAliveLock) {
+            previewKeepAlive = surface != null
+            if (previewKeepAlive) backgroundDisplayId()?.let { PowerController.ensureDisplayAwake(it) }
+            syncUserActivityKeepAlive()
+        }
     }
 
     override fun setTouchCallback(callback: ITouchEventCallback?) {
@@ -392,22 +434,9 @@ class RemoteServiceImpl : RemoteService.Stub() {
         if (started) {
             AppWatchdog.startWatching(runner::isRunning)
             StaleFrameGuard.start(runner::isRunning)
-            startUserActivityKeepAlive()
+            syncUserActivityKeepAlive()
         }
         return started
-    }
-
-    /**
-     * 只在一轮期间续亮：30 及以下 userActivity 不分屏，31–32 的虚拟屏没有独立显示组，
-     * 跑完还续着的话主屏一直不息屏
-     */
-    private fun startUserActivityKeepAlive() {
-        val displayId = VirtualDisplayManager.getDisplayId()
-        if (virtualDisplayMode.get() != DisplayMode.BACKGROUND || displayId == DefaultDisplayConfig.DISPLAY_NONE) {
-            PowerController.stopUserActivityKeepAlive()
-            return
-        }
-        PowerController.startUserActivityKeepAlive(displayId, runner::isRunning)
     }
 
     override fun stopRun(): Boolean {
