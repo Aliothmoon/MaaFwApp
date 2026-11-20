@@ -159,11 +159,11 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
             ) {
                 UpdateSection(settingsState, onSettingsIntent)
+                LogSection(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
                 TaskSettingsGroup(state, onIntent)
                 DisplaySection(state, settingsState, onIntent, onSettingsIntent, onOpenWallpaper)
                 RunDurationSection(settingsState, onSettingsIntent)
                 NotificationSection(onOpenNotificationSettings)
-                LogSection(state, onIntent, onOpenRunLogArchive, onOpenAppLog, onExportLogs)
                 BackupSection(onConfigBackup)
                 PiSection(onIntent)
                 OtherSection(state, settingsState, onIntent, onSettingsIntent)

@@ -33,11 +33,12 @@ object SettingsSections {
     const val OTHER = "settings.other"
     const val ABOUT = "settings.about"
 
-    const val PI_GLOBAL = "pi.global"
-    const val PI_RESOURCE = "pi.resource"
-    const val PI_CONTROLLER = "pi.controller"
+    const val PI_PREFIX = "pi."
+    const val PI_GLOBAL = "${PI_PREFIX}global"
+    const val PI_RESOURCE = "${PI_PREFIX}resource"
+    const val PI_CONTROLLER = "${PI_PREFIX}controller"
 
-    fun projectSection(sectionName: String) = "pi.section.$sectionName"
+    fun projectSection(sectionName: String) = "${PI_PREFIX}section.$sectionName"
 }
 
 /** 手写条目的锚点；值只要全局唯一，契约测试按常量名去源码里找 `SettingSearchTarget(SettingAnchors.X` */
@@ -174,6 +175,11 @@ object SettingSearchIndex {
     val staticEntries: List<SettingSearchEntry> = listOf(
         entry(R.string.settings_update_auto_check, update, SettingAnchors.AUTO_CHECK_UPDATE, keywordsRes = R.string.search_keywords_update),
         entry(R.string.settings_update_auto_download, update, SettingAnchors.AUTO_DOWNLOAD_UPDATE, R.string.settings_update_auto_download_desc),
+        entry(R.string.log_archive_title, log, SettingAnchors.RUN_LOG_ARCHIVE, R.string.settings_log_archive_desc),
+        entry(R.string.app_log_title, log, SettingAnchors.APP_LOG, R.string.settings_log_error_desc),
+        entry(R.string.log_export_title, log, SettingAnchors.EXPORT_LOGS, R.string.settings_log_export_desc),
+        entry(R.string.settings_debug_mode, log, SettingAnchors.DEBUG_MODE, R.string.settings_debug_mode_desc),
+        entry(R.string.settings_save_on_error, log, SettingAnchors.SAVE_ON_ERROR),
         entry(R.string.settings_theme, display, SettingAnchors.THEME, keywordsRes = R.string.search_keywords_theme),
         entry(R.string.settings_theme_style, display, SettingAnchors.THEME_STYLE),
         entry(R.string.settings_ui_scale, display, SettingAnchors.UI_SCALE, R.string.settings_ui_scale_desc, R.string.search_keywords_ui_scale),
@@ -181,11 +187,6 @@ object SettingSearchIndex {
         entry(R.string.settings_language, display, SettingAnchors.LANGUAGE, keywordsRes = R.string.search_keywords_language),
         entry(R.string.settings_duration_limit_enabled, duration, SettingAnchors.DURATION_LIMIT, keywordsRes = R.string.search_keywords_duration),
         entry(R.string.notification_settings_title, notification, SettingAnchors.NOTIFICATION_SETTINGS, keywordsRes = R.string.search_keywords_notification),
-        entry(R.string.log_archive_title, log, SettingAnchors.RUN_LOG_ARCHIVE, R.string.settings_log_archive_desc),
-        entry(R.string.app_log_title, log, SettingAnchors.APP_LOG, R.string.settings_log_error_desc),
-        entry(R.string.log_export_title, log, SettingAnchors.EXPORT_LOGS, R.string.settings_log_export_desc),
-        entry(R.string.settings_debug_mode, log, SettingAnchors.DEBUG_MODE, R.string.settings_debug_mode_desc),
-        entry(R.string.settings_save_on_error, log, SettingAnchors.SAVE_ON_ERROR),
         entry(R.string.config_export_title, backup, SettingAnchors.EXPORT_CONFIG, R.string.config_export_desc, R.string.search_keywords_backup),
         entry(R.string.config_import_title, backup, SettingAnchors.IMPORT_CONFIG, R.string.config_import_desc, R.string.search_keywords_backup),
         entry(R.string.config_import_share_code_title, backup, SettingAnchors.IMPORT_SHARE_CODE, R.string.config_import_share_code_desc, R.string.search_keywords_backup),

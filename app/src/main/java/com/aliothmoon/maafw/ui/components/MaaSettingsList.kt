@@ -3,7 +3,6 @@ package com.aliothmoon.maafw.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -48,9 +48,10 @@ import com.aliothmoon.maafw.theme.MaaIcons
 import com.aliothmoon.maafw.theme.MaaTheme
 
 /*
- * 设置主页的分组列表（移植自 MaaMeow 的 SettingsSection / SettingRow / SettingsDividedColumn）
+ * 设置主页的分组列表（行形态对齐 MaaMeow 的 SettingRow / SettingsDividedColumn）
  *
- * 分区标题落在卡外、点它折叠；卡里一列行，行首单色图标，相邻行之间一道分隔线。
+ * 表头落在卡片内顶部，折叠后收成一张标准 56dp 折叠白卡，与同页「任务设置」及首页折叠卡视觉一致；
+ * 展开时表头下方一道通栏细分隔线，卡内一列行首单色图标的设置项，相邻行之间按标题列对齐分隔。
  * 只给设置主页这种「一页全是设置项」的列表用：内容卡里夹着的零散开关仍走 MaaSwitchRow / MaaNavigationRow
  */
 
@@ -59,59 +60,24 @@ private val TextInset: Dp = MaaDesignTokens.IconSize.rowLeading + MaaDesignToken
 
 /**
  * 展开态只活在本次会话，同 [MaaCard]；[revealToken] 非空且变了就展开一次（设置搜索定位用）
+ *
+ * [info] 挂在表头标题旁的问号钮里，点开在表头下方展开，不触发表头折叠；
+ * [dividerInset] 默认按设置行标题列缩进，无行首固定图标的分组（如「任务设置」）可传 `0.dp`
  */
 @Composable
 fun MaaSettingsSection(
     title: String,
     modifier: Modifier = Modifier,
+    info: String? = null,
     revealToken: Any? = null,
+    dividerInset: Dp = TextInset,
     content: @Composable () -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(true) }
+    var infoExpanded by rememberSaveable { mutableStateOf(false) }
     if (revealToken != null) {
         LaunchedEffect(revealToken) { expanded = true }
     }
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                // 同 MaaCard 的表头：整行标题配缩放或涟漪都太闹
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    role = Role.Button,
-                ) { expanded = !expanded }
-                .padding(
-                    horizontal = MaaDesignTokens.Spacing.xs,
-                    vertical = MaaDesignTokens.Spacing.sm,
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            MaaExpandChevron(expanded)
-        }
-        AnimatedVisibility(visible = expanded, enter = CardExpand, exit = CardCollapse) {
-            MaaSettingsGroupCard(content = content)
-        }
-    }
-}
-
-/** 卡片配方与 [MaaCard] 相同，只是竖直内边距收到 xs：行自己带 56dp 高，再给 16dp 首尾就太空 */
-@Composable
-fun MaaSettingsGroupCard(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val padding = PaddingValues(
-        horizontal = MaaDesignTokens.Card.innerPadding,
-        vertical = MaaDesignTokens.Spacing.xs,
-    )
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -119,7 +85,76 @@ fun MaaSettingsGroupCard(
         border = BorderStroke(MaaDesignTokens.Separator.thickness, MaterialTheme.colorScheme.outline),
     ) {
         CompositionLocalProvider(LocalCardRowBleed provides MaaDesignTokens.Card.innerPadding) {
-            MaaSettingsDividedColumn(modifier = Modifier.padding(padding), content = content)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .maaClickable(pressScale = false) { expanded = !expanded }
+                        .semantics { role = Role.Button }
+                        .heightIn(min = MaaDesignTokens.RowHeight.setting)
+                        .padding(
+                            horizontal = MaaDesignTokens.Card.innerPadding,
+                            vertical = MaaDesignTokens.Spacing.sm,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.xxs),
+                    ) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (info != null) {
+                            SettingInfoToggle(
+                                expanded = infoExpanded,
+                                onToggle = { infoExpanded = !infoExpanded },
+                            )
+                        }
+                    }
+                    MaaExpandChevron(expanded)
+                }
+                if (info != null) {
+                    AnimatedVisibility(visible = infoExpanded, enter = CardExpand, exit = CardCollapse) {
+                        Text(
+                            text = info,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = MaaDesignTokens.Card.innerPadding,
+                                    end = MaaDesignTokens.Card.innerPadding,
+                                    bottom = MaaDesignTokens.Spacing.md,
+                                ),
+                        )
+                    }
+                }
+                AnimatedVisibility(visible = expanded, enter = CardExpand, exit = CardCollapse) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        HorizontalDivider(
+                            thickness = MaaDesignTokens.Separator.thickness,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
+                        // 竖直内边距收到 xs：行自己带 56dp 高，再给 16dp 首尾就太空
+                        MaaSettingsDividedColumn(
+                            modifier = Modifier.padding(
+                                PaddingValues(
+                                    horizontal = MaaDesignTokens.Card.innerPadding,
+                                    vertical = MaaDesignTokens.Spacing.xs,
+                                ),
+                            ),
+                            dividerInset = dividerInset,
+                            content = content,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -128,6 +163,7 @@ fun MaaSettingsGroupCard(
 @Composable
 fun MaaSettingsDividedColumn(
     modifier: Modifier = Modifier,
+    dividerInset: Dp = TextInset,
     content: @Composable () -> Unit,
 ) {
     val color = MaterialTheme.colorScheme.outlineVariant
@@ -139,7 +175,7 @@ fun MaaSettingsDividedColumn(
             .fillMaxWidth()
             .drawWithContent {
                 drawContent()
-                val inset = TextInset.toPx()
+                val inset = dividerInset.toPx()
                 val thickness = MaaDesignTokens.Separator.thickness.toPx()
                 lines.forEach { y ->
                     drawRect(
