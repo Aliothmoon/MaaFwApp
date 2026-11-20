@@ -262,7 +262,12 @@ class ScheduleExecutionService : Service() {
             return
         }
         if (outcome.result != TriggerResult.STARTED) {
-            Timber.w("Schedule %s did not start: %s", strategy.id, launchResult)
+            val frozen = outcome.detail?.resolve(this)?.takeIf { it.isNotBlank() }
+            Timber.w(
+                "Schedule %s did not start: %s",
+                strategy.id,
+                frozen ?: launchResult.toString(),
+            )
         }
         record(strategy, scheduledTimeMs, now, outcome, steps)
     }
