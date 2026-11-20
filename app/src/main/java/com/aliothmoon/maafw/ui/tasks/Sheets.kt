@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.aliothmoon.maafw.R
 import com.aliothmoon.maafw.domain.OptionValue
 import com.aliothmoon.maafw.domain.ResolvedConfiguredTask
@@ -59,6 +60,8 @@ import com.aliothmoon.maafw.ui.components.MaaModalSheet
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSkipReason
+import com.aliothmoon.maafw.ui.components.horizontalBleed
+import com.aliothmoon.maafw.ui.components.maaVerticalScrollbar
 import com.aliothmoon.maafw.ui.i18n.asUiText
 import com.aliothmoon.maafw.ui.options.OptionEditorList
 
@@ -398,6 +401,9 @@ internal fun TaskOptionContent(
     modifier: Modifier = Modifier,
     onClose: (() -> Unit)? = null,
 ) {
+    val scrollState = rememberScrollState()
+    // MaaModalSheet 外层有 Spacing.lg 水平边距：外扩后再把内容 pad 回来，滚动条落在右侧留白槽里不压卡片描边
+    val horizontalBleed = if (onClose != null) MaaDesignTokens.Spacing.lg else 0.dp
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
@@ -411,7 +417,10 @@ internal fun TaskOptionContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .horizontalBleed(horizontalBleed)
+                .maaVerticalScrollbar(scrollState)
+                .verticalScroll(scrollState)
+                .padding(horizontal = horizontalBleed)
                 .padding(bottom = MaaDesignTokens.Spacing.md),
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
