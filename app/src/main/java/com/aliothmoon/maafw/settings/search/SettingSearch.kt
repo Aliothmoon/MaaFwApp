@@ -54,6 +54,7 @@ object SettingAnchors {
     const val RUN_LOG_ARCHIVE = "log.archive"
     const val APP_LOG = "log.app"
     const val EXPORT_LOGS = "log.export"
+    const val CLEAR_LOGS = "log.cleanup"
     const val DEBUG_MODE = "log.debug"
     const val SAVE_ON_ERROR = "log.save_on_error"
     const val EXPORT_CONFIG = "backup.export"
@@ -183,6 +184,7 @@ object SettingSearchIndex {
         entry(R.string.log_archive_title, log, SettingAnchors.RUN_LOG_ARCHIVE, R.string.settings_log_archive_desc),
         entry(R.string.app_log_title, log, SettingAnchors.APP_LOG, R.string.settings_log_error_desc),
         entry(R.string.log_export_title, log, SettingAnchors.EXPORT_LOGS, R.string.settings_log_export_desc),
+        entry(R.string.settings_log_cleanup, log, SettingAnchors.CLEAR_LOGS, R.string.settings_log_cleanup_desc),
         entry(R.string.settings_debug_mode, log, SettingAnchors.DEBUG_MODE, R.string.settings_debug_mode_desc),
         entry(R.string.settings_save_on_error, log, SettingAnchors.SAVE_ON_ERROR),
         entry(R.string.config_export_title, backup, SettingAnchors.EXPORT_CONFIG, R.string.config_export_desc, R.string.search_keywords_backup),
