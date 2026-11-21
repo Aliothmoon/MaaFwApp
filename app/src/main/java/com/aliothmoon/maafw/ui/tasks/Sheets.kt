@@ -425,7 +425,11 @@ internal fun TaskOptionContent(
             verticalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.sm),
         ) {
             task.description?.takeIf { it.isNotBlank() }?.let { description ->
-                MaaCard(title = stringResource(R.string.tasks_description_title)) {
+                MaaCard(
+                    title = stringResource(R.string.tasks_description_title),
+                    collapsible = true,
+                    initiallyExpanded = false,
+                ) {
                     MaaDescriptionPanel {
                         MaaMarkdown(
                             text = description,
