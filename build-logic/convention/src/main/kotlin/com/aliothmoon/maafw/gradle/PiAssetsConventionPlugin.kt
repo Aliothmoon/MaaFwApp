@@ -1,6 +1,7 @@
 package com.aliothmoon.maafw.gradle
 
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.PathSensitivity
@@ -53,10 +54,29 @@ class PiAssetsConventionPlugin : Plugin<Project> {
                 }
             }
 
+            // Not inside packPiArchive: an empty piDir turns that task NO-SOURCE so its actions never
+            // run, and directories left empty by include/exclude would silently vanish under includeEmptyDirs = false
+            val verifyPiAssets = tasks.register("verifyPiAssets") {
+                group = "verification"
+                description = "Fail packaging when a resource directory declared for Android in interface.json is missing from the synced PI tree"
+                dependsOn(syncPiAssets)
+                onlyIf { assetsSourceDir != null }
+                doLast {
+                    val root = piDir.get().asFile
+                    val problems = verifySyncedPiAssets(root)
+                    if (problems.isNotEmpty()) {
+                        throw GradleException(
+                            "the synced PI tree in $root is missing resource directories declared in interface.json (check include/exclude in the profile)\n" +
+                                problems.joinToString("\n") { "  - $it" },
+                        )
+                    }
+                }
+            }
+
             val packPiArchive = tasks.register<Zip>("packPiArchive") {
                 group = "build"
                 description = "Pack the synced PI tree into assets/pi.zip"
-                dependsOn(syncPiAssets)
+                dependsOn(syncPiAssets, verifyPiAssets)
                 from(piDir)
                 destinationDirectory.set(packedDir)
                 archiveFileName.set("pi.zip")
@@ -86,6 +106,7 @@ class PiAssetsConventionPlugin : Plugin<Project> {
                 .configureEach {
                     inputs.files(packedDir.map { it.asFileTree })
                         .withPathSensitivity(PathSensitivity.RELATIVE)
+                    dependsOn(verifyPiAssets)
                 }
         }
     }
