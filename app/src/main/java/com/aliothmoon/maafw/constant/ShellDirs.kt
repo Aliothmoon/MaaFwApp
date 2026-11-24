@@ -13,8 +13,11 @@ object ShellDirs {
     private const val BASE = "/data/local/tmp"
     private const val PKG = BuildConfig.APPLICATION_ID
 
+    /** 共享父目录，不同包名共用；修 root 遗留属主时必须连这一层一起修 */
+    val AGENT_ROOT = File("$BASE/maafw-agent")
+
     /** agent 运行时解包根，其下按 ABI 分（maafw-agent/<applicationId>/<abi>） */
-    val AGENT_DIR = File("$BASE/maafw-agent/$PKG")
+    val AGENT_DIR = File(AGENT_ROOT, PKG)
 
     /** 强制分辨率状态标志，ScreenManager 跨进程读写 */
     val SCREEN_FLAG = File("$BASE/maa_screen_flag_$PKG")

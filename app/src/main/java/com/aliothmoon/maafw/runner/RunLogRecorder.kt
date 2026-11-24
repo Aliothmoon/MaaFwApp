@@ -286,7 +286,14 @@ class RunLogRecorder(
                 resourceBundleCount = session?.resourceBundleCount,
             ),
         ) ?: return
-        publish(entry, session, current, updateLiveStatus = event !is RunnerEvent.Progress)
+        // AgentExited 的 detail 是退出前攒下的 stderr 尾巴，非调试模式也落盘，避免导出缺死因
+        publish(
+            entry,
+            session,
+            current,
+            updateLiveStatus = event !is RunnerEvent.Progress,
+            writeDetail = includeDetails() || event is RunnerEvent.AgentExited,
+        )
     }
 
     private fun publish(

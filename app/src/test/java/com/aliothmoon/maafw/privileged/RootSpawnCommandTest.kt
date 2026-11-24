@@ -24,6 +24,29 @@ class RootSpawnCommandTest {
     }
 
     @Test
+    fun externalFilesRepair_prefersUnderlyingMediaDir_repairsRootOwnedWithGroupWrite_andSupportsMultiUser() {
+        val mainUser = externalFilesRepairCommand(
+            externalFilesDir = "/storage/emulated/0/Android/data/com.example.app/files",
+            packageName = "com.example.app",
+            appUid = 10343,
+        )
+        assertTrue(mainUser.startsWith("[ \"$(id -u)\" = 0 ] && { "))
+        // 优先走 /data/media 绕开 FUSE 对 chown 的拦截，不存在时退回 AppPaths.ROOT
+        assertTrue(mainUser.contains("d='/data/media/0/Android/data/com.example.app/files'; [ -d \"\$d\" ] || d='/storage/emulated/0/Android/data/com.example.app/files'"))
+        // 只动 uid 0 的遗留条目：补组写位（不碰软链）再改属主回 appUid:<目录组>
+        assertTrue(mainUser.contains("find \"\$d\" -user 0 ! -type l -exec chmod ug+rwX {} +"))
+        assertTrue(mainUser.contains("find \"\$d\" -user 0 -exec chown -h \"10343:\$g\" {} +"))
+
+        val workProfile = externalFilesRepairCommand(
+            externalFilesDir = "/storage/emulated/999/Android/data/com.example.app/files",
+            packageName = "com.example.app",
+            appUid = 99910343,
+        )
+        assertTrue(workProfile.contains("d='/data/media/999/Android/data/com.example.app/files'"))
+        assertTrue(workProfile.contains("chown -h \"99910343:\$g\""))
+    }
+
+    @Test
     fun findProcesses_leavesShellExpansionToShell() {
         assertEquals(
             "p=$(pidof 'pkg:svc') && ps -o PID,ETIME -p \${p// /,}",

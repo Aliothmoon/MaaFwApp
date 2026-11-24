@@ -63,6 +63,16 @@ class ProcessAgentSessionTest {
         session.close()
     }
 
+    /** 连接期发现 `!isAlive()` 后先 `awaitExitReport()` 再 `close()`，不能把 stderr 与退出上报掐掉 */
+    @Test
+    fun `awaitExitReport preserves stderr and exit callback before close`() {
+        val session = session(*failing())
+        assertTrue(process!!.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+        session.awaitExitReport()
+        session.close()
+        assertEquals(listOf("err:boom", "exit:3"), events.map(String::trim))
+    }
+
     private companion object {
         val WINDOWS = System.getProperty("os.name").orEmpty().startsWith("Windows")
         const val TIMEOUT_SECONDS = 10L

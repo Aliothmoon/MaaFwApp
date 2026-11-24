@@ -29,6 +29,9 @@ class RunLogComposer {
     private val agentTimestamps = ArrayDeque<Long>()
     private var agentFlooded = false
 
+    /** 最近一段 stderr，留给紧随其后的 [RunnerEvent.AgentExited] 挂进折叠详情，停在「进度」档也能点开看死因 */
+    private val recentStderr = ArrayDeque<String>()
+
     /** 本轮已开始 / 已成功加载的资源路径数，见 [RunLogContext.resourceBundleCount] */
     private var resourceStarted = 0
     private var resourceSucceeded = 0
@@ -41,6 +44,7 @@ class RunLogComposer {
         lastText = null
         agentTimestamps.clear()
         agentFlooded = false
+        recentStderr.clear()
         resourceStarted = 0
         resourceSucceeded = 0
         taskStartedAt = null
@@ -69,12 +73,19 @@ class RunLogComposer {
 
             is RunnerEvent.AgentOutput -> agentEntry(event, atMillis) ?: return null
 
-            is RunnerEvent.AgentConnected -> Composed(
-                RunLogKind.Success,
-                uiTextOf(R.string.run_log_agent_connected, event.label),
-            )
+            is RunnerEvent.AgentConnected -> {
+                recentStderr.clear()
+                Composed(
+                    RunLogKind.Success,
+                    uiTextOf(R.string.run_log_agent_connected, event.label),
+                )
+            }
 
-            is RunnerEvent.AgentExited -> Composed(RunLogKind.Error, agentExitedText(event))
+            is RunnerEvent.AgentExited -> Composed(
+                RunLogKind.Error,
+                agentExitedText(event),
+                detail = takeStderrTail(),
+            )
 
             is RunnerEvent.MalformedCallback -> Composed(
                 RunLogKind.Error,
@@ -103,6 +114,8 @@ class RunLogComposer {
     private fun agentEntry(event: RunnerEvent.AgentOutput, atMillis: Long): Composed? {
         // 写给用户看的按 focus 渲染、进进度档；不进洪泛滑窗：它往往正是这一轮停下来的原因，刷屏期也不能吞
         if (event.isUserFacing) return Composed(RunLogKind.Focus, uiTextFromProject(event.line))
+        // 排在洪泛滑窗之前：traceback 往往先把滑窗打满才退出，尾巴那几行不能跟着被吞
+        if (event.fromStderr) rememberStderr(event.line)
         while (agentTimestamps.isNotEmpty() && atMillis - agentTimestamps.first() >= AGENT_FLOOD_WINDOW_MS) {
             agentTimestamps.removeFirst()
         }
@@ -228,6 +241,20 @@ class RunLogComposer {
     private fun parseDetails(raw: String): JsonObject? =
         runCatching { LOG_JSON.parseToJsonElement(raw) }.getOrNull() as? JsonObject
 
+    private fun rememberStderr(raw: String) {
+        raw.lineSequence().forEach { line ->
+            val clean = line.stripAnsiEscapes()
+            if (clean.isBlank()) return@forEach
+            recentStderr.addLast(clean)
+            if (recentStderr.size > AGENT_EXIT_STDERR_LINES) recentStderr.removeFirst()
+        }
+    }
+
+    private fun takeStderrTail(): String? {
+        if (recentStderr.isEmpty()) return null
+        return recentStderr.joinToString("\n").also { recentStderr.clear() }
+    }
+
     private data class Composed(
         val kind: RunLogKind,
         val text: UiText,
@@ -252,6 +279,11 @@ class RunLogComposer {
 
         const val AGENT_FLOOD_WINDOW_MS = 2_000L
         const val AGENT_FLOOD_THRESHOLD = 15
+        const val AGENT_EXIT_STDERR_LINES = 20
+        val ANSI_ESCAPE = Regex("\u001B\\[[0-9;?]*[a-zA-Z]")
+
+        fun String.stripAnsiEscapes(): String =
+            if (contains('\u001B')) replace(ANSI_ESCAPE, "") else this
 
         val LOG_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
     }

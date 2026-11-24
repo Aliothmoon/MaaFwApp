@@ -1,6 +1,6 @@
 package com.aliothmoon.maafw.privileged
 
-
+import com.aliothmoon.maafw.util.userIdOf
 import timber.log.Timber
 /** 提权进程的拉起方式（su / Shizuku newProcess），与服务规格解耦 */
 interface ProcessSpawner {
@@ -52,6 +52,24 @@ internal fun shellQuote(value: String): String = "'${value.replace("'", "'\"'\"'
  */
 internal fun shellOwnershipRepairCommand(dir: String): String =
     $$"[ \"$(id -u)\" = 0 ] && find $${shellQuote(dir)} ! -user 2000 -exec chown -h 2000:2000 {} + 2>/dev/null"
+
+/**
+ * root 拉起时把外部私有目录下遗留的 uid 0 条目修回 App 与 shell 共用可写
+ *
+ * 旧版 Android 14+ 留 root 时特权进程与 agent child 以 uid 0 写过 pi/debug/、log/；
+ * 降到 shell 后既不能改成 2000（App 自己会丢读写删权限），也不能走 /storage/emulated（root 模式的
+ * Shizuku 已在 init 命名空间，FUSE 会拦 chown），所以优先走底层 /data/media 并补组写位
+ */
+internal fun externalFilesRepairCommand(externalFilesDir: String, packageName: String, appUid: Int): String {
+    val mediaDir = "/data/media/${userIdOf(appUid)}/Android/data/$packageName/files"
+    return $$"[ \"$(id -u)\" = 0 ] && { " +
+        $$"d=$${shellQuote(mediaDir)}; [ -d \"$d\" ] || d=$${shellQuote(externalFilesDir)}; " +
+        $$"[ -d \"$d\" ] && { " +
+        $$"g=$(stat -c %g \"$d\" 2>/dev/null); case \"$g\" in \"\"|0) g=1078 ;; esac; " +
+        $$"find \"$d\" -user 0 ! -type l -exec chmod ug+rwX {} + 2>/dev/null; " +
+        $$"find \"$d\" -user 0 -exec chown -h \"$$appUid:$g\" {} + 2>/dev/null; " +
+        $$"}; }"
+}
 
 /** SIGTERM 触发服务进程 shutdown hook 优雅清理 */
 internal fun killByNameCommand(processName: String): String =

@@ -187,18 +187,16 @@ internal class ProcessAgentSession(
      *
      * 排在 [pumps] 之后建：上报前要等两条流读到 EOF，「已退出」那句才不会抢在 traceback 前面
      */
-    init {
-        Thread({
-            val exitCode = runCatching { process.waitFor() }.getOrElse { return@Thread }
-            if (exitExpected) return@Thread
-            Ln.e("ExecAgentHost: agent exited unexpectedly, exec=$executable pid=$pid exitCode=$exitCode")
-            pumps.forEach { pump -> runCatching { pump.join(PUMP_DRAIN_TIMEOUT_MILLIS) } }
-            runCatching { onUnexpectedExit(pid, exitCode) }
-                .onFailure { Ln.w("ExecAgentHost: agent exit dispatch failed: ${it.message}") }
-        }, "agent-exit-watch").apply {
-            isDaemon = true
-            start()
-        }
+    private val exitWatch = Thread({
+        val exitCode = runCatching { process.waitFor() }.getOrElse { return@Thread }
+        if (exitExpected) return@Thread
+        Ln.e("ExecAgentHost: agent exited unexpectedly, exec=$executable pid=$pid exitCode=$exitCode")
+        pumps.forEach { pump -> runCatching { pump.join(PUMP_DRAIN_TIMEOUT_MILLIS) } }
+        runCatching { onUnexpectedExit(pid, exitCode) }
+            .onFailure { Ln.w("ExecAgentHost: agent exit dispatch failed: ${it.message}") }
+    }, "agent-exit-watch").apply {
+        isDaemon = true
+        start()
     }
 
     override fun isAlive(): Boolean = process.isAlive
@@ -209,6 +207,10 @@ internal class ProcessAgentSession(
 
     override fun flushOutput() {
         batchers.forEach { it.flush() }
+    }
+
+    override fun awaitExitReport() {
+        runCatching { exitWatch.join(EXIT_REPORT_TIMEOUT_MILLIS) }
     }
 
     override fun close() {
@@ -228,6 +230,7 @@ internal class ProcessAgentSession(
 
         /** child 已经没了，管道里剩的读完就是 EOF；孙进程还攥着管道时不能一直等 */
         const val PUMP_DRAIN_TIMEOUT_MILLIS = 1_000L
+        const val EXIT_REPORT_TIMEOUT_MILLIS = PUMP_DRAIN_TIMEOUT_MILLIS + 1_000L
     }
 }
 

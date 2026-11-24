@@ -31,6 +31,9 @@ interface AgentSession : AutoCloseable {
 
     /** 把按窗口攒着、还没交出去的输出立刻交出去 */
     fun flushOutput() {}
+
+    /** 已观测到 `!isAlive()` 时，等退出监听线程抽完管道并发完 `onExit`，再调 [close] 才不会截断现场 */
+    fun awaitExitReport() {}
 }
 
 /**

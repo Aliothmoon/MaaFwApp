@@ -525,8 +525,6 @@ class MaaRunner(
                     agentLib.MaaAgentClientDestroy(client)
                     return failAgents(started, index, "reading agent identifier failed")
                 }
-            agentLib.MaaAgentClientSetTimeout(client, AGENT_CONNECT_TIMEOUT_MILLIS)
-
             val session = try {
                 agentHost.launch(
                     AgentLaunchRequest(
@@ -544,10 +542,23 @@ class MaaRunner(
                 return failAgents(started, index, e.message.orEmpty())
             }
 
-            if (agentLib.MaaAgentClientConnect(client).toInt() == 0) {
-                session.close()
-                agentLib.MaaAgentClientDestroy(client)
-                return failAgents(started, index, "agent connection timed out: ${agent.childExec}")
+            when (awaitAgentConnect(agentLib, client, session, AGENT_CONNECT_TIMEOUT_MILLIS, ::isStopRequested)) {
+                AgentConnectOutcome.CONNECTED -> Unit
+                AgentConnectOutcome.EXITED_EARLY -> {
+                    session.close()
+                    agentLib.MaaAgentClientDestroy(client)
+                    return failAgents(started, index, "agent exited before connecting: ${agent.childExec}")
+                }
+                AgentConnectOutcome.CANCELLED -> {
+                    session.close()
+                    agentLib.MaaAgentClientDestroy(client)
+                    return failAgents(started, index, "agent connect cancelled: ${agent.childExec}")
+                }
+                AgentConnectOutcome.TIMED_OUT -> {
+                    session.close()
+                    agentLib.MaaAgentClientDestroy(client)
+                    return failAgents(started, index, "agent connection timed out: ${agent.childExec}")
+                }
             }
             // 上面的超时只给连接用。留着它会卡住每次 custom 调用：识别算过 30s 就被判超时，
             // 而 agent 算完仍会回包，这个迟到的回包会被下一次同类请求当成自己的（框架不核对 req_id），
@@ -755,3 +766,58 @@ class MaaRunner(
         const val AUTO_PORT: Short = 0
     }
 }
+
+internal enum class AgentConnectOutcome {
+    CONNECTED,
+    EXITED_EARLY,
+    CANCELLED,
+    TIMED_OUT,
+}
+
+/**
+ * 先轮询 [MaaAgentClientLibrary.MaaAgentClientAlive] 等 ZMQ 对端连上，再进阻塞的 `Connect` 走握手
+ *
+ * 直接调 `MaaAgentClientConnect(30s)` 的话，child 启动即退（退出码 1）或用户点停止都要白等满 30 秒，
+ * 期间 `tasker` 还没建，`PostStop` 打断不了它；`Alive` 只是 0ms 的 `ZMQ_POLLOUT` 探针，不动已 bind 的端口
+ */
+internal fun awaitAgentConnect(
+    agentLib: MaaAgentClientLibrary,
+    client: Pointer,
+    session: AgentSession,
+    timeoutMillis: Long,
+    stopRequested: () -> Boolean,
+    pollMillis: Long = AGENT_CONNECT_POLL_MILLIS,
+): AgentConnectOutcome {
+    val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+    while (true) {
+        if (stopRequested()) return AgentConnectOutcome.CANCELLED
+        if (agentLib.MaaAgentClientAlive(client).toInt() != 0) {
+            val remainingMs = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+                .coerceAtLeast(MIN_HANDSHAKE_TIMEOUT_MILLIS)
+            agentLib.MaaAgentClientSetTimeout(client, remainingMs)
+            return if (agentLib.MaaAgentClientConnect(client).toInt() != 0) {
+                AgentConnectOutcome.CONNECTED
+            } else {
+                AgentConnectOutcome.TIMED_OUT
+            }
+        }
+        if (!session.isAlive()) {
+            // 兜住「最后一拍刚连上就退出」的极窄窗口；仍没连上就先等退出报告发完再返回，免得 close 截断 stderr
+            if (agentLib.MaaAgentClientAlive(client).toInt() != 0) continue
+            session.awaitExitReport()
+            return AgentConnectOutcome.EXITED_EARLY
+        }
+        val remainingNs = deadline - System.nanoTime()
+        if (remainingNs <= 0L) return AgentConnectOutcome.TIMED_OUT
+        val sleepMs = minOf(pollMillis, TimeUnit.NANOSECONDS.toMillis(remainingNs).coerceAtLeast(1L))
+        try {
+            Thread.sleep(sleepMs)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return AgentConnectOutcome.CANCELLED
+        }
+    }
+}
+
+private const val AGENT_CONNECT_POLL_MILLIS = 50L
+private const val MIN_HANDSHAKE_TIMEOUT_MILLIS = 1_000L

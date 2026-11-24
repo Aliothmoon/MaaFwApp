@@ -138,6 +138,7 @@ abstract class ProcessServiceConnectorBackend(
     protected open fun buildStartCommand(token: String, logFile: File): String {
         val launcher = File(appContext.applicationInfo.nativeLibraryDir, "liblauncher.so")
         check(launcher.exists()) { "launcher not found: ${launcher.absolutePath}" }
+        val appUid = Process.myUid()
         val invocation = buildString {
             append(shellQuote(launcher.absolutePath))
             append(" --apk=").append(shellQuote(appContext.applicationInfo.sourceDir))
@@ -146,14 +147,15 @@ abstract class ProcessServiceConnectorBackend(
             append(" --token=").append(shellQuote(token))
             append(" --package=").append(shellQuote(appContext.packageName))
             append(" --class=").append(shellQuote(serviceClass.name))
-            append(" --uid=").append(Process.myUid())
+            append(" --uid=").append(appUid)
             append(" --log-file=").append(shellQuote(logFile.absolutePath))
             if (BuildConfig.DEBUG) {
                 append(" --debug-name=").append(shellQuote(processName))
             }
         }
-        // 两个后端都降到 shell；以前留 root 时解出的 agent 目录归 0，降权后写不进去，每次拉起都修回
-        return "${shellOwnershipRepairCommand(ShellDirs.AGENT_DIR.absolutePath)}; " +
+        // 两个后端都降到 shell；以前留 root 时在 /data/local/tmp 与外部私有目录写下的 uid 0 条目，每次拉起前修回
+        return "${shellOwnershipRepairCommand(ShellDirs.AGENT_ROOT.absolutePath)}; " +
+            "${externalFilesRepairCommand(AppPaths.ROOT.absolutePath, appContext.packageName, appUid)}; " +
             spawner.wrapCommand(launcher.absolutePath, invocation)
     }
 

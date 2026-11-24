@@ -12,9 +12,12 @@ internal object PathDiagnosis {
 
     fun diagnose(path: File): String {
         val existing = generateSequence(path.absoluteFile) { it.parentFile }.firstOrNull { it.exists() }
-        val owner = existing?.let { runCatching { Os.stat(it.path).st_uid }.getOrNull() }
+        val stat = existing?.let { runCatching { Os.stat(it.path) }.getOrNull() }
+        val owner = stat?.let {
+            "${it.st_uid}:${it.st_gid} mode=0${Integer.toOctalString(it.st_mode and 0xfff)}"
+        } ?: "?"
         val mounts = runCatching { File("/proc/self/mountinfo").readLines() }.getOrDefault(emptyList())
-        return "owner of $existing=${owner ?: "?"}, mount=${mountOf(path.absolutePath, mounts)}"
+        return "owner of $existing=$owner, mount=${mountOf(path.absolutePath, mounts)}"
     }
 
     /** mountinfo 里覆盖 [path] 的最深挂载点及其文件系统类型 */

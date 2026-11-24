@@ -407,7 +407,24 @@ class RunLogComposerTest {
         assertEquals(3, RunnerEvent.AgentOutput("a\nb\nc", fromStderr = false).lineCount)
     }
 
+    /** 停在「进度」档时点开异常退出那一行就能看见退出前的 stderr 尾巴（剥掉 ANSI），连上或消费后清空 */
+    @Test
+    fun `agent exit carries recent stderr tail in detail even after flood suppression`() {
+        repeat(AGENT_THRESHOLD + 5) { index ->
+            compose(agentLine("\u001B[31merr $index\u001B[0m", fromStderr = true), 0)
+        }
+        val exited = compose(RunnerEvent.AgentExited(index = 0, exec = "/x/libgo-service.so", exitCode = 1, name = "go-service"), 0)!!
+        val lines = exited.detail!!.lines()
+        assertEquals(AGENT_EXIT_STDERR_LINES, lines.size)
+        assertEquals("err ${AGENT_THRESHOLD + 4}", lines.last())
+
+        // 已经挂给这一个 agent 了，后一个没打 stderr 的退出不借用前一个的现场
+        val second = compose(RunnerEvent.AgentExited(index = 1, exec = "/x/libcpp-algo.so", exitCode = 1, name = "cpp-algo"), 0)!!
+        assertNull(second.detail)
+    }
+
     private companion object {
+        const val AGENT_EXIT_STDERR_LINES = 20
         const val AGENT_THRESHOLD = 15
         const val AGENT_WINDOW_MS = 2_000L
     }

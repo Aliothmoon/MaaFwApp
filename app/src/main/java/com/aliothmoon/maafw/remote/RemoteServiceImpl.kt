@@ -207,7 +207,15 @@ class RemoteServiceImpl : RemoteService.Stub() {
             this.logDir = logDir
             runner.applyGlobalOptions(logDir, isDebug)
         } else {
-            Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir")
+            val diagnosis = logDir?.takeIf { it.isNotBlank() }?.let { PathDiagnosis.diagnose(File(it)) } ?: "no path"
+            Ln.w("$TAG: log dir unusable, MaaFramework will write to process CWD: $logDir ($diagnosis)")
+        }
+        val piDebugDir = File(piRoot, AppFiles.DEBUG_DIR)
+        if (!ensureWritableDir(piDebugDir.absolutePath)) {
+            Ln.w(
+                "$TAG: PI debug dir not writable, agent file logs may fail: " +
+                    "$piDebugDir (${PathDiagnosis.diagnose(piDebugDir)})",
+            )
         }
         pruneMaafwBackups()
         logDir?.let { pruneLogcatCaptures(File(it).parentFile) }

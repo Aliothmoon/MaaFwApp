@@ -600,6 +600,22 @@ class RunLogRecorderTest {
         assertEquals(listOf("启动"), text.args)
     }
 
+    /** AgentExited 的 stderr 尾巴在非调试模式下也落进会话文件，避免导出包缺死因 */
+    @Test
+    fun `agent exit stderr detail reaches the session file even outside debug mode`() = runTest(dispatcher) {
+        val runner = RecordingEventRunnerPort()
+        val recorder = recorder(runner)
+
+        recorder.begin(planOf("a"), ID)
+        runner.emit(RunnerEvent.AgentOutput("""{"level":"fatal","message":"Failed to initialize logger"}""", fromStderr = true))
+        runner.emit(RunnerEvent.AgentExited(index = 0, exec = "/x/libgo-service.so", exitCode = 1, name = "go-service"))
+        recorder.finish(runner)
+
+        val exitedLine = sessionRecords().filterIsInstance<RunSessionRecord.Line>().last()
+        assertEquals(RunLogKind.Error, exitedLine.kind)
+        assertEquals("""{"level":"fatal","message":"Failed to initialize logger"}""", exitedLine.detail)
+    }
+
     private fun planOf(vararg taskNames: String) = RunPlan(
         projectName = "demo",
         projectVersion = "1",
