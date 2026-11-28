@@ -694,6 +694,7 @@
     <string name="config_import_unreadable">无法读取该文件</string>
     <string name="close_target_confirm_title">关闭目标应用？</string>
     <string name="tasks_run_from_here">从此处运行</string>
+    <string name="tasks_run_only_this">仅运行此任务</string>
     <string name="run_log_screen_power_off">已关闭屏幕电源，按电源键可点亮</string>
     <string name="run_log_screen_power_off_failed">关闭屏幕电源失败，本轮屏幕保持亮着</string>
     <string name="run_log_screen_power_off_skipped_awake">开始时设备正在使用，未关闭屏幕电源</string>

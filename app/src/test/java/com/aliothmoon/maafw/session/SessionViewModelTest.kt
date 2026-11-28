@@ -62,6 +62,7 @@ import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerPort
 import com.aliothmoon.maafw.runner.StubRunnerScenario
+import com.aliothmoon.maafw.runner.TaskRange
 import com.aliothmoon.maafw.runner.isBusy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -599,6 +600,36 @@ class SessionViewModelTest {
         advanceUntilIdle()
         assertEquals(2, effects.filterIsInstance<SessionEffect.ConfirmStart>().size)
         assertTrue(runner.state.value.phase.isBusy)
+    }
+
+    /** 点过头重发的那一轮仍只跑原来那一段，不变成整份 */
+    @Test
+    fun `confirmed start keeps the task range`() = runTest(mainDispatcher) {
+        val runner = StubRunnerPort(
+            scope = backgroundScope,
+            scenario = StubRunnerScenario(prepareDelayMillis = 60_000, taskDelayMillis = 60_000),
+        )
+        val store = readyStore(
+            tasks = listOf(
+                ConfiguredTask("启动游戏", instanceId = "t1"),
+                ConfiguredTask("启动游戏", instanceId = "t2"),
+            ),
+        )
+        val (vm, _, _) = createVm(store = store, runner = runner, hazards = DisplayHazards(smartResolution = true))
+        advanceUntilIdle()
+        val effects = mutableListOf<SessionEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+
+        vm.onIntent(SessionIntent.Start(range = TaskRange.Only("t2")))
+        advanceUntilIdle()
+        val confirm = effects.filterIsInstance<SessionEffect.ConfirmStart>().single()
+        assertEquals(TaskRange.Only("t2"), confirm.range)
+        assertEquals(RunnerPhase.Idle, runner.state.value.phase)
+
+        vm.onIntent(SessionIntent.Start(acknowledged = confirm.acknowledged, range = confirm.range))
+        advanceUntilIdle()
+        assertTrue(runner.state.value.phase.isBusy)
+        assertEquals(1, runner.state.value.activeExecution?.totalTaskCount)
     }
 
     /** 悬浮窗里弹不了框：提醒照跑，不问 */

@@ -148,7 +148,7 @@ class RunPlanBuilderTest {
         val start = ConfiguredTask("切换账号")
         val config = configWith(first, start, ConfiguredTask("常规作战", enabled = false), ConfiguredTask("启动游戏"))
 
-        val result = RunPlanBuilder.build(definition, config, startFromInstanceId = start.instanceId)
+        val result = RunPlanBuilder.build(definition, config, range = TaskRange.From(start.instanceId))
 
         assertTrue("应编译成功: $result", result is RunPlanResult.Success)
         val plan = (result as RunPlanResult.Success).plan
@@ -158,7 +158,41 @@ class RunPlanBuilderTest {
 
     @Test
     fun `起点已不在配置里映射为 NoExecutableTasks`() {
-        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")), startFromInstanceId = "gone")
+        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")), range = TaskRange.From("gone"))
+        assertTrue(result is RunPlanResult.NoExecutableTasks)
+    }
+
+    /** 前后的任务都不跑也不算跳过；同名的另一条实例不跟着跑 */
+    @Test
+    fun `仅运行此任务只编这一条`() {
+        val only = ConfiguredTask("切换账号")
+        val config = configWith(ConfiguredTask("启动游戏"), only, ConfiguredTask("切换账号"), ConfiguredTask("已删除的任务"))
+
+        val result = RunPlanBuilder.build(definition, config, range = TaskRange.Only(only.instanceId))
+
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        val plan = (result as RunPlanResult.Success).plan
+        assertEquals(listOf("切换账号"), plan.tasks.map { it.taskName })
+        assertTrue(plan.skippedTasks.isEmpty())
+    }
+
+    @Test
+    fun `仅运行此任务不看勾选`() {
+        val only = ConfiguredTask("切换账号", enabled = false)
+
+        val result = RunPlanBuilder.build(
+            definition,
+            configWith(ConfiguredTask("启动游戏"), only),
+            range = TaskRange.Only(only.instanceId),
+        )
+
+        assertTrue("应编译成功: $result", result is RunPlanResult.Success)
+        assertEquals(listOf("切换账号"), (result as RunPlanResult.Success).plan.tasks.map { it.taskName })
+    }
+
+    @Test
+    fun `仅运行的任务已不在配置里映射为 NoExecutableTasks`() {
+        val result = RunPlanBuilder.build(definition, configWith(ConfiguredTask("启动游戏")), range = TaskRange.Only("gone"))
         assertTrue(result is RunPlanResult.NoExecutableTasks)
     }
 

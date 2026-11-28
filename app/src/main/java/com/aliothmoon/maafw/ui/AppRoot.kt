@@ -808,7 +808,7 @@ fun AppRoot(
                     viewModel.onIntent(
                         SessionIntent.Start(
                             acknowledged = confirm.acknowledged,
-                            startFromInstanceId = confirm.startFromInstanceId,
+                            range = confirm.range,
                         ),
                     )
                 },
