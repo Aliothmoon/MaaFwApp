@@ -21,6 +21,11 @@ data class RunPlanPayload(
     val screenHeight: Int,
     /** [com.aliothmoon.maafw.constant.DisplayMode] 取值；决定 Runner 找谁要屏幕尺寸 */
     val displayMode: Int = DisplayMode.BACKGROUND,
+    /**
+     * 后台模式 StartApp 前是否无条件强停目标应用。
+     * 线格式默认 true 是为了旧 payload 解码后保持既有行为；用户设置本身默认 true。
+     */
+    val forceRestartApp: Boolean = true,
     val tasks: List<RuntimeTaskPayload>,
     /** PI 声明的 agent，按声明顺序；空表示本次不起 agent */
     val agents: List<AgentPayload> = emptyList(),

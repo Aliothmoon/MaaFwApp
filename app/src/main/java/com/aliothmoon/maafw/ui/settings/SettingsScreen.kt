@@ -547,6 +547,19 @@ private fun OtherSection(
                 },
             )
         }
+        Spacer(Modifier.height(MaaDesignTokens.Spacing.sm))
+        SettingSearchTarget(SettingAnchors.FORCE_RESTART_APP) {
+            MaaSwitchRow(
+                label = stringResource(R.string.settings_force_restart_app),
+                checked = state.forceRestartApp,
+                onCheckedChange = { onIntent(SessionIntent.SetForceRestartApp(it)) },
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_force_restart_app_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         if (PipController.isSupported(LocalContext.current)) {
             SettingSearchTarget(SettingAnchors.PIP_ON_HOME) {
                 MaaSettingSwitchRow(
