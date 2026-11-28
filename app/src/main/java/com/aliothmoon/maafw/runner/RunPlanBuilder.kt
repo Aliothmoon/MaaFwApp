@@ -28,6 +28,21 @@ sealed interface RunPlanResult {
     data object NoExecutableTasks : RunPlanResult
 }
 
+/**
+ * 本轮只跑配置里的一段任务，按 instanceId 定位：只影响这一轮，不改 enabled、不落盘
+ *
+ * 范围外的任务不算跳过，不进 [RunPlan.skippedTasks]；[instanceId] 那条已不在配置里就没有可执行任务
+ */
+sealed interface TaskRange {
+    val instanceId: String
+
+    /** 「从此处运行」：这一条及其后的已勾选任务 */
+    data class From(override val instanceId: String) : TaskRange
+
+    /** 「仅运行此任务」：只跑这一条；是用户点名要跑的，没勾选也照跑 */
+    data class Only(override val instanceId: String) : TaskRange
+}
+
 /** ProjectDefinition + UserConfiguration → RunPlan；UI 不得绕过此模块拼 pipeline JSON */
 object RunPlanBuilder {
 
@@ -39,8 +54,7 @@ object RunPlanBuilder {
      * [clientVersion] / [clientLanguage] 只为拼 agent 的 `PI_*`，默认空表示「不声明」
      * 取值在 app 侧（BuildConfig 与 per-app locale），此处不反查环境，保持纯函数
      *
-     * [startFromInstanceId]：「从此处运行」只跑这一条及其后的任务，只影响本轮，不改 enabled、不落盘。
-     * 前面的任务不算跳过，不进 [RunPlan.skippedTasks]；起点那条已不在配置里就没有可执行任务
+     * [range] 为 null 时整份配置照常跑；「从此处运行」「仅运行此任务」见 [TaskRange]
      */
     fun build(
         definition: ProjectDefinition,
@@ -49,7 +63,7 @@ object RunPlanBuilder {
         clientVersion: String? = null,
         clientLanguage: String? = null,
         userDataDir: String? = null,
-        startFromInstanceId: String? = null,
+        range: TaskRange? = null,
     ): RunPlanResult {
         val diagnostics = mutableListOf<Diagnostic>()
 
@@ -109,13 +123,13 @@ object RunPlanBuilder {
 
         val runtimeTasks = mutableListOf<RuntimeTask>()
         val skippedTasks = mutableListOf<SkippedTask>()
-        val candidates = if (startFromInstanceId == null) {
-            runConfiguration.tasks
-        } else {
-            runConfiguration.tasks.dropWhile { it.instanceId != startFromInstanceId }
+        val candidates = when (range) {
+            null -> runConfiguration.tasks
+            is TaskRange.From -> runConfiguration.tasks.dropWhile { it.instanceId != range.instanceId }
+            is TaskRange.Only -> runConfiguration.tasks.filter { it.instanceId == range.instanceId }
         }
         for (configured in candidates) {
-            if (!configured.enabled) continue
+            if (!configured.enabled && range !is TaskRange.Only) continue
             // 已不在项目里的任务也只跳过不报错：勾选框已锁，拦下整轮用户只能去删
             val task = definition.task(configured.taskName)
             if (task == null) {

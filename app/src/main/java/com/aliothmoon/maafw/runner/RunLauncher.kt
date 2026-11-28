@@ -150,6 +150,7 @@ class RunLauncher(
      * @param steps 非 null 时把每个挂载物的落点抄一份给调用方，用于记账
      * @param signals 用户的打断面；只有会等待的挂载物（倒计时）读它
      * @param progress 挂载物的进度上报口；调用方决定往哪显示
+     * @param range 非 null 时这一轮只跑配置里的一段任务，见 [TaskRange]
      */
     suspend fun launch(
         trigger: RunTrigger,
@@ -160,11 +161,11 @@ class RunLauncher(
         steps: RunStepSink? = null,
         signals: RunSignals = RunSignals(),
         progress: RunProgress = RunProgress { _, _ -> },
-        startFromInstanceId: String? = null,
+        range: TaskRange? = null,
     ): RunLaunchResult {
         waiting.incrementAndGet()
         val result = try {
-            dispatch(trigger, acknowledged, configurationId, requestId, whenBusy, steps, signals, progress, startFromInstanceId)
+            dispatch(trigger, acknowledged, configurationId, requestId, whenBusy, steps, signals, progress, range)
         } finally {
             waiting.decrementAndGet()
         }
@@ -180,7 +181,7 @@ class RunLauncher(
         steps: RunStepSink?,
         signals: RunSignals,
         progress: RunProgress,
-        startFromInstanceId: String?,
+        range: TaskRange?,
     ): RunLaunchResult {
         if (whenBusy is WhenBusy.Queue) {
             var held = false
@@ -211,7 +212,7 @@ class RunLauncher(
                 configurationId,
                 clientVersion = BuildConfig.VERSION_NAME,
                 clientLanguage = AppLocales.currentProjectTag(),
-                startFromInstanceId = startFromInstanceId,
+                range = range,
             )
             val plan = when (built) {
                 RunPlanResult.NoExecutableTasks -> return RunLaunchResult.NoExecutableTasks

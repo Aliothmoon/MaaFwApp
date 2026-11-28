@@ -57,6 +57,7 @@ import com.aliothmoon.maafw.ui.components.MaaChoiceChip
 import com.aliothmoon.maafw.ui.components.MaaDescriptionPanel
 import com.aliothmoon.maafw.ui.components.MaaMarkdown
 import com.aliothmoon.maafw.ui.components.MaaModalSheet
+import com.aliothmoon.maafw.ui.components.MaaOutlinedButton
 import com.aliothmoon.maafw.ui.components.MaaPiIcon
 import com.aliothmoon.maafw.ui.components.MaaSheetHeader
 import com.aliothmoon.maafw.ui.components.MaaSkipReason
@@ -347,6 +348,9 @@ fun TaskOptionSheet(
     /** 「从此处运行」：只跑这一条及其后的任务；不可起跑或这条没勾选时置灰 */
     canRunFromHere: Boolean,
     onRunFromHere: () -> Unit,
+    /** 「仅运行此任务」：只跑这一条，不看勾选；不可起跑或这条当前跑不了时置灰 */
+    canRunOnlyThis: Boolean,
+    onRunOnlyThis: () -> Unit,
     /** 前台模式灰显但仍可点，对齐启停条：点了由 SessionViewModel 拦下并给提示 */
     foregroundBlocked: Boolean = false,
 ) {
@@ -363,17 +367,9 @@ fun TaskOptionSheet(
                 thickness = MaaDesignTokens.Separator.thickness,
                 color = MaterialTheme.colorScheme.outline,
             )
-            MaaButton(
-                onClick = onRunFromHere,
-                enabled = canRunFromHere,
-                colors = if (foregroundBlocked) {
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                    )
-                } else {
-                    ButtonDefaults.buttonColors()
-                },
+            // 次级按钮按内容取宽，对齐启停条：剩下的宽度留给主操作
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MaaDesignTokens.Spacing.md),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
@@ -381,13 +377,42 @@ fun TaskOptionSheet(
                         bottom = MaaDesignTokens.Spacing.lg,
                     ),
             ) {
-                Icon(
-                    imageVector = MaaIcons.Play,
-                    contentDescription = null,
-                    modifier = Modifier.size(MaaDesignTokens.IconSize.md),
-                )
-                Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
-                Text(stringResource(R.string.tasks_run_from_here))
+                MaaButton(
+                    onClick = onRunFromHere,
+                    enabled = canRunFromHere,
+                    colors = if (foregroundBlocked) {
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        imageVector = MaaIcons.Play,
+                        contentDescription = null,
+                        modifier = Modifier.size(MaaDesignTokens.IconSize.md),
+                    )
+                    Spacer(Modifier.width(MaaDesignTokens.Spacing.xs))
+                    Text(stringResource(R.string.tasks_run_from_here))
+                }
+                MaaOutlinedButton(
+                    onClick = onRunOnlyThis,
+                    enabled = canRunOnlyThis,
+                    // 前台模式与主按钮一样灰显：文字与描边都压到禁用态
+                    colors = if (foregroundBlocked) {
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        )
+                    } else {
+                        ButtonDefaults.outlinedButtonColors()
+                    },
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = canRunOnlyThis && !foregroundBlocked),
+                ) {
+                    Text(stringResource(R.string.tasks_run_only_this))
+                }
             }
         }
     }

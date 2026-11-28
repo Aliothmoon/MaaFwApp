@@ -33,6 +33,7 @@ import com.aliothmoon.maafw.runner.ResolutionPreset
 import com.aliothmoon.maafw.runner.ResolutionPresets
 import com.aliothmoon.maafw.runner.RunnerPhase
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.TaskRange
 import com.aliothmoon.maafw.runner.isBusy
 
 /** 跨页工作会话聚合态；Activity 作用域单实例，UI 只读 */
@@ -325,12 +326,12 @@ sealed interface SessionIntent {
      *
      * [surface] 区分入口：应用内前台仍拦，悬浮窗放行。定时不走这条 Intent。
      * [acknowledged] 是用户在 [SessionEffect.ConfirmStart] 上点过头的项，原样带回来重发。
-     * [startFromInstanceId] 是「从此处运行」的起点，只影响这一轮
+     * [range] 是「从此处运行」「仅运行此任务」要跑的那一段，只影响这一轮
      */
     data class Start(
         val surface: TaskSurface = TaskSurface.InApp,
         val acknowledged: Set<ConfirmToken> = emptySet(),
-        val startFromInstanceId: String? = null,
+        val range: TaskRange? = null,
     ) : SessionIntent
     data object Stop : SessionIntent
 
@@ -390,8 +391,8 @@ sealed interface SessionEffect {
     data class ConfirmStart(
         val prompt: UiText,
         val acknowledged: Set<ConfirmToken>,
-        /** 点头后原样带回 [SessionIntent.Start]，否则从此处运行的那一轮重发成整份 */
-        val startFromInstanceId: String? = null,
+        /** 点头后原样带回 [SessionIntent.Start]，否则只跑一段的那一轮重发成整份 */
+        val range: TaskRange? = null,
     ) : SessionEffect
 
     /** 手动发起被受理：从 [surface] 那一侧切到日志，人就在跟前；定时触发不切 */

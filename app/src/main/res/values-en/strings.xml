@@ -706,6 +706,7 @@
     <string name="config_import_unreadable">Couldn\'t read the file</string>
     <string name="close_target_confirm_title">Close the target app?</string>
     <string name="tasks_run_from_here">Run from here</string>
+    <string name="tasks_run_only_this">Run only this</string>
     <string name="run_log_screen_power_off">Screen power turned off; press the power button to light it</string>
     <string name="run_log_screen_power_off_failed">Could not turn off screen power; the screen stays on for this run</string>
     <string name="run_log_screen_power_off_skipped_awake">The device was in use at the start; screen power left on</string>

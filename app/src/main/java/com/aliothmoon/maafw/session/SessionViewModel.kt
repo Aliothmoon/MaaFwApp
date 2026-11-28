@@ -59,6 +59,7 @@ import com.aliothmoon.maafw.runner.RunLogRecorder
 import com.aliothmoon.maafw.runner.RunnerCommandResult
 import com.aliothmoon.maafw.runner.RunnerPort
 import com.aliothmoon.maafw.runner.RunnerState
+import com.aliothmoon.maafw.runner.TaskRange
 import com.aliothmoon.maafw.runner.focusPlainText
 import com.aliothmoon.maafw.runner.isBusy
 import com.aliothmoon.maafw.runner.ResolutionPreset
@@ -886,7 +887,7 @@ class SessionViewModel(
      */
     private fun launchStart(intent: SessionIntent.Start) {
         if (startJob?.isActive == true) return
-        startJob = viewModelScope.launch { start(intent.surface, intent.acknowledged, intent.startFromInstanceId) }
+        startJob = viewModelScope.launch { start(intent.surface, intent.acknowledged, intent.range) }
     }
 
     /**
@@ -895,7 +896,7 @@ class SessionViewModel(
      * 前台拦截分两层：这里拦应用内入口（前台模式没有应用内的预览环境），
      * ForegroundModePrecheck 拦定时（没人看着的那轮不占主屏）；悬浮窗手动放行
      */
-    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>, startFromInstanceId: String?) {
+    private suspend fun start(surface: TaskSurface, acknowledged: Set<ConfirmToken>, range: TaskRange?) {
         if (surface == TaskSurface.InApp && appSettings.runMode.value == RunMode.FOREGROUND) {
             emitEffect(SessionEffect.ShowMessage(uiTextOf(R.string.runner_foreground_blocked)))
             return
@@ -905,7 +906,7 @@ class SessionViewModel(
             TaskSurface.InApp -> RunTrigger.Manual
             TaskSurface.Overlay -> RunTrigger.Overlay
         }
-        when (val result = runLauncher.launch(trigger, acknowledged, startFromInstanceId = startFromInstanceId)) {
+        when (val result = runLauncher.launch(trigger, acknowledged, range = range)) {
             RunLaunchResult.Started -> emitEffect(SessionEffect.ShowRunLog(surface))
 
             // 手动发起不传 requestId、不排队，这两条到不了
@@ -942,7 +943,7 @@ class SessionViewModel(
                 emitEffect(SessionEffect.ShowMessage(result.reason))
 
             is RunLaunchResult.NeedsConfirmation ->
-                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token, startFromInstanceId))
+                emitEffect(SessionEffect.ConfirmStart(result.prompt, acknowledged + result.token, range))
         }
     }
 
