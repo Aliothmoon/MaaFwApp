@@ -62,7 +62,7 @@ app:
 | `controller` 写 Adb / Win32 / PlayCover… | 只取 `type: Adb` 的一项，设备上由 native controller 实现，**不必为 Android 另写一条** |
 | `child_exec` / `child_args` 决定怎么起 agent | 这两项不参与实际命令行；可执行体和参数写在配方的 `agent.runtimes`                         |
 | 应用名、图标来自 PI 顶层 `label` / `icon` | 由配方的 `app.*` 决定 |
-| Mirror酱 | 暂不支持 |
+| Mirror酱 | 只用来检查、下载新版 APK，见[应用内更新](#应用内更新) |
 | 热更新资源 | 资源随 APK 绑定，换资源重新出包 |
 | 调试期改完资源刷新即可 | 重装或清数据。版本号在独立 checkout 时跟本仓库提交走、作为 submodule 时跟最外层主仓库走；版本号未变时设备可能继续用旧解包 |
 
@@ -177,6 +177,48 @@ build.releaseAbi=arm64-v8a
 ./gradlew :app:syncAgentAssets :app:syncAgentJniLibs
 ```
 
+## 应用内更新
+
+装好的 APK 可以在设置页「更新」里检查、下载并安装新版本。更新源有 Mirror酱 和 GitHub 两个，由用户切换（默认 Mirror酱）。资源没配的那个源用不了：启动时的自动检查不为此弹窗，手动检查才提示「更新源缺少配置」。
+
+| 更新源 | 从哪取 |
+|:---|:---|
+| GitHub | PI 顶层 `github`，要写成 `https://github.com/<owner>/<repo>`，后面多带路径或 `.git` 也认；这一项不查 `$i18n` |
+| Mirror酱 | 配方的 `update.mirrorchyanRid`，没写就用 PI 顶层 `mirrorchyan_rid` |
+
+### 版本号
+
+已安装的版本就是 APK 的 versionName，出包时这样定：
+
+- `local.properties` 里写了 `build.versionName`（或设了环境变量 `BUILD_VERSION_NAME`）就用它。
+- 否则按 `git describe --tags` 算，独立 checkout 看本仓库，作为 submodule 时看最外层主仓库。HEAD 正好在 tag 上就是 tag 本身（`v1.2.3` → `1.2.3`，预发布后缀照留）；正式版 tag 之后的提交是 `1.2.4-alpha.<距离>`，预发布 tag（如 `v1.2.3-beta.1`）之后是 `1.2.3-beta.1.<距离>`。没有 tag 可用时退化成短哈希，更新检查会报「版本号无法解析」，所以 CI 里检出要带上 tag。
+
+新旧版本按 SemVer 2.0 比较，带不带 `v`、省略 minor / patch 都认。
+
+### GitHub
+
+匿名调 GitHub API 读最近 300 个 release，在 tag 能按 SemVer 解析、符合渠道、又有本机能装的 APK 的 release 里取版本最高的一个。「正式版」渠道不收带预发布后缀的版本，也不收标成 Pre-release 的 release；「公测版」渠道都收。
+
+资产名以 `.apk` 结尾才算安装包。挑哪一个看出包时的 ABI：`build.releaseAbi`（debug 包看 `build.debugAbi`）只写了一个 ABI 的是单 ABI 包，否则是 universal 包。
+
+| 已安装的包 | 挑哪个资产 |
+|:---|:---|
+| arm64-v8a | 文件名带 `arm64-v8a`、`arm64`、`aarch64` 的，依次优先；都没有再退回 universal |
+| x86_64 | 文件名带 `x86_64`、`x64`、`amd64` 的，依次优先；都没有再退回 universal |
+| universal | 不带任何 ABI 标记的那一个；这样的 APK 不止一个就算找不到 |
+
+标记两侧须是文件名首尾或 `-`、`_`、`.`、空格，所以 `arm` 不会撞上 `arm64`、`armeabi-v7a`。universal 包的文件名里不要出现任何 ABI 标记（连同 `armeabi-v7a`、`arm`、`x86`），否则会被当成单 ABI 包。可以参考这样命名：`YourPI-android-universal-v1.2.3.apk`、`YourPI-android-arm64-v8a-v1.2.3.apk`。
+
+下载完按 GitHub 给资产算的 SHA-256（API 里的 `digest`）校验，没有这个值的资产会报「安装包缺少校验值」。release 正文就是应用里显示的更新说明；正文中用 `<!-- downloads:start -->` 和 `<!-- downloads:end -->` 包起来的一段（比如只给网页看的下载表格）不显示。
+
+同时配了 Mirror酱 时，GitHub 源先不带 CDK 问一次 Mirror酱 的最新版本号并以它为准，更新说明也换成 Mirror酱 那边的，只去 GitHub 下载这个版本的 tag：GitHub 上没有这个 tag 或挑不出包，下载时报「没有匹配的安装包」，不会退回别的版本。问不到 Mirror酱 时才按上面的规则自己挑。
+
+### Mirror酱
+
+检查版本不用 CDK，下载要用户在设置里填 CDK。请求带 `os=android` 和渠道；单 ABI 包另带 `arch`（arm64-v8a 是 `arm64`，x86_64 是 `amd64`），universal 包不带。服务端按 os / arch 精确匹配，这个架构没有包时会再不带 `arch` 问一次，退到 universal 包。所以上传到 Mirror酱 时，单 ABI 包的 os 标 `android`、arch 标对应的值，universal 包只标 os、不标 arch。
+
+Mirror酱 上的版本号同样要能按 SemVer 解析，下载完按它给的 sha256 校验。
+
 ## 装上之后
 
 1. 授予通知、电池白名单（保活前台服务要用）。
@@ -197,6 +239,9 @@ build.releaseAbi=arm64-v8a
 | 图标不显示 | 文件没进 `include`，或不是 png / webp |
 | 换了资源重装，设备还是旧内容 | 只换资源、没改本仓库时版本号不变，清应用数据或再交一次提交 |
 | 虚拟屏内容为空 | 请检查是否运行过包含了 `StartApp` 的 task 并且没有在前台抢占目标应用 |
+| 检查更新提示「版本号无法解析」 | 已安装包的版本号不是 SemVer，多半是出包时没拿到 tag、退化成了短哈希，见[版本号](#版本号)；用 Mirror酱 源时也可能是那边的版本号不规范 |
+| 检查或下载更新提示「没有匹配的安装包」 | GitHub release 里没有本机能装的 APK：核对资产名里的 ABI 标记，universal 包不带标记、也只能有一个；同时配了 Mirror酱 时，GitHub 上还得有 Mirror酱 那个版本的 tag |
+| 下载更新提示「安装包缺少校验值」 | GitHub 资产没有 `digest`，或 Mirror酱 没给 sha256 |
 
 查看运行日志：
 
